@@ -219,11 +219,6 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         header: 'Objects Detected',
         cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span>,
       },
-      {
-        accessorKey: 'alertThreshold',
-        header: 'Alert Threshold',
-        cell: ({ row }) => <span className={styles.text}>{row.original.alertThreshold ?? '--'}</span>,
-      },
     );
   }
 
@@ -311,7 +306,6 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showIndustrialFields && (
           <>
             <IncidentCardRow icon={Activity} label="Objects Detected" value={row.count ?? '--'} />
-            <IncidentCardRow icon={AlertTriangle} label="Alert Threshold" value={row.alertThreshold ?? '--'} />
           </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />

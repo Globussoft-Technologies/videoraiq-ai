@@ -268,7 +268,10 @@ const IncidentLogsPage = ({ config }) => {
 
   const unauthorizedAccessLogs = config.storagePrefix === 'unauthorized_access';
   const enableViewExports = unauthorizedAccessLogs || config.enableViewExports === true;
-  const previewNavigationEnabled = unauthorizedAccessLogs;
+  // Every incident-log configuration uses the same paginated row list, so the
+  // image viewer can navigate through the currently loaded records for all
+  // logs (Wrong Location, Unauthorized Access, Fire/Smoke, etc.).
+  const previewNavigationEnabled = true;
   const previewRows = useMemo(
     () => (previewNavigationEnabled ? rows.filter((row) => row.incidentImageUrl) : []),
     [previewNavigationEnabled, rows]

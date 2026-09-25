@@ -91,6 +91,7 @@ const SleepActivityLogs = () => {
   const [sleepingFilter, setSleepingFilter] = useState(''); // '' | 'true' | 'false'
 
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
 
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
@@ -264,14 +265,26 @@ const SleepActivityLogs = () => {
     [handleExport]
   );
 
+  const previewRows = useMemo(() => rows.filter((row) => row.incidentImageUrl), [rows]);
+
   const openPreview = useCallback((url) => {
     if (!url) return;
+    setPreviewIndex(previewRows.findIndex((row) => row.incidentImageUrl === url));
     setPreviewImageLoading(true);
     setPreviewImage(url);
-  }, []);
+  }, [previewRows]);
+
+  const showPreviewAt = useCallback((index) => {
+    const row = previewRows[index];
+    if (!row) return;
+    setPreviewIndex(index);
+    setPreviewImageLoading(true);
+    setPreviewImage(row.incidentImageUrl);
+  }, [previewRows]);
 
   const closePreview = () => {
     setPreviewImage(null);
+    setPreviewIndex(-1);
     setPreviewImageLoading(false);
   };
 
@@ -303,6 +316,12 @@ const SleepActivityLogs = () => {
         previewImage={previewImage}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
+        hasPrevious={previewIndex > 0}
+        hasNext={previewIndex >= 0 && previewIndex < previewRows.length - 1}
+        onPrevious={() => showPreviewAt(previewIndex - 1)}
+        onNext={() => showPreviewAt(previewIndex + 1)}
+        position={previewIndex >= 0 ? previewIndex + 1 : 0}
+        total={previewRows.length}
         onClose={closePreview}
       />
 

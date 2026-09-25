@@ -162,7 +162,7 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
                       background: checked ? 'rgba(59,130,246,.08)' : 'transparent',
                       transition: 'background .1s',
                     }}
-                    onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--bg2)'; }}
+                    onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = checked ? 'rgba(59,130,246,.08)' : 'transparent'; }}
                   >
                     <div style={{
@@ -280,7 +280,7 @@ function CompactSelect({ value, options, placeholder, onChange, isDisabled }) {
                   background: opt === value && !disabled ? 'var(--blue)' : 'transparent',
                   opacity: disabled ? 0.45 : 1,
                 }}
-                onMouseEnter={(e) => { if (!disabled && opt !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
+                onMouseEnter={(e) => { if (!disabled && opt !== value) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }}
                 onMouseLeave={(e) => { if (!disabled && opt !== value) e.currentTarget.style.background = 'transparent'; }}
               >
                 {opt}
@@ -1316,6 +1316,7 @@ export default function IncidentCenter() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   const [selectedForResolve, setSelectedForResolve] = useState(() => new Set());
+  const [pageScopePage, setPageScopePage] = useState(null);
   const [resolveMenuOpen, setResolveMenuOpen] = useState(false);
   const [resolveMode, setResolveMode] = useState(null);
   const [resolveConfirm, setResolveConfirm] = useState(null);
@@ -1492,13 +1493,27 @@ export default function IncidentCenter() {
   // reasoning as client's Incidents page: deleteIncidents takes an explicit
   // id list, not a filter, so carrying stale selections across a page change
   // would silently delete incidents the user can no longer see.
-  // A filter change invalidates selected IDs; pagination preserves manual
-  // selections so returning to a page shows the same checked cards.
+  // A filter change invalidates selected IDs. Pagination only clears the
+  // temporary page-wide scope; manually selected incident IDs are preserved so
+  // users can build a selection across pages without selecting a whole new
+  // page accidentally.
   useEffect(() => {
     setSelectedForDelete([]);
     setSelectedForResolve(new Set());
+    setPageScopePage(null);
     setResolveMode(null);
   }, [pageSize, JSON.stringify(serverFilter)]);
+
+  // `page` scope belongs only to the page where it was chosen. Keep explicit
+  // checkbox selections, but do not carry the page-wide visual selection to
+  // the next page.
+  useEffect(() => {
+    if (pageScopePage === page && selectedForResolve.size === currentPageIds.length && currentPageIds.length > 0 && currentPageIds.every((id) => selectedForResolve.has(id))) {
+      setResolveMode('page');
+    } else {
+      setResolveMode((mode) => mode === 'page' ? null : mode);
+    }
+  }, [page, pageScopePage, currentPageIds, selectedForResolve]);
 
   const handleToggleSelectForDelete = useCallback((id) => {
     setSelectedForDelete((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1516,9 +1531,18 @@ export default function IncidentCenter() {
 
   const handleResolveScope = useCallback((mode) => {
     if (mode === 'page') {
-      // Page scope follows the visible page until a card is manually toggled.
-      setSelectedForResolve(new Set());
-      setResolveMode('page');
+      // Add this page to any IDs already selected on earlier pages. The first
+      // page uses the page scope; selecting the same scope on another page
+      // becomes an explicit multi-page selection (12 + 12 = 24).
+      const next = new Set([...selectedForResolve, ...currentPageIds]);
+      setSelectedForResolve(next);
+      if (selectedForResolve.size) {
+        setPageScopePage(null);
+        setResolveMode('selected');
+      } else {
+        setPageScopePage(page);
+        setResolveMode('page');
+      }
       return;
     }
 
@@ -1532,7 +1556,7 @@ export default function IncidentCenter() {
 
     // Selecting this radio must not rebuild or clear the user's IDs.
     setResolveMode('selected');
-  }, []);
+  }, [currentPageIds, page, selectedForResolve]);
 
   const handleToggleResolveSelection = useCallback((id) => {
     // A checkbox click always operates on the visible selection. If the
@@ -1945,6 +1969,8 @@ export default function IncidentCenter() {
                       ? `Mark as resolved (${num(currentPageIds.length)})`
                       : resolveMode === 'selected'
                         ? `Mark as resolved (${num(selectedForResolve.size)})`
+                        : selectedForResolve.size > 0
+                          ? `Mark as resolved (${num(selectedForResolve.size)})`
                         : 'Mark as resolved'}
               </button>
               <button
@@ -1958,18 +1984,19 @@ export default function IncidentCenter() {
               </button>
             </div>
             {resolveMenuOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300, minWidth: 250, padding: 8, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)' }}>
-                <div style={{ padding: '3px 8px 7px', color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>Resolve scope</div>
-                {resolveMode === 'selected' && selectedForResolve.size > 0 && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'selected' ? 'rgba(34,197,94,.14)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'selected' ? 600 : 500 }}>
-                    <input type="radio" name="resolve-scope" checked={resolveMode === 'selected'} onChange={() => handleResolveScope('selected')} disabled={resolvingBulk} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
-                    <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'selected' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'selected' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {resolveMode === 'selected' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300, minWidth: 292, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
+                <div style={{ padding: '4px 10px 9px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Resolve scope</div>
+                {resolveMode !== 'filtered' && resolveMode !== 'page' && selectedForResolve.size > 0 && (
+                  <label onMouseEnter={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 'rgba(34,197,94,.16)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 650 : 500, transition: 'background .15s' }}>
+                    <input type="radio" name="resolve-scope" checked={resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)} onChange={() => handleResolveScope('selected')} disabled={resolvingBulk} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+                    <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#22c55e', color: '#fff', fontSize: 11, fontWeight: 700 }}>Sel</span>
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>Selected incidents ({num(selectedForResolve.size)})</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--tx3)' }}>{num(selectedForResolve.size)} saved across pages</span>
                     </span>
-                    <span>Selected incidents ({num(selectedForResolve.size)})</span>
                   </label>
                 )}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'page' ? 'rgba(34,197,94,.14)' : 'transparent', color: items.length ? 'var(--tx)' : 'var(--tx3)', cursor: items.length && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'page' ? 600 : 500, transition: 'background .15s' }}>
+                <label onMouseEnter={(e) => { if (resolveMode !== 'page') e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (resolveMode !== 'page') e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: resolveMode === 'page' ? 'rgba(34,197,94,.16)' : 'transparent', color: items.length ? 'var(--tx)' : 'var(--tx3)', cursor: items.length && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'page' ? 650 : 500, transition: 'background .15s' }}>
                   <input
                     type="radio"
                     name="resolve-scope"
@@ -1978,12 +2005,13 @@ export default function IncidentCenter() {
                     disabled={!items.length || resolvingBulk}
                     style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
                   />
-                  <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'page' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'page' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
-                    {resolveMode === 'page' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                  <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 11, fontWeight: 700 }}>Pg</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span>{selectedForResolve.size > 0 && resolveMode !== 'page' ? 'Add current page incidents' : 'Current page incidents'} ({num(items.length)})</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--tx3)' }}>{selectedForResolve.size > 0 && resolveMode !== 'page' ? 'Add these to saved selection' : `${num(items.length)} incidents shown here`}</span>
                   </span>
-                  <span>Current page incidents ({num(items.length)})</span>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'filtered' ? 'rgba(34,197,94,.14)' : 'transparent', color: totalCount ? 'var(--tx)' : 'var(--tx3)', cursor: totalCount && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'filtered' ? 600 : 500, transition: 'background .15s' }}>
+                <label onMouseEnter={(e) => { if (resolveMode !== 'filtered') e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (resolveMode !== 'filtered') e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: resolveMode === 'filtered' ? 'rgba(34,197,94,.16)' : 'transparent', color: totalCount ? 'var(--tx)' : 'var(--tx3)', cursor: totalCount && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'filtered' ? 650 : 500, transition: 'background .15s' }}>
                   <input
                     type="radio"
                     name="resolve-scope"
@@ -1992,19 +2020,20 @@ export default function IncidentCenter() {
                     disabled={!totalCount || resolvingBulk}
                     style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
                   />
-                  <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'filtered' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'filtered' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
-                    {resolveMode === 'filtered' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                  <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 11, fontWeight: 700 }}>All</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span>All incidents ({num(totalCount)})</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--tx3)' }}>{num(totalCount)} across every page</span>
                   </span>
-                  <span>All incidents ({num(totalCount)})</span>
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                   <button
                     type="button"
                     onClick={handlePrimaryResolve}
                     disabled={resolvingBulk || !resolveMode}
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #22c55e', borderRadius: 7, background: '#22c55e', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: resolvingBulk || !resolveMode ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !resolveMode ? 0.6 : 1 }}
+                    style={{ width: '100%', padding: '10px 12px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg, #16c978, #00b85c)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: resolvingBulk || !resolveMode ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !resolveMode ? 0.6 : 1, boxShadow: '0 5px 12px rgba(16,185,129,.22)' }}
                   >
-                    Apply
+                    Apply selection
                   </button>
                   {(resolveMode || selectedForResolve.size > 0) && (
                   <button
@@ -2015,7 +2044,7 @@ export default function IncidentCenter() {
                       setResolveMenuOpen(false);
                     }}
                     disabled={resolvingBulk}
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #dc2626', borderRadius: 7, background: '#dc2626', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: resolvingBulk ? 'not-allowed' : 'pointer', boxShadow: '0 2px 6px rgba(220,38,38,.22)' }}
+                    style={{ width: '100%', padding: '10px 12px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: resolvingBulk ? 'not-allowed' : 'pointer', boxShadow: '0 5px 12px rgba(239,68,68,.18)' }}
                   >
                     Clear selection
                   </button>
@@ -2357,4 +2386,5 @@ export default function IncidentCenter() {
     </div>
   );
 }
+
 

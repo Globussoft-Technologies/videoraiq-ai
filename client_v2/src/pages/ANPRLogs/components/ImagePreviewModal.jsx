@@ -15,6 +15,8 @@ const ImagePreviewModal = ({
   hasNext = false,
   onPrevious,
   onNext,
+  position = 0,
+  total = 0,
   onClose,
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -199,22 +201,24 @@ const ImagePreviewModal = ({
           </span>
         </span>
       )}
-      {hasPrevious && (
+      {onPrevious && (
         <button
           type="button"
           onClick={onPrevious}
-          className="absolute left-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-black/60 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+          disabled={!hasPrevious}
+          className={`absolute left-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 text-white shadow-lg backdrop-blur-sm transition-colors ${hasPrevious ? 'cursor-pointer bg-black/60 hover:bg-black/80' : 'cursor-not-allowed bg-black/25 text-white/40'}`}
           title="Previous image"
           aria-label="Previous image"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
       )}
-      {hasNext && (
+      {onNext && (
         <button
           type="button"
           onClick={onNext}
-          className="absolute right-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-black/60 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+          disabled={!hasNext}
+          className={`absolute right-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 text-white shadow-lg backdrop-blur-sm transition-colors ${hasNext ? 'cursor-pointer bg-black/60 hover:bg-black/80' : 'cursor-not-allowed bg-black/25 text-white/40'}`}
           title="Next image"
           aria-label="Next image"
         >
@@ -262,6 +266,11 @@ const ImagePreviewModal = ({
         className="relative bg-[var(--bg1solid)] rounded-2xl border border-[var(--bd)] shadow-2xl p-3 w-[min(88vw,1120px)]"
         onClick={(e) => e.stopPropagation()}
       >
+        {total > 1 && (
+          <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[var(--bd)] bg-[var(--bg1solid)]/95 px-3 py-1 text-xs font-semibold text-[var(--tx2)] shadow-lg">
+            {position} / {total}
+          </div>
+        )}
         <button
           onClick={onClose}
           className="absolute -top-3 -right-3 z-20 bg-[var(--bg1solid)] rounded-full p-1 cursor-pointer shadow-lg hover:bg-[var(--bg2)] border border-[var(--bd)]"
