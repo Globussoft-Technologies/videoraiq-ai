@@ -36,6 +36,13 @@ const INDUSTRIAL_DETECTION_TYPES = new Set([
   'spillsDirtyMessyAreasDetection',
 ]);
 
+// These two incident types show their detected count, but not the threshold
+// value in the Incident Center card.
+const HIDE_ALERT_THRESHOLD_TYPES = new Set([
+  'oilLeakageDetection',
+  'gunnyBagsMaterialsWrongLocationDetection',
+]);
+
 /**
  * Plate + who it belongs to, for detections that carry a vehicle number
  * (Vehicle Detection and the other plate-bearing types). An untagged plate
@@ -641,7 +648,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                 {INDUSTRIAL_DETECTION_TYPES.has(item.incidentType) && (item.count != null || item.alertThreshold != null) && (
                   <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--tx2)' }}>
                     {item.count != null && <span style={{ fontWeight: 600 }}>Detected: {item.count}</span>}
-                    {item.alertThreshold != null && (
+                    {item.alertThreshold != null && !HIDE_ALERT_THRESHOLD_TYPES.has(item.incidentType) && (
                       <span style={{ color: 'var(--tx3)', marginLeft: 5 }}>Threshold: {item.alertThreshold}</span>
                     )}
                   </span>
