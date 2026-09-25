@@ -11,7 +11,8 @@ const webhookLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Public to aMember, but authenticated by timestamped HMAC inside the service.
+// Public to aMember, but authenticated by a shared-secret header or timestamped
+// HMAC inside the service.
 router.post("/users/sync", webhookLimiter, authController.syncAmemberUser);
 
 export default router;

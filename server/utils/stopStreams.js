@@ -7,13 +7,16 @@ import { resolveAdminEndpoints } from "./adminEndpoints.js";
 // caller — whatever the services return is ignored; failures are only logged.
 // Both calls fire independently (one failing can't affect the other). Safe to
 // call from a request/login flow without awaiting.
-const postToStreamServices = (adminId, { detectionPath, attendancePath, tag }) => {
+const postToStreamServices = (
+  adminId,
+  { detectionPath, attendancePath, tag, resolvedEndpoints = null },
+) => {
   try {
     if (!adminId) return;
     const body = { admin_id: String(adminId) };
     const opts = { headers: { "Content-Type": "application/json" }, timeout: 5000 };
 
-    resolveAdminEndpoints(adminId)
+    Promise.resolve(resolvedEndpoints || resolveAdminEndpoints(adminId))
       .then(({ detectionUrl, attendanceUrl }) => {
         // Object detection service
         if (detectionUrl) {
@@ -51,11 +54,16 @@ const postToStreamServices = (adminId, { detectionPath, attendancePath, tag }) =
 };
 
 // On plan expiry — stop all of the admin's detection + face-auth streams.
-export const stopAllStreams = (adminId) =>
+export const stopAllStreams = (
+  adminId,
+  resolvedEndpoints = null,
+  tag = "PLAN_EXPIRED",
+) =>
   postToStreamServices(adminId, {
     detectionPath: "/stream/stop-all",
     attendancePath: "/api/v1/cameras/stop-all",
-    tag: "PLAN_EXPIRED",
+    tag,
+    resolvedEndpoints,
   });
 
 // On plan re-activation — resume all of the admin's detection + face-auth streams.

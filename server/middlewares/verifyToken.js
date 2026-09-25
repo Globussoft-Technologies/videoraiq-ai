@@ -77,6 +77,12 @@ async function verifyToken(req, res, next) {
           routes = req.originalUrl;
           routesValue = routes.split("?");
         } else {
+          const admin = await adminModel.findById(decoded?.adminId);
+          if (!admin) {
+            return res
+              .status(401)
+              .send(Response.tokenFailResp("admin not found"));
+          }
           const user = await User.findOne({ _id: decoded?.memberId }); // Replace with your ID field
           authorizedChannel = await authorizedChannelsModel.findOne({
             userId: decoded?.memberId,

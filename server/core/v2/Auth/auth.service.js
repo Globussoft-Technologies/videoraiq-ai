@@ -28,6 +28,7 @@ import NVRModel from "../NVR/nvr.model.js";
 import sessionsService from "../sessions/sessions.service.js";
 import usersModel from "../users/users.model.js";
 import amemberWebhookEventModel from "./amemberWebhookEvent.model.js";
+import { purgeAmemberTenantData } from "./amemberTenantDeletion.service.js";
 import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermissions, syncAlertsAnalyticsPermissions } from "../../../utils/helperFunctions.js";
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
@@ -44,6 +45,7 @@ const AMEMBER_WEBHOOK_MAX_AGE_SECONDS = 5 * 60;
 const AMEMBER_WEBHOOK_EVENTS = new Set([
   "user.created",
   "user.updated",
+  "user.deleted",
 ]);
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
@@ -115,11 +117,19 @@ class AUTHService {
         throw error;
       }
 
+      const action = String(req.body?.action || "sync").trim().toLowerCase();
+      if (!["sync", "create", "update", "delete"].includes(action)) {
+        const error = new Error("action must be sync, create, update or delete");
+        error.statusCode = 400;
+        throw error;
+      }
+
       return {
         eventId: null,
-        event: "user.sync",
+        event: action === "delete" ? "user.deleted" : "user.sync",
         userId,
         trackEvent: false,
+        action: action === "delete" ? "delete" : "sync",
       };
     }
 
@@ -172,7 +182,13 @@ class AUTHService {
       throw error;
     }
 
-    return { eventId, event, userId, trackEvent: true };
+    return {
+      eventId,
+      event,
+      userId,
+      trackEvent: true,
+      action: event === "user.deleted" ? "delete" : "sync",
+    };
   }
 
   _safeAmemberWebhookLogValue(value, maxLength = 128) {
@@ -286,6 +302,65 @@ class AUTHService {
           ok: true,
           status: "already_synchronized",
           adminId: previousEvent.adminId,
+        });
+      }
+
+      if (verified.action === "delete") {
+        stage = "admin_delete";
+        const existingAdmin = await adminModel.findOne({ user_id: verified.userId });
+        const adminId = existingAdmin?._id ?? null;
+        let deletedRecords = {};
+
+        if (existingAdmin) {
+          // Stop services before removing the admin because endpoint resolution
+          // can use per-admin overrides stored on this document.
+          const streamEndpoints = await resolveAdminEndpoints(existingAdmin._id);
+          stopAllStreams(
+            existingAdmin._id,
+            streamEndpoints,
+            "AMEMBER_USER_DELETED",
+          );
+          const sessionCounts = await sessionsService.deleteAllForAdmin(existingAdmin._id);
+          const tenantCounts = await purgeAmemberTenantData(existingAdmin);
+          deletedRecords = { ...sessionCounts, ...tenantCounts };
+          logger.info(
+            `[AMEMBER_TENANT_DATA_DELETED] userId=${this._safeAmemberWebhookLogValue(verified.userId, 40)} ` +
+              `adminId=${this._safeAmemberWebhookLogValue(adminId, 40)} ` +
+              `counts=${JSON.stringify(deletedRecords)}`,
+          );
+        }
+
+        // Remove stale create/update delivery records for this user. Otherwise
+        // replaying an old event could report success with the now-deleted
+        // adminId even though no local admin exists.
+        const staleEventResult = await amemberWebhookEventModel.deleteMany({
+          userId: verified.userId,
+        });
+        if (staleEventResult.deletedCount) {
+          deletedRecords.webhookEvents = staleEventResult.deletedCount;
+        }
+
+        if (verified.trackEvent) {
+          stage = "event_record";
+          try {
+            await amemberWebhookEventModel.create({
+              eventId: verified.eventId,
+              event: verified.event,
+              userId: verified.userId,
+              adminId,
+            });
+          } catch (error) {
+            if (error?.code !== 11000) throw error;
+          }
+        }
+
+        const resultStatus = existingAdmin ? "deleted" : "already_deleted";
+        this._logAmemberWebhookSuccess(req, verified, resultStatus, adminId);
+        return res.status(200).json({
+          ok: true,
+          status: resultStatus,
+          adminId,
+          deletedRecords,
         });
       }
 

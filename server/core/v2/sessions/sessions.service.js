@@ -202,6 +202,26 @@ class SessionsService {
     }
   }
 
+  async deleteAllForAdmin(adminId) {
+    const sessionIds = await sessionModel.find({ adminId }).distinct("sessionId");
+    const [sessionResult, blockedDeviceResult] = await Promise.all([
+      sessionModel.deleteMany({ adminId }),
+      blockedDeviceModel.deleteMany({ adminId }),
+    ]);
+
+    sessionIds.forEach((sessionId) => {
+      sendSessionRevoked(sessionId, {
+        code: "ACCOUNT_DELETED",
+        message: "This account has been deleted",
+      });
+    });
+
+    return {
+      sessions: Number(sessionResult.deletedCount || 0),
+      blockedDevices: Number(blockedDeviceResult.deletedCount || 0),
+    };
+  }
+
   async ensureDeviceCanLogin(req, userData = {}) {
     const deviceId = this.requestDeviceId(req);
     if (!deviceId) return { allowed: true };

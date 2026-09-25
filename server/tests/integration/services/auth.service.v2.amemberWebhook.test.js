@@ -22,6 +22,21 @@ const { default: DashboardSidebarConfig } = await import(
 const { default: AmemberWebhookEvent } = await import(
   "../../../core/v2/Auth/amemberWebhookEvent.model.js"
 );
+const { default: UserSession } = await import(
+  "../../../core/v2/sessions/sessions.model.js"
+);
+const { Incident } = await import(
+  "../../../core/v2/incidents/incidents.model.js"
+);
+const { default: NVR } = await import(
+  "../../../core/v2/NVR/nvr.model.js"
+);
+const { default: AuthorizedUser } = await import(
+  "../../../core/v2/authorizedUsers/authorizedUsers.model.js"
+);
+const { default: MeasurementIncident } = await import(
+  "../../../core/v2/measurementIncidents/measurementIncidents.model.js"
+);
 const { default: logger } = await import("../../../utils/logger.js");
 
 const SECRET = "test-amember-webhook-secret";
@@ -127,6 +142,138 @@ describe("v2 aMember provisioning webhook", () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.payload.message).toBe("Invalid aMember webhook secret");
+  });
+
+  it("rejects an unsupported static webhook action", async () => {
+    const res = responseRecorder();
+
+    await AUTHService.syncAmemberUserWebhook(
+      staticSecretRequest({ action: "archive", user_id: 103 }),
+      res,
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.payload).toEqual({
+      ok: false,
+      message: "action must be sync, create, update or delete",
+    });
+  });
+
+  it("hard-deletes the local admin and its generated support records", async () => {
+    const admin = await Admin.create({
+      user_id: "103",
+      login: "authoritative-login",
+      email: "authoritative@example.com",
+    });
+    const otherAdmin = await Admin.create({
+      user_id: "104",
+      login: "keep-me",
+      email: "keep-me@example.com",
+    });
+    await DashboardSidebarConfig.create({
+      adminId: admin._id,
+      detectionConfigs: [],
+    });
+    await UserSession.create({
+      sessionId: "session-to-delete",
+      deviceId: "test-device",
+      adminId: admin._id,
+      userType: "admin",
+    });
+    await Incident.collection.insertMany([
+      { userId: "103", timeOfIncident: new Date(), incidentType: "test-delete" },
+      { userId: "104", timeOfIncident: new Date(), incidentType: "test-keep" },
+    ]);
+    await NVR.collection.insertMany([
+      { userId: "103", name: "delete-nvr" },
+      { userId: "104", name: "keep-nvr" },
+    ]);
+    await AuthorizedUser.collection.insertMany([
+      { adminId: admin._id, firstName: "Delete" },
+      { adminId: otherAdmin._id, firstName: "Keep" },
+    ]);
+    await MeasurementIncident.collection.insertMany([
+      { adminId: String(admin._id), stationId: "delete-station" },
+      { adminId: String(otherAdmin._id), stationId: "keep-station" },
+    ]);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = responseRecorder();
+
+    await AUTHService.syncAmemberUserWebhook(
+      staticSecretRequest({
+        action: "delete",
+        user_id: 103,
+        login: "untrusted-login",
+        email: "untrusted@example.com",
+      }),
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({
+      ok: true,
+      status: "deleted",
+      adminId: admin._id,
+      deletedRecords: {
+        sessions: 1,
+        incidents: 1,
+        nvrs: 1,
+        authorizedUsers: 1,
+        measurementIncidents: 1,
+        admins: 1,
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await Admin.findById(admin._id)).toBeNull();
+    expect(await DashboardSidebarConfig.countDocuments({ adminId: admin._id })).toBe(0);
+    expect(await UserSession.countDocuments({ adminId: admin._id })).toBe(0);
+    expect(await Incident.countDocuments({ userId: "103" })).toBe(0);
+    expect(await NVR.countDocuments({ userId: "103" })).toBe(0);
+    expect(await AuthorizedUser.countDocuments({ adminId: admin._id })).toBe(0);
+    expect(await MeasurementIncident.countDocuments({ adminId: String(admin._id) })).toBe(0);
+
+    expect(await Admin.findById(otherAdmin._id)).not.toBeNull();
+    expect(await Incident.countDocuments({ userId: "104" })).toBe(1);
+    expect(await NVR.countDocuments({ userId: "104" })).toBe(1);
+    expect(await AuthorizedUser.countDocuments({ adminId: otherAdmin._id })).toBe(1);
+    expect(await MeasurementIncident.countDocuments({ adminId: String(otherAdmin._id) })).toBe(1);
+
+    const retryRes = responseRecorder();
+    await AUTHService.syncAmemberUserWebhook(
+      staticSecretRequest({ action: "delete", user_id: 103 }),
+      retryRes,
+    );
+    expect(retryRes.statusCode).toBe(200);
+    expect(retryRes.payload).toEqual({
+      ok: true,
+      status: "already_deleted",
+      adminId: null,
+      deletedRecords: {},
+    });
+  });
+
+  it("accepts a signed user.deleted event and records it for replay protection", async () => {
+    const admin = await Admin.create({
+      user_id: "9281",
+      login: "delete-me",
+      email: "delete-me@example.com",
+    });
+    vi.stubGlobal("fetch", vi.fn());
+    const req = signedRequest({
+      eventId: "evt-user-9281-deleted",
+      event: "user.deleted",
+      userId: 9281,
+    });
+    const res = responseRecorder();
+
+    await AUTHService.syncAmemberUserWebhook(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({ ok: true, status: "deleted" });
+    expect(await Admin.findById(admin._id)).toBeNull();
+    expect(await AmemberWebhookEvent.findOne({ eventId: req.body.eventId }))
+      .toMatchObject({ event: "user.deleted", userId: "9281" });
   });
 
   it("fetches the authoritative aMember profile and provisions the local admin", async () => {
