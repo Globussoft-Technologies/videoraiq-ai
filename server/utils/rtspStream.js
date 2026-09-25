@@ -150,35 +150,47 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
   const decryptedIp = decrypt(nvr.ip);
   const decryptedPassword = decrypt(nvr.password);
   const username = nvr.username; // Already decrypted based on your data
+  // Percent-encode: a raw "@", "#", "%", "&", "/" in a password breaks the URL
+  // (e.g. "P@ss!#$%^&*" — "#" starts a fragment and drops the host).
+  // Alphanumeric credentials encode to themselves, so existing URLs don't change.
+  const creds = `${encodeURIComponent(username)}:${encodeURIComponent(decryptedPassword)}`;
 
-  if (nvr.brand === "hikvision") {
-    // Hikvision: rtsp://user:pass@ip:port/Streaming/Channels/101
+  if (nvr.brand === "hikvision" || nvr.brand === "prama") {
+    // Hikvision (and Prama, its rebrand): rtsp://user:pass@ip:port/Streaming/Channels/101
     const streamEndpoint = channel.streamEndpoint;
     const streamIndex = streamType === "main" ? 0 : 1;
-    const streamId = channel.rtspChannels?.[streamIndex]?.id || "";
+    const streamId = channel.rtspChannels?.[streamIndex]?.id;
+    // No stream ID means the NVR never bound this channel (camera unreachable
+    // at discovery time) — building the URL anyway registers a bare
+    // ".../Streaming/Channels/" with the streaming server, which silently fails.
+    if (!streamId) {
+      throw new Error(
+        `Hikvision channel ${channel.channelId} has no RTSP stream ID — camera was unreachable when discovered. Re-run discovery once it is online.`,
+      );
+    }
 
-    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}${streamId}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}${streamId}`;
   } else if (nvr.brand === "cpplus") {
     // CP Plus: rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
     const streamEndpoint = channel.streamEndpoint; // /cam/realmonitor
     const channelId = channel.channelId;
     const subtype = streamType === "main" ? 0 : 1;
 
-    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
   } else if (nvr.brand === "dahua") {
     // Dahua (separate brand): rtsp://user:pass@ip:rtspPort/cam/realmonitor?channel=1&subtype=0
     const streamEndpoint = channel.streamEndpoint || "/cam/realmonitor";
     const channelId = channel.channelId;
     const subtype = streamType === "main" ? 0 : 1;
 
-    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
   } else if (nvr.brand === "tiandy") {
     // Tiandy: rtsp://user:pass@ip:rtspPort/ChannelNo/StreamType
     // StreamType: 1 = main stream, 2 = sub stream
     const channelId = channel.channelId;
     const subtype = streamType === "main" ? 1 : 2;
 
-    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}/${channelId}/${subtype}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}/${channelId}/${subtype}`;
   } else if (nvr.brand === "securus") {
     // XiongMai Sofia: rtsp://ip:rtspPort/user=U&password=HASH&channel=N&stream=S.sdp?real_stream
     // Password must be the Sofia MD5 hash (8 chars from even MD5 hex positions, uppercased)
@@ -190,15 +202,17 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
     const stream = streamType === "main" ? 0 : 1;
     return `rtsp://${decryptedIp}:${nvr.rtspPort}/user=${username}&password=${sofiaHash}&channel=${channelId}&stream=${stream}.sdp?real_stream`;
   } else if (nvr.brand === "honeywell") {
-    // Honeywell I-HPNVR (TVT OEM): /chID=N&streamType=main|sub
+    // Honeywell I-HPNVR (TVT OEM): rtsp://ip:port/ch<N>/main|sub — confirmed
+    // live against an I-HPNVR-416; the old "?chID=N&streamType=" query-string
+    // shape was never a valid TVT RTSP path and always 400'd.
     const channelId = channel.channelId;
     const stream = streamType === "main" ? "main" : "sub";
-    return `rtsp://${encodeURIComponent(username)}:${encodeURIComponent(decryptedPassword)}@${decryptedIp}:${nvr.rtspPort}/chID=${channelId}&streamType=${stream}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}/ch${channelId}/${stream}`;
   } else if (nvr.brand === "camera") {
     // Generic Camera: rtsp://user:pass@ip:port/stream
     const streamEndpoint = channel.streamEndpoint; // e.g., /stream
 
-    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}`;
   } else {
     throw new Error(`Unsupported NVR brand: ${nvr.brand}`);
   }

@@ -23,6 +23,12 @@ import {
   killCurrentPlayBack,
   resolvePlaybackHost,
 } from "../../../utils/rtspStream.js";
+import { getHoneywellPlaybackManifest, fetchHoneywellPlaybackSegment, keepHoneywellPlaybackAlive } from "../NVR/honeywellTvt.js";
+import { isapiPrefix } from "../NVR/isapiPrefix.js";
+import { redis } from "../../../utils/database.js";
+
+// proxyId -> last keepalive timestamp (ms), see getHoneywellPlaybackSegment.
+const honeywellKeepaliveAt = new Map();
 import adminModel from "../admin/admin.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import pythonService from "../../../services/python.service.js";
@@ -1079,7 +1085,90 @@ class ChannelService {
           : t;
         const start = new Date(normalise(startTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
         const end   = new Date(normalise(endTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
-        const playbackUrl = `rtsp://${username}:${password}@${ip}:${rtspPort}/${chId}/1?starttime=${start}&endtime=${end}`;
+        const playbackUrl = `rtsp://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${ip}:${rtspPort}/${chId}/1?starttime=${start}&endtime=${end}`;
+        return res.status(200).json(
+          Response.userSuccessResp("Playback URL retrieved successfully", { playbackUrl })
+        );
+      }
+
+      // Honeywell (TVT OEM): no RTSP playback exists on these NVRs — recordings
+      // are only servable as HTTP DASH (.mpd manifest + .m4s segments), which
+      // needs the NVR's own session cookie/csrf token on every segment fetch.
+      // A browser <video>/dash.js can't attach those headers to a raw NVR URL,
+      // so route it through our own proxy instead of handing back a bare link.
+      if (brand === "honeywell") {
+        const normalise = (t) => /^\d{8}T\d{6}Z$/.test(t)
+          ? `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T${t.slice(9,11)}:${t.slice(11,13)}:${t.slice(13,15)}`
+          : t;
+        const start = new Date(normalise(startTime));
+        const end = new Date(normalise(endTime));
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          return res.status(400).json(Response.userFailResp("Invalid playback time"));
+        }
+
+        const honeywellIp = decrypt(nvr.ip);
+        const honeywellUsername = nvr.username || "admin";
+        const honeywellPassword = decrypt(nvr.password);
+        const honeywellPort = nvr.port || 8000;
+
+        let manifest;
+        try {
+          manifest = await getHoneywellPlaybackManifest({
+            ip: honeywellIp,
+            port: honeywellPort,
+            username: honeywellUsername,
+            password: honeywellPassword,
+            channelId: channel.channelId,
+            start,
+            end,
+          });
+        } catch (playbackError) {
+          logger.error(`Honeywell playback manifest failed for channel ${channel._id}:`, playbackError.message);
+          if (playbackError.code === "HONEYWELL_PLAYBACK_MUTEX") {
+            return res.status(409).json(
+              Response.errorResp(
+                "This Honeywell NVR can only play one recording at a time. Please wait a moment and try again.",
+                playbackError.message,
+              ),
+            );
+          }
+          return res
+            .status(502)
+            .json(Response.errorResp("Failed to retrieve playback URL", playbackError.message));
+        }
+
+        // The NVR session (token/cookie/ip/port) is only good for THIS
+        // playback id — every init.mp4/seg.m4s the browser requests must
+        // reuse it (a fresh login per segment would each count as a new
+        // playback attempt and trip the NVR's one-session "playback_mutex").
+        // Cache it under our own proxy id so the segment route can look it
+        // up without re-authenticating.
+        const proxyId = `${channel._id}-${manifest.sessionId}`;
+        await redis.set(
+          `honeywell-playback:${proxyId}`,
+          JSON.stringify({
+            ip: honeywellIp,
+            port: honeywellPort,
+            sessionId: manifest.sessionId,
+            token: manifest.token,
+            cookie: manifest.cookie,
+            // The manifest is type="static" (a fixed time range) — cache the
+            // XML itself rather than re-deriving it. Re-fetching it later
+            // with only ?id=&keepalive=1 (no chn/s/e/rec_type_arr) 400s;
+            // those params were only known at creation time, right here.
+            manifestXml: manifest.xml,
+            manifestUrl: manifest.manifestUrl, // needed to build the keepalive ping
+          }),
+          "EX",
+          3600, // matches the 1-hour manifest window TVT returns
+        );
+
+        // req.baseUrl carries the real mount path (e.g. "/api/v2/channel") —
+        // hardcoding "/channel" here 404s in every deployment that prefixes
+        // routes (confirmed live: the app mounts this router under /api/v2).
+        const playbackUrl =
+          `${req.protocol}://${req.get("host")}${req.baseUrl}/honeywell-playback/${proxyId}/stream.mpd` +
+          `?token=${req.header("x-access-token")}`;
         return res.status(200).json(
           Response.userSuccessResp("Playback URL retrieved successfully", { playbackUrl })
         );
@@ -1132,6 +1221,98 @@ class ChannelService {
         );
     }
   }
+
+  /**
+   * Serves the DASH manifest for a Honeywell playback session, rewritten to
+   * point at this same proxy's segment route instead of the NVR's own
+   * (unauthenticated-from-the-browser) URLs. The session itself was already
+   * started and cached in getPlaybackUrl's honeywell branch.
+   */
+  async getHoneywellPlaybackManifest(req, res, _next) {
+    try {
+      const { proxyId } = req.params;
+      const cached = await redis.get(`honeywell-playback:${proxyId}`);
+      if (!cached) {
+        return res.status(404).json(Response.notFoundResp("Playback session not found or expired"));
+      }
+      const { sessionId, manifestXml } = JSON.parse(cached);
+      if (!manifestXml) {
+        return res.status(502).json(Response.errorResp("Failed to refresh playback manifest", "No cached manifest for this session"));
+      }
+      const xml = manifestXml;
+
+      // dash.js resolves the manifest's relative segment URLs on its own and
+      // has no equivalent of hls.js's per-fragment loader hook (the one
+      // useHlsPlayer.js uses to append ?token=), so the token has to be
+      // baked into every segment URL here instead — otherwise each
+      // init.mp4/seg.m4s request arrives at our own verifyToken-guarded
+      // route with no token and 400s.
+      const token = req.query?.token || "";
+
+      // TVT's manifest paths are "$RepresentationID$/init.mp4?id=..&seg=.."
+      // — dash.js substitutes $RepresentationID$ with the Representation's
+      // own id ("video" or "audio") when it resolves each request, so that
+      // placeholder has to stay intact; only the id=/token= querystring
+      // needs rewriting here. (id= is already correct — it's our own
+      // sessionId — token= is what's missing, since dash.js has no
+      // per-fragment loader hook to append it the way hls.js's does.)
+      const rewritten = xml.replace(
+        /(init\.mp4|seg\.m4s)\?id=(\d+)(&amp;seg=[^"]*)?/g,
+        (_match, file, id, segPart = "") => `${file}?id=${id}${segPart}&amp;token=${encodeURIComponent(token)}`,
+      );
+
+      res.set("Content-Type", "application/dash+xml");
+      return res.status(200).send(rewritten);
+    } catch (error) {
+      logger.error("Honeywell playback manifest proxy error:", error);
+      return res.status(500).json(Response.errorResp("Failed to serve playback manifest", error.message));
+    }
+  }
+
+  /** Passthrough for one init.mp4/seg.m4s, reusing the cached NVR session. */
+  async getHoneywellPlaybackSegment(req, res, _next) {
+    try {
+      const { proxyId, track, file } = req.params;
+      const { seg = "0" } = req.query;
+      const cached = await redis.get(`honeywell-playback:${proxyId}`);
+      if (!cached) {
+        return res.status(404).json(Response.notFoundResp("Playback session not found or expired"));
+      }
+      const { ip, port, sessionId, token, cookie, manifestUrl } = JSON.parse(cached);
+
+      // Segments stream every ~5s while playing, so piggyback the NVR's
+      // heartbeat + keepalive on them (every 10s, like the Honeywell web UI)
+      // — without the heartbeat the NVR kills the session at ~60s.
+      // ponytail: in-process throttle map; move to redis if the API runs multi-instance.
+      const now = Date.now();
+      if (manifestUrl && now - (honeywellKeepaliveAt.get(proxyId) || 0) > 10000) {
+        honeywellKeepaliveAt.set(proxyId, now);
+        keepHoneywellPlaybackAlive({ manifestUrl, sessionId, token, cookie }).catch((err) =>
+          logger.warn(`Honeywell keepalive failed for ${proxyId}: ${err.message}`),
+        );
+      }
+
+      const response = await fetchHoneywellPlaybackSegment({
+        ip,
+        port,
+        sessionId,
+        track,
+        file,
+        seg,
+        token,
+        cookie,
+        client: { fetch: (url, opts) => fetch(url, opts) }, // plain fetch — session is cookie/token-based, no further Digest challenge needed
+      });
+
+      res.set("Content-Type", "application/octet-stream");
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return res.status(200).send(buffer);
+    } catch (error) {
+      logger.error("Honeywell playback segment proxy error:", error);
+      return res.status(502).json(Response.errorResp("Failed to fetch playback segment", error.message));
+    }
+  }
+
   async getPlaybackTimeline(req, res, _next) {
     try {
       const { nvrId, cameraId, channel, startTime, endTime } = req.body;
@@ -1185,7 +1366,7 @@ class ChannelService {
       let body = "";
 
       if (brand === "hikvision" || brand === "prama" || brand === "tiandy") {
-        url = `http://${ip}:${port}/ISAPI/ContentMgmt/search`;
+        url = `http://${ip}:${port}/${await isapiPrefix(client, `http://${ip}:${port}`, brand)}/ContentMgmt/search`;
         headers = { "Content-Type": "application/xml" };
         body = hikvisionXml;
       } else if (brand === "dahua") {

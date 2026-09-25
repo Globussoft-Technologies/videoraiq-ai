@@ -25,7 +25,7 @@ describe("Honeywell TVT discovery", () => {
         channelId: "1",
         name: "Entrance",
         ipAddress: "10.0.0.21",
-        streamEndpoint: "/chID=",
+        streamEndpoint: "/ch",
         rtspChannels: expect.arrayContaining([
           expect.objectContaining({ id: "1_main" }),
           expect.objectContaining({ id: "1_sub" }),

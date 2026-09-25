@@ -24,7 +24,11 @@ export const isRegistrationLinkActive = (decoded, registrationLink, now = Date.n
 
 async function verifyToken(req, res, next) {
   try {
-    const token = req.header("x-access-token");
+    // <video>/dash.js/hls.js fetch fragments directly and can't attach custom
+    // headers, so the header stays authoritative and this is only a fallback
+    // for those media requests — same convention the frontend already uses
+    // against the external streaming server (useHlsPlayer.js's ?token=).
+    const token = req.header("x-access-token") || req.query?.token;
 
     if (!token) {
       return res
@@ -33,8 +37,6 @@ async function verifyToken(req, res, next) {
     }
 
     try {
-      const token = req.header("x-access-token");
-
       const decodedServiceToken = jwt.verify(token, backendToken);
       if (decodedServiceToken?.service === "python-backend") {
         req.verified = {

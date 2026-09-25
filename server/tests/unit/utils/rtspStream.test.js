@@ -92,15 +92,23 @@ describe("buildRTSPUrl", () => {
     );
   });
 
-  it("falls back to empty streamId when rtspChannels is missing", () => {
-    const channel = { streamEndpoint: "/Streaming/Channels/" };
+  it("percent-encodes URL-special characters in the password", () => {
     const url = rtsp.buildRTSPUrl(
-      { ...baseNvr, brand: "hikvision" },
-      channel,
+      { ...baseNvr, password: encrypt("P@ss!#$%^&*"), brand: "hikvision" },
+      { streamEndpoint: "/Streaming/Channels/", rtspChannels: [{ id: "2101" }] },
     );
     expect(url).toBe(
-      `rtsp://admin:${passwordPlain}@${ipPlain}:554/Streaming/Channels/`,
+      `rtsp://admin:P%40ss!%23%24%25%5E%26*@${ipPlain}:554/Streaming/Channels/2101`,
     );
+    // The host must still parse out correctly — a raw "#" would have dropped it.
+    expect(new URL(url).hostname).toBe(ipPlain);
+  });
+
+  it("throws when rtspChannels is missing (channel was never bound to a stream)", () => {
+    const channel = { channelId: "7", streamEndpoint: "/Streaming/Channels/" };
+    expect(() =>
+      rtsp.buildRTSPUrl({ ...baseNvr, brand: "hikvision" }, channel),
+    ).toThrow(/no RTSP stream ID/);
   });
 
   it("builds a cpplus URL with subtype 0 for main stream", () => {
@@ -138,10 +146,10 @@ describe("buildRTSPUrl", () => {
     const channel = { channelId: "3" };
 
     expect(rtsp.buildRTSPUrl(nvr, channel, "main")).toBe(
-      `rtsp://admin:${passwordPlain}@${ipPlain}:554/chID=3&streamType=main`,
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/ch3/main`,
     );
     expect(rtsp.buildRTSPUrl(nvr, channel, "sub")).toBe(
-      `rtsp://admin:${passwordPlain}@${ipPlain}:554/chID=3&streamType=sub`,
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/ch3/sub`,
     );
   });
 

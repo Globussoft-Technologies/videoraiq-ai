@@ -570,6 +570,12 @@ const SpillsDirtyMessyAreasDetectionIncident = Incident.discriminator(
 const loiteringDetectionSchema = new Schema({
   count: {type:Number,default:0},
   triggerNotification: { type: Boolean, default: true },
+  // How long the person loitered, in seconds (as sent by the detector).
+  loiteringSeconds: { type: Number, default: null },
+  // outTime is timeOfIncident; inTime = timeOfIncident - loiteringSeconds.
+  // Stored as Dates so the frontend can format hours/minutes/seconds itself.
+  inTime: { type: Date, default: null },
+  outTime: { type: Date, default: null },
 });
 const LoiteringDetectionIncident = Incident.discriminator('loiteringDetection', loiteringDetectionSchema);
 

@@ -87,6 +87,11 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const fragmentAnchorsRef = useRef([]);
   const playlistClockRef = useRef(null);
   const playbackProgressRef = useRef({ playing: false, buffering: false });
+  // Honeywell/TVT serves one static DASH manifest covering [loadedAt, end of
+  // day] per session, and the NVR allows only one such session at a time
+  // with no way to release it early — so a seek within that already-loaded
+  // range should just move video.currentTime, never call loadAt again.
+  const loadedRangeMsRef = useRef(null); // { start, end } in cursorMs terms, or null
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
@@ -118,6 +123,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     setVideoState('idle');
     setTimelineZoomLevel(0);
     setThumbnailCache(new Map());
+    loadedRangeMsRef.current = null;
   }, [channelId, +day]);
 
   // Fetch event markers + recording-segment availability for the day
@@ -205,14 +211,30 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         });
         if (token !== seekTokenRef.current) return;
         if (!url) { transportRef.current?.pause(); setVideoState('no-recording'); setVideoUrl(''); return; }
+        // This manifest covers [requestedMs, end of day] as one static file —
+        // remember that so later seeks inside it can skip loadAt entirely.
+        loadedRangeMsRef.current = /\.mpd(\?|$)/i.test(url)
+          ? { start: requestedMs, end: DAY_MS - 1000 }
+          : null;
         setVideoUrl(url);
         // A retry/seek may return the same playlist URL with a new source behind it.
         setSourceRevision((revision) => revision + 1);
-      } catch {
+      } catch (err) {
         if (token !== seekTokenRef.current) return;
         transportRef.current?.pause();
         setVideoState('no-recording');
         setVideoUrl('');
+        // Honeywell/TVT NVRs allow only one playback session device-wide,
+        // with no API to release it early — every seek races the previous
+        // one's session. Surface that distinctly so it reads as an expected
+        // hardware limit, not a generic failure.
+        if (err?.response?.status === 409) {
+          toast.warning(err.response?.data?.body?.message || 'This NVR can only play one recording at a time. Please wait a moment and try again.', {
+            id: 'honeywell-playback-mutex',
+            position: 'bottom-right',
+            duration: 4000,
+          });
+        }
       }
     }, SCRUB_DEBOUNCE_MS);
   }, [channelId, day, triggerFutureAlert]);
@@ -226,7 +248,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     };
   }, [channelId, +day, loadAt]);
 
-  // HLS attach
+  // HLS/DASH attach
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
@@ -236,6 +258,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       return;
     }
     let hls;
+    let dash;
     let cancelled = false;
     let retryTimer = null;
     let attempts = 0;
@@ -249,7 +272,36 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       if (retryTimer) clearTimeout(retryTimer);
       transportRef.current?.fail(error);
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      if (dash) { try { dash.destroy(); } catch { /* noop */ } }
     };
+
+    // Honeywell/TVT NVRs serve recordings as DASH (.mpd), not HLS — a static,
+    // finite manifest (no live edge), so dash.js's own timeline is already
+    // wall-clock-accurate and needs none of the HLS branch's fragment-clock
+    // anchoring below. No scrub-retry loop either: mediaPresentationDuration
+    // covers the requested range as one file, so there's no 404-while-encoding
+    // race like a live HLS playlist has.
+    if (/\.mpd(\?|$)/i.test(videoUrl)) {
+      import('dashjs').then(({ default: dashjs }) => {
+        if (!isCurrent()) return;
+        transportRef.current?.attach();
+        dash = dashjs.MediaPlayer().create();
+        dash.initialize(video, videoUrl, false);
+        dash.on(dashjs.MediaPlayer.events.ERROR, (event) => {
+          if (!isCurrent()) return;
+          // eslint-disable-next-line no-console -- diagnosing real playback failures, not a leftover debug log
+          console.error('DASH playback error', event);
+          failPlayback(event?.error);
+        });
+      }).catch((error) => {
+        failPlayback(error);
+      });
+      return () => {
+        cancelled = true;
+        if (dash) { try { dash.destroy(); } catch { /* noop */ } }
+        else { video.removeAttribute('src'); video.load(); }
+      };
+    }
 
     import('hls.js').then(({ default: Hls }) => {
       if (!isCurrent()) return;
@@ -465,7 +517,16 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       setCursorMs(clamped);
       streamStartMsRef.current = clamped;
       lastSeekMsRef.current = clamped;
-      loadAt(clamped);
+
+      // Already-loaded DASH manifest covers this point (see loadedRangeMsRef
+      // note above) — just move the playhead. No loadAt, no new NVR session.
+      const loaded = loadedRangeMsRef.current;
+      const video = videoRef.current;
+      if (loaded && video && clamped >= loaded.start && clamped <= loaded.end) {
+        video.currentTime = (clamped - loaded.start) / 1000;
+      } else {
+        loadAt(clamped);
+      }
 
       // Attempt immediate capture if the video element is already rendering
       requestAnimationFrame(() => {

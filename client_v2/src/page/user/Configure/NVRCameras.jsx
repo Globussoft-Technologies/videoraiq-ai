@@ -331,6 +331,7 @@ const NVR_BRANDS = [
   {value:'tiandy', label:'Tiandy'},
   {value:'securus', label:'Securus'},
   { value: 'honeywell', label: 'Honeywell' },
+  { value: 'prama', label: 'Prama' },
 ];
 
 // ── Shimmering placeholder block for loading states ────────────────────────

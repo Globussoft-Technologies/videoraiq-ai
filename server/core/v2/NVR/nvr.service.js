@@ -19,6 +19,7 @@ import mongoose from "mongoose";
 import { emitCameraLimit } from "../../../socket.js";
 import { isLicensingEnforced } from "../clientConfig/detectionLicense.service.js";
 import { fetchHoneywellTvtCameras } from "./honeywellTvt.js";
+import { isapiPrefix } from "./isapiPrefix.js";
 
 /**
  * A channel's identifier, whichever field this deployment stores it in.
@@ -503,10 +504,10 @@ class NVRService {
 
       // 6. If credentials changed, validate with the NVR
       if (credentialsChanged) {
-        if (existingNvr.brand === "hikvision") {
+        if (existingNvr.brand === "hikvision" || existingNvr.brand === "prama") {
           const testClient = new DigestFetch(username, passwordToUse);
           const testRes = await testClient.fetch(
-            `http://${ip}:${port}/ISAPI/System/deviceInfo`,
+            `http://${ip}:${port}/${await isapiPrefix(testClient, `http://${ip}:${port}`, existingNvr.brand)}/System/deviceInfo`,
           );
 
           if (!testRes.ok) {
@@ -534,8 +535,6 @@ class NVRService {
           }
         } else if (existingNvr.brand === "dahua") {
           // TODO: Add Dahua auth test logic
-        } else if (existingNvr.brand === "prama") {
-          // TODO: Add Prama auth test logic
         } else if (existingNvr.brand === "honeywell") {
           await fetchHoneywellTvtCameras({
             ip,
@@ -1167,9 +1166,15 @@ class NVRService {
           rtspChannels: cam.rtspChannels || [],
         });
 
-        const uid = `${savedNvr._id}-${savedCam._id}`;
-        const rtspUrl = buildRTSPUrl(savedNvr, savedCam, "main");
-        await registerCameraStream(uid, rtspUrl, savedNvr?.userId);
+        try {
+          const uid = `${savedNvr._id}-${savedCam._id}`;
+          const rtspUrl = buildRTSPUrl(savedNvr, savedCam, "main");
+          await registerCameraStream(uid, rtspUrl, savedNvr?.userId);
+        } catch (streamError) {
+          // Channel had no stream ID (camera unreachable at discovery) — keep
+          // the camera saved so it shows up for retry, just skip registration.
+          logger.error(`Failed to register stream for camera ${savedCam._id}:`, streamError);
+        }
         savedCameras.push(savedCam);
       }
 
@@ -1369,12 +1374,19 @@ class NVRService {
     try {
       const client = new DigestFetch(username, password);
 
-      if (brand.toLowerCase() === "hikvision") {
+      if (brand.toLowerCase() === "hikvision" || brand.toLowerCase() === "prama") {
+        // Prama is rebranded Hikvision firmware: identical endpoints and XML,
+        // but newer builds serve them under /pramaAPI/ (see isapiPrefix).
+        // RTSP paths are unchanged.
+        const api = await isapiPrefix(client, `http://${ip}:${port}`, brand);
         const deviceInfoRes = await client.fetch(
-          `http://${ip}:${port}/ISAPI/System/deviceInfo`
+          `http://${ip}:${port}/${api}/System/deviceInfo`
         );
         if (!deviceInfoRes.ok) {
-          return { error: "Failed to authenticate with Hikvision NVR" };
+          return {
+            error: `Failed to authenticate with ${brand.toLowerCase() === "prama" ? "Prama" : "Hikvision"} NVR ` +
+              `(HTTP ${deviceInfoRes.status}) — check the HTTP port and credentials`,
+          };
         }
 
         const deviceInfoXml = await deviceInfoRes.text();
@@ -1403,12 +1415,12 @@ class NVRService {
         };
 
         const channels = await fetchAllPaged(
-          "/ISAPI/ContentMgmt/InputProxy/channels",
+          `/${api}/ContentMgmt/InputProxy/channels`,
           "InputProxyChannelList",
           "InputProxyChannel"
         );
 
-        const statusPath = "/ISAPI/ContentMgmt/InputProxy/channels/status";
+        const statusPath = `/${api}/ContentMgmt/InputProxy/channels/status`;
         let statuses = [];
         // Hikvision can expose an input channel before its proxy stream ID.
         // Never build/register a URL ending in `/Streaming/Channels/`.
@@ -1428,7 +1440,7 @@ class NVRService {
         }
 
         const streamingChannels = await fetchAllPaged(
-          "/ISAPI/Streaming/channels",
+          `/${api}/Streaming/channels`,
           "StreamingChannelList",
           "StreamingChannel"
         );
@@ -2236,6 +2248,24 @@ class NVRService {
         await Camera.bulkWrite(bulkOps);
       }
 
+      // This endpoint only ever flipped isAdded — a camera discovered before a
+      // URL-building fix (or before the streaming server had it) stayed
+      // unregistered forever, since nothing else re-registers an existing
+      // camera's stream. Re-register every selected camera here; the
+      // streaming server treats it as an idempotent upsert on the same uid.
+      const newlySelected = allCameras.filter((cam) => selectedSet.has(channelKey(cam)));
+      await Promise.all(
+        newlySelected.map(async (cam) => {
+          try {
+            const uid = `${nvr._id}-${cam._id}`;
+            const rtspUrl = buildRTSPUrl(nvr, cam, "main");
+            await registerCameraStream(uid, rtspUrl, user_id);
+          } catch (streamError) {
+            logger.error(`Failed to register stream for camera ${cam._id}:`, streamError);
+          }
+        }),
+      );
+
       // Fetch all updated cameras (including inactive for complete state)
       const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
 
@@ -2350,6 +2380,24 @@ class NVRService {
           }
         });
       }
+
+      // Re-register every already-known camera too — this screen is the only
+      // place that re-fetches live channel data for an existing NVR, so it's
+      // also the natural place to heal a camera that was registered with a
+      // bad URL (e.g. a fixed brand format) or never registered at all.
+      // Idempotent upsert on the same uid; fire-and-forget like the block above.
+      camerasData.cameras
+        .filter((cam) => addedMap.has(channelKey(cam)))
+        .forEach((cam) => {
+          const { _id: dbId } = addedMap.get(channelKey(cam));
+          try {
+            const uid = `${nvr._id}-${dbId}`;
+            const rtspUrl = buildRTSPUrl(nvr, cam, "main");
+            registerCameraStream(uid, rtspUrl, nvr.userId);
+          } catch (streamError) {
+            logger.error(`Failed to re-register stream for camera ${dbId}:`, streamError);
+          }
+        });
 
       const availableCameras = camerasData.cameras.map((cam) => ({
         ...cam,

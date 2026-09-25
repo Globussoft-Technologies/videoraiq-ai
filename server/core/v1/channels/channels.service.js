@@ -880,7 +880,7 @@ class ChannelService {
           : t;
         const start = new Date(normalise(startTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
         const end   = new Date(normalise(endTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
-        const playbackUrl = `rtsp://${username}:${password}@${ip}:${rtspPort}/${chId}/1?starttime=${start}&endtime=${end}`;
+        const playbackUrl = `rtsp://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${ip}:${rtspPort}/${chId}/1?starttime=${start}&endtime=${end}`;
         return res.status(200).json(
           Response.userSuccessResp("Playback URL retrieved successfully", { playbackUrl })
         );

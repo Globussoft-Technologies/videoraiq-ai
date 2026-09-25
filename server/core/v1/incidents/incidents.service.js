@@ -536,6 +536,13 @@ class IncidentsService {
       } else if (incidentType === "loiteringDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
+        // outTime = timeOfIncident; inTime = timeOfIncident - loiteringSeconds.
+        const loiteringSeconds = Number(req?.body?.loiteringSeconds);
+        if (newIncident.timeOfIncident && Number.isFinite(loiteringSeconds)) {
+          newIncident.loiteringSeconds = loiteringSeconds;
+          newIncident.outTime = new Date(newIncident.timeOfIncident);
+          newIncident.inTime = new Date(newIncident.outTime.getTime() - loiteringSeconds * 1000);
+        }
       } else if (incidentType === "tableOccupancyDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
