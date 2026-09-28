@@ -62,7 +62,9 @@ function DeviceCard({ device, busy, onDecision, onDelete }) {
           {connected ? <Wifi size={14} /> : <WifiOff size={14} />}{connected ? 'Pi is connected' : 'Pi is not currently connected'}
         </span>
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          <button disabled={busy} onClick={() => onDelete(device)} style={{ alignItems: 'center', background: 'transparent', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, color: 'var(--crit)', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}><Trash2 size={14} /> Delete</button>
+          {device.approvalStatus !== 'pending' && (
+            <button disabled={busy} onClick={() => onDelete(device)} style={{ alignItems: 'center', background: 'transparent', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, color: 'var(--crit)', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}><Trash2 size={14} /> Delete</button>
+          )}
           {device.approvalStatus === 'pending' && (
             <>
             <button disabled={busy} onClick={() => onDecision(device, 'rejected')} style={{ alignItems: 'center', background: 'rgba(239,68,68,.10)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, color: 'var(--crit)', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}><X size={14} /> Reject</button>

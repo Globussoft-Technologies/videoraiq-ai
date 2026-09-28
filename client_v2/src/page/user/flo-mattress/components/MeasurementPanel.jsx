@@ -131,7 +131,7 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-400/5" />
-        {resolvedImage && <div className="pointer-events-none absolute inset-x-[13%] inset-y-[20%] rounded border border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,.2)]" />}
+        {/* {resolvedImage && <div className="pointer-events-none absolute inset-x-[13%] inset-y-[20%] rounded border border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,.2)]" />} */}
         <div className="absolute inset-x-3 bottom-2 flex items-center justify-end bg-transparent px-3 py-1.5">
           {imageDetailsExpanded && (
             <>

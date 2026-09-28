@@ -29,6 +29,9 @@ import {
 const POLL_INTERVAL_MS = 1500;
 const BUSY_STATUSES = new Set(['capturing', 'calibrating']);
 const CALIBRATION_DRAFT_KEY = 'videoraiq:measurement-calibration:drafts:v1';
+const RECTANGLE_MIN_MM = 300;
+const RECTANGLE_MAX_MM = 6000;
+const RECTANGLE_LABELS = ['P0 far-left', 'P1 far-right', 'P2 near-right', 'P3 near-left'];
 
 function readCalibrationDrafts() {
   try {
@@ -39,9 +42,9 @@ function readCalibrationDrafts() {
   }
 }
 
-function validDraftPoints(points) {
+function validDraftPoints(points, zoneType = 'polygon') {
   if (!Array.isArray(points)) return [];
-  return points.slice(0, 32).filter((point) => (
+  return points.slice(0, zoneType === 'rectangle' ? 4 : 32).filter((point) => (
     Number.isFinite(point?.x)
     && Number.isFinite(point?.y)
     && point.x >= 0
@@ -56,11 +59,58 @@ function storedDraft(deviceId) {
   if (!draft || typeof draft !== 'object') return null;
   const savedFlatness = Number(draft.flatness);
   const savedTolerance = Number(draft.tolerance);
+  const zoneType = draft.zoneType === 'rectangle' ? 'rectangle' : 'polygon';
   return {
-    points: validDraftPoints(draft.points),
+    zoneType,
+    points: validDraftPoints(draft.points, zoneType),
+    zoneLengthMm: draft.zoneLengthMm ?? '',
+    zoneBreadthMm: draft.zoneBreadthMm ?? '',
     flatness: savedFlatness >= 10 && savedFlatness <= 100 ? savedFlatness : 85,
     tolerance: savedTolerance >= 1 && savedTolerance <= 100 ? savedTolerance : 20,
   };
+}
+
+function cross(a, b, c) {
+  return ((b.x - a.x) * (c.y - b.y)) - ((b.y - a.y) * (c.x - b.x));
+}
+
+function rectangleValidity(points, length, breadth) {
+  const errors = [];
+  const warnings = [];
+  if (points.length !== 4) errors.push('Click exactly four corners in P0, P1, P2, P3 order.');
+
+  if (points.length === 4) {
+    const duplicate = points.some((point, index) => points.some((other, otherIndex) => (
+      otherIndex > index && Math.hypot(point.x - other.x, point.y - other.y) < 0.001
+    )));
+    if (duplicate) errors.push('Rectangle corners must be unique.');
+
+    const turns = points.map((point, index) => cross(point, points[(index + 1) % 4], points[(index + 2) % 4]));
+    if (turns.some((value) => Math.abs(value) < 0.00001)
+      || !(turns.every((value) => value > 0) || turns.every((value) => value < 0))) {
+      errors.push('The four corners must form a convex rectangle without crossing sides.');
+    }
+
+    const area = Math.abs(points.reduce((sum, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return sum + (point.x * next.y) - (next.x * point.y);
+    }, 0) / 2);
+    if (area < 0.02) errors.push('The rectangle must cover at least 2% of the captured frame.');
+
+    if ((points[0].y + points[1].y) / 2 >= (points[2].y + points[3].y) / 2) {
+      warnings.push('The far edge P0–P1 is not above the near edge P2–P3; confirm the physical corner order.');
+    }
+    if ((points[0].x + points[3].x) / 2 >= (points[1].x + points[2].x) / 2) {
+      warnings.push('The left edge P0–P3 is not left of P1–P2; confirm the physical corner order.');
+    }
+  }
+
+  const validDimension = (value) => Number.isFinite(Number(value))
+    && Number(value) >= RECTANGLE_MIN_MM
+    && Number(value) <= RECTANGLE_MAX_MM;
+  if (!validDimension(breadth)) errors.push(`Breadth must be ${RECTANGLE_MIN_MM}–${RECTANGLE_MAX_MM} mm.`);
+  if (!validDimension(length)) errors.push(`Length must be ${RECTANGLE_MIN_MM}–${RECTANGLE_MAX_MM} mm.`);
+  return { errors: [...new Set(errors)], warnings };
 }
 
 function saveCalibrationDraft(deviceId, draft) {
@@ -201,6 +251,9 @@ export default function MeasurementCalibration() {
   const [pageError, setPageError] = useState('');
   const [operation, setOperation] = useState('');
   const [confirmCalibration, setConfirmCalibration] = useState(false);
+  const [zoneType, setZoneType] = useState('polygon');
+  const [zoneLengthMm, setZoneLengthMm] = useState('');
+  const [zoneBreadthMm, setZoneBreadthMm] = useState('');
   const [flatness, setFlatness] = useState(85);
   const [tolerance, setTolerance] = useState(20);
   const [draftReady, setDraftReady] = useState(false);
@@ -225,7 +278,15 @@ export default function MeasurementCalibration() {
     && Number.isFinite(toleranceValue)
     && toleranceValue >= 1
     && toleranceValue <= 100;
-  const canCalibrate = points.length >= 3 && !busy && Boolean(deviceId) && settingsValid;
+  const zoneValidity = useMemo(() => {
+    if (zoneType === 'rectangle') return rectangleValidity(points, zoneLengthMm, zoneBreadthMm);
+    return {
+      errors: points.length >= 3 ? [] : ['Click at least three points around the usable surface.'],
+      warnings: [],
+    };
+  }, [points, zoneBreadthMm, zoneLengthMm, zoneType]);
+  const maxPoints = zoneType === 'rectangle' ? 4 : 32;
+  const canCalibrate = !zoneValidity.errors.length && !busy && Boolean(deviceId) && settingsValid;
 
   const loadFrame = useCallback(async (selectedId, version = '') => {
     try {
@@ -301,7 +362,10 @@ export default function MeasurementCalibration() {
     calibrationStartedHereRef.current = false;
     setDraftReady(false);
     setStatus(null);
+    setZoneType(draft?.zoneType || 'polygon');
     setPoints(draft?.points || []);
+    setZoneLengthMm(draft?.zoneLengthMm ?? '');
+    setZoneBreadthMm(draft?.zoneBreadthMm ?? '');
     setFlatness(draft?.flatness ?? 85);
     setTolerance(draft?.tolerance ?? 20);
     setFrameError('');
@@ -317,11 +381,19 @@ export default function MeasurementCalibration() {
     getSavedCalibrationZone(deviceId)
       .then((saved) => {
         if (cancelled || activeDeviceRef.current !== deviceId || !saved) return;
-        setPoints(validDraftPoints(saved.points));
+        const savedZoneType = saved.zone_type === 'rectangle' ? 'rectangle' : 'polygon';
+        const savedPoints = validDraftPoints(saved.points, savedZoneType);
+        setZoneType(savedZoneType);
+        setPoints(savedPoints);
+        setZoneLengthMm(saved.zone_length_mm ?? '');
+        setZoneBreadthMm(saved.zone_breadth_mm ?? '');
         setFlatness(Math.round(Number(saved.min_zone_flat_ratio) * 100));
         setTolerance(Number(saved.inlier_tolerance_mm));
         saveCalibrationDraft(deviceId, {
-          points: validDraftPoints(saved.points),
+          zoneType: savedZoneType,
+          points: savedPoints,
+          zoneLengthMm: saved.zone_length_mm ?? '',
+          zoneBreadthMm: saved.zone_breadth_mm ?? '',
           flatness: Math.round(Number(saved.min_zone_flat_ratio) * 100),
           tolerance: Number(saved.inlier_tolerance_mm),
         });
@@ -348,17 +420,28 @@ export default function MeasurementCalibration() {
       return undefined;
     }
     const draft = {
-      points: validDraftPoints(points),
+      zoneType,
+      points: validDraftPoints(points, zoneType),
+      zoneLengthMm,
+      zoneBreadthMm,
       flatness: Number(flatness),
       tolerance: Number(tolerance),
     };
     saveCalibrationDraft(deviceId, draft);
     const timer = window.setTimeout(() => {
-      saveCalibrationZone(deviceId, {
+      const serverDraft = {
+        zone_type: zoneType,
         points: draft.points,
         min_zone_flat_ratio: draft.flatness / 100,
         inlier_tolerance_mm: draft.tolerance,
-      })
+      };
+      if (zoneType === 'rectangle') {
+        const length = Number(zoneLengthMm);
+        const breadth = Number(zoneBreadthMm);
+        if (length >= RECTANGLE_MIN_MM && length <= RECTANGLE_MAX_MM) serverDraft.zone_length_mm = length;
+        if (breadth >= RECTANGLE_MIN_MM && breadth <= RECTANGLE_MAX_MM) serverDraft.zone_breadth_mm = breadth;
+      }
+      saveCalibrationZone(deviceId, serverDraft)
         .then(() => {
           draftSaveErrorShownRef.current = false;
         })
@@ -369,7 +452,7 @@ export default function MeasurementCalibration() {
         });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [deviceId, draftReady, flatness, points, tolerance]);
+  }, [deviceId, draftReady, flatness, points, tolerance, zoneBreadthMm, zoneLengthMm, zoneType]);
 
   useEffect(() => {
     if (!deviceId) return undefined;
@@ -421,9 +504,14 @@ export default function MeasurementCalibration() {
     setOperation('calibrate');
     try {
       const nextStatus = await runMeasurementCalibration(deviceId, {
+        zone_type: zoneType,
         points,
         min_zone_flat_ratio: flatnessValue / 100,
         inlier_tolerance_mm: toleranceValue,
+        ...(zoneType === 'rectangle' ? {
+          zone_length_mm: Number(zoneLengthMm),
+          zone_breadth_mm: Number(zoneBreadthMm),
+        } : {}),
       });
       setStatus(nextStatus);
       setPageError('');
@@ -444,11 +532,18 @@ export default function MeasurementCalibration() {
     // Only the empty SVG drawing surface may add a point. Without this guard,
     // clicks on an existing marker (or a child element) bubble to the SVG and
     // create an unexpected extra vertex.
-    if (event.target !== event.currentTarget || !frameUrl || busy || points.length >= 32) return;
+    if (event.target !== event.currentTarget || !frameUrl || busy || points.length >= maxPoints) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
     const y = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
     setPoints((current) => [...current, { x, y }]);
+  };
+
+  const changeZoneType = (nextType) => {
+    if (nextType === zoneType || busy) return;
+    setZoneType(nextType);
+    setPoints([]);
+    setPageError('');
   };
 
   if (!isAdmin) {
@@ -462,6 +557,27 @@ export default function MeasurementCalibration() {
   }
 
   const polygon = points.map((point) => `${point.x * 1000},${point.y * 1000}`).join(' ');
+  const rectangleEdges = zoneType === 'rectangle' && points.length === 4
+    ? [
+      { from: points[0], to: points[1], label: `${zoneBreadthMm || '?'} mm breadth` },
+      { from: points[1], to: points[2], label: `${zoneLengthMm || '?'} mm length` },
+      { from: points[2], to: points[3], label: `${zoneBreadthMm || '?'} mm breadth` },
+      { from: points[3], to: points[0], label: `${zoneLengthMm || '?'} mm length` },
+    ]
+    : [];
+  const visibleZoneMessage = zoneValidity.errors[0]
+    || zoneValidity.warnings[0]
+    || (zoneType === 'rectangle' ? 'Rectangle is valid and ready to calibrate.' : 'Polygon is valid and ready to calibrate.');
+  const visibleZoneTone = zoneValidity.errors.length
+    ? 'var(--crit)'
+    : zoneValidity.warnings.length
+      ? 'var(--warn)'
+      : 'var(--ok)';
+  const activeMetricSolveRecorded = [
+    status?.active_zone?.planar_scale_x,
+    status?.active_zone?.planar_scale_y,
+    status?.active_zone?.rectangle_rms_mm,
+  ].every((value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 22 }}>
@@ -501,8 +617,17 @@ export default function MeasurementCalibration() {
           <div style={{ alignItems: 'center', borderBottom: '1px solid var(--bd)', display: 'flex', flexWrap: 'wrap', gap: 9, padding: '13px 15px' }}>
             <Camera size={17} style={{ color: 'var(--blue)' }} />
             <strong style={{ color: 'var(--tx)', fontSize: 13.5 }}>RealSense calibration frame</strong>
-            <span style={{ color: 'var(--tx3)', fontSize: 11 }}>Click around the usable empty surface in order.</span>
+            <span style={{ color: 'var(--tx3)', fontSize: 11 }}>
+              {zoneType === 'rectangle'
+                ? 'Click P0 far-left, P1 far-right, P2 near-right, then P3 near-left.'
+                : 'Click around the usable empty surface in order.'}
+            </span>
             <span style={{ marginLeft: 'auto' }}><StatusBadge value={status?.status} /></span>
+          </div>
+
+          <div role={zoneValidity.errors.length ? 'alert' : 'status'} style={{ alignItems: 'center', background: `color-mix(in srgb, ${visibleZoneTone} 8%, var(--bg1))`, borderBottom: '1px solid var(--bd)', color: visibleZoneTone, display: 'flex', fontSize: 11.5, gap: 7, minHeight: 34, padding: '7px 15px' }}>
+            {zoneValidity.errors.length || zoneValidity.warnings.length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+            {visibleZoneMessage}
           </div>
 
           <div style={{ background: '#07111f', minHeight: 380, position: 'relative' }}>
@@ -514,7 +639,7 @@ export default function MeasurementCalibration() {
                   onClick={addPoint}
                   preserveAspectRatio="none"
                   role="application"
-                  style={{ cursor: busy ? 'wait' : points.length >= 32 ? 'not-allowed' : 'crosshair', display: 'block', height: '100%', inset: 0, overflow: 'hidden', position: 'absolute', touchAction: 'none', width: '100%', zIndex: 1 }}
+                  style={{ cursor: busy ? 'wait' : points.length >= maxPoints ? 'not-allowed' : 'crosshair', display: 'block', height: '100%', inset: 0, overflow: 'hidden', position: 'absolute', touchAction: 'none', width: '100%', zIndex: 1 }}
                   viewBox="0 0 1000 1000"
                 >
                   {points.length >= 3 && <polygon fill="rgba(34,197,94,.18)" pointerEvents="none" points={polygon} stroke="#22c55e" strokeWidth="4" vectorEffect="non-scaling-stroke" />}
@@ -522,8 +647,27 @@ export default function MeasurementCalibration() {
                   {points.map((point, index) => (
                     <g key={`${point.x}-${point.y}-${index}`} pointerEvents="none">
                       <circle cx={point.x * 1000} cy={point.y * 1000} fill="#fff" r="10" stroke="#22c55e" strokeWidth="5" vectorEffect="non-scaling-stroke" />
-                      <text fill="#07111f" fontSize="18" fontWeight="800" textAnchor="middle" x={point.x * 1000} y={(point.y * 1000) + 6}>{index + 1}</text>
+                      <text fill="#07111f" fontSize={zoneType === 'rectangle' ? 15 : 18} fontWeight="800" paintOrder="stroke" stroke="#fff" strokeWidth="3" textAnchor="middle" x={point.x * 1000} y={(point.y * 1000) - 16}>
+                        {zoneType === 'rectangle' ? RECTANGLE_LABELS[index] : index + 1}
+                      </text>
                     </g>
+                  ))}
+                  {rectangleEdges.map((edge, index) => (
+                    <text
+                      fill="#fff"
+                      fontSize="15"
+                      fontWeight="800"
+                      key={`${edge.label}-${index}`}
+                      paintOrder="stroke"
+                      pointerEvents="none"
+                      stroke="#07111f"
+                      strokeWidth="5"
+                      textAnchor="middle"
+                      x={((edge.from.x + edge.to.x) / 2) * 1000}
+                      y={(((edge.from.y + edge.to.y) / 2) * 1000) - 9}
+                    >
+                      {edge.label}
+                    </text>
                   ))}
                 </svg>
                 {busy && (
@@ -544,14 +688,48 @@ export default function MeasurementCalibration() {
             </button>
             <button disabled={!points.length || busy} onClick={() => setPoints((current) => current.slice(0, -1))} style={actionStyle('secondary', !points.length || busy)} type="button"><Undo2 size={15} /> Undo point</button>
             <button disabled={!points.length || busy} onClick={() => setPoints([])} style={actionStyle('danger', !points.length || busy)} type="button"><RotateCcw size={15} /> Clear zone</button>
-            <span style={{ color: points.length >= 3 ? 'var(--ok)' : 'var(--tx3)', fontFamily: 'var(--mono)', fontSize: 10.5, marginLeft: 'auto' }}>{points.length} / 32 points</span>
+            <span style={{ color: zoneValidity.errors.length ? 'var(--tx3)' : 'var(--ok)', fontFamily: 'var(--mono)', fontSize: 10.5, marginLeft: 'auto' }}>{points.length} / {maxPoints} points</span>
           </div>
         </section>
 
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <section style={panelStyle({ padding: 16 })}>
             <strong style={{ color: 'var(--tx)', display: 'block', fontSize: 13.5 }}>Calibration controls</strong>
-            <p style={{ color: 'var(--tx3)', fontSize: 11.5, lineHeight: 1.55, margin: '5px 0 16px' }}>Keep the polygon slightly inside the physical surface edges.</p>
+            <p style={{ color: 'var(--tx3)', fontSize: 11.5, lineHeight: 1.55, margin: '5px 0 16px' }}>
+              {zoneType === 'rectangle'
+                ? 'Mark the four physical corners in the required order and enter the real dimensions.'
+                : 'Keep the polygon slightly inside the physical surface edges.'}
+            </p>
+
+            <div aria-label="Calibration zone mode" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 9, display: 'grid', gap: 4, gridTemplateColumns: '1fr 1fr', marginBottom: 16, padding: 4 }}>
+              {['polygon', 'rectangle'].map((mode) => (
+                <button
+                  disabled={busy}
+                  key={mode}
+                  onClick={() => changeZoneType(mode)}
+                  style={{ background: zoneType === mode ? 'var(--blue)' : 'transparent', border: 0, borderRadius: 7, color: zoneType === mode ? '#fff' : 'var(--tx2)', cursor: busy ? 'not-allowed' : 'pointer', fontSize: 11.5, fontWeight: 750, padding: '8px 10px', textTransform: 'capitalize' }}
+                  type="button"
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {zoneType === 'rectangle' && (
+              <div style={{ display: 'grid', gap: 11, gridTemplateColumns: '1fr 1fr', marginBottom: 16 }}>
+                <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
+                  Length (P0-P3)
+                  <input disabled={busy} max={RECTANGLE_MAX_MM} min={RECTANGLE_MIN_MM} onChange={(event) => setZoneLengthMm(event.target.value)} placeholder="e.g. 2000" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', marginTop: 6, padding: '8px', width: '100%' }} type="number" value={zoneLengthMm} />
+                </label>
+                <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
+                  Breadth (P0-P1)
+                  <input disabled={busy} max={RECTANGLE_MAX_MM} min={RECTANGLE_MIN_MM} onChange={(event) => setZoneBreadthMm(event.target.value)} placeholder="e.g. 1800" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', marginTop: 6, padding: '8px', width: '100%' }} type="number" value={zoneBreadthMm} />
+                </label>
+                <div style={{ color: 'var(--tx3)', fontSize: 10.5, gridColumn: '1 / -1', lineHeight: 1.5 }}>
+                  Required range: {RECTANGLE_MIN_MM}-{RECTANGLE_MAX_MM} mm. Corner order: P0 far-left, P1 far-right, P2 near-right, P3 near-left.
+                </div>
+              </div>
+            )}
 
             <label style={{ color: 'var(--tx2)', display: 'block', fontSize: 11.5, fontWeight: 650 }}>
               Minimum flatness
@@ -590,12 +768,52 @@ export default function MeasurementCalibration() {
                 : status?.message || pageError || 'Select a station to fetch its calibration status.'}
             </p>
             {pageError && status?.message && <p role="alert" style={{ color: 'var(--crit)', fontSize: 11.5, margin: '9px 0 0' }}>{pageError}</p>}
+            {Array.isArray(status?.warnings) && status.warnings.map((warning) => (
+              <p key={warning} role="status" style={{ color: 'var(--warn)', fontSize: 11.5, margin: '9px 0 0' }}>Warning: {warning}</p>
+            ))}
             {status?.camera_owner && <div style={{ background: 'var(--bg2)', borderRadius: 8, color: 'var(--tx3)', fontFamily: 'var(--mono)', fontSize: 10, marginTop: 11, padding: 9 }}>Camera owner: {status.camera_owner}</div>}
+            {typeof status?.baseline_available === 'boolean' && (
+              <div style={{ color: status.baseline_available ? 'var(--ok)' : 'var(--warn)', fontSize: 11, lineHeight: 1.5, marginTop: 10 }}>
+                {status.baseline_available
+                  ? 'Empty-surface depth baseline is active.'
+                  : 'No depth baseline is recorded. Measurements use the fitted plane and may be noisier near the surface.'}
+              </div>
+            )}
             {status?.updated_at && <div style={{ color: 'var(--tx3)', fontSize: 10.5, marginTop: 10 }}>Updated {new Date(status.updated_at).toLocaleString()}</div>}
             <div style={{ alignItems: 'center', color: 'var(--tx3)', display: 'flex', fontSize: 10.5, gap: 6, marginTop: 12 }}>
               <RefreshCw className={BUSY_STATUSES.has(status?.status) ? 'animate-spin' : ''} size={12} />
               Status updates automatically
             </div>
+
+            {status?.active_zone && (
+              <div style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, marginTop: 14, padding: 11 }}>
+                <strong style={{ color: 'var(--tx)', display: 'block', fontSize: 11.5, marginBottom: 8 }}>Active measurement zone</strong>
+                {status.active_zone.error ? (
+                  <div role="alert" style={{ color: 'var(--crit)', fontSize: 11, overflowWrap: 'anywhere' }}>{status.active_zone.error}</div>
+                ) : (
+                  <div style={{ color: 'var(--tx2)', display: 'grid', fontSize: 10.5, gap: 6, gridTemplateColumns: '1fr auto' }}>
+                    <span>Type</span><strong style={{ color: 'var(--tx)', textTransform: 'capitalize' }}>{status.active_zone.zone_type || 'unknown'}</strong>
+                    <span>Points</span><strong style={{ color: 'var(--tx)' }}>{status.active_zone.point_count ?? '-'}</strong>
+                    {status.active_zone.zone_type === 'rectangle' && (
+                      <>
+                        <span>Declared breadth x length</span>
+                        <strong style={{ color: 'var(--tx)' }}>{status.active_zone.zone_breadth_mm ?? '-'} x {status.active_zone.zone_length_mm ?? '-'} mm</strong>
+                        {activeMetricSolveRecorded ? (
+                            <>
+                              <span>Planar scale X / Y</span>
+                              <strong style={{ color: 'var(--tx)' }}>{Number(status.active_zone.planar_scale_x).toFixed(4)} / {Number(status.active_zone.planar_scale_y).toFixed(4)}</strong>
+                              <span>Corner RMS</span>
+                              <strong style={{ color: 'var(--tx)' }}>{Number(status.active_zone.rectangle_rms_mm).toFixed(2)} mm</strong>
+                            </>
+                          ) : (
+                            <div style={{ color: 'var(--tx3)', gridColumn: '1 / -1', marginTop: 2 }}>Metric solve: not recorded for this calibration.</div>
+                          )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section style={panelStyle({ background: 'rgba(245,158,11,.07)', borderColor: 'rgba(245,158,11,.28)', color: 'var(--tx2)', fontSize: 11.5, lineHeight: 1.55, padding: 14 })}>
@@ -614,6 +832,9 @@ export default function MeasurementCalibration() {
         message={(
           <div className="space-y-2">
             <p>The selected measurement surface must be completely empty.</p>
+            {zoneType === 'rectangle' && (
+              <p>Please confirm the declared {zoneBreadthMm} mm breadth and {zoneLengthMm} mm length were physically tape-measured.</p>
+            )}
             <p className="font-medium text-[var(--tx)]">Objects inside the zone will corrupt the reference plane used by future measurements.</p>
           </div>
         )}

@@ -947,6 +947,7 @@ export async function startDepthMeasurement(station, qrDimensions, signal) {
 
 export async function extractQrWithDs(station, jpegBlob, signal, { automatic = false } = {}) {
   const endpoint = qrExtractionUrl(station?.pi?.api, station?.pi?.device?.ip);
+  const startedAt = Date.now();
   const form = new FormData();
   form.append('image', jpegBlob, 'qr_code.jpg');
   try {
@@ -1044,10 +1045,38 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
         : 'Manual S capture was decoded by the DS QR fallback API',
       details: normalized,
     });
+    reportMeasurementApiDiagnostic(station, {
+      event: 'success',
+      endpoint,
+      sku: normalizedDimensions.sku,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      message: automatic ? 'Automatic QR extraction completed' : 'Manual QR extraction completed',
+    });
     return normalized;
   } catch (error) {
-    if (error.name === 'AbortError') throw error;
+    if (error.name === 'AbortError') {
+      reportMeasurementApiDiagnostic(station, {
+        event: 'timeout',
+        endpoint,
+        durationMs: Date.now() - startedAt,
+        message: 'QR extraction was aborted by the station workflow deadline',
+      });
+      throw error;
+    }
     const networkFailure = error instanceof TypeError || /failed to fetch/i.test(error.message);
+    // A readable HTTP response saying that this frame contains no QR is a
+    // normal scanner miss. Log only connectivity/unexpected service failures
+    // so the Docker logs remain useful during continuous automatic scanning.
+    if (networkFailure || (!error.failureReason && !error.serviceMessage)) {
+      reportMeasurementApiDiagnostic(station, {
+        event: networkFailure ? 'unreachable' : 'service-error',
+        endpoint,
+        status: error.status || null,
+        durationMs: Date.now() - startedAt,
+        message: error.message,
+      });
+    }
     const wrapped = new Error(networkFailure
       ? `Unable to reach the DS QR fallback API at ${endpoint}.`
       : error.message);
