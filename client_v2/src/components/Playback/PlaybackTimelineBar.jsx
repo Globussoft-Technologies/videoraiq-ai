@@ -368,14 +368,6 @@ export default function PlaybackTimelineBar({
   );
   const cursorVisible = cursorPx >= scrollLeft && cursorPx <= scrollLeft + containerWidth;
   const cursorLabelOffset = clampLabelCenter(cursorPx) - cursorPx;
-  const previewWidth = Math.min(208, containerWidth - 16);
-  const previewCenter = Math.max(
-    previewWidth / 2 + 8,
-    Math.min(containerWidth - previewWidth / 2 - 8, hoverX - scrollLeft)
-  );
-  const hoverRecorded = hoverMs !== null && isRecorded(hoverMs);
-  const hoverIsFuture = hoverMs !== null && isFutureSeek(dayStart, hoverMs);
-  const previewFrameUrl = hoverRecorded ? getNearestFrame(hoverMs) : null;
 
   return (
     <div 
@@ -385,33 +377,6 @@ export default function PlaybackTimelineBar({
         borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)'
       }}
     >
-      {isHovering && hoverMs !== null && !hoverIsFuture && (
-        <div
-          className="absolute bottom-full mb-2 z-50 rounded-xl border p-1.5 shadow-xl pointer-events-none"
-          style={{
-            left: `${(scrollRef.current?.offsetLeft || 14) + previewCenter}px`,
-            transform: 'translateX(-50%)',
-            width: previewWidth,
-            backgroundColor: isDark ? 'var(--bg1)' : '#ffffff',
-            borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)',
-            color: isDark ? '#f1f5f9' : '#334155',
-          }}
-        >
-          <div className="aspect-video overflow-hidden rounded-md bg-[#0c1017] flex items-center justify-center">
-            {previewFrameUrl ? (
-              <img src={previewFrameUrl} alt={`Recording preview at ${formatClock(hoverMs, true)}`} className="w-full h-full object-cover" />
-            ) : (
-              <span className="px-2 text-center text-[11px] text-slate-300">
-                {hoverRecorded ? 'Preview unavailable' : 'No recording at this time'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-2 px-1 pt-1.5 text-[11px] font-medium">
-            <span>Preview</span>
-            <span className="font-mono font-semibold text-violet-600 dark:text-violet-400">{formatClock(hoverMs, true)}</span>
-          </div>
-        </div>
-      )}
       <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 font-semibold" style={{ color: isDark ? '#f1f5f9' : '#000000' }}>
