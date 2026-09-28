@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   processWithDs: vi.fn(),
   sendPayloadToUser: vi.fn(),
   sendMeasurement: vi.fn(),
+  loggerInfo: vi.fn(),
+  loggerWarn: vi.fn(),
+  loggerError: vi.fn(),
   resolveMeasurementMediaReference: vi.fn(async (value) => {
     if (typeof value === "string") return value.trim() || null;
     return value?.url || value?.storagePath || null;
@@ -47,7 +50,11 @@ vi.mock("../../core/v2/measurementMedia/measurementMedia.service.js", () => ({
 }));
 
 vi.mock("../../utils/logger.js", () => ({
-  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  default: {
+    error: mocks.loggerError,
+    info: mocks.loggerInfo,
+    warn: mocks.loggerWarn,
+  },
 }));
 
 const { default: service } = await import(
@@ -205,6 +212,32 @@ describe("measurement incident service", () => {
       }),
       expect.objectContaining({ $set: expect.objectContaining({ status: "rejected" }) }),
       { new: true, runValidators: true },
+    );
+    expect(mocks.loggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining("[MEASUREMENT_DECISION] request started action=reject"),
+    );
+    expect(mocks.loggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining("[MEASUREMENT_DECISION] request completed action=reject"),
+    );
+  });
+
+  it.each([
+    ["ETIMEDOUT", "timeout"],
+    ["ECONNREFUSED", "connection-failure"],
+  ])("classifies %s while updating a decision as %s", async (code, failureType) => {
+    const error = Object.assign(new Error(`simulated ${code}`), { code });
+    mocks.findOneAndUpdate.mockReturnValue({ lean: vi.fn().mockRejectedValue(error) });
+    const res = responseDouble();
+
+    await service.updateStatus({
+      ...identity,
+      params: { id: "650000000000000000000501" },
+      body: { status: "accepted" },
+    }, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringContaining(`[MEASUREMENT_DECISION] ${failureType} action=accept`),
     );
   });
 

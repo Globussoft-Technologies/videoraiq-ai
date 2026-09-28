@@ -282,10 +282,28 @@ class RaspberryPiService {
     }
 
     try {
-      const device = await RaspberryPiDevice.findOneAndDelete({
+      const filter = {
         code,
         $or: [{ admin: null }, { admin: adminId }],
-      });
+      };
+      const existing = await RaspberryPiDevice.findOne(filter);
+      if (!existing) {
+        return res.status(404).json({ status: "error", message: "Raspberry Pi registration was not found" });
+      }
+
+      // A pending registration is the Pi's active pairing request. Removing it
+      // strands a Pi that is polling the same code: status and heartbeat calls
+      // return 404 until the Pi explicitly registers again. Keep the request so
+      // the administrator can still approve or reject it.
+      if ((existing.approvalStatus || "pending") === "pending") {
+        return res.status(200).json({
+          status: "success",
+          message: "Pending Raspberry Pi request retained for approval",
+          data: publicDevice(existing),
+        });
+      }
+
+      const device = await RaspberryPiDevice.findOneAndDelete(filter);
       if (!device) {
         return res.status(404).json({ status: "error", message: "Raspberry Pi registration was not found" });
       }

@@ -37,7 +37,13 @@ function dsError(error, action) {
       responseData = null;
     }
   }
-  const detail = responseData?.detail || responseData?.message;
+  const rawDetail = responseData?.detail || responseData?.message;
+  const detail = Array.isArray(rawDetail)
+    ? rawDetail
+      .map((item) => String(item?.msg || item?.message || item || "").replace(/^Value error,\s*/i, "").trim())
+      .filter(Boolean)
+      .join(", ")
+    : String(rawDetail || "").replace(/^Value error,\s*/i, "").trim();
   if (responseStatus >= 400 && responseStatus < 600) {
     return Object.assign(new Error(detail || `DS ${action} request failed`), { status: responseStatus });
   }
@@ -97,7 +103,12 @@ function sendPersistenceFailure(res, error, action) {
 function zoneData(document) {
   if (!document) return null;
   return {
+    zone_type: document.zoneType || "polygon",
     points: document.points || [],
+    ...(document.zoneType === "rectangle" ? {
+      zone_length_mm: document.zoneLengthMm,
+      zone_breadth_mm: document.zoneBreadthMm,
+    } : {}),
     min_zone_flat_ratio: document.minZoneFlatRatio,
     inlier_tolerance_mm: document.inlierToleranceMm,
     updated_at: document.updatedAt,
@@ -191,7 +202,14 @@ class MeasurementCalibrationService {
         {
           $set: {
             stationId: device.mac,
+            zoneType: validation.value.zone_type,
             points: validation.value.points,
+            zoneLengthMm: validation.value.zone_type === "rectangle"
+              ? validation.value.zone_length_mm ?? null
+              : null,
+            zoneBreadthMm: validation.value.zone_type === "rectangle"
+              ? validation.value.zone_breadth_mm ?? null
+              : null,
             minZoneFlatRatio: validation.value.min_zone_flat_ratio,
             inlierToleranceMm: validation.value.inlier_tolerance_mm,
           },

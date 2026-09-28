@@ -191,6 +191,11 @@ describe("Raspberry Pi registration contract", () => {
   });
 
   it("lets an administrator delete their Raspberry Pi connection", async () => {
+    mocks.findOne.mockResolvedValue({
+      code: "592JV6",
+      mac: "aa:bb:cc:dd:ee:ff",
+      approvalStatus: "approved",
+    });
     mocks.findOneAndDelete.mockResolvedValue({
       code: "592JV6",
       mac: "aa:bb:cc:dd:ee:ff",
@@ -211,6 +216,32 @@ describe("Raspberry Pi registration contract", () => {
       status: "success",
       message: "Raspberry Pi connection deleted",
       data: { code: "592JV6", mac: "aa:bb:cc:dd:ee:ff" },
+    });
+  });
+
+  it("retains a pending request so it remains available for approval", async () => {
+    const pending = {
+      _id: "device-1",
+      code: "592JV6",
+      mac: "aa:bb:cc:dd:ee:ff",
+      ip: "192.168.1.50",
+      approvalStatus: "pending",
+      status: "connected",
+    };
+    mocks.findOne.mockResolvedValue(pending);
+    const res = responseDouble();
+
+    await service.deleteRegistration({
+      verified: { userData: { adminId: "650000000000000000000001" } },
+      params: { code: "592JV6" },
+    }, res);
+
+    expect(mocks.findOneAndDelete).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({
+      status: "success",
+      message: "Pending Raspberry Pi request retained for approval",
+      data: { code: "592JV6", approvalStatus: "pending" },
     });
   });
 });

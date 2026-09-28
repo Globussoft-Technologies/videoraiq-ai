@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import path from "path";
 import mongoose from "mongoose";
 import mime from "mime-types";
+import config from "config";
 import logger from "../../../utils/logger.js";
 import MeasurementIncident from "../measurementIncidents/measurementIncidents.model.js";
 import MeasurementCapture from "../measurements/measurementCapture.model.js";
@@ -22,6 +23,7 @@ import {
 } from "./measurementMinio.js";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const APP_ENV = String(config.get("APP_ENV") || "").trim().toLowerCase();
 const RETRY_INTERVAL_MS = Math.max(5_000, Number(process.env.MEASUREMENT_MEDIA_RETRY_INTERVAL_MS) || 60_000);
 const LOCK_MS = Math.max(30_000, Number(process.env.MEASUREMENT_MEDIA_LOCK_MS) || 120_000);
 const IMAGE_EXTENSIONS = new Set([
@@ -50,6 +52,14 @@ function assetIdFor(idempotencyKey) {
 
 function retryDelay(attempts) {
   return Math.min(30 * 60_000, 15_000 * (2 ** Math.min(Math.max(attempts, 0), 7)));
+}
+
+export function measurementMediaLocalFirst() {
+  const explicit = process.env.MEASUREMENT_MEDIA_LOCAL_FIRST;
+  if (explicit !== undefined) {
+    return ["1", "true", "yes", "on"].includes(String(explicit).trim().toLowerCase());
+  }
+  return APP_ENV === "onprem";
 }
 
 function responseData(asset) {
@@ -289,6 +299,29 @@ export async function storeMeasurementMediaBuffer({
   }
   if (asset.cloudPath) return asset;
   if (asset.localKey && ["pending", "syncing", "cloud_synced"].includes(asset.status)) return asset;
+
+  // On-prem stations must not wait for an unreachable cloud provider before
+  // the measurement workflow can continue. Persist locally first and let the
+  // existing retry worker synchronize and clean up the MinIO copy later.
+  if (measurementMediaLocalFirst() && measurementMinioEnabled()) {
+    await putMeasurementFallback({ key: localKey, buffer, contentType });
+    asset = await MeasurementMedia.findOneAndUpdate(
+      { _id: asset._id },
+      {
+        $set: {
+          localKey,
+          status: "pending",
+          nextRetryAt: new Date(),
+          lastError: null,
+        },
+      },
+      { new: true },
+    ).lean();
+    logger.info(
+      `[MEASUREMENT_MEDIA] Stored locally first asset=${asset.assetId} source=${source}; cloud synchronization queued`,
+    );
+    return asset;
+  }
 
   try {
     const cloudPath = await uploadToConfiguredProvider(asset, buffer);

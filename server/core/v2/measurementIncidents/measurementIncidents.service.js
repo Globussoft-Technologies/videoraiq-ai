@@ -49,6 +49,21 @@ function isMacStationId(value) {
   return /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(String(value || "").trim());
 }
 
+function measurementDecisionFailureType(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const name = String(error?.name || "");
+  const message = String(error?.message || "");
+  if (
+    ["ETIMEDOUT", "ESOCKETTIMEDOUT", "ECONNABORTED"].includes(code)
+    || /timeout|timed out|server selection/i.test(`${name} ${message}`)
+  ) return "timeout";
+  if (
+    ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(code)
+    || /connection (?:refused|reset)|host unreachable|network unreachable/i.test(message)
+  ) return "connection-failure";
+  return "server-error";
+}
+
 function resolvedNormalizedMeasuredData(input, qrMetadata) {
   return input.normalizedMeasuredData
     ?? normalizeMeasuredData(input.measuredData, qrMetadata);
@@ -234,10 +249,39 @@ class MeasurementIncidentsService {
   }
 
   async updateStatus(req, res) {
+    const startedAt = Date.now();
+    const incidentId = String(req.params?.id || "");
+    const requestedStatus = String(req.body?.status || "").trim().toLowerCase();
+    const requestedAction = requestedStatus === "accepted"
+      ? "accept"
+      : requestedStatus === "rejected" ? "reject" : requestedStatus || "unknown";
+    let responseCompleted = false;
+
+    logger.info(
+      `[MEASUREMENT_DECISION] request started action=${requestedAction} incident=${incidentId || "missing"}`,
+    );
+
+    req.once?.("aborted", () => {
+      logger.warn(
+        `[MEASUREMENT_DECISION] connection-failure action=${requestedAction} incident=${incidentId || "missing"} event=request-aborted durationMs=${Date.now() - startedAt}`,
+      );
+    });
+    res.once?.("close", () => {
+      if (!responseCompleted && !res.writableEnded) {
+        logger.warn(
+          `[MEASUREMENT_DECISION] connection-failure action=${requestedAction} incident=${incidentId || "missing"} event=response-closed durationMs=${Date.now() - startedAt}`,
+        );
+      }
+    });
+
     const validation = measurementStatusSchema.validate(req.body, {
       abortEarly: false,
     });
     if (validation.error) {
+      responseCompleted = true;
+      logger.warn(
+        `[MEASUREMENT_DECISION] request rejected action=${requestedAction} incident=${incidentId || "missing"} status=400 durationMs=${Date.now() - startedAt} reason=validation`,
+      );
       return res.status(400).json(
         Response.validationFailResp(
           "Invalid measurement status",
@@ -246,6 +290,10 @@ class MeasurementIncidentsService {
       );
     }
     if (!mongoose.isValidObjectId(req.params.id)) {
+      responseCompleted = true;
+      logger.warn(
+        `[MEASUREMENT_DECISION] request rejected action=${requestedAction} incident=${incidentId || "missing"} status=400 durationMs=${Date.now() - startedAt} reason=invalid-id`,
+      );
       return res.status(400).json(
         Response.validationFailResp("Invalid measurement incident id", req.params.id),
       );
@@ -255,6 +303,10 @@ class MeasurementIncidentsService {
       const identity = identityFrom(req);
       const filter = ownedDocumentFilter(req.params.id, identity);
       if (!filter) {
+        responseCompleted = true;
+        logger.warn(
+          `[MEASUREMENT_DECISION] request rejected action=${requestedAction} incident=${incidentId} status=403 durationMs=${Date.now() - startedAt} reason=access-denied`,
+        );
         return res.status(403).json(
           Response.accessDeniedResp("Measurement incident access denied"),
         );
@@ -273,16 +325,28 @@ class MeasurementIncidentsService {
       ).lean();
 
       if (!incident) {
+        responseCompleted = true;
+        logger.warn(
+          `[MEASUREMENT_DECISION] request completed action=${requestedAction} incident=${incidentId} status=404 durationMs=${Date.now() - startedAt}`,
+        );
         return res.status(404).json(
           Response.notFoundResp("Measurement incident not found"),
         );
       }
 
+      responseCompleted = true;
+      logger.info(
+        `[MEASUREMENT_DECISION] request completed action=${requestedAction} incident=${incidentId} station=${incident.stationId || identity.stationId || "unknown"} status=200 durationMs=${Date.now() - startedAt}`,
+      );
       return res.status(200).json(
         Response.userSuccessResp("Measurement incident status updated", incident),
       );
     } catch (error) {
-      logger.error(`Measurement incident status update failed: ${error.message}`);
+      responseCompleted = true;
+      const failureType = measurementDecisionFailureType(error);
+      logger.error(
+        `[MEASUREMENT_DECISION] ${failureType} action=${requestedAction} incident=${incidentId || "missing"} durationMs=${Date.now() - startedAt} code=${error?.code || "unknown"} message=${error.message}`,
+      );
       return res.status(500).json(
         Response.errorResp("Failed to update measurement incident", error.message),
       );

@@ -62,7 +62,12 @@ vi.mock("../../utils/logger.js", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { default: service, resolveMeasurementMediaReference, runMeasurementMediaRetryOnce } = await import(
+const {
+  default: service,
+  measurementMediaLocalFirst,
+  resolveMeasurementMediaReference,
+  runMeasurementMediaRetryOnce,
+} = await import(
   "../../core/v2/measurementMedia/measurementMedia.service.js"
 );
 
@@ -100,6 +105,7 @@ function uploadRequest() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete process.env.MEASUREMENT_MEDIA_LOCAL_FIRST;
   mocks.minioEnabled.mockReturnValue(true);
   mocks.mediaExists.mockResolvedValue(true);
   mocks.incidentUpdateMany.mockResolvedValue({ modifiedCount: 0 });
@@ -107,6 +113,27 @@ beforeEach(() => {
 });
 
 describe("measurement media upload", () => {
+  it("stores to MinIO immediately when local-first mode is enabled", async () => {
+    process.env.MEASUREMENT_MEDIA_LOCAL_FIRST = "true";
+    let inserted;
+    mocks.mediaFindOneAndUpdate
+      .mockImplementationOnce((_filter, update) => {
+        inserted = { _id: "asset-db-id", ...update.$setOnInsert };
+        return result(inserted);
+      })
+      .mockImplementationOnce((_filter, update) => result({ ...inserted, ...update.$set }));
+
+    const res = responseDouble();
+    await service.upload(uploadRequest(), res);
+
+    expect(measurementMediaLocalFirst()).toBe(true);
+    expect(res.statusCode).toBe(200);
+    expect(res.payload.data.remotePath).toMatch(/^\/api\/v2\/measurement-media\/[a-f\d]{32}$/);
+    expect(res.payload.data.syncStatus).toBe("pending");
+    expect(mocks.putFallback).toHaveBeenCalledTimes(1);
+    expect(mocks.putMedia).not.toHaveBeenCalled();
+  });
+
   it("keeps the shared upload response shape when cloud storage succeeds", async () => {
     let inserted;
     mocks.mediaFindOneAndUpdate
