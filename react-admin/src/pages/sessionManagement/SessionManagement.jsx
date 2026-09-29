@@ -45,11 +45,8 @@ const DEFAULT_PAGE_SIZE = 10
 const AUTO_REFRESH_MS = 20000
 
 // The owner-summary dashboard filters by counting each owner's sessions in a
-// given state (see visibleSummary) — Logged Out isn't offered there since
-// "narrow to owners who logged out at some point" isn't a useful summary view
-// (almost every owner has old logged-out sessions). Once a specific owner is
-// opened, the dropdown filters that owner's actual session rows instead, where
-// both Active and Logged Out are meaningful.
+// given state (see visibleSummary). Logged-out sessions are removed by the
+// backend, so neither view offers a Logged Out filter.
 const SUMMARY_STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'online', label: 'Online' },
@@ -60,7 +57,6 @@ const DETAIL_STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'online', label: 'Online' },
   { value: 'blocked', label: 'Blocked' },
-  { value: 'logged_out', label: 'Logged Out' },
 ]
 
 const statusClass = {
@@ -288,15 +284,6 @@ const StatusBadge = ({ status }) => (
     {String(status || 'unknown').replace('_', ' ')}
   </span>
 )
-
-const latestEventReason = (events = [], type) => {
-  if (!Array.isArray(events)) return ''
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index]
-    if (event?.type === type && event.reason) return event.reason
-  }
-  return ''
-}
 
 const latestEventAt = (events = [], type) => {
   if (!Array.isArray(events)) return ''
@@ -624,7 +611,6 @@ const SessionManagement = () => {
       // narrowing the owner list while keeping their real totals visible.
       if (!detailMode && status === 'online' && !(row.onlineCount > 0)) return false
       if (!detailMode && status === 'blocked' && !(row.blockedCount > 0)) return false
-      if (!detailMode && status === 'logged_out' && !(row.loggedOutCount > 0)) return false
       if (!query) return true
       return [row.ownerName, row.ownerEmail, row.userType, row.ownerId]
         .filter(Boolean)
@@ -924,10 +910,8 @@ const SessionManagement = () => {
     setSelectedOwner('')
     navigate('/session-management')
     setPage(0)
-    // The list view's status dropdown doesn't offer Active/Logged Out (see
-    // SUMMARY_STATUS_OPTIONS) — clear those out on the way back so it isn't
-    // left showing a value with no matching option.
-    setStatus((current) => (current === 'active' || current === 'logged_out' ? '' : current))
+    // The list view's status dropdown doesn't offer Active.
+    setStatus((current) => (current === 'active' ? '' : current))
   }
 
   const openDetails = async (sessionId) => {
