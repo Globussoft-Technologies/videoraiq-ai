@@ -104,6 +104,16 @@ export const updateTelegramAlertSwitch = async (enabled) => {
   return unwrap(res);
 };
 
+export const updatePushAlertSwitch = async (enabled) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/alert-switches/push`,
+    { pushAlertsEnabled: enabled },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
 export const getTimezones = async (search = '') => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/admin/timezones`, {

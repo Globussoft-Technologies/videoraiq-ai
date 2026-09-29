@@ -1,6 +1,7 @@
 import Cookies from 'js-cookie';
 import axios from 'axios';
 import { clearSessionId, getSessionId } from '@/utils/sessionIdentity';
+import { unregisterWebPush } from '@/utils/webPush';
 
 const url = import.meta.env.VITE_ENV;
 const apiUrl = import.meta.env.VITE_BACKEND;
@@ -71,6 +72,10 @@ export async function logout({ clearSession = true, syncServer = true } = {}) {
       // Logout must continue locally even if the server session update fails.
     }
   }
+
+  // Before the access-token cookie goes: the next person on this browser must
+  // not keep receiving this tenant's incident pushes.
+  await unregisterWebPush(token);
 
   const preservedStorage = {};
   Object.keys(localStorage).forEach((key) => {

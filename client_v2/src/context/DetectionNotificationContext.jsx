@@ -4,6 +4,8 @@ import { Bell, Trash2, X } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { timeOfDay } from '../lib/format';
+import getAccessToken from '@/utils/getAccessToken';
+import { registerWebPush, webPushActive } from '@/utils/webPush';
 
 export const DESKTOP_NOTIFICATIONS_KEY = 'vq_desktop_notifications_enabled';
 export const IN_APP_NOTIFICATIONS_KEY = 'vq_inapp_notifications_enabled';
@@ -294,7 +296,13 @@ export function DetectionNotificationProvider({ children }) {
         'Notification' in window &&
         Notification.permission === 'granted'
       ) {
-        const notification = new Notification(title, { body: description });
+        // With web push active, the service worker already shows this one for
+        // a hidden tab — don't pop it twice. The shared tag is a second guard.
+        if (webPushActive()) return;
+        const notification = new Notification(title, {
+          body: description,
+          tag: `incident-${data?._id}-${data?.timeOfIncident}`,
+        });
         notification.onclick = () => window.focus();
         return;
       }
@@ -312,6 +320,12 @@ export function DetectionNotificationProvider({ children }) {
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, handleDetection);
   }, [socket, user?.adminId]);
+
+  // Incident push for when no tab is open — follows the same Settings ▸
+  // Desktop notifications switch as the socket-driven desktop notification.
+  useEffect(() => {
+    if (user?.adminId && desktopNotificationsEnabled()) registerWebPush(getAccessToken());
+  }, [user?.adminId]);
 
   return (
     <>

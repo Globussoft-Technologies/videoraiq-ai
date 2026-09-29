@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Monitor,
   Radio,
+  Smartphone,
   ShieldCheck,
   SlidersHorizontal,
   Volume2,
@@ -38,6 +39,7 @@ import {
   updateAttendanceSettings,
   updateEmailAlertSwitch,
   updateTelegramAlertSwitch,
+  updatePushAlertSwitch,
   updateRetention,
   updateIncidentPreview,
   normalizeIncidentPreview,
@@ -49,6 +51,8 @@ import { usePermissions } from '../../../context/PermissionContext';
 import { getChannels, getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
+import getAccessToken from '@/utils/getAccessToken';
+import { registerWebPush, unregisterWebPush } from '@/utils/webPush';
 import {
   DESKTOP_NOTIFICATIONS_KEY,
   desktopNotificationsEnabled,
@@ -193,10 +197,15 @@ function isVerified(recipient) {
   return recipient?.verified === true || recipient?.status === 'verified';
 }
 
+const ALERT_SWITCHES = {
+  email: { field: 'emailAlertsEnabled', label: 'Email', update: updateEmailAlertSwitch },
+  telegram: { field: 'telegramAlertsEnabled', label: 'Telegram', update: updateTelegramAlertSwitch },
+  push: { field: 'pushAlertsEnabled', label: 'Push', update: updatePushAlertSwitch },
+};
+
 function alertSwitchValue(payload, key) {
   const data = payload?.alertSwitches || payload?.switches || payload?.data || payload || {};
-  const exactKey = key === 'email' ? 'emailAlertsEnabled' : 'telegramAlertsEnabled';
-  const value = data?.[exactKey];
+  const value = data?.[ALERT_SWITCHES[key].field];
   if (typeof value === 'boolean') return value;
   return false;
 }
@@ -754,6 +763,7 @@ export default function SystemSettings() {
   const soundEnabled = !!audio.audioEnabled;
   const emailAlertsEnabled = alertSwitchOverrides.email ?? alertSwitchValue(alertSwitchesApi.data, 'email');
   const telegramAlertsEnabled = alertSwitchOverrides.telegram ?? alertSwitchValue(alertSwitchesApi.data, 'telegram');
+  const pushAlertsEnabled = alertSwitchOverrides.push ?? alertSwitchValue(alertSwitchesApi.data, 'push');
   const emailRecipients = Array.isArray(emailRecipientsApi.data) ? emailRecipientsApi.data : [];
   const phoneRecipients = Array.isArray(phoneRecipientsApi.data) ? phoneRecipientsApi.data : [];
   const verifiedEmails = emailRecipients.filter(isVerified).length;
@@ -811,18 +821,17 @@ export default function SystemSettings() {
       toast.error(`You don't have permission to ${next ? 'enable' : 'disable'} settings`);
       return;
     }
-    const updateFn = key === 'email' ? updateEmailAlertSwitch : updateTelegramAlertSwitch;
     setAlertSwitchOverrides((prev) => ({ ...prev, [key]: next }));
     setAlertSwitchSaving(key);
     try {
-      await updateFn(next);
+      await ALERT_SWITCHES[key].update(next);
       await alertSwitchesApi.refetch();
       setAlertSwitchOverrides((prev) => {
         const copy = { ...prev };
         delete copy[key];
         return copy;
       });
-      toast.success(`${key === 'email' ? 'Email' : 'Telegram'} alerts ${next ? 'enabled' : 'disabled'}`);
+      toast.success(`${ALERT_SWITCHES[key].label} alerts ${next ? 'enabled' : 'disabled'}`);
     } catch (err) {
       setAlertSwitchOverrides((prev) => {
         const copy = { ...prev };
@@ -873,6 +882,9 @@ export default function SystemSettings() {
 
     window.localStorage.setItem(DESKTOP_NOTIFICATIONS_KEY, next ? 'true' : 'false');
     setDesktopNotifications(next);
+    // Push (tab closed) follows the same switch as socket desktop alerts (tab open).
+    if (next) registerWebPush(getAccessToken());
+    else unregisterWebPush(getAccessToken());
     toast.success(`Desktop notifications ${next ? 'enabled' : 'disabled'}`);
   };
 
@@ -1077,6 +1089,15 @@ export default function SystemSettings() {
             onChange={(next) => handleAlertSwitchToggle('telegram', next)}
             disabled={alertSwitchSaving === 'telegram' || (telegramAlertsEnabled ? !canDisableSetting : !canEnableSetting)}
             loading={alertSwitchSaving === 'telegram'}
+          />
+          <ToggleRow
+            icon={Smartphone}
+            label="Push Notifications"
+            desc="Push alerts are sent to signed-in browsers and mobile apps"
+            value={pushAlertsEnabled}
+            onChange={(next) => handleAlertSwitchToggle('push', next)}
+            disabled={alertSwitchSaving === 'push' || (pushAlertsEnabled ? !canDisableSetting : !canEnableSetting)}
+            loading={alertSwitchSaving === 'push'}
           />
           <ToggleRow
             icon={Volume2}
