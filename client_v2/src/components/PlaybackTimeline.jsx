@@ -5,7 +5,7 @@ import BufferingIndicator from './BufferingIndicator';
 import FullscreenZoomSurface from './FullscreenZoomSurface';
 import PlaybackTimelineBar, { TIMELINE_ZOOM_LEVELS } from './Playback/PlaybackTimelineBar';
 import { createPlaybackTransport } from './Playback/playbackTransport';
-import { bufferedForwardTarget, createPlaylistClock, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from './Playback/playbackClock';
+import { bufferedForwardTarget, bufferedSeekOffset, createPlaylistClock, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from './Playback/playbackClock';
 import { fetchIncidents } from '../helpers/incidents';
 import { toast } from 'sonner';
 import {
@@ -24,6 +24,8 @@ const MAX_NATIVE_RATE = 4;
 const FAST_FORWARD_TICK_MS = 500;
 const MANIFEST_RETRY_MS = 1000;
 const MANIFEST_RETRY_LIMIT = 20;
+const HONEYWELL_MUTEX_RETRY_MS = 5000;
+const HONEYWELL_MUTEX_RETRY_LIMIT = 18; // ~90s, past the NVR's ~60s session timeout
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtClock(ms) {
@@ -88,14 +90,18 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const playlistClockRef = useRef(null);
   const playbackProgressRef = useRef({ playing: false, buffering: false });
   // Honeywell/TVT serves one static DASH manifest covering [loadedAt, end of
-  // day] per session, and the NVR allows only one such session at a time
-  // with no way to release it early — so a seek within that already-loaded
-  // range should just move video.currentTime, never call loadAt again.
+  // day] per session, but only transcodes segments in order from loadedAt —
+  // so only a seek into the already-buffered part can reuse the session
+  // (see bufferedSeekOffset); any other seek opens a new one via loadAt.
   const loadedRangeMsRef = useRef(null); // { start, end } in cursorMs terms, or null
+  // Auto-reopens after a DASH failure since playback last ran; capped so a dead
+  // NVR ends in the "Press play to retry" state instead of a reload loop.
+  const dashRecoveriesRef = useRef(0);
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
       onPlaying: (value) => {
+        if (value) dashRecoveriesRef.current = 0;
         playbackProgressRef.current.playing = value;
         setPlaying(value);
       },
@@ -182,7 +188,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   }, []);
 
   // Resolve + load a playable segment for the current cursor (debounced)
-  const loadAt = useCallback((ms) => {
+  const loadAt = useCallback((ms, mutexRetries = 0) => {
     if (!channelId) return;
     if (isFutureSeek(day.getTime(), ms)) {
       triggerFutureAlert();
@@ -193,6 +199,13 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     // The playback API encodes startTime to whole seconds.
     const requestedMs = Math.floor(ms / 1000) * 1000;
     transportRef.current?.prepare({ autoplay: true });
+    // Drop the old DASH session now: each segment it keeps downloading makes the
+    // backend ping the NVR's keepalive, holding the one-session lock the new
+    // request is waiting on (409 until the NVR times it out).
+    if (loadedRangeMsRef.current) {
+      loadedRangeMsRef.current = null;
+      setVideoUrl('');
+    }
     streamStartMsRef.current = requestedMs;
     clockAnchoredRef.current = false;
     fragmentAnchorsRef.current = [];
@@ -221,6 +234,19 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         setSourceRevision((revision) => revision + 1);
       } catch (err) {
         if (token !== seekTokenRef.current) return;
+        // The previous session only frees on the NVR's own timeout (~60s once its
+        // segments stop) — keep retrying so a seek resumes by itself, like Play would.
+        if (err?.response?.status === 409 && mutexRetries < HONEYWELL_MUTEX_RETRY_LIMIT) {
+          toast.info('Waiting for the NVR to release the previous playback…', {
+            id: 'honeywell-playback-mutex',
+            position: 'bottom-right',
+            duration: HONEYWELL_MUTEX_RETRY_MS + 1000,
+          });
+          scrubTimerRef.current = setTimeout(() => {
+            if (token === seekTokenRef.current) loadAt(requestedMs, mutexRetries + 1);
+          }, HONEYWELL_MUTEX_RETRY_MS);
+          return;
+        }
         transportRef.current?.pause();
         setVideoState('no-recording');
         setVideoUrl('');
@@ -238,6 +264,9 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       }
     }, SCRUB_DEBOUNCE_MS);
   }, [channelId, day, triggerFutureAlert]);
+  // The source-attach effect below re-runs per source, not per loadAt identity.
+  const loadAtRef = useRef(loadAt);
+  loadAtRef.current = loadAt;
 
   // Auto-load start of day on channel/date change
   useEffect(() => {
@@ -284,6 +313,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     if (/\.mpd(\?|$)/i.test(videoUrl)) {
       import('dashjs').then(({ default: dashjs }) => {
         if (!isCurrent()) return;
+        // DASH media time maps 1:1 onto the requested start — let the clock advance.
+        clockAnchoredRef.current = true;
         transportRef.current?.attach();
         dash = dashjs.MediaPlayer().create();
         dash.initialize(video, videoUrl, false);
@@ -291,6 +322,13 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           if (!isCurrent()) return;
           // eslint-disable-next-line no-console -- diagnosing real playback failures, not a leftover debug log
           console.error('DASH playback error', event);
+          // A segment the NVR couldn't produce: reopen a session at the current
+          // point and keep playing, as pressing Play would.
+          if (transportRef.current?.wantsPlayback && dashRecoveriesRef.current < 2) {
+            dashRecoveriesRef.current += 1;
+            loadAtRef.current?.(streamStartMsRef.current + Math.max(0, video.currentTime) * 1000);
+            return;
+          }
           failPlayback(event?.error);
         });
       }).catch((error) => {
@@ -517,13 +555,17 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       setCursorMs(clamped);
       streamStartMsRef.current = clamped;
       lastSeekMsRef.current = clamped;
+      dashRecoveriesRef.current = 0; // a fresh user action gets fresh retries
 
-      // Already-loaded DASH manifest covers this point (see loadedRangeMsRef
-      // note above) — just move the playhead. No loadAt, no new NVR session.
+      // Already buffered in the current DASH session — just move the playhead.
+      // Anything else opens a new session at the target (loadAt autoplays).
       const loaded = loadedRangeMsRef.current;
       const video = videoRef.current;
-      if (loaded && video && clamped >= loaded.start && clamped <= loaded.end) {
-        video.currentTime = (clamped - loaded.start) / 1000;
+      const offsetSec = video ? bufferedSeekOffset(loaded, clamped, video.buffered) : null;
+      if (offsetSec !== null) {
+        // Media time 0 is the manifest start, not the clicked time.
+        streamStartMsRef.current = loaded.start;
+        video.currentTime = offsetSec;
       } else {
         loadAt(clamped);
       }

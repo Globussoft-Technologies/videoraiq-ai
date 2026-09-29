@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bufferedForwardTarget, createPlaylistClock, fragmentClockOffset, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from '../src/components/Playback/playbackClock.js';
+import { bufferedForwardTarget, bufferedSeekOffset, createPlaylistClock, fragmentClockOffset, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from '../src/components/Playback/playbackClock.js';
 
 class Video extends EventTarget {
   paused = false;
@@ -326,4 +326,17 @@ test('the timeupdate fallback freezes when only the current frame is buffered', 
   video.dispatchEvent(new Event('timeupdate'));
   assert.deepEqual(times, [10]);
   stop();
+});
+
+test('bufferedSeekOffset reuses the session only inside the buffer', () => {
+  const ranges = (...r) => ({ length: r.length, start: (i) => r[i][0], end: (i) => r[i][1] });
+  const loaded = { start: 60_000, end: 86_399_000 }; // session opened at 00:01
+  const buffered = ranges([0, 20]); // first 20s of it downloaded
+  assert.equal(bufferedSeekOffset(loaded, 70_000, buffered), 10); // 00:01:10 is buffered
+  // 04:12 is inside the manifest but not buffered: the NVR refuses that segment
+  // in this session (502), so it must reload instead.
+  assert.equal(bufferedSeekOffset(loaded, 15_151_000, buffered), null);
+  assert.equal(bufferedSeekOffset(loaded, 0, buffered), null); // before the session start
+  assert.equal(bufferedSeekOffset(null, 70_000, buffered), null);
+  assert.equal(bufferedSeekOffset(loaded, 70_000, ranges()), null); // nothing buffered yet
 });

@@ -1151,7 +1151,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           hasRtspUrl: camera.hasRtspUrl,
         })));
       })
-      .catch(() => toast.error('Failed to load cameras for this NVR.'))
+      .catch((e) => toast.error(friendlyErrorMessage(e?.response?.data?.body, 'Failed to load cameras for this NVR.')))
       .finally(() => active && setConnecting(false));
     return () => { active = false; };
   }, [editingNvr, isEdit]);

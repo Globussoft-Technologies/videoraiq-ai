@@ -97,6 +97,20 @@ export function frameRecordingTime(mediaTime, anchors, fallbackOffset) {
   return null;
 }
 
+// Seconds into the loaded DASH source for a timeline point, only when that
+// point is already buffered. Honeywell/TVT NVRs transcode segments on demand,
+// in order: jumping to an unbuffered segment in the same session is refused
+// (502, confirmed live), so anything outside the buffer needs a new session
+// that starts at the target time.
+export function bufferedSeekOffset(loaded, ms, buffered) {
+  if (!loaded || !buffered || ms < loaded.start || ms > loaded.end) return null;
+  const offset = (ms - loaded.start) / 1000;
+  for (let i = 0; i < buffered.length; i += 1) {
+    if (offset >= buffered.start(i) && offset < buffered.end(i)) return offset;
+  }
+  return null;
+}
+
 export function bufferedForwardTarget(video, extraSeconds) {
   const current = video.currentTime;
   if (video.paused || video.seeking || video.readyState < 3 || !Number.isFinite(current)) return current;
