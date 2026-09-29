@@ -174,8 +174,8 @@ export default function IsAuth({ children }) {
     if (exchangeStarted.current) return;
     exchangeStarted.current = true;
 
-    const amemberLogin = Cookies.get('amember_login') || 'harish';
-    const amemberPass = Cookies.get('amember_pass') || 'Hari@123';
+    const amemberLogin = Cookies.get('amember_login');
+    const amemberPass = Cookies.get('amember_pass');
     const token = getAccessToken();
     const searchParams = new URLSearchParams(window.location.search);
     const impersonationToken = searchParams.get('amember_impersonation') || '';
