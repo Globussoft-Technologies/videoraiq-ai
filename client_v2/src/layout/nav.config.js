@@ -117,7 +117,7 @@ export const NAV_GROUPS = [
   {
     label: 'EXPERIENCE',
     items: [
-      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW' },
+      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW', hideForFloMattress: true },
     ],
   }, {
     label: 'MONITOR',
@@ -132,7 +132,7 @@ export const NAV_GROUPS = [
   {
     label: 'INTELLIGENCE',
     items: [
-      { key: 'analytics', label: 'Analytics', path: 'analytics', icon: BarChart3, permissionKey: 'analytics' },
+      { key: 'analytics', label: 'Analytics', path: 'analytics', icon: BarChart3, permissionKey: 'analytics', hideForFloMattress: true },
     ],
   },
   {
@@ -150,6 +150,7 @@ export const NAV_GROUPS = [
   },
   {
     label: LOGS_GROUP_LABEL,
+    hideForFloMattress: true,
     items: [
       { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs', logsConfigKey: 'attendanceLogs' },
       { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs', logsConfigKey: 'accessLogs' },
@@ -175,7 +176,7 @@ export const NAV_GROUPS = [
     label: 'CONFIGURE',
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
-      { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2, permissionKey: 'detectionSettings' },
+      { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2, permissionKey: 'detectionSettings', hideForFloMattress: true },
       { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, permissionKey: 'settings' },
     ],
   },
@@ -198,8 +199,8 @@ export const NAV_GROUPS = [
     label: 'SETTINGS',
     items: [
       // { key: 'engines', label: 'Detection Settings', path: 'engines', icon: SlidersHorizontal, permissionKey: 'detectionSettings' },
-      { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients' },
-      { key: 'auto-email-reports', label: 'Auto Email Reports', path: 'auto-email-reports', icon: MailPlus, permissionKey: 'autoEmailReports' },
+      { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients', hideForFloMattress: true },
+      { key: 'auto-email-reports', label: 'Auto Email Reports', path: 'auto-email-reports', icon: MailPlus, permissionKey: 'autoEmailReports', hideForFloMattress: true },
     ],
   },
 ];

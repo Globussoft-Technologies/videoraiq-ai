@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { usePermissions } from '@/context/PermissionContext';
 import { NAV_GROUPS } from './nav.config';
 import PageLoader from '@/components/PageLoader';
+import { isClientNavGroupVisible, isClientNavItemVisible } from '@/lib/navVisibility';
 
 // Mirrors Sidebar.jsx's isItemVisible — kept in sync there and in
 // HomeRedirect.jsx since all three read the same permissionKey/permissionSubKey
@@ -26,8 +27,9 @@ function isItemVisible(item, permissions) {
 
 function firstVisiblePath(permissions) {
   for (const group of NAV_GROUPS) {
-    if (group.hidden) continue;
+    if (group.hidden || !isClientNavGroupVisible(group)) continue;
     for (const item of group.items) {
+      if (!isClientNavItemVisible(item)) continue;
       if (isItemVisible(item, permissions)) return item.path;
     }
   }

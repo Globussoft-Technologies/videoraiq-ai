@@ -5,7 +5,12 @@ import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown, GripVertical } fro
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from './nav.config';
 import { useLogOrder, orderLogItems, moveLogItem } from '@/lib/logOrder';
 import { useOutsideClick } from '../hooks/useOutsideClick';
-import { isItemVisible, isItemLogEnabled } from '@/lib/navVisibility';
+import {
+  isClientNavGroupVisible,
+  isClientNavItemVisible,
+  isItemVisible,
+  isItemLogEnabled,
+} from '@/lib/navVisibility';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
@@ -285,12 +290,13 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
         }}
       >
         {NAV_GROUPS
-          .filter((g) => !g.hidden)
+          .filter((g) => !g.hidden && isClientNavGroupVisible(g))
           .map((group) => ({
             ...group,
             items: group.items.filter(
               (item) => (
                 !(hidePlayback && item.key === 'camera')
+                && isClientNavItemVisible(item)
                 && isItemVisible(item, permissions)
                 && isItemLogEnabled(item, logsConfig)
               ),

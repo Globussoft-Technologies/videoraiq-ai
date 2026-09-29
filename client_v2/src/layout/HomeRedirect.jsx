@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { NAV_GROUPS } from './nav.config';
 import { usePermissions } from '@/context/PermissionContext';
 import PageLoader from '@/components/PageLoader';
+import { isClientNavGroupVisible, isClientNavItemVisible } from '@/lib/navVisibility';
 
 // Mirrors Sidebar.jsx's isItemVisible — an item with no permissionKey is
 // always visible; one with permissionSubKey reads a nested logs.* module.
@@ -35,8 +36,9 @@ export default function HomeRedirect() {
   if (loading) return <PageLoader />;
 
   for (const group of NAV_GROUPS) {
-    if (group.hidden) continue;
+    if (group.hidden || !isClientNavGroupVisible(group)) continue;
     for (const item of group.items) {
+      if (!isClientNavItemVisible(item)) continue;
       if (isItemVisible(item, permissions)) {
         return <Navigate to={item.path} replace />;
       }

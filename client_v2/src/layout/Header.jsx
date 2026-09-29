@@ -6,14 +6,15 @@ import { useClock } from '../hooks/useClock';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { NAV_GROUPS } from './nav.config';
+import { isClientNavGroupVisible, isClientNavItemVisible } from '../lib/navVisibility';
 import { getChannels } from '../helpers/monitoring';
 import { networkRatingInfo } from '../lib/networkStatus';
 import { timeAgo } from '../lib/format';
 import StartTourMenu from '../components/Tour/StartTourMenu';
 
 // Static index of navigable pages, built once from the sidebar config.
-const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden).flatMap((g) =>
-  g.items.map((it) => ({
+const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
+  g.items.filter(isClientNavItemVisible).map((it) => ({
     kind: 'Page',
     kindColor: 'var(--blue)',
     label: it.label,

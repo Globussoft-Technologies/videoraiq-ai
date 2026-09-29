@@ -1,6 +1,18 @@
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from '@/layout/nav.config';
+import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
 
 export const LOGS_TOUR_KEY = 'logs-records';
+
+// Client-profile visibility is separate from permissions: these pages remain
+// routable, but Flo Mattress builds do not advertise them in navigation,
+// header search, or the guided tour.
+export function isClientNavItemVisible(item) {
+  return !(IS_FLO_MATTRESS && item?.hideForFloMattress === true);
+}
+
+export function isClientNavGroupVisible(group) {
+  return !(IS_FLO_MATTRESS && group?.hideForFloMattress === true);
+}
 
 /**
  * The rules that decide whether a sidebar nav item is shown at all.
@@ -57,9 +69,15 @@ export function isItemLogEnabled(item, logsConfig) {
  * before the logs that feed it.
  */
 export function visibleNavItems(permissions, logsConfig) {
-  return NAV_GROUPS.filter((group) => !group.hidden).flatMap((group) => {
+  return NAV_GROUPS
+    .filter((group) => !group.hidden && isClientNavGroupVisible(group))
+    .flatMap((group) => {
     const items = group.items
-      .filter((item) => isItemVisible(item, permissions) && isItemLogEnabled(item, logsConfig))
+      .filter((item) => (
+        isClientNavItemVisible(item)
+        && isItemVisible(item, permissions)
+        && isItemLogEnabled(item, logsConfig)
+      ))
       .map((item) => ({ ...item, group: group.label }));
 
     if (group.label !== LOGS_GROUP_LABEL) return items;
@@ -72,7 +90,7 @@ export function visibleNavItems(permissions, logsConfig) {
         group: LOGS_GROUP_LABEL,
       },
     ];
-  });
+    });
 }
 
 export { LOGS_GROUP_LABEL };
