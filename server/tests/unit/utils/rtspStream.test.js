@@ -153,6 +153,18 @@ describe("buildRTSPUrl", () => {
     );
   });
 
+  it("builds Securus (XiongMai Sofia) main and sub-stream URLs", () => {
+    const nvr = { ...baseNvr, brand: "securus" };
+    const channel = { channelId: "2" };
+
+    expect(rtsp.buildRTSPUrl(nvr, channel, "main")).toBe(
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/user=admin&password=${passwordPlain}&channel=2&stream=0.sdp`,
+    );
+    expect(rtsp.buildRTSPUrl(nvr, channel, "sub")).toBe(
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/user=admin&password=${passwordPlain}&channel=2&stream=1.sdp`,
+    );
+  });
+
   it("builds a generic camera URL", () => {
     const channel = { streamEndpoint: "/stream" };
     const url = rtsp.buildRTSPUrl(

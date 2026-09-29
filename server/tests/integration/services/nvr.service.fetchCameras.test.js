@@ -338,3 +338,34 @@ describe("NVRService._fetchCamerasFromNvr — unsupported + error arms", () => {
     expect(out).toEqual({ error: "ECONNREFUSED" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Securus (v2) — channel count comes only from the device's web page; with no
+// page (closed port, or the RTSP port entered as HTTP) discovery must fail
+// instead of inventing 4 cameras. 127.0.0.1 has no DVRIP listener on 34567,
+// so that source is empty too.
+// ---------------------------------------------------------------------------
+describe("NVRService v2._fetchCamerasFromNvr — securus", () => {
+  let V2;
+  beforeAll(async () => {
+    ({ default: V2 } = await import("../../../core/v2/NVR/nvr.service.js"));
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  it("returns an error when the web page can't be read", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNREFUSED"); }));
+    const out = await V2._fetchCamerasFromNvr("securus", "127.0.0.1", 7075, "admin", "admin123");
+    expect(out.error).toMatch(/Could not read the channel list .* 127\.0\.0\.1:7075/);
+  });
+
+  it("uses g_channelNum from the web page", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) =>
+      String(url).endsWith(":80/")
+        ? okText("<title>Securus Purple XVR</title><script>var g_channelNum=2;</script>")
+        : failText(),
+    ));
+    const out = await V2._fetchCamerasFromNvr("securus", "127.0.0.1", 80, "admin", "admin123");
+    expect(out.cameras.map((c) => c.channelId)).toEqual(["1", "2"]);
+    expect(out.deviceInfo.model).toBe("Securus Purple XVR");
+  });
+});

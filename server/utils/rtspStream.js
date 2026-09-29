@@ -192,15 +192,12 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
 
     return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}/${channelId}/${subtype}`;
   } else if (nvr.brand === "securus") {
-    // XiongMai Sofia: rtsp://ip:rtspPort/user=U&password=HASH&channel=N&stream=S.sdp?real_stream
-    // Password must be the Sofia MD5 hash (8 chars from even MD5 hex positions, uppercased)
-    const md5 = createHash("md5").update(decryptedPassword).digest("hex");
-    let sofiaHash = "";
-    for (let i = 0; i < 8; i++) sofiaHash += md5[i * 2];
-    sofiaHash = sofiaHash.toUpperCase();
+    // XiongMai Sofia: rtsp://user:pass@ip:rtspPort/user=U&password=P&channel=N&stream=S.sdp
+    // Confirmed in VLC against a Securus Purple XVR: plaintext password, not the
+    // Sofia MD5 hash, and no "?real_stream" suffix.
     const channelId = channel.channelId;
     const stream = streamType === "main" ? 0 : 1;
-    return `rtsp://${decryptedIp}:${nvr.rtspPort}/user=${username}&password=${sofiaHash}&channel=${channelId}&stream=${stream}.sdp?real_stream`;
+    return `rtsp://${creds}@${decryptedIp}:${nvr.rtspPort}/user=${username}&password=${decryptedPassword}&channel=${channelId}&stream=${stream}.sdp`;
   } else if (nvr.brand === "honeywell") {
     // Honeywell I-HPNVR (TVT OEM): rtsp://ip:port/ch<N>/main|sub — confirmed
     // live against an I-HPNVR-416; the old "?chID=N&streamType=" query-string

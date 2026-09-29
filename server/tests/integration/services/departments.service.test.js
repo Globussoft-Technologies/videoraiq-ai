@@ -164,3 +164,36 @@ describe("DepartmentService.delete", () => {
     expect(def).not.toBeNull();
   });
 });
+
+// Duplicate-name checks are per admin, not global: another admin's department
+// with the same name must not block create or rename (v1 and v2).
+const { default: DepartmentServiceV2 } = await import(
+  "../../../core/v2/departments/departments.service.js"
+);
+describe.each([
+  ["v1", DepartmentService],
+  ["v2", DepartmentServiceV2],
+])("DepartmentService %s — duplicate names are per admin", (_v, Service) => {
+  const otherAdminId = new mongoose.Types.ObjectId();
+
+  it("allows creating a name another admin already uses", async () => {
+    await Department.create({ adminId: otherAdminId, departmentName: "ops" });
+    const { req, res, next } = serviceCtx({ adminId, body: { departmentName: "Ops" } });
+    await Service.create(req, res, next);
+    expect(payload(res).message ?? "").not.toMatch(/already exists/i);
+    expect(await Department.countDocuments({ adminId })).toBe(1);
+  });
+
+  it("allows renaming to a name another admin already uses", async () => {
+    await Department.create({ adminId: otherAdminId, departmentName: "ops" });
+    const mine = await Department.create({ adminId, departmentName: "security" });
+    const { req, res, next } = serviceCtx({
+      adminId,
+      query: { departmentId: String(mine._id) },
+      body: { departmentName: "ops" },
+    });
+    await Service.update(req, res, next);
+    expect(payload(res).message ?? "").not.toMatch(/already exists/i);
+    expect((await Department.findById(mine._id)).departmentName).toBe("ops");
+  });
+});

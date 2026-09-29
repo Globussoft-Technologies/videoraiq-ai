@@ -15,7 +15,7 @@ async create(req,res,next){
         let {error,value} = createDepartment.createDepartment(req?.body);
         if(error) return res.send(Response.userFailResp(error,"Validation Failed!."));
 
-        const departmentExists = await departmentsModel.findOne({ departmentName: new RegExp(`^${departmentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') ,empDepartmentId})
+        const departmentExists = await departmentsModel.findOne({ departmentName: new RegExp(`^${departmentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') ,empDepartmentId, adminId})
         if (departmentExists) return res.send(Response.userFailResp('department already exists','Validation failed!.'));
 
 
@@ -142,12 +142,12 @@ async get(req, res, next) {
           .send(Response.userFailResp("Department not found", "Validation Failed!."));
       }
   
-      // ✅ Prevent duplicate departmentName within the same org
+      // ✅ Prevent duplicate departmentName within the same admin
       if (value.departmentName) {
         const escapedDept = String(value.departmentName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const duplicate = await departmentsModel.findOne({
           _id: { $ne: departmentId }, // exclude current one
-          orgId: existingDepartment.orgId,
+          adminId: existingDepartment.adminId, // per admin — orgId defaults to false, so it matched every admin
           departmentName: new RegExp(`^${escapedDept}$`, "i"),
           softDelete: false,
         });

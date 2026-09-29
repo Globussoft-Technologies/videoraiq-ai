@@ -1108,15 +1108,29 @@ class NVRService {
       }
 
       if (existingNvr) {
-        // NVR exists - show all available cameras + mark which ones are already added
-        const addedCameras = await Camera.find({ nvrId: existingNvr._id });
-        const addedChannelIds = addedCameras.map((c) => c.channelId);
+        // NVR exists - show all available cameras + mark which ones are already added.
+        // includeInactive: cameras saved but not yet selected (isAdded: false) still
+        // need their dbId, or the UI can't preview them.
+        const savedCameras = await Camera.find({ nvrId: existingNvr._id })
+          .setOptions({ includeInactive: true });
+        const savedByChannel = new Map(savedCameras.map((c) => [channelKey(c), c]));
 
-        // Mark cameras that are already added
-        const camerasWithStatus = camerasData.cameras.map((cam) => ({
-          ...cam,
-          isAdded: addedChannelIds.includes(cam.channelId),
-        }));
+        const camerasWithStatus = camerasData.cameras.map((cam) => {
+          const saved = savedByChannel.get(channelKey(cam));
+          return { ...cam, isAdded: !!saved?.isAdded, dbId: saved?._id ?? null };
+        });
+
+        // Re-register saved cameras' streams — a camera whose first registration
+        // failed (e.g. a broken brand URL) otherwise never gets a preview stream.
+        // Idempotent upsert on the same uid; fire-and-forget like editNvrCameras.
+        savedCameras.forEach((cam) => {
+          try {
+            const rtspUrl = buildRTSPUrl(existingNvr, cam, "main");
+            registerCameraStream(`${existingNvr._id}-${cam._id}`, rtspUrl, existingNvr.userId);
+          } catch (streamError) {
+            logger.error(`Failed to re-register stream for camera ${cam._id}:`, streamError);
+          }
+        });
 
         return res.status(200).json(
           Response.userSuccessResp("Cameras retrieved successfully", {
@@ -2071,8 +2085,10 @@ class NVRService {
           sock.on("error", () => finish());
         });
 
-        // Step 3: HTML page — channel count + fallback device info from embedded JS vars
-        let channelCount = 4;
+        // Step 3: HTML page — channel count + fallback device info from embedded JS vars.
+        // No default count: guessing 4 turned a wrong/closed HTTP port into 4 fake
+        // cameras that streamed whatever device owned the RTSP port.
+        let channelCount = 0;
         let htmlDeviceInfo = {};
         try {
           const htmlRes = await fetch(`http://${ip}:${port}/`, { signal: AbortSignal.timeout(5000) });
@@ -2089,7 +2105,17 @@ class NVRService {
               macAddress:      extract(/g_macAddr\s*=\s*["']([^"']+)["']/),
             };
           }
-        } catch (_) { /* use defaults */ }
+        } catch (_) { /* unreachable, or not an HTTP port (e.g. the RTSP port) */ }
+
+        // DVRIP is no fallback on its own: on some firmware it answers identically
+        // for right and wrong passwords and returns no channel list.
+        if (!channelCount) channelCount = dvripResult.ipcChannels.length;
+        if (!channelCount) {
+          return {
+            error: `Could not read the channel list from the Securus device at ${ip}:${port}. ` +
+              "Check that the HTTP port is the device's web port and is reachable from the internet.",
+          };
+        }
 
         // Merge device info: ONVIF (most reliable) > DVRIP SystemInfo > HTML vars
         const deviceInfo = {
