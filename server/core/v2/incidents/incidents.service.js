@@ -114,6 +114,7 @@ const modelMap = {
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
 import { triggerAlertOnIncident } from "../alerts/alert.events.js";
+import { sendIncidentPush } from "../../../services/push.service.js";
 import config from "config";
 import {
   DetectionSetting,
@@ -548,6 +549,7 @@ class IncidentsService {
                 saved: recentIncident,
                 adminId
               }).catch((err) => logger.error(err));
+              void sendIncidentPush({ admin: isAdminExist, incident: incidentObj });
             }
           // }
           delete incidentObj.timeSeries;
@@ -906,6 +908,7 @@ class IncidentsService {
             saved,
             adminId
           }).catch((err) => logger.error(err));
+          void sendIncidentPush({ admin: isAdminExist, incident: saved });
         }
       // }
 

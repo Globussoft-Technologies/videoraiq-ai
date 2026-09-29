@@ -123,6 +123,8 @@ const adminSchema = new mongoose.Schema({
   // channel entirely even if a detection has recipients configured.
   emailAlertsEnabled: { type: Boolean, default: true },
   telegramAlertsEnabled: { type: Boolean, default: true },
+  // Incident push notifications (web, Android, iOS) — see services/push.service.js.
+  pushAlertsEnabled: { type: Boolean, default: true },
   // One-bot linking (Option A): a unique verification code shown to the client.
   // The client adds the shared platform bot to their channel and posts this code
   // there; the bot's webhook matches the code -> this admin and saves the

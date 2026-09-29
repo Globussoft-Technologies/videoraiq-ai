@@ -706,7 +706,7 @@ class AdminService {
   async getAlertSwitches(req, res, next) {
     try {
       const adminId = req?.verified?.userData?.adminId;
-      const admin = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled").lean();
+      const admin = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled pushAlertsEnabled").lean();
       if (!admin) {
         return res.status(404).json(Response.userFailResp("Admin not found"));
       }
@@ -714,6 +714,8 @@ class AdminService {
         Response.userSuccessResp("Alert switches fetched successfully", {
           emailAlertsEnabled: admin.emailAlertsEnabled,
           telegramAlertsEnabled: admin.telegramAlertsEnabled,
+          // Admins created before this field existed have no value stored — the schema default (on) applies.
+          pushAlertsEnabled: admin.pushAlertsEnabled !== false,
         })
       );
     } catch (error) {
@@ -770,6 +772,34 @@ class AdminService {
       return res.status(200).json(
         Response.userSuccessResp("Telegram alerts switch updated successfully", {
           telegramAlertsEnabled: admin.telegramAlertsEnabled,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  async updatePushAlertsEnabled(req, res, next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const { pushAlertsEnabled } = req.body || {};
+      if (typeof pushAlertsEnabled !== "boolean") {
+        return res.status(400).json(Response.userFailResp("pushAlertsEnabled must be boolean"));
+      }
+
+      const admin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { pushAlertsEnabled } },
+        { new: true, select: "pushAlertsEnabled" }
+      ).lean();
+
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Push alerts switch updated successfully", {
+          pushAlertsEnabled: admin.pushAlertsEnabled,
         })
       );
     } catch (error) {

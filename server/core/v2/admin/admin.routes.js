@@ -19,6 +19,7 @@ router.put("/allowed-detections",verifyToken,adminController.updateAllowedDetect
 router.get("/alert-switches",verifyToken,adminController.getAlertSwitches);
 router.put("/alert-switches/email",verifyToken,adminController.updateEmailAlertsEnabled);
 router.put("/alert-switches/telegram",verifyToken,adminController.updateTelegramAlertsEnabled);
+router.put("/alert-switches/push",verifyToken,adminController.updatePushAlertsEnabled);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
 router.get("/onboarding",verifyToken,adminController.fetchOnboarding);

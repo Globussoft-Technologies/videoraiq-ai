@@ -47,6 +47,7 @@ import clientConfigRoutes from "../../core/v2/clientConfig/clientConfig.routes.j
 import logsConfigurationRoutes from "../../core/v2/logsConfiguration/logsConfiguration.routes.js";
 import videoRecordsRoutes from "../../core/v2/videoRecords/videoRecords.routes.js";
 import sessionRoutes from "../../core/v2/sessions/sessions.routes.js";
+import pushTokensRoutes from "../../core/v2/pushTokens/pushTokens.routes.js";
 import measurementIncidentsRoutes from "../../core/v2/measurementIncidents/measurementIncidents.routes.js";
 import measurementsRoutes from "../../core/v2/measurements/measurements.routes.js";
 import adminStorageRoutes from "../../core/v2/adminStorage/adminStorage.routes.js";
@@ -117,6 +118,7 @@ router.use("/telegram", telegramRoutes);
 // clientConfig.routes.js applies verifyToken per-route, so mount plain.
 router.use("/client-config", clientConfigRoutes);
 router.use("/sessions", verifyToken, sessionRoutes);
+router.use("/push-tokens", verifyToken, pushTokensRoutes);
 // Email Monitoring dashboard has its own config-credential login and its own
 // secret — mount WITHOUT verifyToken, the router guards itself.
 router.use("/email-monitoring", emailMonitoringRoutes);

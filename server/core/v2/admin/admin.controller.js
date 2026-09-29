@@ -287,6 +287,23 @@ class AdminController {
     */
     return await adminService.updateTelegramAlertsEnabled(req, res, next);
   }
+
+  async updatePushAlertsEnabled(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Globally enable or disable incident push notifications (web, Android, iOS) for the authenticated admin'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        required: true,
+        schema: {
+          pushAlertsEnabled: true
+        }
+    }
+    #swagger.responses[200] = { description: 'Push alerts switch updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updatePushAlertsEnabled(req, res, next);
+  }
   async updateLogsSound(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Update logsSound preferences for Admin or User'
