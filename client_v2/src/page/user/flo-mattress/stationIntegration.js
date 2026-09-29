@@ -345,12 +345,33 @@ export function resolvePiUrl(piApi, value, fallbackPath) {
   }
 }
 
-export function backendCaptureUrl(ip, pageProtocol = window.location.protocol) {
-  const raw = clean(ip);
-  if (!raw) throw new Error('Backend IP is missing');
-  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `${pageProtocol === 'https:' ? 'https' : 'http'}://${raw}`;
-  const url = new URL(withProtocol);
-  if (!url.port) url.port = '5055';
+function configuredBackendUrl() {
+  return clean(import.meta.env?.VITE_BACKEND);
+}
+
+export function backendCaptureUrl(
+  ip,
+  pageProtocol = window.location.protocol,
+  configuredBackend = configuredBackendUrl(),
+  pageOrigin = window.location.origin,
+) {
+  // VITE_BACKEND is the single source of truth for cloud and on-prem builds.
+  // Include the port in the environment value whenever the backend does not
+  // use the standard HTTP(S) port. Station data remains a legacy fallback.
+  const configured = clean(configuredBackend);
+  const raw = configured || clean(ip);
+  if (!raw) throw new Error('Backend URL is missing');
+
+  let url;
+  if (/^https?:\/\//i.test(raw)) {
+    url = new URL(raw);
+  } else if (raw.startsWith('/')) {
+    url = new URL(raw, pageOrigin);
+  } else {
+    const protocol = pageProtocol === 'https:' ? 'https' : 'http';
+    url = new URL(`${protocol}://${raw}`);
+  }
+
   url.pathname = '/api/v2/measurements/captures';
   url.search = '';
   url.hash = '';
