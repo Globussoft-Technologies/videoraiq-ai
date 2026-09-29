@@ -4,6 +4,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
+import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import { PRIORITY_OPTIONS, CAR_COMPANIES } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
@@ -130,7 +131,7 @@ export default function SaveDetectionAreaModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        width: '100%', maxWidth: (isLineCrossing || isCheckInOut) ? 520 : 440, maxHeight: '88vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+        width: '100%', maxWidth: (isLineCrossing || isCheckInOut) ? 520 : 440, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
@@ -333,23 +334,11 @@ export default function SaveDetectionAreaModal({
                 </div>
               )}
               {extraFields.includes('threshold') && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec) *</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={z.threshold}
-                    onChange={e => updateZoneField(i, 'threshold', e.target.value)}
-                    placeholder="e.g. 30"
-                    style={{
-                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                      background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-threshold`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`, fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                    }}
-                  />
-                  {errors[`zone-${i}-threshold`] && (
-                    <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Threshold is required.</div>
-                  )}
-                </div>
+                <ThresholdDurationInput
+                  value={z.threshold}
+                  onChange={value => updateZoneField(i, 'threshold', value)}
+                  error={errors[`zone-${i}-threshold`]}
+                />
               )}
               {extraFields.includes('company') && (
                 <div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
+import ThresholdDurationInput from './ThresholdDurationInput';
 import { CAR_COMPANIES } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
@@ -217,23 +218,12 @@ export default function ZoneSettingsPanel({
                     </div>
                   )}
                   {extraFields.includes('threshold') && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec) *</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={z.threshold}
-                        onChange={e => onUpdateField(i, 'threshold', e.target.value)}
-                        placeholder="e.g. 30"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-threshold`] ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
-                      />
-                      {errors[`zone-${i}-threshold`] && (
-                        <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-threshold`]}</div>
-                      )}
-                    </div>
+                    <ThresholdDurationInput
+                      value={z.threshold}
+                      onChange={value => onUpdateField(i, 'threshold', value)}
+                      error={errors[`zone-${i}-threshold`]}
+                      compact
+                    />
                   )}
                   {extraFields.includes('company') && (
                     <div>
