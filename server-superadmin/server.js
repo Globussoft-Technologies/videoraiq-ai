@@ -25,6 +25,7 @@ import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
 import { metricsHandler } from "./utils/prometheus.js";
 import { startLoggedOutAutoDelete } from "./core/v1/sessions/loggedOutAutoDelete.js";
+import { startStaleOfflineAutoDelete } from "./core/v1/sessions/staleOfflineAutoDelete.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -118,6 +119,7 @@ const startServer = async () => {
       );
     });
     startLoggedOutAutoDelete();
+    startStaleOfflineAutoDelete();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

@@ -52,5 +52,6 @@ const sessionSchema = new mongoose.Schema(
 
 sessionSchema.index({ adminId: 1, memberId: 1, deviceId: 1, status: 1 });
 sessionSchema.index({ adminId: 1, status: 1, lastActiveAt: -1 });
+sessionSchema.index({ status: 1, lastActiveAt: 1, _id: 1 });
 
 export default mongoose.model("UserSession", sessionSchema);

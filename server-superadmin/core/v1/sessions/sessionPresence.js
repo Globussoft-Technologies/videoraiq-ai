@@ -32,3 +32,27 @@ export const getOnlineSessionIds = async (sessionIds = []) => {
     return new Set();
   }
 };
+
+// Cleanup must never interpret a Redis failure as "all sessions offline".
+// Keep this separate from the dashboard's best-effort reader above.
+export const getOnlineSessionIdsStrict = async (sessionIds = []) => {
+  const ids = [...new Set(sessionIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  if (!ids.length) return new Set();
+  if (redis.status !== "ready") throw new Error("Redis presence is unavailable");
+
+  let timeout;
+  try {
+    const values = await Promise.race([
+      redis.mget(ids.map(presenceKey)),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Redis presence lookup timed out")), 5_000);
+      }),
+    ]);
+    if (!Array.isArray(values) || values.length !== ids.length) {
+      throw new Error("Redis presence lookup returned an invalid result");
+    }
+    return new Set(ids.filter((_, index) => values[index] != null));
+  } finally {
+    clearTimeout(timeout);
+  }
+};
