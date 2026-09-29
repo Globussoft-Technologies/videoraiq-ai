@@ -200,6 +200,20 @@ export default function TourTooltip({
           {...primaryProps}
           title={primaryLabel}
           aria-label={primaryLabel}
+          onKeyDown={(event) => {
+            // Focused buttons are activated by Space or Enter by default.
+            // Tour progress should happen only through an intentional click/tap.
+            if (event.key === ' ' || event.code === 'Space' || event.key === 'Enter') {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onKeyUp={(event) => {
+            if (event.key === ' ' || event.code === 'Space' || event.key === 'Enter') {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
           style={{
             height: 32,
             padding: '0 15px',
