@@ -1099,7 +1099,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     location: editingNvr.location || editingNvr.locationName || '',
     ip: decrypt(editingNvr.ipAddress || editingNvr.ip || ''),
     user: editingNvr.username || 'admin',
-    oldPass: '', newPass: '',
     rtsp: editingNvr.rtspPort || '554',
     http: editingNvr.port || '80',
   } : {
@@ -1134,24 +1133,23 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   }, []);
 
   useEffect(() => {
-    if (!isEdit || isLocalEdit) return;
+    // A normal NVR edit must stay on the connection form until the user
+    // explicitly clicks "Discover Cameras". Direct RTSP records are the only
+    // exception: their saved camera rows are part of the edit form itself and
+    // there is no discovery step for them.
+    if (!isEdit || isLocalEdit || editingNvr.connectionMode !== 'direct') return;
     let active = true;
     setConnecting(true);
     getNvrCamerasForEdit(editingNvr._id)
       .then((body) => {
         if (!active || body?.status !== 'success') return;
         const available = body.data?.availableCameras || [];
-        if (editingNvr.connectionMode === 'direct') {
-          setDirectCameras(available.map((camera) => ({
-            dbId: camera.dbId,
-            name: camera.name,
-            rtspUrl: '',
-            hasRtspUrl: camera.hasRtspUrl,
-          })));
-        } else {
-          applyFetchedCameras(available);
-          setStep(2);
-        }
+        setDirectCameras(available.map((camera) => ({
+          dbId: camera.dbId,
+          name: camera.name,
+          rtspUrl: '',
+          hasRtspUrl: camera.hasRtspUrl,
+        })));
       })
       .catch(() => toast.error('Failed to load cameras for this NVR.'))
       .finally(() => active && setConnecting(false));
@@ -1412,10 +1410,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     if (!form.location.trim()) found.location = 'Select or create a location.';
     if (!ip) found.ip = 'Public IP address is required.';
     if (!form.user.trim()) found.user = 'Username is required.';
-    if (isEdit && (form.oldPass || form.newPass)) {
-      if (!form.oldPass) found.oldPass = 'Current password is required.';
-      if (!form.newPass) found.newPass = 'New password is required.';
-    }
     if (!String(form.rtsp || '').trim()) found.rtsp = 'RTSP port is required.';
     if (!String(form.http || '').trim()) found.http = 'HTTP port is required.';
     setErrors(found);
@@ -1438,8 +1432,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           location: form.location,
           brand: form.brand,
         };
-        if (form.oldPass) payload.oldPassword = form.oldPass;
-        if (form.newPass) payload.newPassword = form.newPass;
         const resp = await updateNvrById(editingNvr._id, payload);
         const body = resp?.data?.body;
         if (body?.status !== 'success') {
@@ -1874,37 +1866,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                     <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
                   </div>
                   <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} autoComplete="off" />
-                  {isEdit ? (
-                    <ModalInput
-                      label="Old Password"
-                      type="password"
-                      passwordToggle
-                      value={form.oldPass}
-                      onChange={set('oldPass')}
-                      placeholder="Enter your old password"
-                      invalid={!!errors.oldPass}
-                      error={errors.oldPass}
-                      readOnly={isLocalEdit}
-                      autoComplete="current-password"
-                    />
-                  ) : (
+                  {!isEdit && (
                     <ModalInput label="Password" type="password" passwordToggle value={form.pass} onChange={set('pass')} placeholder="password" autoComplete="new-password" />
-                  )}
-                  {isEdit && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <ModalInput
-                        label="New Password"
-                        type="password"
-                        passwordToggle
-                        value={form.newPass}
-                          onChange={set('newPass')}
-                          placeholder="Enter new password"
-                        invalid={!!errors.newPass}
-                        error={errors.newPass}
-                        readOnly={isLocalEdit}
-                        autoComplete="new-password"
-                      />
-                    </div>
                   )}
                   <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} readOnly={isLocalEdit} />
                   <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} readOnly={isLocalEdit} />

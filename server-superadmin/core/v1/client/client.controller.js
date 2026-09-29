@@ -7,6 +7,8 @@ class ClientController {
         /* #swagger.parameters['skip'] = { in: 'query', type: 'integer', minimum: 0, description: 'Records to skip' } */
         /* #swagger.parameters['limit'] = { in: 'query', type: 'integer', minimum: 1, description: 'Page size (max 50)' } */
         /* #swagger.parameters['search'] = { in: 'query', description: 'Filter by name / email / login' } */
+        /* #swagger.parameters['status'] = { in: 'query', enum: ['active', 'inactive', 'expired', 'unknown'], description: 'Filter by subscription status' } */
+        /* #swagger.parameters['plan'] = { in: 'query', type: 'string', description: 'Filter by subscription plan name' } */
         /* #swagger.parameters['sortBy'] = { in: 'query', enum: ['name', 'email', 'login', 'createdAt'], description: 'Sort field (default createdAt)' } */
         /* #swagger.parameters['sortOrder'] = { in: 'query', enum: ['asc', 'desc'], description: 'Sort direction (default desc)' } */
         return await clientService.listAdmins(req, res, next);

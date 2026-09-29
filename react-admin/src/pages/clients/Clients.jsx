@@ -4,10 +4,18 @@ import Topbar from '../../layout/Topbar'
 import ClientsTable from './components/ClientsTable'
 import Pagination from './components/Pagination'
 import LoadingState from '../../components/UI/LoadingState'
+import CustomSelect from '../../components/UI/CustomSelect'
 import { getClients } from './apis/get'
 import { notifyApiError } from '../../utils/apiError'
 
 const DEFAULT_PAGE_SIZE = 10
+const STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'unknown', label: 'Unknown' },
+]
 
 // Rotating avatar gradients so rows are visually distinct.
 const AVATAR_COLORS = [
@@ -39,6 +47,9 @@ const Clients = () => {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [planFilter, setPlanFilter] = useState('')
+  const [availablePlans, setAvailablePlans] = useState([])
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   // Server-side sort. Only name/email are sortable (see ClientsTable).
@@ -73,12 +84,21 @@ const Clients = () => {
       setLoading(true)
       setError('')
       try {
-        const res = await getClients(page * pageSize, pageSize, debouncedQuery, sortBy, sortOrder)
+        const res = await getClients(
+          page * pageSize,
+          pageSize,
+          debouncedQuery,
+          sortBy,
+          sortOrder,
+          statusFilter,
+          planFilter,
+        )
         if (cancelled) return
         const data = res?.body?.data ?? res?.data ?? {}
         const admins = Array.isArray(data.admins) ? data.admins : []
         setClients(admins.map(mapAdmin))
         setTotal(data.totalCount ?? admins.length)
+        setAvailablePlans(Array.isArray(data.filterOptions?.plans) ? data.filterOptions.plans : [])
       } catch (err) {
         if (cancelled) return
         setError(notifyApiError(err, 'Failed to load clients'))
@@ -93,7 +113,12 @@ const Clients = () => {
     return () => {
       cancelled = true
     }
-  }, [page, pageSize, debouncedQuery, sortBy, sortOrder])
+  }, [page, pageSize, debouncedQuery, sortBy, sortOrder, statusFilter, planFilter])
+
+  const planOptions = [
+    { value: '', label: 'All plans' },
+    ...availablePlans.map((plan) => ({ value: plan.toLowerCase(), label: plan })),
+  ]
 
   return (
     <>
@@ -102,18 +127,40 @@ const Clients = () => {
       <div className="px-8 py-6">
         {/* Controls */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-          <div className="relative w-full max-w-md">
-            <Search
-              size={16}
-              className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
-            />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search clients by name or email…"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-white/4 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-purple-400/60"
-            />
+          <div className="flex w-full flex-1 flex-wrap items-center gap-3">
+            <div className="relative w-full max-w-md">
+              <Search
+                size={16}
+                className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search clients by name or email…"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-white/4 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-purple-400/60"
+              />
+            </div>
+            <div className="w-40">
+              <CustomSelect
+                value={statusFilter}
+                options={STATUS_OPTIONS}
+                onChange={(value) => {
+                  setStatusFilter(value)
+                  setPage(0)
+                }}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={planFilter}
+                options={planOptions}
+                onChange={(value) => {
+                  setPlanFilter(value)
+                  setPage(0)
+                }}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -140,7 +187,7 @@ const Clients = () => {
           <>
             <ClientsTable
               clients={clients}
-              searching={debouncedQuery.length > 0}
+              searching={debouncedQuery.length > 0 || Boolean(statusFilter) || Boolean(planFilter)}
               sortBy={sortBy}
               sortOrder={sortOrder}
               onSort={handleSort}

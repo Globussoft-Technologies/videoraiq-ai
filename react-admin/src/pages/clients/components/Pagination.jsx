@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import CustomSelect from '../../../components/UI/CustomSelect'
 
 const ROWS_OPTIONS = [10, 20, 50]
 
@@ -129,17 +130,12 @@ const Pagination = ({ page, pageSize, total, onPageChange, onPageSizeChange }) =
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 dark:text-gray-500">Rows</span>
-            <select
+            <CustomSelect
               value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/10 dark:bg-white/4 dark:text-white"
-            >
-              {ROWS_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onPageSizeChange(Number(value))}
+              options={ROWS_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
+              className="!h-8 !w-16 !rounded-lg !px-2"
+            />
           </div>
         )}
       </div>

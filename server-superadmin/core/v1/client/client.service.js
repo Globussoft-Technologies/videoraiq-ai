@@ -84,8 +84,15 @@ class ClientService {
       const skip = Math.max(parseInt(req.query.skip) || 0, 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
       const search = (req.query.search || "").trim();
+      const statusFilter = String(req.query.status || "").trim().toLowerCase();
+      const planFilter = String(req.query.plan || "").trim().toLowerCase();
+      const allowedStatuses = new Set(["active", "inactive", "expired", "unknown"]);
+      const effectiveStatusFilter = allowedStatuses.has(statusFilter) ? statusFilter : "";
 
-      // ponytail: only DB fields are sortable; plan/cameras/status are enriched post-query
+      // Plan and status are subscription-enriched fields, so filtering and the
+      // active-first ordering must happen before pagination. Paginating the DB
+      // records first would put active clients on later pages and make filter
+      // totals depend on whichever page happened to be loaded.
       const SORTABLE = { name: "name_f", email: "email", login: "login", createdAt: "createdAt" };
       const sortField = SORTABLE[req.query.sortBy] || "createdAt";
       const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
@@ -96,22 +103,12 @@ class ClientService {
         filter.$or = [{ name_f: rx }, { name_l: rx }, { email: rx }, { login: rx }];
       }
 
-      const [admins, totalCount] = await Promise.all([
-        adminModel.find(filter).sort({ [sortField]: sortOrder, _id: 1 }).skip(skip).limit(limit),
-        adminModel.countDocuments(filter),
-      ]);
+      const admins = await adminModel.find(filter).lean();
 
-      // One aggregation for camera counts across the whole page (NVR.userId = admin.user_id).
-      // aggregate() bypasses the NVR find-hook, so no memberId access-control applies here.
-      const userIds = admins.map((a) => a.user_id);
-      const cameraAgg = await NVRModel.aggregate([
-        { $match: { userId: { $in: userIds } } },
-        { $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } },
-      ]);
-      const cameraByUser = Object.fromEntries(cameraAgg.map((c) => [c._id, c.cameras]));
-
-      // Enrich each admin from aMember. One admin's failure never fails the page.
-      const rows = await Promise.all(
+      // Resolve every matching client's subscription before filtering and
+      // pagination. Stored snapshots make this local for current clients; the
+      // existing aMember fallback keeps legacy clients accurate.
+      const enriched = await Promise.all(
         admins.map(async (admin) => {
           const snapshot = admin.subscriptionSnapshot;
           const [plan, sub] = await Promise.all([
@@ -120,7 +117,50 @@ class ClientService {
               : this._getLatestInvoiceName(admin.user_id),
             this._getSubscriptionStatus(admin.user_id, snapshot),
           ]);
-          return {
+          return { admin, plan, sub };
+        }),
+      );
+
+      const availablePlans = [...new Set(
+        enriched.map(({ plan }) => String(plan || "").trim()).filter(Boolean),
+      )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+      const filtered = enriched.filter(({ plan, sub }) => {
+        if (effectiveStatusFilter && sub.status !== effectiveStatusFilter) return false;
+        if (planFilter && String(plan || "").trim().toLowerCase() !== planFilter) return false;
+        return true;
+      });
+
+      const statusRank = { active: 0, expired: 1, inactive: 2, unknown: 3 };
+      const compareValues = (left, right) => {
+        if (sortField === "createdAt") {
+          return (new Date(left || 0).getTime() - new Date(right || 0).getTime()) * sortOrder;
+        }
+        return String(left || "").localeCompare(String(right || ""), undefined, {
+          sensitivity: "base",
+        }) * sortOrder;
+      };
+      filtered.sort((left, right) => {
+        const rankDifference = (statusRank[left.sub.status] ?? 4) - (statusRank[right.sub.status] ?? 4);
+        if (rankDifference) return rankDifference;
+        const valueDifference = compareValues(left.admin[sortField], right.admin[sortField]);
+        if (valueDifference) return valueDifference;
+        return String(left.admin._id).localeCompare(String(right.admin._id));
+      });
+
+      const totalCount = filtered.length;
+      const pageRows = filtered.slice(skip, skip + limit);
+
+      // One aggregation for camera counts across the whole page (NVR.userId = admin.user_id).
+      // aggregate() bypasses the NVR find-hook, so no memberId access-control applies here.
+      const userIds = pageRows.map(({ admin }) => admin.user_id);
+      const cameraAgg = await NVRModel.aggregate([
+        { $match: { userId: { $in: userIds } } },
+        { $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } },
+      ]);
+      const cameraByUser = Object.fromEntries(cameraAgg.map((c) => [c._id, c.cameras]));
+
+      const rows = pageRows.map(({ admin, plan, sub }) => ({
             adminId: admin._id,
             userId: admin.user_id,
             name: `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login,
@@ -129,11 +169,18 @@ class ClientService {
             cameras: cameraByUser[admin.user_id] || 0,
             expireDate: sub.expireDate,
             status: sub.status,
-          };
-        })
-      );
+          }));
 
-      return res.send(Response.SuccessResp("Admins fetched successfully", { totalCount, skip, limit, admins: rows }));
+      return res.send(Response.SuccessResp("Admins fetched successfully", {
+        totalCount,
+        skip,
+        limit,
+        admins: rows,
+        filterOptions: {
+          plans: availablePlans,
+          statuses: ["active", "inactive", "expired", "unknown"],
+        },
+      }));
     } catch (err) {
       logger.error(`client listAdmins: ${err.message}`);
       return res.send(Response.userFailResp("Failed to fetch admins", err.message));
