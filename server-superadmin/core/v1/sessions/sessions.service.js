@@ -4,6 +4,7 @@ import logger from "../../../utils/logger.js";
 import sessionModel from "./sessions.model.js";
 import blockedDeviceModel from "./blockedDevice.model.js";
 import { getOnlineSessionIds } from "./sessionPresence.js";
+import { withoutLoggedOut } from "./loggedOutAutoDelete.js";
 import usersModel from "../users/users.model.js";
 import adminModel from "../admin/admin.model.js";
 
@@ -125,7 +126,7 @@ class SessionsService {
   async getUserSessions(req, res) {
     try {
       const { skip, limit } = pagination(req);
-      const filter = { ...currentUserFilter(req), ...statusFilter(req) };
+      const filter = withoutLoggedOut({ ...currentUserFilter(req), ...statusFilter(req) });
 
       if (requestedStatus(req) === "online") {
         const activeSessions = await sessionModel.find(filter).sort({ lastActiveAt: -1 }).lean();
@@ -161,6 +162,7 @@ class SessionsService {
         if (resolved.error) return res.status(resolved.error.statusCode).send(resolved.error);
         filter = { ...resolved.filter, ...statusFilter(req), ...sessionQueryFilters(req) };
       }
+      filter = withoutLoggedOut(filter);
 
       if (requestedStatus(req) === "online") {
         // Presence lives in Redis, so it can't be paginated at the DB level:
@@ -190,7 +192,7 @@ class SessionsService {
 
   async getSessionSummary(req, res) {
     try {
-      const filter = { ...(await scopedAdminFilter(req)), ...statusFilter(req), ...sessionQueryFilters(req) };
+      const filter = withoutLoggedOut({ ...(await scopedAdminFilter(req)), ...statusFilter(req), ...sessionQueryFilters(req) });
 
       const rows = await sessionModel.aggregate([
         { $match: filter },
@@ -305,7 +307,7 @@ class SessionsService {
     try {
       const filter = isSuperAdmin(req) ? {} : currentUserFilter(req);
       if (!isSuperAdmin(req) && !authUser(req).memberId) delete filter.memberId;
-      const session = await sessionModel.findOne({ ...filter, sessionId: req.params.sessionId }).lean();
+      const session = await sessionModel.findOne(withoutLoggedOut({ ...filter, sessionId: req.params.sessionId })).lean();
       if (!session) return res.status(404).send(Response.notFoundResp("Session not found"));
       const [withOnline] = await withOnlineFlag([session]);
       return res.status(200).send(Response.userSuccessResp("Session fetched successfully.", withOnline));
