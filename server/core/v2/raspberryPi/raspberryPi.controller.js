@@ -29,7 +29,7 @@ class RaspberryPiController {
 
   async registrationStatus(req, res, next) {
     /* #swagger.tags = ['Raspberry Pi']
-       #swagger.description = 'Poll a Raspberry Pi registration code for pending/approved state and its station token.'
+       #swagger.description = 'Poll a Raspberry Pi registration code. Approved responses include the station token, station ID, login, user name and user email.'
        #swagger.responses[200] = { description: 'Registration status returned' }
        #swagger.responses[404] = { description: 'Registration code not found' } */
     return await raspberryPiService.registrationStatus(req, res, next);

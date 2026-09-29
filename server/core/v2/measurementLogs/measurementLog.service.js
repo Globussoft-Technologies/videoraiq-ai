@@ -9,7 +9,8 @@ const MM_PER_INCH = 25.4;
 
 // Resolve a stored media path (qr / measurement image) to an absolute URL so the
 // table thumbnail, the preview modal and the PDF/XLSX/CSV exports all link the
-// same place. Values that are already absolute pass through untouched.
+// same place. Previously stored absolute backend URLs are re-based onto the
+// current request origin so an old machine IP cannot keep breaking images.
 //
 // The measurement pipeline stores capture paths relative to the API host, e.g.
 // "/api/v2/measurements/captures/<file>.jpg" — those just need the host prefixed.
@@ -17,14 +18,32 @@ const MM_PER_INCH = 25.4;
 // backend upload proxy. This is important for on-prem object storage: the
 // MinIO bucket is private and its object keys are not browser URLs. The proxy
 // also remains provider-aware for NAS, AWS, GCP and Oracle paths.
-function backendDomain() {
+function configuredBackendDomain() {
   try {
     if (config.has("backendDomain")) return String(config.get("backendDomain") || "").replace(/\/+$/, "");
   } catch { /* not configured */ }
   return "";
 }
 
-function mediaUrl(pathValue) {
+// Resolve the public API origin from every incoming list request. This avoids
+// returning a stale configured IP after an on-prem host moves, while naturally
+// retaining the configured staging/cloud domain when the service is reached
+// through its reverse proxy. The configured value remains the fallback for
+// background callers and direct toRow() usage in reports/tests.
+function requestBackendDomain(req) {
+  const getHeader = (name) => String(req?.get?.(name) || "").split(",")[0].trim();
+  const host = getHeader("x-forwarded-host") || getHeader("host");
+  const protocol = getHeader("x-forwarded-proto") || String(req?.protocol || "").trim();
+
+  if (host && /^(?:https?)$/i.test(protocol)) {
+    try {
+      return new URL(`${protocol.toLowerCase()}://${host}`).origin;
+    } catch { /* fall back to configured backendDomain */ }
+  }
+  return configuredBackendDomain();
+}
+
+function mediaUrl(pathValue, publicBackendDomain = configuredBackendDomain()) {
   let p = String(pathValue || "").trim();
   if (!p) return "";
 
@@ -35,7 +54,7 @@ function mediaUrl(pathValue) {
   }
   p = p.replace(/^\/?api\/v2\/uploads(?=\/api\/)/i, "");
 
-  const host = backendDomain();
+  const host = String(publicBackendDomain || "").replace(/\/+$/, "");
   if (/^\/?api\//i.test(p)) {
     return `${host}/${p.replace(/^\/+/, "")}`;
   }
@@ -190,7 +209,7 @@ function comparisonResult(doc) {
  * dimensions (qrMetadata) are inches — convert measured to inches so the two
  * are comparable.
  */
-function toRow(doc, timezone) {
+function toRow(doc, timezone, publicBackendDomain) {
   const { meta, md, printed, measured, dev, devFrac, matchPct, status } = comparisonResult(doc);
 
   const hasMeasure = measured.L != null || measured.W != null || measured.H != null;
@@ -254,11 +273,11 @@ function toRow(doc, timezone) {
     lowConfidence: confidence != null && confidence < 0.6,
     // `shot` = whichever frame we have; `shotUrl` / `measurementImageUrl` are the
     // absolute links used by the preview modal and the exports.
-    shot: mediaUrl(doc.qrImage?.url || doc.qrImagePath || doc.measurementImage || ""),
-    shotUrl: mediaUrl(doc.qrImage?.url || doc.qrImagePath || doc.measurementImage || ""),
-    qrImageUrl: mediaUrl(doc.qrImage?.url || doc.qrImagePath || ""),
+    shot: mediaUrl(doc.qrImage?.url || doc.qrImagePath || doc.measurementImage || "", publicBackendDomain),
+    shotUrl: mediaUrl(doc.qrImage?.url || doc.qrImagePath || doc.measurementImage || "", publicBackendDomain),
+    qrImageUrl: mediaUrl(doc.qrImage?.url || doc.qrImagePath || "", publicBackendDomain),
     measurementImage: doc.measurementImage || "",
-    measurementImageUrl: mediaUrl(doc.measurementImage || ""),
+    measurementImageUrl: mediaUrl(doc.measurementImage || "", publicBackendDomain),
     createdAt: doc.createdAt,
   };
 }
@@ -415,7 +434,8 @@ class MeasurementLogService {
         .limit(allRows ? 20000 : limit + skip + 500) // headroom for the post-map status filter
         .lean();
 
-      let rows = docs.map((d) => toRow(d, timezone));
+      const publicBackendDomain = requestBackendDomain(req);
+      let rows = docs.map((d) => toRow(d, timezone, publicBackendDomain));
 
       const statusF = req.query.status;
       if (statusF && statusF !== "all") rows = rows.filter((r) => r.status === statusF);
@@ -429,7 +449,7 @@ class MeasurementLogService {
       const paged = allRows ? rows : rows.slice(skip, skip + limit);
 
       // Aggregates for the KPI cards + analytics.
-      const all = docs.map((d) => toRow(d, timezone));
+      const all = docs.map((d) => toRow(d, timezone, publicBackendDomain));
       const passCount = all.filter((r) => r.status === "pass").length;
       const stats = {
         total: all.length,
@@ -651,4 +671,4 @@ class MeasurementLogService {
 }
 
 export default new MeasurementLogService();
-export { toRow, deviationOf, buildMatch };
+export { toRow, deviationOf, buildMatch, requestBackendDomain };

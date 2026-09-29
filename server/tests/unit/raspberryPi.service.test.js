@@ -9,10 +9,15 @@ const mocks = vi.hoisted(() => ({
   findOneAndUpdate: vi.fn(),
   findOneAndDelete: vi.fn(),
   find: vi.fn(),
+  adminFindById: vi.fn(),
 }));
 
 vi.mock("../../core/v2/raspberryPi/raspberryPi.model.js", () => ({
   default: mocks,
+}));
+
+vi.mock("../../core/v2/admin/admin.model.js", () => ({
+  default: { findById: mocks.adminFindById },
 }));
 
 const { default: service } = await import(
@@ -90,7 +95,7 @@ describe("Raspberry Pi registration contract", () => {
     expect(device.tokenEncrypted).toEqual(expect.any(String));
   });
 
-  it("returns approved status and token from GET status without changing approval", async () => {
+  it("keeps status/code/token and adds stationId to an approved GET status response", async () => {
     const approvedToken = await (async () => {
       const device = {
         _id: "device-1",
@@ -111,7 +116,120 @@ describe("Raspberry Pi registration contract", () => {
       status: "approved",
       code: "123456",
       token: approvedToken.token,
+      stationId: "aa:bb:cc:dd:ee:ff",
     });
+  });
+
+  it("returns locally stored tenant context only to the matching approved station", async () => {
+    const device = {
+      _id: "device-1",
+      admin: "650000000000000000000001",
+      mac: "aa:bb:cc:dd:ee:ff",
+      code: "123456",
+      approvalStatus: "approved",
+      tokenEncrypted: null,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.findOne.mockResolvedValue(device);
+    const adminLean = vi.fn().mockResolvedValue({
+      _id: "650000000000000000000001",
+      login: "pridehonda",
+      name_f: "Pride",
+      name_l: "Honda",
+      email: "ceo@pridehonda.com",
+    });
+    const adminSelect = vi.fn().mockReturnValue({ lean: adminLean });
+    mocks.adminFindById.mockReturnValue({
+      select: adminSelect,
+    });
+    const res = responseDouble();
+
+    await service.registrationStatus({ params: { code: "123456" } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({
+      status: "approved",
+      code: "123456",
+      stationId: "aa:bb:cc:dd:ee:ff",
+      token: expect.any(String),
+      login: "pridehonda",
+      user_name: "Pride Honda",
+      user_email: "ceo@pridehonda.com",
+    });
+    expect(res.payload.user).toBeUndefined();
+    expect(mocks.adminFindById).toHaveBeenCalledWith("650000000000000000000001");
+    expect(adminSelect).toHaveBeenCalledWith("login name_f name_l email");
+  });
+
+  it("keeps the original pending status response unchanged", async () => {
+    mocks.findOne.mockResolvedValue({
+      _id: "device-1",
+      mac: "aa:bb:cc:dd:ee:ff",
+      code: "123456",
+      approvalStatus: "pending",
+    });
+    const res = responseDouble();
+
+    await service.registrationStatus({ params: { code: "123456" } }, res);
+
+    expect(res.payload).toEqual({
+      status: "pending",
+      code: "123456",
+    });
+    expect(mocks.adminFindById).not.toHaveBeenCalled();
+  });
+
+  it("keeps the original rejected status response unchanged", async () => {
+    mocks.findOne.mockResolvedValue({
+      _id: "device-1",
+      admin: "650000000000000000000001",
+      mac: "aa:bb:cc:dd:ee:ff",
+      code: "123456",
+      approvalStatus: "rejected",
+    });
+    const res = responseDouble();
+
+    await service.registrationStatus({ params: { code: "123456" } }, res);
+
+    expect(res.payload).toEqual({
+      status: "rejected",
+      code: "123456",
+    });
+    expect(mocks.adminFindById).not.toHaveBeenCalled();
+  });
+
+  it("still returns the approved station token when optional context loading fails", async () => {
+    const device = {
+      _id: "device-1",
+      admin: "650000000000000000000001",
+      mac: "aa:bb:cc:dd:ee:ff",
+      code: "123456",
+      approvalStatus: "approved",
+      tokenEncrypted: null,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.findOne.mockResolvedValue(device);
+    const adminSelect = vi.fn().mockReturnValue({
+      lean: vi.fn().mockRejectedValue(new Error("temporary database read failure")),
+    });
+    mocks.adminFindById.mockReturnValue({
+      select: adminSelect,
+    });
+    const res = responseDouble();
+
+    await service.registrationStatus({ params: { code: "123456" } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({
+      status: "approved",
+      code: "123456",
+      stationId: "aa:bb:cc:dd:ee:ff",
+      token: expect.any(String),
+    });
+    expect(res.payload.user).toBeUndefined();
+    expect(res.payload.login).toBeUndefined();
+    expect(res.payload.user_name).toBeUndefined();
+    expect(res.payload.user_email).toBeUndefined();
   });
 
   it("lets an administrator claim and approve a pending pairing code", async () => {

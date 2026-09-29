@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { toRow, deviationOf, buildMatch } from "../../core/v2/measurementLogs/measurementLog.service.js";
+import {
+  toRow,
+  deviationOf,
+  buildMatch,
+  requestBackendDomain,
+} from "../../core/v2/measurementLogs/measurementLog.service.js";
 
 it("serves local/provider measurement image paths through the backend proxy", () => {
   const row = toRow(
@@ -52,6 +57,64 @@ it("keeps QR capture and measurement frame as separate preview URLs", () => {
     "http://backend.test/api/v2/uploads/uploads/images/measurement-results/measurement-frame.jpg",
   );
   expect(row.qrImageUrl).not.toBe(row.measurementImageUrl);
+});
+
+it("uses the backend IP from the current request instead of a stale configured IP", () => {
+  const request = {
+    protocol: "http",
+    get(name) {
+      return name.toLowerCase() === "host" ? "192.168.0.46:5055" : undefined;
+    },
+  };
+  const publicBackendDomain = requestBackendDomain(request);
+  const row = toRow(
+    {
+      _id: "current-request-host",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      measurementImage: "/uploads/images/measurement-results/result.jpg",
+    },
+    "Asia/Kolkata",
+    publicBackendDomain,
+  );
+
+  expect(publicBackendDomain).toBe("http://192.168.0.46:5055");
+  expect(row.measurementImageUrl).toBe(
+    "http://192.168.0.46:5055/api/v2/uploads/uploads/images/measurement-results/result.jpg",
+  );
+});
+
+it("replaces an obsolete stored image IP with the current request origin", () => {
+  const row = toRow(
+    {
+      _id: "obsolete-image-host",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      measurementImage: "http://192.168.0.82:5055/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+    "Asia/Kolkata",
+    "http://192.168.0.46:5055",
+  );
+
+  expect(row.measurementImageUrl).toBe(
+    "http://192.168.0.46:5055/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  );
+});
+
+it("uses forwarded staging origin when the API is behind a reverse proxy", () => {
+  const request = {
+    protocol: "http",
+    get(name) {
+      const headers = {
+        "x-forwarded-host": "dev-api.videoraiq.com",
+        "x-forwarded-proto": "https",
+        host: "backend:5000",
+      };
+      return headers[name.toLowerCase()];
+    },
+  };
+
+  expect(requestBackendDomain(request)).toBe("https://dev-api.videoraiq.com");
 });
 
 // The QR label (qrMetadata) is always inches. DS `measuredData` has been seen

@@ -2,7 +2,9 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import config from "config";
 import RaspberryPiDevice from "./raspberryPi.model.js";
+import Admin from "../admin/admin.model.js";
 import { decrypt, decryptData, encrypt } from "../../../utils/cryptoUtils.js";
+import logger from "../../../utils/logger.js";
 import { raspberryPiRegistrationSchema } from "./raspberryPi.validate.js";
 
 const HEADER = "x-raspberry-pi-data";
@@ -108,7 +110,22 @@ class RaspberryPiService {
     return token;
   }
 
-  async registrationResponse(device) {
+  async approvedUserContext(device) {
+    if (!device?.admin) return null;
+
+    const admin = await Admin.findById(device.admin)
+      .select("login name_f name_l email")
+      .lean();
+    if (!admin) return null;
+
+    return {
+      login: admin.login,
+      user_name: `${admin.name_f || ""} ${admin.name_l || ""}`.trim(),
+      user_email: admin.email,
+    };
+  }
+
+  async registrationResponse(device, { includeApprovedContext = false } = {}) {
     const status =
       device.approvalStatus ||
       (device.status === "connected" && device.tokenEncrypted ? "approved" : "pending");
@@ -122,10 +139,25 @@ class RaspberryPiService {
       await device.save();
     }
 
-    if (status === "approved") {
-      return { status, code: device.code, token: await this.stationToken(device) };
+    const response = { status, code: device.code };
+    if (status === "approved") response.token = await this.stationToken(device);
+
+    // The existing status-by-code poll keeps status/code/token unchanged and
+    // adds locally cached tenant context only after approval. Registration,
+    // pending and rejected responses retain their original response shapes.
+    if (includeApprovedContext && status === "approved") {
+      response.stationId = normalizeMac(device.mac || device.deviceData);
+      try {
+        const user = await this.approvedUserContext(device);
+        if (user) Object.assign(response, user);
+      } catch (error) {
+        // Tenant context is additive. A local lookup failure must never stop
+        // an already-approved station from receiving its valid token.
+        logger.warn(`[RASPBERRY_PI_STATUS] Unable to load tenant context for station ${response.stationId}: ${error.message}`);
+      }
     }
-    return { status, code: device.code };
+
+    return response;
   }
 
   async register(req, res) {
@@ -180,7 +212,10 @@ class RaspberryPiService {
       if (!device) {
         return res.status(404).json({ status: "error", message: "Registration not found" });
       }
-      return res.status(200).json(await this.registrationResponse(device));
+
+      return res.status(200).json(await this.registrationResponse(device, {
+        includeApprovedContext: true,
+      }));
     } catch {
       return res.status(500).json({ status: "error", message: "Failed to fetch registration status" });
     }
