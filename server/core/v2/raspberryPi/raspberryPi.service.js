@@ -78,14 +78,17 @@ class RaspberryPiService {
     throw new Error("Unable to allocate Raspberry Pi registration code");
   }
 
-  async stationToken(device) {
+  async stationToken(device, userContext = null) {
     if (device.tokenEncrypted) {
       try {
         const existing = decrypt(device.tokenEncrypted);
         const claims = jwt.verify(existing, config.get("jwt.secretKey"));
+        const hasCurrentUserContext = !userContext || ["login", "user_name", "user_email"]
+          .every((key) => claims?.[key] === userContext[key]);
         if (
           claims?.tokenType === "raspberry-pi" &&
-          normalizeMac(claims.stationId) === normalizeMac(device.mac)
+          normalizeMac(claims.stationId) === normalizeMac(device.mac) &&
+          hasCurrentUserContext
         ) {
           return existing;
         }
@@ -101,6 +104,7 @@ class RaspberryPiService {
         registrationCode: device.code,
         deviceId: String(device._id),
         ...(device.admin ? { adminId: String(device.admin) } : {}),
+        ...(userContext || {}),
       },
       config.get("jwt.secretKey"),
       { algorithm: "HS512" },
@@ -119,9 +123,9 @@ class RaspberryPiService {
     if (!admin) return null;
 
     return {
-      login: admin.login,
+      login: String(admin.login || ""),
       user_name: `${admin.name_f || ""} ${admin.name_l || ""}`.trim(),
-      user_email: admin.email,
+      user_email: String(admin.email || ""),
     };
   }
 
@@ -139,22 +143,28 @@ class RaspberryPiService {
       await device.save();
     }
 
+    let approvedContext = null;
+    if (status === "approved" && device.admin) {
+      try {
+        approvedContext = await this.approvedUserContext(device);
+      } catch (error) {
+        // User claims are additive. A local lookup failure must never stop an
+        // already-approved station from receiving its valid station token.
+        logger.warn(`[RASPBERRY_PI_STATUS] Unable to load tenant context for station ${normalizeMac(device.mac || device.deviceData)}: ${error.message}`);
+      }
+    }
+
     const response = { status, code: device.code };
-    if (status === "approved") response.token = await this.stationToken(device);
+    if (status === "approved") {
+      response.token = await this.stationToken(device, approvedContext);
+    }
 
     // The existing status-by-code poll keeps status/code/token unchanged and
     // adds locally cached tenant context only after approval. Registration,
     // pending and rejected responses retain their original response shapes.
     if (includeApprovedContext && status === "approved") {
       response.stationId = normalizeMac(device.mac || device.deviceData);
-      try {
-        const user = await this.approvedUserContext(device);
-        if (user) Object.assign(response, user);
-      } catch (error) {
-        // Tenant context is additive. A local lookup failure must never stop
-        // an already-approved station from receiving its valid token.
-        logger.warn(`[RASPBERRY_PI_STATUS] Unable to load tenant context for station ${response.stationId}: ${error.message}`);
-      }
+      if (approvedContext) Object.assign(response, approvedContext);
     }
 
     return response;

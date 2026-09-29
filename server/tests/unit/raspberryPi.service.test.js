@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import jwt from "jsonwebtoken";
-import { encryptData } from "../../utils/cryptoUtils.js";
+import { encrypt, encryptData } from "../../utils/cryptoUtils.js";
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(),
@@ -121,13 +121,24 @@ describe("Raspberry Pi registration contract", () => {
   });
 
   it("returns locally stored tenant context only to the matching approved station", async () => {
+    const legacyToken = jwt.sign(
+      {
+        tokenType: "raspberry-pi",
+        stationId: "aa:bb:cc:dd:ee:ff",
+        registrationCode: "123456",
+        deviceId: "device-1",
+        adminId: "650000000000000000000001",
+      },
+      globalThis.__TEST_CONFIG__.jwt.secretKey,
+      { algorithm: "HS512" },
+    );
     const device = {
       _id: "device-1",
       admin: "650000000000000000000001",
       mac: "aa:bb:cc:dd:ee:ff",
       code: "123456",
       approvalStatus: "approved",
-      tokenEncrypted: null,
+      tokenEncrypted: encrypt(legacyToken),
       save: vi.fn().mockResolvedValue(undefined),
     };
     mocks.findOne.mockResolvedValue(device);
@@ -157,6 +168,18 @@ describe("Raspberry Pi registration contract", () => {
       user_email: "ceo@pridehonda.com",
     });
     expect(res.payload.user).toBeUndefined();
+    expect(res.payload.token).not.toBe(legacyToken);
+    const claims = jwt.verify(res.payload.token, globalThis.__TEST_CONFIG__.jwt.secretKey);
+    expect(claims).toMatchObject({
+      tokenType: "raspberry-pi",
+      stationId: "aa:bb:cc:dd:ee:ff",
+      registrationCode: "123456",
+      deviceId: "device-1",
+      adminId: "650000000000000000000001",
+      login: "pridehonda",
+      user_name: "Pride Honda",
+      user_email: "ceo@pridehonda.com",
+    });
     expect(mocks.adminFindById).toHaveBeenCalledWith("650000000000000000000001");
     expect(adminSelect).toHaveBeenCalledWith("login name_f name_l email");
   });
