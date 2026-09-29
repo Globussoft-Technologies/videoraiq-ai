@@ -9,6 +9,11 @@ vi.mock("../../core/v2/measurements/stationToken.middleware.js", () => ({
 }));
 vi.mock("../../core/v2/measurements/measurements.controller.js", () => ({
   default: {
+    startMeasurement: vi.fn((_req, res) => res.status(202).json({ route: "start" })),
+    extractQr: vi.fn((req, res) => res.status(200).json({
+      route: "qr-extract",
+      uploaded: Boolean(req.file?.buffer),
+    })),
     createCapture: vi.fn((req, res) => res.status(201).json({
       route: "capture",
       raw: Buffer.isBuffer(req.body),
@@ -35,6 +40,22 @@ beforeEach(() => {
 });
 
 describe("streaming-server measurement capture routes", () => {
+  it("proxies measurement starts", async () => {
+    const response = await request(app)
+      .post(`${BASE}/start`)
+      .send({ sku: "G_OK8478", length: 78, width: 72, height: 6 });
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ route: "start" });
+  });
+
+  it("accepts a QR image for DS extraction", async () => {
+    const response = await request(app)
+      .post(`${BASE}/qr/extract`)
+      .attach("image", Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "qr.jpg");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ route: "qr-extract", uploaded: true });
+  });
+
   it("accepts a raw JPEG body", async () => {
     const response = await request(app)
       .post(`${BASE}/captures`)

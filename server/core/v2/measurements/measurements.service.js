@@ -1,5 +1,7 @@
 import path from "path";
 import { createHash } from "crypto";
+import net from "net";
+import axios from "axios";
 import MeasurementCapture from "./measurementCapture.model.js";
 import {
   deleteMediaV2 as deleteMedia,
@@ -13,6 +15,8 @@ import {
 } from "../measurementMedia/measurementMedia.service.js";
 
 const MAX_CAPTURE_BYTES = 15 * 1024 * 1024;
+const DS_PORT = 8000;
+const DS_TIMEOUT_MS = 25_000;
 const MEASUREMENT_DIAGNOSTIC_EVENTS = new Set([
   "request",
   "success",
@@ -44,6 +48,64 @@ function isJpeg(buffer) {
     buffer[buffer.length - 1] === 0xd9;
 }
 
+function measurementDsUrl(ip, route) {
+  const value = String(ip || "").trim();
+  if (!net.isIP(value)) {
+    throw Object.assign(new Error("The approved station has an invalid IP address"), { statusCode: 422 });
+  }
+  const host = net.isIPv6(value) ? `[${value}]` : value;
+  return `http://${host}:${DS_PORT}${route}`;
+}
+
+function measurementPayload(body = {}) {
+  const sku = String(body.sku || "").trim().toUpperCase();
+  const dimension = (name) => {
+    const value = Number(body[name]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+  const payload = {
+    sku,
+    length: dimension("length"),
+    width: dimension("width"),
+    height: dimension("height"),
+  };
+  if (!/^[A-Z0-9._-]{1,200}$/.test(sku)) {
+    throw Object.assign(new Error("A valid SKU is required"), { statusCode: 422 });
+  }
+  const missing = ["length", "width", "height"].filter((name) => payload[name] === null);
+  if (missing.length) {
+    throw Object.assign(new Error(`Valid positive ${missing.join(", ")} value${missing.length > 1 ? "s are" : " is"} required`), { statusCode: 422 });
+  }
+  return payload;
+}
+
+function dsProxyError(error, action) {
+  if (error?.statusCode) return error;
+  const responseStatus = Number(error?.response?.status);
+  const responseData = error?.response?.data;
+  const rawDetail = responseData?.detail || responseData?.message || responseData?.body?.message;
+  const detail = Array.isArray(rawDetail)
+    ? rawDetail.map((item) => item?.msg || item?.message || String(item || "")).filter(Boolean).join(", ")
+    : String(rawDetail || "").trim();
+  if (responseStatus >= 400 && responseStatus < 600) {
+    return Object.assign(new Error(detail || `DS ${action} request failed`), { statusCode: responseStatus });
+  }
+  const timedOut = error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT";
+  return Object.assign(
+    new Error(timedOut ? `DS ${action} request timed out` : `Unable to reach the station measurement service`),
+    { statusCode: timedOut ? 504 : 502 },
+  );
+}
+
+function sendDsProxyFailure(res, error, action) {
+  const normalized = dsProxyError(error, action);
+  logger.warn(`[MEASUREMENT_DS_PROXY] ${action} failed: ${normalized.message}`);
+  return res.status(normalized.statusCode || 500).json({
+    ok: false,
+    message: normalized.message,
+  });
+}
+
 function capturePath(filename) {
   return `/api/v2/measurements/captures/${encodeURIComponent(filename)}`;
 }
@@ -55,6 +117,51 @@ function captureUrl(req, filename) {
 }
 
 class MeasurementsService {
+  async startMeasurement(req, res) {
+    try {
+      const payload = measurementPayload(req.body);
+      const endpoint = measurementDsUrl(req.stationDevice?.ip, "/v1/dimensions/measure");
+      const response = await axios.post(endpoint, payload, {
+        timeout: DS_TIMEOUT_MS,
+        maxRedirects: 0,
+        headers: { "Content-Type": "application/json" },
+      });
+      logger.info(
+        `[MEASUREMENT_DS_PROXY] start accepted station=${safeLogValue(req.stationToken?.stationId, 100)} endpoint=${endpoint} sku=${payload.sku} status=${response.status}`,
+      );
+      return res.status(response.status).json(response.data);
+    } catch (error) {
+      return sendDsProxyFailure(res, error, "measurement start");
+    }
+  }
+
+  async extractQr(req, res) {
+    try {
+      if (!req.file?.buffer?.length) {
+        throw Object.assign(new Error("QR image is required"), { statusCode: 400 });
+      }
+      const endpoint = measurementDsUrl(req.stationDevice?.ip, "/v1/qr/extract-dimensions");
+      const form = new FormData();
+      form.append(
+        "image",
+        new Blob([req.file.buffer], { type: req.file.mimetype || "image/jpeg" }),
+        req.file.originalname || "qr_code.jpg",
+      );
+      const response = await axios.post(endpoint, form, {
+        timeout: DS_TIMEOUT_MS,
+        maxRedirects: 0,
+        maxBodyLength: MAX_CAPTURE_BYTES,
+        maxContentLength: MAX_CAPTURE_BYTES,
+      });
+      logger.info(
+        `[MEASUREMENT_DS_PROXY] QR extraction completed station=${safeLogValue(req.stationToken?.stationId, 100)} endpoint=${endpoint} status=${response.status}`,
+      );
+      return res.status(response.status).json(response.data);
+    } catch (error) {
+      return sendDsProxyFailure(res, error, "QR extraction");
+    }
+  }
+
   async createDiagnostic(req, res) {
     const stationId = String(req.stationToken?.stationId || "").trim().toLowerCase();
     const event = safeLogValue(req.body?.event, 40).toLowerCase();
@@ -260,5 +367,14 @@ class MeasurementsService {
   }
 }
 
-export { MAX_CAPTURE_BYTES, capturePath, captureUrl, isJpeg, safeFilenamePart };
+export {
+  MAX_CAPTURE_BYTES,
+  capturePath,
+  captureUrl,
+  dsProxyError,
+  isJpeg,
+  measurementDsUrl,
+  measurementPayload,
+  safeFilenamePart,
+};
 export default new MeasurementsService();

@@ -1,9 +1,14 @@
 import express from "express";
+import multer from "multer";
 import controller from "./measurements.controller.js";
 import verifyStationToken from "./stationToken.middleware.js";
 
 const router = express.Router();
 const rawJpeg = express.raw({ type: "image/jpeg", limit: "15mb" });
+const qrUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+}).single("image");
 
 function parseJpeg(req, res, next) {
   rawJpeg(req, res, (error) => {
@@ -14,6 +19,28 @@ function parseJpeg(req, res, next) {
     return res.status(400).json({ ok: false, message: "Unable to read JPEG body" });
   });
 }
+
+function parseQrImage(req, res, next) {
+  qrUpload(req, res, (error) => {
+    if (!error) return next();
+    if (error.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ ok: false, message: "QR image exceeds the 15 MB limit" });
+    }
+    return res.status(400).json({ ok: false, message: "Unable to read QR image" });
+  });
+}
+
+router.post(
+  "/start",
+  verifyStationToken,
+  controller.startMeasurement.bind(controller),
+);
+router.post(
+  "/qr/extract",
+  verifyStationToken,
+  parseQrImage,
+  controller.extractQr.bind(controller),
+);
 
 router.post(
   "/captures",
@@ -33,5 +60,5 @@ router.delete(
   controller.deleteCapture.bind(controller),
 );
 
-export { parseJpeg };
+export { parseJpeg, parseQrImage };
 export default router;

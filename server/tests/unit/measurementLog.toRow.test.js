@@ -117,6 +117,62 @@ it("uses forwarded staging origin when the API is behind a reverse proxy", () =>
   expect(requestBackendDomain(request)).toBe("https://dev-api.videoraiq.com");
 });
 
+it.each([
+  ["oracle", "/oracle/uploads/images/measurement-results/result.jpg"],
+  ["aws", "/aws/uploads/images/measurement-results/result.jpg"],
+  ["gcp", "/gcp/uploads/images/measurement-results/result.jpg"],
+  ["nas/legacy", "/uploads/images/measurement-results/result.jpg"],
+])("does not expose an internal localhost upstream as the public %s image host", (_provider, storedPath) => {
+  const request = {
+    protocol: "http",
+    get(name) {
+      const headers = {
+        "x-forwarded-host": "localhost:5055",
+        "x-forwarded-proto": "https",
+        host: "localhost:5055",
+      };
+      return headers[name.toLowerCase()];
+    },
+  };
+  const publicBackendDomain = requestBackendDomain(
+    request,
+    "https://globussoft.videoraiq.com/api-backend",
+  );
+  const row = toRow(
+    {
+      _id: "provider-image-behind-proxy",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      measurementImage: storedPath,
+    },
+    "Asia/Kolkata",
+    publicBackendDomain,
+  );
+
+  expect(publicBackendDomain).toBe("https://globussoft.videoraiq.com/api-backend");
+  expect(row.measurementImageUrl).toBe(
+    `https://globussoft.videoraiq.com/api-backend/api/v2/uploads/${storedPath.replace(/^\/+/, "")}`,
+  );
+});
+
+it("keeps the configured reverse-proxy path when its public host is forwarded", () => {
+  const request = {
+    protocol: "http",
+    get(name) {
+      const headers = {
+        "x-forwarded-host": "globussoft.videoraiq.com",
+        "x-forwarded-proto": "https",
+      };
+      return headers[name.toLowerCase()];
+    },
+  };
+
+  expect(requestBackendDomain(
+    request,
+    "https://globussoft.videoraiq.com/api-backend",
+  )).toBe("https://globussoft.videoraiq.com/api-backend");
+});
+
 // The QR label (qrMetadata) is always inches. DS `measuredData` has been seen
 // in inches, cm and mm, and the breadth axis arrives as either `breadth` or
 // `width`. toRow / deviationOf must normalise all of that against the label.

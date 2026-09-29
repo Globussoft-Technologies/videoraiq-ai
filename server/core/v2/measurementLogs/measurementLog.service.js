@@ -30,17 +30,39 @@ function configuredBackendDomain() {
 // retaining the configured staging/cloud domain when the service is reached
 // through its reverse proxy. The configured value remains the fallback for
 // background callers and direct toRow() usage in reports/tests.
-function requestBackendDomain(req) {
+function requestBackendDomain(req, configuredDomain = configuredBackendDomain()) {
   const getHeader = (name) => String(req?.get?.(name) || "").split(",")[0].trim();
   const host = getHeader("x-forwarded-host") || getHeader("host");
   const protocol = getHeader("x-forwarded-proto") || String(req?.protocol || "").trim();
 
   if (host && /^(?:https?)$/i.test(protocol)) {
     try {
-      return new URL(`${protocol.toLowerCase()}://${host}`).origin;
+      const requestUrl = new URL(`${protocol.toLowerCase()}://${host}`);
+      let configuredUrl = null;
+      try {
+        configuredUrl = configuredDomain ? new URL(configuredDomain) : null;
+      } catch { /* ignore an invalid optional fallback */ }
+      const requestIsLoopback = requestUrl.hostname === "localhost"
+        || requestUrl.hostname === "::1"
+        || requestUrl.hostname === "[::1]"
+        || requestUrl.hostname === "0.0.0.0"
+        || requestUrl.hostname.startsWith("127.");
+
+      // A reverse proxy commonly forwards its internal upstream Host header
+      // (for example localhost:5055). That address is valid only inside the
+      // server container and produces broken browser images. Prefer the
+      // configured public URL in that case. Also retain its path prefix (such
+      // as /api-backend) when the forwarded host is the configured public host.
+      if (configuredUrl && (
+        requestIsLoopback
+        || requestUrl.hostname.toLowerCase() === configuredUrl.hostname.toLowerCase()
+      )) {
+        return configuredDomain;
+      }
+      return requestUrl.origin;
     } catch { /* fall back to configured backendDomain */ }
   }
-  return configuredBackendDomain();
+  return configuredDomain;
 }
 
 function mediaUrl(pathValue, publicBackendDomain = configuredBackendDomain()) {

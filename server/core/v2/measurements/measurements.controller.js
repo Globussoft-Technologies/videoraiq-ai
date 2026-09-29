@@ -1,6 +1,14 @@
 import measurementsService from "./measurements.service.js";
 
 class MeasurementsController {
+  async startMeasurement(req, res) {
+    return measurementsService.startMeasurement(req, res);
+  }
+
+  async extractQr(req, res) {
+    return measurementsService.extractQr(req, res);
+  }
+
   async createCapture(req, res) {
     /* #swagger.tags = ['Measurements']
        #swagger.description = 'Upload a raw JPEG capture using an approved Raspberry Pi station token.'

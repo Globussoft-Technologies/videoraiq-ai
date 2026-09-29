@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
   deleteMeasurementMediaReference: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
+  axiosPost: vi.fn(),
+}));
+
+vi.mock("axios", () => ({
+  default: { post: mocks.axiosPost },
 }));
 
 vi.mock("../../core/v2/measurements/measurementCapture.model.js", () => ({
@@ -55,6 +60,7 @@ function request(overrides = {}) {
     body: jpeg(),
     baseUrl: "/api/v2/measurements",
     protocol: "http",
+    stationDevice: { ip: "192.168.0.177", admin: "650000000000000000000001" },
     stationToken: { stationId: "aa:bb:cc:dd:ee:ff" },
     get(name) { return headers[name.toLowerCase()]; },
     ...overrides,
@@ -86,6 +92,104 @@ beforeEach(() => {
 });
 
 describe("measurement capture upload", () => {
+  it("proxies measurement start through the approved station IP", async () => {
+    mocks.axiosPost.mockResolvedValue({
+      status: 202,
+      data: { request_id: "measurement-123", status: "processing", estimated_measurement_seconds: 15 },
+    });
+    const res = responseDouble();
+
+    await service.startMeasurement(request({
+      body: { sku: "g_ok8478", length: 78, width: 72, height: 6 },
+    }), res);
+
+    expect(mocks.axiosPost).toHaveBeenCalledWith(
+      "http://192.168.0.177:8000/v1/dimensions/measure",
+      { sku: "G_OK8478", length: 78, width: 72, height: 6 },
+      expect.objectContaining({ timeout: 25000, maxRedirects: 0 }),
+    );
+    expect(res.statusCode).toBe(202);
+    expect(res.payload.request_id).toBe("measurement-123");
+  });
+
+  it("rejects incomplete measurement payloads before contacting DS", async () => {
+    const res = responseDouble();
+
+    await service.startMeasurement(request({
+      body: { sku: "G_OK8478", length: 78, width: 72 },
+    }), res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.payload.message).toContain("height");
+    expect(mocks.axiosPost).not.toHaveBeenCalled();
+  });
+
+  it("proxies QR images through the approved station IP", async () => {
+    mocks.axiosPost.mockResolvedValue({
+      status: 200,
+      data: { found: true, dimensions: { sku: "G_OK8478" } },
+    });
+    const res = responseDouble();
+
+    await service.extractQr(request({
+      file: {
+        buffer: jpeg(),
+        mimetype: "image/jpeg",
+        originalname: "qr_code.jpg",
+      },
+    }), res);
+
+    expect(mocks.axiosPost).toHaveBeenCalledWith(
+      "http://192.168.0.177:8000/v1/qr/extract-dimensions",
+      expect.any(FormData),
+      expect.objectContaining({ timeout: 25000, maxRedirects: 0 }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.payload.found).toBe(true);
+  });
+
+  it("returns a gateway error when the approved station DS cannot be reached", async () => {
+    mocks.axiosPost.mockRejectedValue(Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }));
+    const res = responseDouble();
+
+    await service.startMeasurement(request({
+      body: { sku: "G_OK8478", length: 78, width: 72, height: 6 },
+    }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.payload.message).toBe("Unable to reach the station measurement service");
+  });
+
+  it("does not proxy to a non-IP value stored on a station", async () => {
+    const res = responseDouble();
+
+    await service.startMeasurement(request({
+      body: { sku: "G_OK8478", length: 78, width: 72, height: 6 },
+      stationDevice: { ip: "example.com" },
+    }), res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.payload.message).toContain("invalid IP address");
+    expect(mocks.axiosPost).not.toHaveBeenCalled();
+  });
+
+  it("preserves actionable DS validation errors", async () => {
+    mocks.axiosPost.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ msg: "Field required", loc: ["body", "height"] }] },
+      },
+    });
+    const res = responseDouble();
+
+    await service.startMeasurement(request({
+      body: { sku: "G_OK8478", length: 78, width: 72, height: 6 },
+    }), res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.payload.message).toBe("Field required");
+  });
+
   it("records DS request and connectivity diagnostics in backend logs", async () => {
     const res = responseDouble();
     await service.createDiagnostic(request({
