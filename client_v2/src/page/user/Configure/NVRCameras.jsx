@@ -1532,7 +1532,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 
   return (
     <div
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
