@@ -200,6 +200,17 @@ const VEHICLE_LOG_LOOKUP_STAGES = [
   { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
 ];
 
+/** Vehicle Check-In/Out column -> the grouped-row field(s) it sorts on. */
+const VEHICLE_SORT_FIELDS = {
+  vehicleNumber: ["vehicleNumber"],
+  custody: ["custody"],
+  inOut: ["checkInCount", "checkOutCount"],
+  nvrName: ["nvrData.nvrName"],
+  cameraName: ["cameraName"],
+  firstCheckIn: ["timeOfIncident"],
+  lastUpdated: ["lastEventAt"],
+};
+
 const toModelYear = (value) => {
   if (value === undefined || value === null || String(value).trim() === "") return null;
   const year = Number.parseInt(String(value).trim(), 10);
@@ -3668,7 +3679,7 @@ console.log(result,'result');
         );
       }
 
-      const { skip = 0, limit = 10, custody, search, sortOrder } = req.query || {};
+      const { skip = 0, limit = 10, custody, search, sortField, sortOrder } = req.query || {};
       // Export path: return each vehicle's crossings alongside the row.
       const includeHistory = String(req.query?.includeHistory) === "true";
       const match = this._vehicleCheckInOutMatch(req);
@@ -3821,10 +3832,33 @@ console.log(result,'result');
         });
       }
 
-      // Newest arrival first by default, matching every other log page.
+      // The Camera column shows customName, falling back to name; sort on
+      // exactly that. `$gt ""` also skips a null or empty customName.
       basePipeline.push({
-        $sort: { timeOfIncident: sortOrder === "asc" ? 1 : -1, _id: -1 },
+        $addFields: {
+          cameraName: {
+            $cond: [
+              { $gt: ["$channelData.customName", ""] },
+              "$channelData.customName",
+              "$channelData.name",
+            ],
+          },
+        },
       });
+
+      // Newest arrival first by default, matching every other log page. The
+      // trailing timeOfIncident/_id keep ties (custody, counts, one NVR) in a
+      // stable order so a row can't repeat or vanish between pages.
+      // ponytail: binary string sort, so "Zeta" sorts before "alpha" -- same as
+      // the other log pages; sort on $toLower'd keys if mixed case shows up.
+      const dir = sortOrder === "asc" ? 1 : -1;
+      const key = String(sortField ?? "");
+      const sortPaths = Object.hasOwn(VEHICLE_SORT_FIELDS, key)
+        ? VEHICLE_SORT_FIELDS[key]
+        : ["timeOfIncident"];
+      const sortStage = Object.fromEntries(sortPaths.map((p) => [p, dir]));
+      if (!("timeOfIncident" in sortStage)) sortStage.timeOfIncident = -1;
+      sortStage._id = -1;
 
       // Calculate both totals over the complete filtered vehicle set. This
       // aggregation intentionally runs before $skip/$limit so the custody
@@ -3842,6 +3876,7 @@ console.log(result,'result');
         ]),
         Incident.aggregate([
           ...basePipeline,
+          { $sort: sortStage },
           { $skip: parseInt(skip) },
           { $limit: parseInt(limit) },
         ]),

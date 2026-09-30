@@ -278,6 +278,35 @@ describe("vehicle check-in/out logs — paging and search", () => {
   });
 });
 
+describe("vehicle check-in/out logs — sorting", () => {
+  const plates = async (query) => (await list(query)).data.map((r) => r.vehicleNumber);
+
+  it("sorts by last update, both directions", async () => {
+    await crossing("AAA", true, 9);
+    await crossing("AAA", false, 20); // AAA arrived first but was seen last
+    await crossing("BBB", true, 12);
+
+    expect(await plates({ sortField: "lastUpdated", sortOrder: "asc" })).toEqual(["BBB", "AAA"]);
+    expect(await plates({ sortField: "lastUpdated", sortOrder: "desc" })).toEqual(["AAA", "BBB"]);
+  });
+
+  it("sorts by camera display name, falling back to the raw name", async () => {
+    const other = new mongoose.Types.ObjectId();
+    await mongoose.connection.collection("channels").insertOne({ _id: other, name: "back gate", customName: "" });
+    await crossing("AAA", true, 9); // "outside view cam"
+    await crossing("BBB", true, 10, { channelId: other }); // "back gate"
+
+    expect(await plates({ sortField: "cameraName", sortOrder: "asc" })).toEqual(["BBB", "AAA"]);
+  });
+
+  it("falls back to newest first on an unknown field", async () => {
+    await crossing("AAA", true, 9);
+    await crossing("BBB", true, 12);
+
+    expect(await plates({ sortField: "constructor" })).toEqual(["BBB", "AAA"]);
+  });
+});
+
 describe("vehicle check-in/out logs — includeHistory (export path)", () => {
   it("returns each vehicle crossings inline", async () => {
     await crossing("MH12AB1234", true, 9);
