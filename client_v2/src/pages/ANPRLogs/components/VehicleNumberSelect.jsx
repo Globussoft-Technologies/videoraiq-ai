@@ -12,6 +12,7 @@ const VehicleNumberSelect = ({
   vehicleNumberList,
   vehicleNumberSearch,
   setVehicleNumberSearch,
+  fullWidth = false,
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -30,7 +31,7 @@ const VehicleNumberSelect = ({
   };
 
   return (
-    <div className="relative w-full md:w-[200px]" ref={ref}>
+    <div className={fullWidth ? 'relative w-full' : 'relative w-full md:w-[200px]'} ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}

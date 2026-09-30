@@ -482,6 +482,7 @@ const VehicleCheckInOutLogs = () => {
                       vehicleNumberList={filteredVehicleNumbers}
                       vehicleNumberSearch={vehicleNumberSearch}
                       setVehicleNumberSearch={setVehicleNumberSearch}
+                      fullWidth
                     />
                   </div>
                 </div>

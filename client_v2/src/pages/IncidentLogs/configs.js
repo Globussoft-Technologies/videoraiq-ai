@@ -268,6 +268,7 @@ export const STOCK_COUNTING_CONFIG = {
   showIndustrialFields: false,
   showStockCountingFields: true,
   showVehicleNumberFilter: true,
+  vehicleNumbersEndpoint: '/incidents/logs/loading-unloading-stock-counting-detection/numbers',
   tableOnly: true,
   statsLabel: 'Vehicles',
 };

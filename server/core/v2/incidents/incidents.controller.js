@@ -753,6 +753,20 @@ class IncidentsController {
     return incidentsService.getLoadingUnloadingStockCountingLogs(req, res, next);
   }
 
+  async getLoadingUnloadingStockCountingVehicleNumbers(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Distinct vehicle numbers from loading/unloading stock-counting incidents. Supports search, date range, NVR and camera filters.'
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'Stock-counting vehicle numbers fetched successfully' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return incidentsService.getLoadingUnloadingStockCountingVehicleNumbers(req, res, next);
+  }
+
   async getBlurredCameraDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Blurred Camera Detection logs.'

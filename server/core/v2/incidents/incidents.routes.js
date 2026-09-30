@@ -138,6 +138,11 @@ router.get(
   incidentsController.getSpillsDirtyMessyAreasDetectionLogs,
 );
 router.get(
+  "/logs/loading-unloading-stock-counting-detection/numbers",
+  viewAccessCheck,
+  incidentsController.getLoadingUnloadingStockCountingVehicleNumbers,
+);
+router.get(
   "/logs/loading-unloading-stock-counting-detection",
   viewAccessCheck,
   incidentsController.getLoadingUnloadingStockCountingLogs,

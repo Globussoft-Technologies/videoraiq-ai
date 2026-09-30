@@ -15,7 +15,7 @@ import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
-import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
+import { getNVRs, getchannels, fetchIncidentLogs, fetchIncidentVehicleNumbers } from './Api';
 
 const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
 
@@ -115,6 +115,8 @@ const IncidentLogsPage = ({ config }) => {
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
+  const [vehicleNumberList, setVehicleNumberList] = useState([]);
+  const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -158,6 +160,31 @@ const IncidentLogsPage = ({ config }) => {
       }
     })();
   }, [nvrIds]);
+
+  useEffect(() => {
+    if (!config.vehicleNumbersEndpoint) {
+      setVehicleNumberList([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      fetchIncidentVehicleNumbers({
+        endpoint: config.vehicleNumbersEndpoint,
+        search: vehicleNumberSearch,
+        startDate,
+        endDate,
+        nvrIds,
+        channelIds,
+      })
+        .then((res) => {
+          setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []);
+        })
+        .catch((err) => {
+          console.log(`Error fetching ${config.title} vehicle numbers:`, err);
+          setVehicleNumberList([]);
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [config.title, config.vehicleNumbersEndpoint, vehicleNumberSearch, startDate, endDate, nvrIds, channelIds]);
 
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
@@ -558,6 +585,9 @@ const IncidentLogsPage = ({ config }) => {
           showVehicleNumber={config.showVehicleNumberFilter}
           vehicleNumber={vehicleNumber}
           setVehicleNumber={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER', value: v })}
+          vehicleNumberList={vehicleNumberList}
+          vehicleNumberSearch={vehicleNumberSearch}
+          setVehicleNumberSearch={setVehicleNumberSearch}
         />
 
         <AutoRefreshComponent

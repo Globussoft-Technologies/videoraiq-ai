@@ -76,6 +76,26 @@ export const fetchIncidentLogs = async ({
   });
 };
 
+export const fetchIncidentVehicleNumbers = async ({
+  endpoint,
+  search,
+  startDate,
+  endDate,
+  nvrIds,
+  channelIds,
+}) => {
+  return axios.get(`${HOST}${endpoint}`, {
+    params: {
+      ...(search && { search }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
+      ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+    },
+    headers: getHeaders(),
+  });
+};
+
 export const deleteLineCrossingLogs = async ({
   startDate,
   endDate,

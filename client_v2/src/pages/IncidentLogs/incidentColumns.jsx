@@ -254,11 +254,6 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         header: sortableHeader('Total Boxes', 'boxCount', onSort, sortable),
         cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.boxCount ?? 0}</span>,
       },
-      {
-        accessorKey: 'eventCount',
-        header: sortableHeader('Events', 'eventCount', onSort, sortable),
-        cell: ({ row }) => <span className={styles.text}>{row.original.eventCount ?? 0}</span>,
-      },
     );
   }
 

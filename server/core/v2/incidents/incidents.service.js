@@ -4915,6 +4915,96 @@ console.log(result,'result');
     }
   }
 
+  async getLoadingUnloadingStockCountingVehicleNumbers(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const { search, startDate, endDate, nvrId, nvrIds, channelId, channelIds } =
+        req.query || {};
+      const toArray = (value) =>
+        value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
+      const toObjectIds = (values) =>
+        values
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "loadingUnloadingStockCountingDetection",
+        vehicleNumber: { $type: "string", $nin: ["", "--", "N/A"] },
+      };
+      if (startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const requestedNvrs = toArray(nvrId || nvrIds);
+      if (requestedNvrs.length) match.nvrId = { $in: toObjectIds(requestedNvrs) };
+
+      const requestedChannels = toArray(channelId || channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = requestedChannels;
+      if (Array.isArray(authorizedChannels)) {
+        const authorizedSet = new Set(authorizedChannels.map((id) => id.toString()));
+        effectiveChannelIds = requestedChannels.length
+          ? requestedChannels.filter((id) => authorizedSet.has(id))
+          : [...authorizedSet];
+      }
+      if (requestedChannels.length || Array.isArray(authorizedChannels)) {
+        match.channelId = { $in: toObjectIds(effectiveChannelIds) };
+      }
+
+      const pipeline = [
+        { $match: match },
+        {
+          $group: {
+            _id: {
+              $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $match: { _id: { $nin: ["", "--", "N/A"] } } },
+      ];
+      if (search && String(search).trim()) {
+        pipeline.push({
+          $match: {
+            _id: {
+              $regex: escapeRegex(String(search).trim()),
+              $options: "i",
+            },
+          },
+        });
+      }
+      pipeline.push({ $sort: { _id: 1 } });
+
+      const rows = await Incident.aggregate(pipeline);
+      const vehicleNumbers = rows.map((row) => row._id);
+      return res.status(200).json(
+        Response.userSuccessResp(
+          "Loading/unloading stock vehicle numbers fetched successfully",
+          {
+            totalCount: vehicleNumbers.length,
+            vehicleNumbers,
+            vehicleNumberCounts: Object.fromEntries(
+              rows.map((row) => [row._id, row.count]),
+            ),
+          },
+        ),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch loading/unloading stock vehicle numbers", 500));
+    }
+  }
+
   async getBlurredCameraDetectionLogs(req, res, next) {
     return this._getIndustrialDetectionLogs(req, res, next, "blurredCameraDetection");
   }
