@@ -273,11 +273,15 @@ export const STOCK_COUNTING_CONFIG = {
   statsLabel: 'Vehicles',
 };
 
-export const BLURRED_CAMERA_CONFIG = industrialDetectionConfig({
-  endpoint: '/incidents/logs/blurred-camera-detection',
-  title: 'Blurred Camera Detection Logs',
-  fileName: 'blurred_camera_detection_logs',
-  sheetName: 'Blurred Camera Logs',
-  storagePrefix: 'blurred_camera',
-  permissionKey: 'blurredCameraLogs',
-});
+export const BLURRED_CAMERA_CONFIG = {
+  ...industrialDetectionConfig({
+    endpoint: '/incidents/logs/blurred-camera-detection',
+    title: 'Blurred Camera Detection Logs',
+    fileName: 'blurred_camera_detection_logs',
+    sheetName: 'Blurred Camera Logs',
+    storagePrefix: 'blurred_camera',
+    permissionKey: 'blurredCameraLogs',
+  }),
+  showIndustrialFields: false,
+  showBlurredCameraFields: true,
+};

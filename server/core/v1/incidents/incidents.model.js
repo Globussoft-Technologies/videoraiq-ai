@@ -615,6 +615,7 @@ const LoadingUnloadingStockCountingIncident = Incident.discriminator(
 );
 
 const BlurredCameraDetectionSchema = new Schema({
+  isBlurred: { type: Boolean, default: undefined },
   count: { type: Number, default: 1, min: 0 },
   alertThreshold: { type: Number, default: 80 },
   triggerNotification: { type: Boolean, default: true },

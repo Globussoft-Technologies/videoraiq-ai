@@ -238,6 +238,7 @@ const IncidentLogsPage = ({ config }) => {
         smokeCount: item.smokeCount,
         isFallDetected: item.isFallDetected,
         evidenceScore: item.evidenceScore,
+        isBlurred: item.isBlurred,
         stockMovement: item.stockMovement,
         stockCountBefore: item.stockCountBefore,
         stockCountAfter: item.stockCountAfter,

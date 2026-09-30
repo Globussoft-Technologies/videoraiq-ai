@@ -212,6 +212,28 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showBlurredCameraFields) {
+    cols.push({
+      accessorKey: 'isBlurred',
+      header: 'Is Blurred',
+      cell: ({ row }) => {
+        const value = row.original.isBlurred;
+        if (typeof value !== 'boolean') return <span className={styles.text}>--</span>;
+        return (
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+              value
+                ? 'bg-[var(--crit)]/15 text-[var(--crit)]'
+                : 'bg-[var(--ok)]/15 text-[var(--ok)]'
+            }`}
+          >
+            {value ? 'True' : 'False'}
+          </span>
+        );
+      },
+    });
+  }
+
   if (config.showIndustrialFields) {
     cols.push(
       {
@@ -337,6 +359,13 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
               value={formatEvidenceScore(row.evidenceScore)}
             />
           </>
+        )}
+        {config.showBlurredCameraFields && (
+          <IncidentCardRow
+            icon={Activity}
+            label="Is Blurred"
+            value={typeof row.isBlurred === 'boolean' ? (row.isBlurred ? 'True' : 'False') : '--'}
+          />
         )}
         {config.showIndustrialFields && (
           <>

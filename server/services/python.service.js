@@ -30,8 +30,17 @@ const appendIndustrialDetectors = (
       if (name === "loadingUnloadingStockCountingSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const detectorZoneConfigs = configs.map((config) => {
-          const { mode: _storedMode, ...detectorZoneConfig } = config;
-          return detectorZoneConfig;
+          const plainConfig = typeof config?.toObject === "function"
+            ? config.toObject({
+              depopulate: true,
+              getters: false,
+              virtuals: false,
+            })
+            : config?._doc && typeof config._doc === "object"
+              ? config._doc
+              : config;
+
+          return { name: plainConfig?.name };
         });
         const stockDetectorExtras = {
           ...(Array.isArray(stockSettings.line_coordinates)

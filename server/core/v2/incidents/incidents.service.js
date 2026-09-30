@@ -743,6 +743,7 @@ class IncidentsService {
       } else if (incidentType === "blurredCameraDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;
+        newIncident.isBlurred = req?.body?.isBlurred;
         newIncident.count = req?.body?.count ?? 1;
         newIncident.alertThreshold = req?.body?.alertThreshold ?? 80;
         newIncident.triggerNotification = req?.body?.triggerNotification;

@@ -59,6 +59,7 @@ const fetchAllForExport = async (config, params) => {
       count: item.count ?? '--',
       alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
+      isBlurred: typeof item.isBlurred === 'boolean' ? (item.isBlurred ? 'True' : 'False') : '--',
       evidenceScore: evidenceScoreStr,
       stockMovement: item.stockMovement || '--',
       stockCountBefore: item.stockCountBefore ?? '--',
@@ -100,6 +101,10 @@ const buildExportColumns = (config) => {
       { key: 'isFallDetected', label: 'Fall Detected' },
       { key: 'evidenceScore', label: 'Evidence Score' }
     );
+  }
+
+  if (config.showBlurredCameraFields) {
+    cols.push({ key: 'isBlurred', label: 'Is Blurred' });
   }
 
   if (config.showIndustrialFields) {
@@ -291,6 +296,9 @@ const exportToGridPDF = async (config, params) => {
         ['Fall Detected', 'isFallDetected'],
         ['Evidence Score', 'evidenceScore']
       );
+    }
+    if (config.showBlurredCameraFields) {
+      details.push(['Is Blurred', 'isBlurred']);
     }
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);
