@@ -40,7 +40,7 @@ export function zonesFor(setting, cameraId, settingType) {
   return polygons.map((poly, i) => ({
     name: configs[i]?.name || `Zone ${i + 1}`,
     capacity: configs[i]?.capacity ?? '',
-    threshold: configs[i]?.threshold_sec ?? '',
+    threshold: configs[i]?.threshold_sec ?? '0',
     company: configs[i]?.company ?? '',
     countMode: (() => {
       const raw = configs[i]?.count_mode ?? setting?.settings?.count_mode;

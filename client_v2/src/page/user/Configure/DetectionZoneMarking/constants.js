@@ -77,7 +77,6 @@ export const ZONE_EXTRA_FIELDS = {
   deskAbsenceSettings: ['threshold', 'capacity'],
   crowdDetectionSettings: ['capacity'],
   carModelDetectionSettings: ['company'],
-  fireSmokeDetectionSettings: ['threshold'],
   personFallSickDetectionSettings: ['threshold'],
   workingAtHeightDetectionSettings: ['threshold'],
   oilLeakageDetectionSettings: ['threshold'],

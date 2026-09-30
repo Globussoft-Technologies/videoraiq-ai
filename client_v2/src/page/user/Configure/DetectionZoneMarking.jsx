@@ -312,7 +312,7 @@ export default function DetectionZoneMarking({
   const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
     name: `Zone ${index + 1}`,
     capacity: '',
-    threshold: '',
+    threshold: '0',
     company: '',
     telegramChatIds: [],
     telegramChatId: '',

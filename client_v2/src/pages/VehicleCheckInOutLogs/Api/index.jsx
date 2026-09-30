@@ -25,6 +25,7 @@ export const fetchVehicleCheckInOutLogs = ({
   severity,
   custody,
   search,
+  sortField,
   sortOrder,
   // Export path: returns each vehicle's crossings inline, so the export makes
   // one request instead of one per vehicle.
@@ -45,6 +46,7 @@ export const fetchVehicleCheckInOutLogs = ({
         // Only sent when actually filtering — omitted means "both".
         ...(custody === 'true' || custody === 'false' ? { custody } : {}),
         ...(search && { search }),
+        ...(sortField && { sortField }),
         ...(sortOrder && { sortOrder }),
         ...(includeHistory ? { includeHistory: 'true' } : {}),
       },

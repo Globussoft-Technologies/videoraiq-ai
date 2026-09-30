@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'moment-timezone';
 import {
+  ArrowDown,
+  ArrowDownUp,
+  ArrowUp,
   CarFront,
   ChevronDown,
   ChevronLeft,
@@ -51,6 +54,30 @@ const fmtTime = (value) => (value ? moment(value).format('DD/MM/YYYY hh:mm A') :
 const fmtFirstCheckIn = (row) => (Number(row?.checkInCount || 0) > 0 ? fmtTime(row.timeOfIncident) : '--');
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 
+/** "1d 2h 1m ago" — zero units dropped. */
+const elapsed = (value, now) => {
+  let m = Math.max(0, Math.floor((now - new Date(value)) / 60000));
+  const parts = [[1440, 'd'], [60, 'h'], [1, 'm']]
+    .map(([size, unit]) => {
+      const n = Math.floor(m / size);
+      m %= size;
+      return n ? `${n}${unit}` : null;
+    })
+    .filter(Boolean);
+  return parts.length ? `${parts.join(' ')} ago` : 'just now';
+};
+
+/** Ticks every minute so the value doesn't freeze between refreshes. */
+const Elapsed = ({ value }) => {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  if (!value) return '--';
+  return <span title={fmtTime(value)}>{elapsed(value, now)}</span>;
+};
+
 const cameraName = (row) => row?.channelData?.customName || row?.channelData?.name || '--';
 
 /**
@@ -96,6 +123,24 @@ const CUSTODY_TABS = [
 const th = 'px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] whitespace-nowrap';
 const td = 'px-4 py-3 text-sm text-[var(--tx)] align-middle';
 
+/** Header cell that sorts server-side on `field` (see VEHICLE_SORT_FIELDS). */
+const SortTh = ({ label, field, sort, onSort }) => {
+  const active = sort.field === field;
+  const Icon = !active ? ArrowDownUp : sort.order === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className={th} aria-sort={active ? (sort.order === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="inline-flex items-center gap-1 cursor-pointer uppercase hover:text-[var(--tx)]"
+      >
+        {label}
+        <Icon className={`w-3 h-3 ${active ? '' : 'text-[var(--tx3)]'}`} />
+      </button>
+    </th>
+  );
+};
+
 const VehicleCheckInOutLogs = () => {
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -117,6 +162,8 @@ const VehicleCheckInOutLogs = () => {
   const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  // Empty field = server default (newest first).
+  const [sort, setSort] = useState({ field: '', order: '' });
   const [gotoPage, setGotoPage] = useState('');
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
@@ -159,6 +206,8 @@ const VehicleCheckInOutLogs = () => {
         nvrIds,
         channelIds,
         search: debouncedSearch || vehicleNumber,
+        sortField: sort.field,
+        sortOrder: sort.order,
         // Bring each vehicle's crossings back with the row so the image
         // preview can walk every crossing image without an expand or a
         // second request.
@@ -178,7 +227,7 @@ const VehicleCheckInOutLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch]);
+  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort]);
 
   useEffect(() => {
     load();
@@ -186,7 +235,14 @@ const VehicleCheckInOutLogs = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [nvrIds, channelIds, vehicleNumber, custody]);
+  }, [nvrIds, channelIds, vehicleNumber, custody, sort]);
+
+  // First click on a column sorts asc; re-clicking the same column flips it.
+  const toggleSort = (field) =>
+    setSort((prev) => ({
+      field,
+      order: prev.field === field && prev.order === 'asc' ? 'desc' : 'asc',
+    }));
 
   // Filter option sources.
   useEffect(() => {
@@ -255,8 +311,10 @@ const VehicleCheckInOutLogs = () => {
       nvrIds,
       channelIds,
       search: debouncedSearch || vehicleNumber,
+      sortField: sort.field,
+      sortOrder: sort.order,
     }),
-    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch],
+    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort],
   );
 
   const nvrOptions = useMemo(
@@ -479,12 +537,13 @@ const VehicleCheckInOutLogs = () => {
               <tr className="border-b border-[var(--bd)]">
                 <th className={`${th} w-10`} />
                 <th className={th}>Image</th>
-                <th className={th}>Vehicle Number</th>
-                <th className={th}>Custody</th>
-                <th className={th}>In / Out</th>
-                <th className={th}>NVR Name</th>
-                <th className={th}>Camera Name</th>
-                <th className={th}>First Check-In</th>
+                <SortTh label="Vehicle Number" field="vehicleNumber" sort={sort} onSort={toggleSort} />
+                <SortTh label="Custody" field="custody" sort={sort} onSort={toggleSort} />
+                <SortTh label="In / Out" field="inOut" sort={sort} onSort={toggleSort} />
+                <SortTh label="NVR Name" field="nvrName" sort={sort} onSort={toggleSort} />
+                <SortTh label="Camera Name" field="cameraName" sort={sort} onSort={toggleSort} />
+                <SortTh label="First Check-In" field="firstCheckIn" sort={sort} onSort={toggleSort} />
+                <SortTh label="Last Updated" field="lastUpdated" sort={sort} onSort={toggleSort} />
               </tr>
             </thead>
 
@@ -535,11 +594,12 @@ const VehicleCheckInOutLogs = () => {
                       <td className={`${td} whitespace-nowrap`}>
                         {fmtFirstCheckIn(row)}
                       </td>
+                      <td className={`${td} whitespace-nowrap`}><Elapsed value={row.lastEventAt} /></td>
                     </tr>
 
                     {open && (
                       <tr className="border-b border-[var(--bd)]">
-                        <td colSpan={8} className="p-0">
+                        <td colSpan={9} className="p-0">
                           <div className="bg-[var(--bg2)] px-6 py-4">
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] mb-2">
                               All crossings for {dash(row.vehicleNumber)}
@@ -591,7 +651,7 @@ const VehicleCheckInOutLogs = () => {
 
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={9} className="px-4 py-16 text-center">
                     <SearchX className="w-7 h-7 mx-auto text-[var(--tx3)] mb-2" />
                     <p className="text-sm text-[var(--tx2)]">
                       No vehicle check-in/out logs for this range.
