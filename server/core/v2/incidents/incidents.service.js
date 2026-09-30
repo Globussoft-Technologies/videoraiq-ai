@@ -3826,8 +3826,20 @@ console.log(result,'result');
         $sort: { timeOfIncident: sortOrder === "asc" ? 1 : -1, _id: -1 },
       });
 
-      const [countResult, logs] = await Promise.all([
-        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+      // Calculate both totals over the complete filtered vehicle set. This
+      // aggregation intentionally runs before $skip/$limit so the custody
+      // count remains the same on every page.
+      const [summaryResult, logs] = await Promise.all([
+        Incident.aggregate([
+          ...basePipeline,
+          {
+            $group: {
+              _id: null,
+              totalCount: { $sum: 1 },
+              inCustodyCount: { $sum: { $cond: ["$custody", 1, 0] } },
+            },
+          },
+        ]),
         Incident.aggregate([
           ...basePipeline,
           { $skip: parseInt(skip) },
@@ -3837,7 +3849,8 @@ console.log(result,'result');
 
       return res.status(200).json(
         Response.userSuccessResp("vehicleCheckInOut logs fetched successfully", {
-          totalCount: countResult[0]?.totalCount || 0,
+          totalCount: summaryResult[0]?.totalCount || 0,
+          inCustodyCount: summaryResult[0]?.inCustodyCount || 0,
           data: logs,
         }),
       );

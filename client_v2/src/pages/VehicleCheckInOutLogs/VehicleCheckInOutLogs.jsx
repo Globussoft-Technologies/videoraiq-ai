@@ -99,6 +99,7 @@ const td = 'px-4 py-3 text-sm text-[var(--tx)] align-middle';
 const VehicleCheckInOutLogs = () => {
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [inCustodyCount, setInCustodyCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -166,6 +167,7 @@ const VehicleCheckInOutLogs = () => {
       const data = res?.data?.body?.data;
       setRows(data?.data || []);
       setTotalCount(data?.totalCount || 0);
+      setInCustodyCount(data?.inCustodyCount || 0);
       // Any open sub-rows belong to the previous result set.
       setExpanded({});
     } catch (err) {
@@ -290,14 +292,6 @@ const VehicleCheckInOutLogs = () => {
       setExporting(null);
     }
   };
-
-  const summary = useMemo(
-    () => ({
-      inCustody: rows.filter((r) => r.custody).length,
-      returned: rows.filter((r) => !r.custody).length,
-    }),
-    [rows],
-  );
 
   // Every image slot for the vehicles on this page, in row order: each vehicle's
   // own thumbnail, then every one of its crossings. One slot per clickable
@@ -468,8 +462,7 @@ const VehicleCheckInOutLogs = () => {
           </div>
 
           <span className="text-[11px] text-[var(--tx3)] ml-auto">
-            {totalCount} vehicle{totalCount === 1 ? '' : 's'} · {summary.inCustody} in custody on
-            this page
+            {totalCount} vehicle{totalCount === 1 ? '' : 's'} · {inCustodyCount} in custody
           </span>
         </div>
 

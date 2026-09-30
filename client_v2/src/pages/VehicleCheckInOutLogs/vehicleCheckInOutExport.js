@@ -36,7 +36,7 @@ const imageUrlOf = (item) => {
   return `${import.meta.env.VITE_INCIDENT_URL || ''}${path}`;
 };
 
-const stamp = () => moment().format('YYYYMMDD_HHmm');
+const EXPORT_FILE_NAME = 'Vehicle Check-In-Out Logs';
 
 /** Every vehicle under the current filters, each with its crossings. */
 const fetchAllForExport = async (filters = {}) => {
@@ -239,7 +239,7 @@ const exportToExcel = async (filters) => {
     );
     XLSX.utils.book_append_sheet(workbook, crossings, 'Crossings');
 
-    XLSX.writeFile(workbook, `vehicle_check_in_out_${stamp()}.xlsx`);
+    XLSX.writeFile(workbook, `${EXPORT_FILE_NAME}.xlsx`);
     toast.success(`Exported ${rows.length} vehicles`);
   } catch (error) {
     console.error('Failed to export vehicle check-in/out Excel:', error);
@@ -324,7 +324,7 @@ const exportToPDF = async (filters) => {
       },
     });
 
-    doc.save(`vehicle_check_in_out_${stamp()}.pdf`);
+    doc.save(`${EXPORT_FILE_NAME}.pdf`);
     toast.success(`Exported ${rows.length} vehicles`);
   } catch (error) {
     console.error('Failed to export vehicle check-in/out PDF:', error);
