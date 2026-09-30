@@ -603,18 +603,19 @@ const CarLogs = () => {
           );
         },
       },
-      {
-        accessorKey: 'modelName',
-        header: () => (
-          <button
-            onClick={() => toggleSort('modelName')}
-            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-          >
-            Model Name
-          </button>
-        ),
-        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.modelName}</span>,
-      },
+      // Hidden for now -- uncomment to show the Model Name column again.
+      // {
+      //   accessorKey: 'modelName',
+      //   header: () => (
+      //     <button
+      //       onClick={() => toggleSort('modelName')}
+      //       className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+      //     >
+      //       Model Name
+      //     </button>
+      //   ),
+      //   cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.modelName}</span>,
+      // },
       {
         accessorKey: 'vehicleNumber',
         header: () => (
@@ -655,32 +656,33 @@ const CarLogs = () => {
         ),
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.company}</span>,
       },
-      {
-        accessorKey: 'color',
-        header: () => (
-          <button
-            onClick={() => toggleSort('color')}
-            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-          >
-            Colour
-          </button>
-        ),
-        cell: ({ row }) => (
-          <span className="text-[13px] text-[var(--tx)] capitalize">{row.original.color}</span>
-        ),
-      },
-      {
-        accessorKey: 'year',
-        header: () => (
-          <button
-            onClick={() => toggleSort('year')}
-            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-          >
-            Year
-          </button>
-        ),
-        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.year}</span>,
-      },
+      // Hidden for now -- uncomment to show the Colour and Year columns again.
+      // {
+      //   accessorKey: 'color',
+      //   header: () => (
+      //     <button
+      //       onClick={() => toggleSort('color')}
+      //       className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+      //     >
+      //       Colour
+      //     </button>
+      //   ),
+      //   cell: ({ row }) => (
+      //     <span className="text-[13px] text-[var(--tx)] capitalize">{row.original.color}</span>
+      //   ),
+      // },
+      // {
+      //   accessorKey: 'year',
+      //   header: () => (
+      //     <button
+      //       onClick={() => toggleSort('year')}
+      //       className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+      //     >
+      //       Year
+      //     </button>
+      //   ),
+      //   cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.year}</span>,
+      // },
       {
         accessorKey: 'nvrName',
         header: () => (
@@ -814,6 +816,7 @@ const CarLogs = () => {
           )}
         </div>
         <div className="p-[11px] space-y-[9px]">
+          {/* Hidden for now -- uncomment to show Model on the grid card again.
           <div className="flex items-center gap-2 text-xs min-w-0">
             <Car className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
@@ -823,6 +826,7 @@ const CarLogs = () => {
               {row.modelName}
             </span>
           </div>
+          */}
           <div className="flex items-center gap-2 text-xs min-w-0">
             <CarFront className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
@@ -850,6 +854,7 @@ const CarLogs = () => {
               {row.company}
             </span>
           </div>
+          {/* Hidden for now -- uncomment to show Colour and Year on the grid card again.
           <div className="flex items-center gap-2 text-xs min-w-0">
             <Palette className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
@@ -868,6 +873,7 @@ const CarLogs = () => {
               {row.year}
             </span>
           </div>
+          */}
           <div className="flex items-center gap-2 text-xs min-w-0">
             <Server className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
