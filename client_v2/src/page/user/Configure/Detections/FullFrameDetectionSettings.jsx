@@ -13,6 +13,7 @@ import {
   Loader2,
   ShieldAlert,
   Info,
+  ScanEye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -29,6 +30,20 @@ import {
  * 2. Raw numeric fields: UI shows actual numbers (seconds, degrees, pixels), NO 100x conversion!
  */
 export const FULL_FRAME_CONFIGS = {
+  blurredCameraDetectionSettings: {
+    title: 'Blurred Camera Detection',
+    subtitle: 'Full-frame monitoring for sustained camera focus and image-clarity loss',
+    icon: ScanEye,
+    iconColor: '#0ea5e9',
+    namePrefix: 'Blurred Camera',
+    incidentType: 'blurredCameraDetection',
+    defaults: {
+      trigger_notification: true,
+      levelOfImportance: 'high',
+      alertThreshold: 80,
+    },
+    sections: [],
+  },
   fireSmokeDetectionSettings: {
     title: 'Fire & Smoke Detection',
     subtitle: 'Full-frame detection for early warning of fire outbreaks and smoke dispersion',
@@ -314,7 +329,7 @@ export function serializeSettings(config, formValues) {
   result.trigger_notification = Boolean(formValues.trigger_notification);
   result.levelOfImportance = formValues.levelOfImportance || config.defaults?.levelOfImportance || 'moderate';
   result.zone_name = 'Full Frame';
-  result.alertThreshold = 1;
+  result.alertThreshold = config.defaults?.alertThreshold ?? 1;
   result.metricType = 'gauge';
   result.referencePoints = {};
   result.zone_configs = [];

@@ -43,6 +43,8 @@ export const DETECTION_TYPES = {
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
   equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
+  loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
+  blurredCameraDetectionSettings: "Blurred Camera Detection",
 }
 export const DETECTION_TYPES2 = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -81,6 +83,8 @@ export const DETECTION_TYPES2 = {
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
   equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
+  loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
+  blurredCameraDetectionSettings: "Blurred Camera Detection",
 }
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
@@ -115,6 +119,8 @@ export const DETECTION_DESCRIPTIONS = {
   mobilePhoneDetectionSettings: "Phone usage in restricted zones",
   equipmentOilLeakageDetectionSettings: "Oil leakage from industrial equipment",
   vehicleFuelOilLeakageDetectionSettings: "Fuel or oil leakage from vehicles",
+  loadingUnloadingStockCountingSettings: "Track stock quantities during loading and unloading",
+  blurredCameraDetectionSettings: "Detect sustained loss of camera image clarity",
 };
 
 export const TYPE_MAP = {
@@ -148,6 +154,8 @@ export const TYPE_MAP = {
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
   equipmentOilLeakageDetectionSettings: "equipmentOilLeakageDetection",
   vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetection",
+  loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
+  blurredCameraDetectionSettings: "blurredCameraDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -175,6 +183,8 @@ export const DETECTION_MODES_MAP = {
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
   equipmentOilLeakageDetectionSettings: ["equipmentOilLeakageDetectionSettings"],
   vehicleFuelOilLeakageDetectionSettings: ["vehicleFuelOilLeakageDetectionSettings"],
+  loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
+  blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -213,6 +223,8 @@ export const toPopulateDetections = [
   { path: "detections.tableOccupancyDetectionSettings.id" },
   { path: "detections.foodServicePPEDetectionSettings.id" },
   { path: "detections.mobilePhoneDetectionSettings.id" },
+  { path: "detections.loadingUnloadingStockCountingSettings.id" },
+  { path: "detections.blurredCameraDetectionSettings.id" },
 ];
 
 // sample payloads

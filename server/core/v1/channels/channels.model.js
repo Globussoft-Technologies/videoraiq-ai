@@ -118,6 +118,8 @@ const detectionFields = {
   sandDustWasteScrapDisposalDetectionSettings: detectionSettingSchema,
   unauthorizedAnimalEntryDetectionSettings: detectionSettingSchema,
   spillsDirtyMessyAreasDetectionSettings: detectionSettingSchema,
+  loadingUnloadingStockCountingSettings: detectionSettingSchema,
+  blurredCameraDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

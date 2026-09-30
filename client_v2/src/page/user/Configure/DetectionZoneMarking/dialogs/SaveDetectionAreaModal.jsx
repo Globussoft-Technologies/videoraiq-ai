@@ -132,9 +132,10 @@ export default function SaveDetectionAreaModal({
     }}>
       <div style={{
         width: '100%', maxWidth: (isLineCrossing || isCheckInOut) ? 520 : 440, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-        borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
+        borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
+        maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '22px 22px 16px' }}>
           <div style={{ display: 'grid', gap: 10, minWidth: 0, flex: 1 }}>
             <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>
               {isCheckInOut ? 'Save Check-In / Check-Out' : isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}
@@ -166,7 +167,10 @@ export default function SaveDetectionAreaModal({
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto',
+          overscrollBehavior: 'contain', padding: '0 22px 4px', minHeight: 0,
+        }}>
           <div style={{ display: 'grid', gap: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
@@ -382,7 +386,10 @@ export default function SaveDetectionAreaModal({
           ))}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 22px 22px',
+          borderTop: '1px solid var(--bd)', background: 'var(--bg1solid)', flex: '0 0 auto',
+        }}>
           <button
             onClick={onCancel}
             disabled={saving}

@@ -32,6 +32,7 @@ export const initialState = {
   // additional filters
   severity: '',
   status: '', // ON / OFF (conveyor only)
+  vehicleNumber: '',
 
   // pagination
   limit: 12,
@@ -75,12 +76,14 @@ export function reducer(state, action) {
       return { ...state, severity: action.value };
     case 'SET_STATUS':
       return { ...state, status: action.value };
+    case 'SET_VEHICLE_NUMBER':
+      return { ...state, vehicleNumber: action.value };
 
     case 'SET_LIMIT':
       return { ...state, limit: action.value, currentPage: 1 };
 
     case 'RESET_FILTERS':
-      return { ...state, nvrIds: [], channelIds: [], severity: '', status: '' };
+      return { ...state, nvrIds: [], channelIds: [], severity: '', status: '', vehicleNumber: '' };
 
     default:
       return state;

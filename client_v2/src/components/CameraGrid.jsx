@@ -58,6 +58,8 @@ export const ENGINE_LABEL_MAP = {
   sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
+  loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
+  blurredCameraDetectionSettings: 'Blurred Camera Detection',
 };
 
 /* ── Extract enabled engines from channel.detections object ─────────────── */

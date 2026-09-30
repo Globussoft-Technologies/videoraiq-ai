@@ -23,10 +23,33 @@ const INDUSTRIAL_DETECTORS = new Set(INDUSTRIAL_SETTING_TYPES);
 const appendIndustrialDetectors = (
   detectors,
   modes,
-  { zones, zone_configs, severity } = {},
+  { zones, zone_configs, severity, stockSettings = {} } = {},
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === "loadingUnloadingStockCountingSettings") {
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        const detectorZoneConfigs = configs.map((config) => {
+          const { mode: _storedMode, ...detectorZoneConfig } = config;
+          return detectorZoneConfig;
+        });
+        const stockDetectorExtras = {
+          ...(Array.isArray(stockSettings.line_coordinates)
+            ? { line_coordinates: stockSettings.line_coordinates }
+            : {}),
+          ...(Array.isArray(stockSettings.inside_reference_point)
+            ? { inside_reference_point: stockSettings.inside_reference_point }
+            : {}),
+          trigger_notification: stockSettings.trigger_notification ?? true,
+        };
+        detectors.push({
+          name,
+          zones: Array.isArray(zones) ? zones : [],
+          zone_configs: detectorZoneConfigs,
+          ...stockDetectorExtras,
+        });
+        continue;
+      }
       detectors.push({
         name,
         zone_configs,
@@ -118,6 +141,12 @@ const buildFireSmokeDetector = (
   fire_smoke_cooldown_sec: settings.fire_smoke_cooldown_sec ?? 60,
   severity: severity ?? "high",
   zone_name: settings.zone_name ?? "Full Frame",
+  trigger_notification: settings.trigger_notification ?? true,
+});
+
+const buildBlurredCameraDetector = (severity, settings = {}) => ({
+  name: "blurredCameraDetectionSettings",
+  severity: severity ?? "high",
   trigger_notification: settings.trigger_notification ?? true,
 });
 
@@ -558,6 +587,10 @@ class PythonService {
         );
       }
 
+      if (detection_modes?.includes("blurredCameraDetectionSettings")) {
+        detectors.push(buildBlurredCameraDetector(severity, confidence_thresholds));
+      }
+
 
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
@@ -670,6 +703,7 @@ class PythonService {
         zones,
         zone_configs,
         severity,
+        stockSettings: confidence_thresholds,
       });
 
       // ❗️ Validation
@@ -869,6 +903,11 @@ class PythonService {
         );
       }
 
+
+      if (detection_modes?.includes("blurredCameraDetectionSettings")) {
+        detectors.push(buildBlurredCameraDetector(severity, confidence_thresholds));
+      }
+
       if (detection_modes?.includes("vehicleType")) {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
@@ -949,6 +988,7 @@ class PythonService {
         zones,
         zone_configs,
         severity,
+        stockSettings: confidence_thresholds,
       });
 
       // ❗️ Validation

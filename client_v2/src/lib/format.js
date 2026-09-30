@@ -77,6 +77,10 @@ const CUSTOM_DETECTION_LABELS = {
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetection: 'Spills, Dirty or Messy Areas Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
+  loadingUnloadingStockCountingDetection: 'Loading/Unloading Stock Counting Detection',
+  loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
+  blurredCameraDetection: 'Blurred Camera Detection',
+  blurredCameraDetectionSettings: 'Blurred Camera Detection',
 };
 
 /** Human display name for an incident/detection type. */

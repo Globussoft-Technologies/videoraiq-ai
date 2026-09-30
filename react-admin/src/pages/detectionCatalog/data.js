@@ -27,6 +27,7 @@ import {
   MapPin,
   MoonStar,
   Package,
+  PackageSearch,
   PackageX,
   PawPrint,
   ScanEye,
@@ -222,6 +223,14 @@ export const DETECTION_META = {
   spillsDirtyMessyAreasDetectionSettings: {
     Icon: BrushCleaning,
     tint: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
+  },
+  loadingUnloadingStockCountingSettings: {
+    Icon: PackageSearch,
+    tint: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',
+  },
+  blurredCameraDetectionSettings: {
+    Icon: ScanEye,
+    tint: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
   },
   carModelDetectionSettings: {
     Icon: Car,

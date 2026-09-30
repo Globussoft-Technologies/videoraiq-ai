@@ -59,6 +59,8 @@ const SHORT_LABELS = {
   sandDustWasteScrapDisposalDetectionSettings: 'Waste Disposal',
   unauthorizedAnimalEntryDetectionSettings: 'Animal Entry',
   spillsDirtyMessyAreasDetectionSettings: 'Messy Area',
+  loadingUnloadingStockCountingSettings: 'Stock Counting',
+  blurredCameraDetectionSettings: 'Blurred Camera',
 };
 
 export function humanize(settingType) {

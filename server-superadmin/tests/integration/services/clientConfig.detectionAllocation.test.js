@@ -17,6 +17,8 @@ const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
 const { redis } = await import("../../../utils/database.js");
 
 const PPE = "personalProtectiveEquipmentSettings";
+const STOCK_COUNTING = "loadingUnloadingStockCountingSettings";
+const BLURRED_CAMERA = "blurredCameraDetectionSettings";
 
 beforeAll(async () => connectMongo());
 afterAll(async () => disconnectMongo());
@@ -27,6 +29,30 @@ beforeEach(async () => {
 });
 
 describe("detection allocation revocation", () => {
+  it.each([
+    ["loading/unloading stock counting", STOCK_COUNTING],
+    ["blurred camera detection", BLURRED_CAMERA],
+  ])("licenses %s with a camera allocation", async (_label, settingType) => {
+    const admin = await Admin.create({
+      user_id: "stock-client",
+      login: "stock-client",
+      email: "stock-client@test.com",
+      purchasedCameras: 5,
+    });
+    const { req, res } = serviceCtx({
+      params: { adminId: String(admin._id), settingType },
+      body: { cameraAllocation: 3, enabled: true },
+    });
+
+    await ClientConfigService.updateDetectionAllocation(req, res);
+
+    expect(payload(res).data).toMatchObject({
+      settingType,
+      cameraAllocation: 3,
+      enabled: true,
+    });
+  });
+
   it("turns a detection off and publishes a revoke when allocation reaches zero", async () => {
     const admin = await Admin.create({
       user_id: "client-1",

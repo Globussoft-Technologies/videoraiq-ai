@@ -51,6 +51,8 @@ const detectionFields = {
   mobilePhoneDetectionSettings: detectionSettingSchema,
   equipmentOilLeakageDetectionSettings: detectionSettingSchema,
   vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
+  loadingUnloadingStockCountingSettings: detectionSettingSchema,
+  blurredCameraDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

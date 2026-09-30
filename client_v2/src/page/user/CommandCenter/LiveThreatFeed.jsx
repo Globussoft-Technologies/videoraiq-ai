@@ -23,6 +23,7 @@ const TYPE_META = {
   sandDustWasteScrapDisposalDetection: { label: 'WASTE', color: '#78716c' },
   unauthorizedAnimalEntryDetection: { label: 'ANML', color: '#ef4444' },
   spillsDirtyMessyAreasDetection: { label: 'MESSY', color: '#14b8a6' },
+  loadingUnloadingStockCountingDetection: { label: 'STOCK', color: '#6366f1' },
 };
 
 function typeMeta(alert) {

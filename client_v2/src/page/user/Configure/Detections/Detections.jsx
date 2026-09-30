@@ -30,6 +30,7 @@ import {
 import DetectionCard from './DetectionCard';
 import DetectionDetailPanel from './DetectionDetailPanel';
 import DetectionIncidents from './DetectionIncidents';
+import { buildFullFrameDefaultPayload } from './FullFrameDetectionSettings';
 import ConfirmDialog from '../DetectionZoneMarking/dialogs/ConfirmDialog';
 import DetectionLimitDialog from '../../../../components/DetectionLimitDialog';
 import NoDetectionLicense from '../../../../components/NoDetectionLicense';
@@ -888,6 +889,10 @@ export default function Detections() {
             ? 'unauthorized animal entry intrusion'
             : detectionType === 'spillsDirtyMessyAreasDetectionSettings'
             ? 'spills dirty messy areas housekeeping'
+            : detectionType === 'loadingUnloadingStockCountingSettings'
+            ? 'loading unloading stock counting inventory movement'
+            : detectionType === 'blurredCameraDetectionSettings'
+            ? 'blurred camera blur image clarity focus obstruction'
             : '';
         const haystack = [
           m.name,
@@ -1116,6 +1121,36 @@ export default function Detections() {
         } catch {
           // ignore background check errors
         }
+      }
+
+      if (enable && !hasExistingSetting && detectionType === 'blurredCameraDetectionSettings') {
+        const defaultPayload = buildFullFrameDefaultPayload(detectionType, zoneCamera);
+        if (!defaultPayload?.NVRId) {
+          throw new Error('Unable to determine the NVR for this camera.');
+        }
+
+        const createResponse = await createDetectionSetting(defaultPayload);
+        const createdSetting =
+          createResponse?.savedDetectionSettings?.saved?.[0]?.detection ||
+          createResponse?.saved?.[0]?.detection ||
+          createResponse?.data?.body?.data?.savedDetectionSettings?.saved?.[0]?.detection ||
+          createResponse?.detectionSetting ||
+          createResponse?.data?.body ||
+          createResponse;
+
+        if (!createdSetting?._id) {
+          throw new Error('Blurred Camera Detection settings could not be created.');
+        }
+
+        existingEntry = { id: createdSetting, enabled: false };
+        hasExistingSetting = true;
+        setZoneCamera((prev) => prev ? {
+          ...prev,
+          detections: {
+            ...(prev.detections || {}),
+            [detectionType]: existingEntry,
+          },
+        } : prev);
       }
 
       if (enable && !hasExistingSetting) {

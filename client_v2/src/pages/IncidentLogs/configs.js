@@ -254,3 +254,29 @@ export const MESSY_AREA_CONFIG = industrialDetectionConfig({
   storagePrefix: 'messy_area',
   permissionKey: 'messyAreaLogs',
 });
+
+export const STOCK_COUNTING_CONFIG = {
+  ...industrialDetectionConfig({
+    endpoint: '/incidents/logs/loading-unloading-stock-counting-detection',
+    title: 'Loading/Unloading Stock Counting Logs',
+    fileName: 'loading_unloading_stock_counting_logs',
+    sheetName: 'Stock Counting Logs',
+    storagePrefix: 'stock_counting',
+    permissionKey: 'stockCountingLogs',
+    showAlertThreshold: false,
+  }),
+  showIndustrialFields: false,
+  showStockCountingFields: true,
+  showVehicleNumberFilter: true,
+  tableOnly: true,
+  statsLabel: 'Vehicles',
+};
+
+export const BLURRED_CAMERA_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/blurred-camera-detection',
+  title: 'Blurred Camera Detection Logs',
+  fileName: 'blurred_camera_detection_logs',
+  sheetName: 'Blurred Camera Logs',
+  storagePrefix: 'blurred_camera',
+  permissionKey: 'blurredCameraLogs',
+});

@@ -222,6 +222,46 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showStockCountingFields) {
+    cols.push(
+      {
+        accessorKey: 'vehicleNumber',
+        header: sortableHeader('Vehicle Number', 'vehicleNumber', onSort, sortable),
+        cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.vehicleNumber || 'Unknown'}</span>,
+      },
+      {
+        accessorKey: 'direction',
+        header: 'Movement',
+        cell: ({ row }) => <span className={`${styles.text} capitalize`}>{row.original.direction || '--'}</span>,
+      },
+      {
+        accessorKey: 'boxTypes',
+        header: 'Box Type',
+        cell: ({ row }) => <span className={`${styles.text} capitalize`}>{row.original.boxTypes?.join(', ') || '--'}</span>,
+      },
+      {
+        accessorKey: 'loadedBoxCount',
+        header: 'Loaded',
+        cell: ({ row }) => <span className={styles.text}>{row.original.loadedBoxCount ?? 0}</span>,
+      },
+      {
+        accessorKey: 'unloadedBoxCount',
+        header: 'Unloaded',
+        cell: ({ row }) => <span className={styles.text}>{row.original.unloadedBoxCount ?? 0}</span>,
+      },
+      {
+        accessorKey: 'boxCount',
+        header: sortableHeader('Total Boxes', 'boxCount', onSort, sortable),
+        cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.boxCount ?? 0}</span>,
+      },
+      {
+        accessorKey: 'eventCount',
+        header: sortableHeader('Events', 'eventCount', onSort, sortable),
+        cell: ({ row }) => <span className={styles.text}>{row.original.eventCount ?? 0}</span>,
+      },
+    );
+  }
+
   cols.push(
     {
       accessorKey: 'createdAt',
@@ -306,6 +346,17 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showIndustrialFields && (
           <>
             <IncidentCardRow icon={Activity} label="Objects Detected" value={row.count ?? '--'} />
+          </>
+        )}
+        {config.showStockCountingFields && (
+          <>
+            <IncidentCardRow icon={Activity} label="Vehicle" value={row.vehicleNumber || 'Unknown'} />
+            <IncidentCardRow icon={Activity} label="Movement" value={row.direction || '--'} />
+            <IncidentCardRow icon={Activity} label="Box Type" value={row.boxTypes?.join(', ') || '--'} />
+            <IncidentCardRow icon={Activity} label="Loaded" value={row.loadedBoxCount ?? 0} />
+            <IncidentCardRow icon={Activity} label="Unloaded" value={row.unloadedBoxCount ?? 0} />
+            <IncidentCardRow icon={Activity} label="Total Boxes" value={row.boxCount ?? 0} />
+            <IncidentCardRow icon={Activity} label="Events" value={row.eventCount ?? 0} />
           </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />

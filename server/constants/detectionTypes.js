@@ -55,6 +55,8 @@ export const DETECTION_TYPES = {
   sandDustWasteScrapDisposalDetectionSettings: "Sand, Dust, Waste & Scrap Disposal Detection",
   unauthorizedAnimalEntryDetectionSettings: "Unauthorized Animal Entry Detection",
   spillsDirtyMessyAreasDetectionSettings: "Spills, Dirty or Messy Areas Detection",
+  loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
+  blurredCameraDetectionSettings: "Blurred Camera Detection",
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
@@ -66,6 +68,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "sandDustWasteScrapDisposalDetectionSettings",
   "unauthorizedAnimalEntryDetectionSettings",
   "spillsDirtyMessyAreasDetectionSettings",
+  "loadingUnloadingStockCountingSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -77,6 +80,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "sandDustWasteScrapDisposalDetection",
   "unauthorizedAnimalEntryDetection",
   "spillsDirtyMessyAreasDetection",
+  "loadingUnloadingStockCountingDetection",
 ]);
 
 /**
@@ -117,6 +121,8 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   sandDustWasteScrapDisposalDetectionSettings: { permissionKey: "wasteDisposalLogs", logsConfigKey: "wasteDisposalLogs" },
   unauthorizedAnimalEntryDetectionSettings: { permissionKey: "animalEntryLogs", logsConfigKey: "animalEntryLogs" },
   spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
+  loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
+  blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
 });
 
 export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
@@ -177,6 +183,8 @@ export const TYPE_MAP = {
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetection",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetection",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetection",
+  loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
+  blurredCameraDetectionSettings: "blurredCameraDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -217,6 +225,8 @@ export const DETECTION_MODES_MAP = {
   sandDustWasteScrapDisposalDetectionSettings: ["sandDustWasteScrapDisposalDetectionSettings"],
   unauthorizedAnimalEntryDetectionSettings: ["unauthorizedAnimalEntryDetectionSettings"],
   spillsDirtyMessyAreasDetectionSettings: ["spillsDirtyMessyAreasDetectionSettings"],
+  loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
+  blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
 };
 
 /**
@@ -278,6 +288,8 @@ export const DS_DETECTOR_BY_MODE = {
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
+  loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
+  blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
 };
 
 /**
@@ -352,6 +364,8 @@ export const DS_LOGIC_BY_MODE = {
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
+  loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
+  blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -406,6 +420,8 @@ export const toPopulateDetections = [
   { path: "detections.sandDustWasteScrapDisposalDetectionSettings.id" },
   { path: "detections.unauthorizedAnimalEntryDetectionSettings.id" },
   { path: "detections.spillsDirtyMessyAreasDetectionSettings.id" },
+  { path: "detections.loadingUnloadingStockCountingSettings.id" },
+  { path: "detections.blurredCameraDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1586,3 +1602,32 @@ export const spillsDirtyMessyAreasDetectionSettings = industrialDetectionExample
   "spillsDirtyMessyAreasDetectionSettings",
   "Spills, Dirty or Messy Areas Detection",
 );
+export const loadingUnloadingStockCountingSettings = {
+  ...industrialDetectionExample(
+    "loadingUnloadingStockCountingSettings",
+    "Loading/Unloading Stock Counting Detection",
+  ),
+  settings: {
+    ...industrialDetectionExample(
+      "loadingUnloadingStockCountingSettings",
+      "Loading/Unloading Stock Counting Detection",
+    ).settings,
+    mode: "both",
+  },
+};
+export const blurredCameraDetectionSettings = {
+  channelId: ["664f89e8a9d345001ee326b1"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "blurredCameraDetectionSettings",
+  name: "Blurred Camera Detection",
+  enabled: true,
+  alerts: [],
+  settings: {
+    imageRequired: true,
+    videoLinkRequirement: false,
+    levelOfImportance: "high",
+    alertThreshold: 80,
+    trigger_notification: true,
+    metricType: "gauge",
+  },
+};

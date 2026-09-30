@@ -53,6 +53,8 @@ import WrongLocationLogs from './pages/WrongLocationLogs/WrongLocationLogs';
 import WasteDisposalLogs from './pages/WasteDisposalLogs/WasteDisposalLogs';
 import AnimalEntryLogs from './pages/AnimalEntryLogs/AnimalEntryLogs';
 import MessyAreaLogs from './pages/MessyAreaLogs/MessyAreaLogs';
+import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
+import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -144,6 +146,8 @@ export const v2Routes = (
     <Route path="logs/waste-disposal" element={guard('logs', 'wasteDisposalLogs', <WasteDisposalLogs />)} />
     <Route path="logs/animal-entry" element={guard('logs', 'animalEntryLogs', <AnimalEntryLogs />)} />
     <Route path="logs/messy-area" element={guard('logs', 'messyAreaLogs', <MessyAreaLogs />)} />
+    <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
+    <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

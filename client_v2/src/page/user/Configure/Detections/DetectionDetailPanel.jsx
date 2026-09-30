@@ -2,7 +2,7 @@ import {
   Activity, AlertCircle, Armchair, Box, Briefcase, Calendar, CalendarCheck,
   Car, CarFront, CircleOff, Clock, Clock3, CopyPlus, DoorOpen, Factory, Flame,
   GitCommitHorizontal, Globe, Hammer, HardHat, HeartPulse, Lightbulb, ListRestart, Package, Plus,
-  ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
+  ScanEye, ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
   Users, UtensilsCrossed, Waves, X, ChevronDown, Droplet, PackageSearch, PawPrint, Sparkles,
 } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
@@ -75,6 +75,8 @@ const DETECTION_ICONS = {
   sandDustWasteScrapDisposalDetectionSettings: Trash2,
   unauthorizedAnimalEntryDetectionSettings: PawPrint,
   spillsDirtyMessyAreasDetectionSettings: Sparkles,
+  loadingUnloadingStockCountingSettings: PackageSearch,
+  blurredCameraDetectionSettings: ScanEye,
   'Attendance-detection': UserCheck,
 };
 
@@ -970,6 +972,7 @@ export default function DetectionDetailPanel({
   const scheduleFallback = formatScheduleMode(model.scheduleMode || model.schedule, 'N/A');
   const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
   const usesThresholds = thresholdKeys.length > 0;
+  const isBlurredCameraDetection = model?.settingType === 'blurredCameraDetectionSettings';
   const thresholdsBlockedByInactive = !hideToggle && !model.active;
   const thresholdsBlockedByAccess = !canEdit;
   const resetThresholdActionDisabled = resetThresholdDisabled || thresholdsBlockedByAccess || thresholdsBlockedByInactive;
@@ -1440,7 +1443,7 @@ export default function DetectionDetailPanel({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-        <button
+        {!isBlurredCameraDetection && <button
           type="button"
           onClick={onEditZones}
           disabled={!canEdit}
@@ -1459,7 +1462,7 @@ export default function DetectionDetailPanel({
           }}
         >
           Edit zones &amp; rules
-        </button>
+        </button>}
         <button
           type="button"
           onClick={openSchedule}

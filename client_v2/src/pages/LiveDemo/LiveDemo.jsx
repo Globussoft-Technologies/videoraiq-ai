@@ -76,6 +76,8 @@ const detections = [
   { name: 'Sand, Dust, Waste & Scrap Disposal Detection', subtitle: 'Waste disposal', category: 'industrial', color: '#78716c', settingType: 'sandDustWasteScrapDisposalDetectionSettings' },
   { name: 'Unauthorized Animal Entry Detection', subtitle: 'Animal entry', category: 'industrial', color: '#ef4444', settingType: 'unauthorizedAnimalEntryDetectionSettings' },
   { name: 'Spills, Dirty or Messy Areas Detection', subtitle: 'Housekeeping', category: 'industrial', color: '#14b8a6', settingType: 'spillsDirtyMessyAreasDetectionSettings' },
+  { name: 'Loading/Unloading Stock Counting Detection', subtitle: 'Stock movement', category: 'industrial', color: '#6366f1', settingType: 'loadingUnloadingStockCountingSettings' },
+  { name: 'Blurred Camera Detection', subtitle: 'Camera clarity', category: 'industrial', color: '#0ea5e9', settingType: 'blurredCameraDetectionSettings' },
   { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16', settingType: 'lightDetectionSettings' },
 ];
 

@@ -14,6 +14,10 @@ const zoneConfigsField = {
       name: { type: String },
       capacity: { type: Number },
       threshold_sec: { type: Number },
+      mode: {
+        type: String,
+        enum: ["loading", "unloading", "both"],
+      },
       // Daily Telegram-alert window for this zone, in the admin's timezone.
       // 12-hour clock strings, e.g. "09:00 AM" / "06:30 PM". null = no window;
       // Telegram is only sent when both are set AND the incident's local time
@@ -1157,6 +1161,62 @@ const SpillsDirtyMessyAreasDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema }),
 );
 
+const LoadingUnloadingStockCountingDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  mode: {
+    type: String,
+    enum: ["loading", "unloading", "both"],
+    default: "both",
+  },
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  line_coordinates: [[Number]],
+  inside_reference_point: [Number],
+  trigger_notification: { type: Boolean, default: true },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const LoadingUnloadingStockCountingSetting = DetectionSetting.discriminator(
+  "loadingUnloadingStockCountingSettings",
+  new mongoose.Schema({ settings: LoadingUnloadingStockCountingDetectionSchema }),
+);
+
+const BlurredCameraDetectionSchema = new mongoose.Schema({
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 80 },
+  trigger_notification: { type: Boolean, default: true },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const BlurredCameraDetectionSetting = DetectionSetting.discriminator(
+  "blurredCameraDetectionSettings",
+  new mongoose.Schema({ settings: BlurredCameraDetectionSchema }),
+);
+
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
@@ -1561,4 +1621,6 @@ export {
   SandDustWasteScrapDisposalDetectionSetting,
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
+  LoadingUnloadingStockCountingSetting,
+  BlurredCameraDetectionSetting,
 };

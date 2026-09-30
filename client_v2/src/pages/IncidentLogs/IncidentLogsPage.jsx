@@ -19,6 +19,13 @@ import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
 
 const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
 
+const incidentImageUrl = (value) => {
+  if (!value) return null;
+  const image = String(value).trim();
+  if (/^(https?:|data:|blob:)/i.test(image)) return image;
+  return `${import.meta.env.VITE_INCIDENT_URL || ''}${image}`;
+};
+
 function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
   const exporting = !!exportingFormat;
   return (
@@ -88,6 +95,7 @@ const IncidentLogsPage = ({ config }) => {
     channelIds,
     severity,
     status,
+    vehicleNumber,
     limit,
   } = state;
 
@@ -100,7 +108,7 @@ const IncidentLogsPage = ({ config }) => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
-  const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid'
+  const [viewMode, setViewMode] = useState(() => (config.tableOnly ? 'table' : 'grid')); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
@@ -154,7 +162,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, status, limit]);
+  }, [nvrIds, channelIds, severity, status, vehicleNumber, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -177,13 +185,12 @@ const IncidentLogsPage = ({ config }) => {
         severity,
         status: config.showStatus ? status : undefined,
         search: searchInput,
+        vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       });
 
       const data = res?.data?.body?.data;
       const list = data?.data || [];
       const total = data?.totalCount || 0;
-
-      const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
 
       const mapped = list.map((item) => ({
         ...item,
@@ -195,8 +202,8 @@ const IncidentLogsPage = ({ config }) => {
         channelName: item.channelData?.name || '--',
         nvrId: item.nvrId || item.nvrData?._id || '',
         channelId: item.channelId || item.channelData?._id || '',
-        createdAt: item.createdAt,
-        incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
+        createdAt: item.timeOfIncident || item.createdAt,
+        incidentImageUrl: incidentImageUrl(item.Image),
         severity: item.severity || '--',
         count: item.count,
         alertThreshold: item.alertThreshold,
@@ -204,6 +211,19 @@ const IncidentLogsPage = ({ config }) => {
         smokeCount: item.smokeCount,
         isFallDetected: item.isFallDetected,
         evidenceScore: item.evidenceScore,
+        stockMovement: item.stockMovement,
+        stockCountBefore: item.stockCountBefore,
+        stockCountAfter: item.stockCountAfter,
+        vehicleNumber: String(item.vehicleNumber || '').trim() || (config.showStockCountingFields ? 'Unknown' : ''),
+        direction: item.direction || item.stockMovement,
+        boxCount: item.boxCount ?? item.count,
+        loadedBoxCount: item.loadedBoxCount,
+        unloadedBoxCount: item.unloadedBoxCount,
+        boxTypes: item.boxTypes || (item.boxType ? [item.boxType] : []),
+        eventCount: item.eventCount,
+        sessionCount: item.sessionCount,
+        defaultCountApplied: item.defaultCountApplied,
+        truckPresent: item.truckPresent,
       }));
 
       dispatch({ type: 'SET_ROWS', value: mapped });
@@ -226,6 +246,7 @@ const IncidentLogsPage = ({ config }) => {
                 severity: level,
                 status: config.showStatus ? status : undefined,
                 search: searchInput,
+                vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
               });
               return [level, countRes?.data?.body?.data?.totalCount || 0];
             })
@@ -242,7 +263,7 @@ const IncidentLogsPage = ({ config }) => {
       dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, vehicleNumber, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -304,6 +325,74 @@ const IncidentLogsPage = ({ config }) => {
     setPreviewImageLoading(false);
   }, []);
 
+  const renderStockEvents = useCallback(
+    (row) => {
+      const events = Array.isArray(row?.events) ? row.events : [];
+      return (
+        <div className="bg-[var(--bg2)] px-5 py-4">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)]">
+            All stock movements for {row?.vehicleNumber || 'Unknown'}
+          </div>
+          {events.length === 0 ? (
+            <div className="py-3 text-xs text-[var(--tx3)]">No individual events are available.</div>
+          ) : (
+            <div className="divide-y divide-[var(--bd)] overflow-hidden rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)]">
+              {events.map((event, index) => {
+                const direction = String(event?.direction || '').toLowerCase();
+                const imageUrl = incidentImageUrl(event?.Image);
+                return (
+                  <div
+                    key={event?._id || event?.eventId || `${row?.aggregationKey || row?._id}-${index}`}
+                    className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
+                  >
+                    <span
+                      className={`inline-flex min-w-[76px] justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                        direction === 'loading'
+                          ? 'bg-[var(--ok)]/15 text-[var(--ok)]'
+                          : direction === 'unloading'
+                            ? 'bg-[var(--warn)]/15 text-[var(--warn)]'
+                            : 'bg-[var(--bg3)] text-[var(--tx2)]'
+                      }`}
+                    >
+                      {direction || '--'}
+                    </span>
+                    <span className="text-xs font-semibold text-[var(--tx)]">
+                      Boxes: {event?.boxCount ?? 0}
+                    </span>
+                    <span className="text-xs capitalize text-[var(--tx2)]">
+                      Type: {event?.boxType || '--'}
+                    </span>
+                    <span className="text-xs text-[var(--tx2)]">
+                      {event?.timeOfIncident
+                        ? moment.utc(event.timeOfIncident).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+                        : '--'}
+                    </span>
+                    <span className="text-[11px] text-[var(--tx3)]">
+                      {[event?.nvrName, event?.channelName].filter(Boolean).join(' · ') || '--'}
+                    </span>
+                    {event?.zone && (
+                      <span className="text-[11px] text-[var(--tx3)]">Zone: {event.zone}</span>
+                    )}
+                    {imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => openPreview(imageUrl)}
+                        className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--blue)] hover:underline"
+                      >
+                        View image
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    },
+    [openPreview]
+  );
+
   const showPreviousPreview = useCallback(() => {
     if (previewIndex > 0) showPreviewAt(previewIndex - 1);
   }, [previewIndex, showPreviewAt]);
@@ -336,7 +425,7 @@ const IncidentLogsPage = ({ config }) => {
   const stats = useMemo(() => {
     if (config.showStats === false) return [];
     return [
-      { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
+      { label: config.statsLabel || 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
       { label: 'High', value: severityTotals.high || 0, color: 'var(--crit)' },
       { label: 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
@@ -354,8 +443,9 @@ const IncidentLogsPage = ({ config }) => {
       severity,
       status: config.showStatus ? status : undefined,
       searchInput,
+      vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
     }),
-    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, searchInput]
+    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, searchInput]
   );
 
   const handleExport = useCallback(
@@ -401,22 +491,23 @@ const IncidentLogsPage = ({ config }) => {
         error={error}
         data={rows}
         columns={columns}
-        gridCard={gridCard}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        gridCard={config.tableOnly ? undefined : gridCard}
+        viewMode={config.tableOnly ? 'table' : viewMode}
+        onViewModeChange={config.tableOnly ? undefined : setViewMode}
         attendanceLogsCount={totalCount}
         currentPage={currentPage}
         setCurrentPage={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         onPageChange={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         limit={limit}
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
-        searchKeys={['incidentName', 'nvrName', 'channelName']}
+        searchKeys={['incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
         searchQuery={searchInput}
         onSearchChange={(v) => dispatch({ type: 'SET_SEARCH_INPUT', value: v })}
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
+        renderExpandedRow={config.showStockCountingFields ? renderStockEvents : undefined}
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : d);
           let s = start ? toIso(start) : null;
@@ -464,6 +555,9 @@ const IncidentLogsPage = ({ config }) => {
           showStatus={config.showStatus}
           status={status}
           setStatus={(v) => dispatch({ type: 'SET_STATUS', value: v })}
+          showVehicleNumber={config.showVehicleNumberFilter}
+          vehicleNumber={vehicleNumber}
+          setVehicleNumber={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER', value: v })}
         />
 
         <AutoRefreshComponent

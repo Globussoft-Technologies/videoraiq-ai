@@ -68,6 +68,8 @@ import {
   SandDustWasteScrapDisposalDetectionIncident,
   UnauthorizedAnimalEntryDetectionIncident,
   SpillsDirtyMessyAreasDetectionIncident,
+  LoadingUnloadingStockCountingIncident,
+  BlurredCameraDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -110,6 +112,8 @@ const modelMap = {
   sandDustWasteScrapDisposalDetection: SandDustWasteScrapDisposalDetectionIncident,
   unauthorizedAnimalEntryDetection: UnauthorizedAnimalEntryDetectionIncident,
   spillsDirtyMessyAreasDetection: SpillsDirtyMessyAreasDetectionIncident,
+  loadingUnloadingStockCountingDetection: LoadingUnloadingStockCountingIncident,
+  blurredCameraDetection: BlurredCameraDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -384,6 +388,27 @@ class IncidentsService {
         return res
           .status(400)
           .json({ error: `Unknown incident type: ${incidentType}` });
+      }
+
+      // DS can retry a delivery after a timeout. eventId is its idempotency
+      // key; accepting the retry as another stock event would inflate the
+      // per-vehicle box total and send the same notification twice.
+      if (
+        incidentType === "loadingUnloadingStockCountingDetection" &&
+        req.body.eventId
+      ) {
+        const existingIncident = await Model.findOne({
+          userId: userId?.toString(),
+          eventId: String(req.body.eventId).trim(),
+        });
+        if (existingIncident) {
+          return res.status(200).json(
+            Response.userSuccessResp("Incident already processed", {
+              Incident: existingIncident.toObject(),
+              duplicate: true,
+            }),
+          );
+        }
       }
 
       const currentTime = new Date();
@@ -714,6 +739,12 @@ class IncidentsService {
         newIncident.count = req?.body?.count;
         newIncident.isFallDetected = req?.body?.isFallDetected;
         newIncident.evidenceScore = req?.body?.evidenceScore;
+        newIncident.triggerNotification = req?.body?.triggerNotification;
+      } else if (incidentType === "blurredCameraDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
+        newIncident.Image = req?.body?.Image;
+        newIncident.count = req?.body?.count ?? 1;
+        newIncident.alertThreshold = req?.body?.alertThreshold ?? 80;
         newIncident.triggerNotification = req?.body?.triggerNotification;
       } else if (industrialIncidentTypes.has(incidentType)) {
         newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
@@ -4546,6 +4577,346 @@ console.log(result,'result');
       next,
       "spillsDirtyMessyAreasDetection",
     );
+  }
+
+  async getLoadingUnloadingStockCountingLogs(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const {
+        skip = 0,
+        limit = 10,
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+        severity,
+        vehicleNumber,
+        search,
+        sortField,
+        sortOrder,
+      } = req.query || {};
+      const toArray = (value) =>
+        value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
+
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "loadingUnloadingStockCountingDetection",
+      };
+      if (startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        match.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const requestedChannels = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (requestedChannels.length && Array.isArray(authorizedChannels)) {
+        const authorizedSet = new Set(authorizedChannels.map((id) => id.toString()));
+        effectiveChannelIds = requestedChannels.filter((id) => authorizedSet.has(id));
+      } else if (requestedChannels.length) {
+        effectiveChannelIds = requestedChannels;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((id) => id.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        match.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+      if (severity) match.severity = severity;
+      if (vehicleNumber && String(vehicleNumber).trim()) {
+        const escapedVehicle = escapeRegex(String(vehicleNumber).trim());
+        match.vehicleNumber = {
+          $regex: `^\\s*${escapedVehicle}\\s*$`,
+          $options: "i",
+        };
+      }
+
+      // One result row represents one vehicle across the selected filters/date
+      // range. Events with no readable plate deliberately remain separate so
+      // unrelated unknown vehicles are never merged into one stock total.
+      const pipeline = [
+        { $match: match },
+        ...VEHICLE_LOG_LOOKUP_STAGES,
+        {
+          $addFields: {
+            _stockVehicleNumber: {
+              $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } },
+            },
+            _stockDirection: {
+              $toLower: { $ifNull: ["$direction", { $ifNull: ["$stockMovement", ""] }] },
+            },
+            _stockBoxCount: {
+              $convert: {
+                input: { $ifNull: ["$boxCount", { $ifNull: ["$count", 0] }] },
+                to: "double",
+                onError: 0,
+                onNull: 0,
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            _stockGroupKey: {
+              $cond: [
+                { $gt: [{ $strLenCP: "$_stockVehicleNumber" }, 0] },
+                "$_stockVehicleNumber",
+                { $concat: ["UNREADABLE:", { $toString: "$_id" }] },
+              ],
+            },
+          },
+        },
+        { $sort: { timeOfIncident: -1, _id: -1 } },
+        {
+          $group: {
+            _id: "$_stockGroupKey",
+            latestIncidentId: { $first: "$_id" },
+            schemaVersion: { $first: "$schemaVersion" },
+            eventId: { $first: "$eventId" },
+            eventIds: { $addToSet: "$eventId" },
+            vehicleSessionId: { $first: "$vehicleSessionId" },
+            vehicleSessionIds: { $addToSet: "$vehicleSessionId" },
+            vehicleNumber: { $first: "$_stockVehicleNumber" },
+            incidentType: { $first: "$incidentType" },
+            incidentName: { $first: "$incidentName" },
+            description: { $first: "$description" },
+            zone: { $first: "$zone" },
+            severity: { $first: "$severity" },
+            videoLink: { $first: "$videoLink" },
+            images: { $push: "$Image" },
+            cameraId: { $first: "$cameraId" },
+            nvrId: { $first: "$nvrId" },
+            channelId: { $first: "$channelId" },
+            userId: { $first: "$userId" },
+            adminId: { $first: "$adminId" },
+            nvrData: { $first: "$nvrData" },
+            channelData: { $first: "$channelData" },
+            nvrNames: { $addToSet: "$nvrData.nvrName" },
+            channelNames: { $addToSet: "$channelData.name" },
+            timeOfIncident: { $first: "$timeOfIncident" },
+            directions: { $addToSet: "$_stockDirection" },
+            lineCrossingDirections: { $addToSet: "$lineCrossingDirection" },
+            boxTypes: { $addToSet: "$boxType" },
+            events: {
+              $push: {
+                _id: "$_id",
+                eventId: "$eventId",
+                direction: "$_stockDirection",
+                lineCrossingDirection: "$lineCrossingDirection",
+                boxType: "$boxType",
+                boxCount: "$_stockBoxCount",
+                Image: "$Image",
+                timeOfIncident: "$timeOfIncident",
+                zone: "$zone",
+                description: "$description",
+                nvrName: "$nvrData.nvrName",
+                channelName: {
+                  $ifNull: ["$channelData.customName", "$channelData.name"],
+                },
+              },
+            },
+            boxCount: { $sum: "$_stockBoxCount" },
+            loadedBoxCount: {
+              $sum: { $cond: [{ $eq: ["$_stockDirection", "loading"] }, "$_stockBoxCount", 0] },
+            },
+            unloadedBoxCount: {
+              $sum: { $cond: [{ $eq: ["$_stockDirection", "unloading"] }, "$_stockBoxCount", 0] },
+            },
+            eventCount: { $sum: 1 },
+            countMethod: { $first: "$countMethod" },
+            defaultCountApplied: {
+              $max: { $cond: [{ $eq: ["$defaultCountApplied", true] }, 1, 0] },
+            },
+            truckPresent: {
+              $max: { $cond: [{ $eq: ["$truckPresent", true] }, 1, 0] },
+            },
+            triggerNotification: {
+              $max: { $cond: [{ $eq: ["$triggerNotification", true] }, 1, 0] },
+            },
+            resolved: { $min: { $cond: [{ $eq: ["$resolved", true] }, 1, 0] } },
+          },
+        },
+        {
+          $set: {
+            Image: {
+              $arrayElemAt: [
+                {
+                  $filter: {
+                    input: "$images",
+                    as: "image",
+                    cond: {
+                      $and: [
+                        { $ne: ["$$image", null] },
+                        { $ne: ["$$image", ""] },
+                      ],
+                    },
+                  },
+                },
+                0,
+              ],
+            },
+            directions: {
+              $filter: {
+                input: "$directions",
+                as: "direction",
+                cond: { $in: ["$$direction", ["loading", "unloading"]] },
+              },
+            },
+            boxTypes: {
+              $filter: {
+                input: "$boxTypes",
+                as: "boxType",
+                cond: {
+                  $and: [
+                    { $ne: ["$$boxType", null] },
+                    { $ne: ["$$boxType", ""] },
+                  ],
+                },
+              },
+            },
+            vehicleSessionIds: {
+              $filter: {
+                input: "$vehicleSessionIds",
+                as: "sessionId",
+                cond: {
+                  $and: [
+                    { $ne: ["$$sessionId", null] },
+                    { $ne: ["$$sessionId", ""] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $set: {
+            direction: {
+              $cond: [
+                { $gt: [{ $size: "$directions" }, 1] },
+                "both",
+                { $arrayElemAt: ["$directions", 0] },
+              ],
+            },
+            sessionCount: { $size: "$vehicleSessionIds" },
+            defaultCountApplied: { $eq: ["$defaultCountApplied", 1] },
+            truckPresent: { $eq: ["$truckPresent", 1] },
+            triggerNotification: { $eq: ["$triggerNotification", 1] },
+            resolved: { $eq: ["$resolved", 1] },
+          },
+        },
+        {
+          $set: {
+            aggregationKey: "$_id",
+            _id: "$latestIncidentId",
+            count: "$boxCount",
+            stockMovement: "$direction",
+            createdAt: "$timeOfIncident",
+          },
+        },
+        { $unset: ["images", "latestIncidentId"] },
+      ];
+
+      if (search && typeof search === "string" && search.trim()) {
+        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = { $regex: escaped, $options: "i" };
+        pipeline.push(
+          {
+            $set: {
+              _searchTime: {
+                $dateToString: {
+                  date: "$timeOfIncident",
+                  format: "%Y-%m-%d %H:%M",
+                  timezone: "Asia/Kolkata",
+                },
+              },
+              _searchBoxCount: { $toString: "$boxCount" },
+              _searchEventCount: { $toString: "$eventCount" },
+            },
+          },
+          {
+            $match: {
+              $or: [
+                { vehicleNumber: rx },
+                { incidentName: rx },
+                { description: rx },
+                { zone: rx },
+                { direction: rx },
+                { boxTypes: rx },
+                { countMethod: rx },
+                { eventIds: rx },
+                { vehicleSessionIds: rx },
+                { nvrNames: rx },
+                { channelNames: rx },
+                { _searchTime: rx },
+                { _searchBoxCount: rx },
+                { _searchEventCount: rx },
+              ],
+            },
+          },
+          { $unset: ["_searchTime", "_searchBoxCount", "_searchEventCount"] },
+        );
+      }
+
+      const stockSortFields = {
+        createdAt: "timeOfIncident",
+        timeOfIncident: "timeOfIncident",
+        vehicleNumber: "vehicleNumber",
+        direction: "direction",
+        boxCount: "boxCount",
+        count: "boxCount",
+        eventCount: "eventCount",
+        severity: "severity",
+        incidentName: "incidentName",
+        nvrName: "nvrData.nvrName",
+        "nvrData.nvrName": "nvrData.nvrName",
+        channelName: "channelData.name",
+        "channelData.name": "channelData.name",
+      };
+      const sortPath = stockSortFields[String(sortField || "").trim()] || "timeOfIncident";
+      pipeline.push({ $sort: { [sortPath]: sortOrder === "asc" ? 1 : -1, _id: -1 } });
+
+      const parsedSkip = Math.max(0, Number.parseInt(skip, 10) || 0);
+      const parsedLimit = Math.min(10000, Math.max(1, Number.parseInt(limit, 10) || 10));
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...pipeline, { $count: "totalCount" }]),
+        Incident.aggregate([...pipeline, { $skip: parsedSkip }, { $limit: parsedLimit }]),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp(
+          "Loading/unloading stock counting logs fetched successfully",
+          {
+            totalCount: countResult[0]?.totalCount || 0,
+            data: logs,
+          },
+        ),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch loading/unloading stock counting logs", 500));
+    }
+  }
+
+  async getBlurredCameraDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "blurredCameraDetection");
   }
 
   async getUnauthorizedAccessLogs(req, res, next) {

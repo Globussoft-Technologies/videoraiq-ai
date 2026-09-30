@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   getSandDustWasteScrapDisposalDetectionLogs: vi.fn(),
   getUnauthorizedAnimalEntryDetectionLogs: vi.fn(),
   getSpillsDirtyMessyAreasDetectionLogs: vi.fn(),
+  getLoadingUnloadingStockCountingLogs: vi.fn(),
+  getBlurredCameraDetectionLogs: vi.fn(),
 }));
 
 vi.mock("../../core/v2/incidents/incidents.service.js", () => ({
@@ -63,6 +65,8 @@ beforeEach(() => {
     mocks.getSandDustWasteScrapDisposalDetectionLogs,
     mocks.getUnauthorizedAnimalEntryDetectionLogs,
     mocks.getSpillsDirtyMessyAreasDetectionLogs,
+    mocks.getLoadingUnloadingStockCountingLogs,
+    mocks.getBlurredCameraDetectionLogs,
   ]) {
     handler.mockImplementation((req, res) =>
       res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
@@ -111,6 +115,8 @@ describe("separate industrial detection log routes", () => {
     ["sand-dust-waste-scrap-disposal-detection", "getSandDustWasteScrapDisposalDetectionLogs"],
     ["unauthorized-animal-entry-detection", "getUnauthorizedAnimalEntryDetectionLogs"],
     ["spills-dirty-messy-areas-detection", "getSpillsDirtyMessyAreasDetectionLogs"],
+    ["loading-unloading-stock-counting-detection", "getLoadingUnloadingStockCountingLogs"],
+    ["blurred-camera-detection", "getBlurredCameraDetectionLogs"],
   ])("routes /logs/%s to %s", async (path, handlerName) => {
     const response = await request(app).get(`/api/v2/incidents/logs/${path}`);
 

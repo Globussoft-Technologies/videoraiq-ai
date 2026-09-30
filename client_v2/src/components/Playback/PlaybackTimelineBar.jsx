@@ -57,6 +57,7 @@ const INCIDENT_COLOR = {
   sandDustWasteScrapDisposalDetection: '#78716c',
   unauthorizedAnimalEntryDetection: '#ef4444',
   spillsDirtyMessyAreasDetection: '#14b8a6',
+  loadingUnloadingStockCountingDetection: '#6366f1',
 };
 
 function eventColor(type) {

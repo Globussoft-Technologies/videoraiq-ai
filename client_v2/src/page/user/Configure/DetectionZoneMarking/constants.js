@@ -15,10 +15,16 @@ export const DETECTION_FIELD_KEYS = [
   'workingAtHeightDetectionSettings', 'oilLeakageDetectionSettings',
   'gunnyBagsMaterialsWrongLocationDetectionSettings', 'sandDustWasteScrapDisposalDetectionSettings',
   'unauthorizedAnimalEntryDetectionSettings', 'spillsDirtyMessyAreasDetectionSettings',
+  'loadingUnloadingStockCountingSettings',
 ];
 
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
 export const PERSON_FALL_SICK_SETTING_TYPE = 'personFallSickDetectionSettings';
+export const STOCK_COUNTING_SETTING_TYPE = 'loadingUnloadingStockCountingSettings';
+
+export function isStockCountingType(value) {
+  return String(value || '') === STOCK_COUNTING_SETTING_TYPE;
+}
 
 export function isSpecialDetectionType(value) {
   const normalized = String(value || '');

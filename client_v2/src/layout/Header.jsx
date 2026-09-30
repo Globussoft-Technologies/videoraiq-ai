@@ -74,6 +74,14 @@ const DETECTION_SEARCH_INDEX = [
   },
   {
     kind: 'Detection',
+    kindColor: '#6366f1',
+    label: 'Loading/Unloading Stock Counting Detection',
+    sub: 'Industrial & Environment • Stock movement counting',
+    keywords: 'loading unloading stock counting inventory movement',
+    to: '/detection-settings?detection=loadingUnloadingStockCountingSettings',
+  },
+  {
+    kind: 'Detection',
     kindColor: '#ff5b57',
     label: 'Fire & Smoke Detection',
     sub: 'Safety & PPE • Full-frame hazard detection',

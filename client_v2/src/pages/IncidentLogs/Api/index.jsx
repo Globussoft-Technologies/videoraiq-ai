@@ -53,6 +53,7 @@ export const fetchIncidentLogs = async ({
   severity,
   status,
   search,
+  vehicleNumber,
 }) => {
   return axios.request({
     method,
@@ -69,6 +70,7 @@ export const fetchIncidentLogs = async ({
       ...(severity && { severity }),
       ...(status && { status }),
       ...(search && { search }),
+      ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
     },
     headers: getHeaders(),
   });

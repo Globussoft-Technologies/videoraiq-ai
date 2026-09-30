@@ -269,6 +269,20 @@ describe("vehicle check-in/out logs — paging and search", () => {
     expect(new Set(keys).size).toBe(3);
   });
 
+  it("returns the full filtered custody count on every page", async () => {
+    await crossing("IN0001", true, 9);
+    await crossing("IN0002", true, 10);
+    await crossing("OUT0001", true, 11);
+    await crossing("OUT0001", false, 12);
+
+    const first = await list({ skip: 0, limit: 1 });
+    const second = await list({ skip: 1, limit: 1 });
+
+    expect(first.totalCount).toBe(3);
+    expect(first.inCustodyCount).toBe(2);
+    expect(second.inCustodyCount).toBe(2);
+  });
+
   it("searches by plate and by model", async () => {
     await crossing("MH12AB1234", true, 9, { model_name: "Swift" });
     await crossing("KA05XY9999", true, 10, { model_name: "City" });

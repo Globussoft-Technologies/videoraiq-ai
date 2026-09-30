@@ -50,6 +50,7 @@ const ReusableTablePage = ({
   stats,
   secondaryToolbar,
   datePickerVariant,
+  renderExpandedRow,
 }) => {
   const [internalSearchInput, setInternalSearchInput] = useState('');
   const [internalViewMode, setInternalViewMode] = useState('table');
@@ -239,7 +240,12 @@ const ReusableTablePage = ({
               )
             ) : (
               <div data-tour="log-table" className="w-full overflow-x-auto overflow-y-auto max-h-[60vh] rounded-xl border border-[var(--bd)]">
-                <ProfilesTable data={paginated} columns={columns} loading={false} />
+                <ProfilesTable
+                  data={paginated}
+                  columns={columns}
+                  loading={false}
+                  renderExpandedRow={renderExpandedRow}
+                />
               </div>
             )}
             {isEmpty && (

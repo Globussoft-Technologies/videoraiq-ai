@@ -83,6 +83,28 @@ const CASES = [
     IncidentModel: incidentModels.SpillsDirtyMessyAreasDetectionIncident,
     logMethod: "getSpillsDirtyMessyAreasDetectionLogs",
   },
+  {
+    settingType: "loadingUnloadingStockCountingSettings",
+    incidentType: "loadingUnloadingStockCountingDetection",
+    SettingModel: settingsModels.LoadingUnloadingStockCountingSetting,
+    IncidentModel: incidentModels.LoadingUnloadingStockCountingIncident,
+    logMethod: "getLoadingUnloadingStockCountingLogs",
+    incidentFields: {
+      schemaVersion: "1.0",
+      eventId: "stock-event-1",
+      vehicleSessionId: "stock-session-1",
+      vehicleNumber: "MH12AB1234",
+      direction: "loading",
+      lineCrossingDirection: "entry",
+      boxType: "brown",
+      boxCount: 5,
+      countMethod: "configured_bundle_size",
+      classificationStatus: "classified",
+      classificationConfidence: 0.93,
+      defaultCountApplied: false,
+      truckPresent: true,
+    },
+  },
 ];
 
 let admin;
@@ -98,10 +120,146 @@ beforeEach(async () => {
   });
 });
 
+describe("stock-counting vehicle aggregation", () => {
+  it("groups events by normalized vehicle number and sums box counts", async () => {
+    const nvr = await NVR.create({
+      userId: admin.user_id,
+      nvrName: "Stock NVR",
+      brand: "hikvision",
+      domain: "http://stock-nvr.test",
+      location: "loading bay",
+      localNvrId: "stock-aggregate-nvr",
+    });
+    const channel = await Channel.create({
+      userId: admin.user_id,
+      nvrId: nvr._id,
+      localChannelId: "1",
+      name: "Stock Camera",
+      streamingPath: "/Streaming/Channels/101",
+      isAdded: true,
+    });
+
+    const common = {
+      nvrId: nvr._id,
+      channelId: channel._id,
+      userId: admin.user_id,
+      incidentName: "Stock Movement Detected",
+      zone: "Loading/Unloading Bay",
+      severity: "moderate",
+      boxType: "brown",
+      classificationStatus: "classified",
+      truckPresent: true,
+    };
+    await incidentModels.LoadingUnloadingStockCountingIncident.create([
+      {
+        ...common,
+        timeOfIncident: new Date("2026-09-30T10:15:42Z"),
+        eventId: "event-1",
+        vehicleSessionId: "session-1",
+        vehicleNumber: "mh12ab1234",
+        direction: "loading",
+        boxCount: 5,
+        Image: "/incidents/stock/event-1.jpg",
+        classificationConfidence: 0.93,
+      },
+      {
+        ...common,
+        timeOfIncident: new Date("2026-09-30T10:20:42Z"),
+        eventId: "event-2",
+        vehicleSessionId: "session-1",
+        vehicleNumber: " MH12AB1234 ",
+        direction: "unloading",
+        boxCount: 3,
+        Image: "/incidents/stock/event-2.jpg",
+        classificationConfidence: 0.89,
+      },
+      {
+        ...common,
+        timeOfIncident: new Date("2026-09-30T10:25:42Z"),
+        eventId: "event-3",
+        vehicleSessionId: "session-2",
+        vehicleNumber: "KA01CD5678",
+        direction: "loading",
+        boxCount: 2,
+        Image: "/incidents/stock/event-3.jpg",
+        classificationConfidence: 0.95,
+      },
+    ]);
+
+    const logsContext = serviceCtx({
+      user_id: admin.user_id,
+      adminId: admin._id,
+      query: {
+        skip: "0",
+        limit: "10",
+        startDate: "2026-09-30",
+        endDate: "2026-09-30",
+      },
+    });
+    await IncidentsService.getLoadingUnloadingStockCountingLogs(
+      logsContext.req,
+      logsContext.res,
+      logsContext.next,
+    );
+
+    expect(logsContext.res.statusCode).toBe(200);
+    const result = payload(logsContext.res).data;
+    expect(result.totalCount).toBe(2);
+    const vehicle = result.data.find((row) => row.vehicleNumber === "MH12AB1234");
+    expect(vehicle).toMatchObject({
+      direction: "both",
+      boxCount: 8,
+      count: 8,
+      loadedBoxCount: 5,
+      unloadedBoxCount: 3,
+      eventCount: 2,
+      sessionCount: 1,
+      Image: "/incidents/stock/event-2.jpg",
+    });
+    expect(vehicle.events).toHaveLength(2);
+    expect(vehicle.events).toEqual([
+      expect.objectContaining({
+        eventId: "event-2",
+        direction: "unloading",
+        boxCount: 3,
+        Image: "/incidents/stock/event-2.jpg",
+      }),
+      expect.objectContaining({
+        eventId: "event-1",
+        direction: "loading",
+        boxCount: 5,
+        Image: "/incidents/stock/event-1.jpg",
+      }),
+    ]);
+    const filteredContext = serviceCtx({
+      user_id: admin.user_id,
+      adminId: admin._id,
+      query: {
+        skip: "0",
+        limit: "10",
+        startDate: "2026-09-30",
+        endDate: "2026-09-30",
+        vehicleNumber: "mh12ab1234",
+      },
+    });
+    await IncidentsService.getLoadingUnloadingStockCountingLogs(
+      filteredContext.req,
+      filteredContext.res,
+      filteredContext.next,
+    );
+    const filteredResult = payload(filteredContext.res).data;
+    expect(filteredResult.totalCount).toBe(1);
+    expect(filteredResult.data[0]).toMatchObject({
+      vehicleNumber: "MH12AB1234",
+      boxCount: 8,
+    });
+  });
+});
+
 describe("v2 industrial detection incidents and logs", () => {
   it.each(CASES)(
     "creates and lists $incidentType",
-    async ({ settingType, incidentType, SettingModel, IncidentModel, logMethod }) => {
+    async ({ settingType, incidentType, SettingModel, IncidentModel, logMethod, incidentFields = {} }) => {
       const nvr = await NVR.create({
         userId: admin.user_id,
         nvrName: "Industrial NVR",
@@ -134,7 +292,11 @@ describe("v2 industrial detection incidents and logs", () => {
           alerts: [],
           NVRId: nvr._id.toString(),
           channelId: [channel._id.toString()],
-          settings: { levelOfImportance: "high", metricType: "gauge" },
+          settings: {
+            levelOfImportance: "high",
+            metricType: "gauge",
+            ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
+          },
         },
       });
       await DetectionSettingsService.createDetectionSettings(
@@ -165,6 +327,7 @@ describe("v2 industrial detection incidents and logs", () => {
           triggerNotification: true,
           adminId: admin._id.toString(),
           count: 1,
+          ...incidentFields,
         },
       });
 
@@ -179,6 +342,23 @@ describe("v2 industrial detection incidents and logs", () => {
       const saved = await IncidentModel.findOne({ incidentType });
       expect(saved.timeOfIncident.toISOString()).toBe("2026-09-21T12:30:45.000Z");
       expect(saved.alertThreshold).toBe(400);
+      if (settingType === "loadingUnloadingStockCountingSettings") {
+        const savedSetting = await SettingModel.findOne({ settingType });
+        expect(savedSetting.settings.mode).toBe("loading");
+
+        const retryContext = serviceCtx({
+          user_id: admin.user_id,
+          adminId: admin._id,
+          body: { ...createContext.req.body },
+        });
+        await IncidentsService.createIncidents(
+          retryContext.req,
+          retryContext.res,
+          retryContext.next,
+        );
+        expect(payload(retryContext.res).data.duplicate).toBe(true);
+        expect(await IncidentModel.countDocuments({ incidentType })).toBe(1);
+      }
 
       const logsContext = serviceCtx({
         user_id: admin.user_id,

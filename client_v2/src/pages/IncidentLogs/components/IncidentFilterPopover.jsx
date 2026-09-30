@@ -33,12 +33,21 @@ const IncidentFilterPopover = ({
   showStatus = false,
   status,
   setStatus,
+  showVehicleNumber = false,
+  vehicleNumber = '',
+  setVehicleNumber,
 }) => {
   const activeFiltersCount = useMemo(
     () =>
-      [nvrIds.length > 0, channelIds.length > 0, showSeverity && !!severity, showStatus && !!status].filter(Boolean)
+      [
+        nvrIds.length > 0,
+        channelIds.length > 0,
+        showSeverity && !!severity,
+        showStatus && !!status,
+        showVehicleNumber && !!vehicleNumber.trim(),
+      ].filter(Boolean)
         .length,
-    [nvrIds, channelIds, severity, showSeverity, showStatus, status]
+    [nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber]
   );
 
   const resetFilters = () => {
@@ -46,6 +55,7 @@ const IncidentFilterPopover = ({
     setChannelIds([]);
     if (showSeverity) setSeverity('');
     if (showStatus) setStatus('');
+    if (showVehicleNumber) setVehicleNumber('');
   };
 
   return (
@@ -98,6 +108,25 @@ const IncidentFilterPopover = ({
               maxHeight="max-h-40"
               msg="No Camera Found"
             />
+            {showVehicleNumber && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="incident-vehicle-number-filter"
+                  className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]"
+                >
+                  Vehicle Number
+                </label>
+                <input
+                  id="incident-vehicle-number-filter"
+                  type="text"
+                  value={vehicleNumber}
+                  onChange={(event) => setVehicleNumber(event.target.value.toUpperCase())}
+                  placeholder="e.g. MH12AB1234"
+                  autoComplete="off"
+                  className="h-9 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] px-3 text-sm font-medium uppercase text-[var(--tx)] outline-none placeholder:normal-case placeholder:text-[var(--tx3)] focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/15"
+                />
+              </div>
+            )}
             {showSeverity && (
               <InlineSelect
                 value={severity}

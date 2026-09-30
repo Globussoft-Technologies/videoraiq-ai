@@ -566,6 +566,64 @@ const SpillsDirtyMessyAreasDetectionIncident = Incident.discriminator(
   SpillsDirtyMessyAreasDetectionSchema,
 );
 
+const LoadingUnloadingStockCountingDetectionSchema = new Schema({
+  // DS event identity. eventId is unique per detection event, while
+  // vehicleSessionId ties all stock movements from the same vehicle visit
+  // together. Both remain optional so older detector versions can still post.
+  schemaVersion: { type: String, default: "1.0" },
+  eventId: { type: String, default: null, index: true },
+  vehicleSessionId: { type: String, default: null, index: true },
+  vehicleNumber: { type: String, default: null, index: true },
+  direction: {
+    type: String,
+    enum: ["loading", "unloading"],
+    default: undefined,
+  },
+  lineCrossingDirection: {
+    type: String,
+    enum: ["entry", "exit"],
+    default: undefined,
+  },
+  boxType: { type: String, default: undefined },
+  // Leave missing values undefined so the logs aggregation can distinguish a
+  // legacy `count` payload from a real zero-box event.
+  boxCount: { type: Number, default: undefined, min: 0 },
+  countMethod: { type: String, default: null },
+  classificationStatus: { type: String, default: null },
+  classificationConfidence: { type: Number, default: null, min: 0 },
+  defaultCountApplied: { type: Boolean, default: undefined },
+  truckPresent: { type: Boolean, default: undefined },
+  adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+
+  // Legacy fields are retained for payload compatibility. New DS builds use
+  // direction + boxCount, and the logs service falls back to these fields for
+  // historical records created before schemaVersion 1.0.
+  count: { type: Number, default: 0, min: 0 },
+  stockMovement: {
+    type: String,
+    enum: ["loading", "unloading"],
+    default: undefined,
+  },
+  stockCountBefore: { type: Number, default: null, min: 0 },
+  stockCountAfter: { type: Number, default: null, min: 0 },
+  alertThreshold: { type: Number, default: 1 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const LoadingUnloadingStockCountingIncident = Incident.discriminator(
+  "loadingUnloadingStockCountingDetection",
+  LoadingUnloadingStockCountingDetectionSchema,
+);
+
+const BlurredCameraDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 80 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const BlurredCameraDetectionIncident = Incident.discriminator(
+  "blurredCameraDetection",
+  BlurredCameraDetectionSchema,
+);
+
 // Cylinder Stack Height Detection
 const loiteringDetectionSchema = new Schema({
   count: {type:Number,default:0},
@@ -737,4 +795,6 @@ export  {
   SandDustWasteScrapDisposalDetectionIncident,
   UnauthorizedAnimalEntryDetectionIncident,
   SpillsDirtyMessyAreasDetectionIncident,
+  LoadingUnloadingStockCountingIncident,
+  BlurredCameraDetectionIncident,
 };

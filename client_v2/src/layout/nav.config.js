@@ -99,6 +99,8 @@ const stevinrockLogItems = [
   { key: 'waste-disposal', label: 'Sand, Dust, Waste & Scrap Disposal Logs', path: 'logs/waste-disposal', icon: Trash2, permissionKey: 'logs', permissionSubKey: 'wasteDisposalLogs', logsConfigKey: 'wasteDisposalLogs' },
   { key: 'animal-entry', label: 'Unauthorized Animal Entry Logs', path: 'logs/animal-entry', icon: PawPrint, permissionKey: 'logs', permissionSubKey: 'animalEntryLogs', logsConfigKey: 'animalEntryLogs' },
   { key: 'messy-area', label: 'Messy Area Logs', path: 'logs/messy-area', icon: BrushCleaning, permissionKey: 'logs', permissionSubKey: 'messyAreaLogs', logsConfigKey: 'messyAreaLogs' },
+  { key: 'stock-counting', label: 'Loading/Unloading Stock Logs', path: 'logs/stock-counting', icon: PackageSearch, permissionKey: 'logs', permissionSubKey: 'stockCountingLogs', logsConfigKey: 'stockCountingLogs' },
+  { key: 'blurred-camera', label: 'Blurred Camera Logs', path: 'logs/blurred-camera', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'blurredCameraLogs', logsConfigKey: 'blurredCameraLogs' },
 ];
 
 /**
@@ -254,6 +256,8 @@ export const VIEW_META = {
   'waste-disposal': { title: 'Waste Disposal Logs', sub: 'Sand, dust, waste and scrap disposal detections' },
   'animal-entry': { title: 'Unauthorized Animal Entry Logs', sub: 'Unauthorized animal entry detections' },
   'messy-area': { title: 'Messy Area Logs', sub: 'Spill, dirty and messy-area detections' },
+  'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
+  'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

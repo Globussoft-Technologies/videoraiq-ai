@@ -138,6 +138,16 @@ router.get(
   incidentsController.getSpillsDirtyMessyAreasDetectionLogs,
 );
 router.get(
+  "/logs/loading-unloading-stock-counting-detection",
+  viewAccessCheck,
+  incidentsController.getLoadingUnloadingStockCountingLogs,
+);
+router.get(
+  "/logs/blurred-camera-detection",
+  viewAccessCheck,
+  incidentsController.getBlurredCameraDetectionLogs,
+);
+router.get(
   "/logs/unauthorized-access",
   viewAccessCheck,
   incidentsController.getUnauthorizedAccessLogs,

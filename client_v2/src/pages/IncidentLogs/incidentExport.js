@@ -6,12 +6,19 @@ import { toast } from 'sonner';
 import { fetchIncidentLogs } from './Api';
 import { formatStatus } from './incidentColumns';
 
+const resolveIncidentImageUrl = (value) => {
+  if (!value) return '';
+  const image = String(value).trim();
+  if (/^(https?:|data:|blob:)/i.test(image)) return image;
+  return `${import.meta.env.VITE_INCIDENT_URL || ''}${image}`;
+};
+
 /**
  * Fetch the full (unpaginated) result set for export using the current filters,
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
 const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, searchInput } = params;
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, searchInput, vehicleNumber } = params;
 
   const res = await fetchIncidentLogs({
     endpoint: config.endpoint,
@@ -27,9 +34,9 @@ const fetchAllForExport = async (config, params) => {
     severity,
     status,
     search: searchInput,
+    vehicleNumber,
   });
 
-  const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
   const list = res?.data?.body?.data?.data || [];
   return list.map((item) => {
     let evidenceScoreStr = '--';
@@ -42,17 +49,28 @@ const fetchAllForExport = async (config, params) => {
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
-      createdAt: item.createdAt
-        ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+      createdAt: item.timeOfIncident || item.createdAt
+        ? moment.utc(item.timeOfIncident || item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
         : '--',
       severity: item.severity || '--',
-      incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : '',
+      incidentImageUrl: resolveIncidentImageUrl(item.Image),
       fireCount: item.fireCount ?? '--',
       smokeCount: item.smokeCount ?? '--',
       count: item.count ?? '--',
       alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
       evidenceScore: evidenceScoreStr,
+      stockMovement: item.stockMovement || '--',
+      stockCountBefore: item.stockCountBefore ?? '--',
+      stockCountAfter: item.stockCountAfter ?? '--',
+      vehicleNumber: item.vehicleNumber || (config.showStockCountingFields ? 'Unknown' : '--'),
+      direction: item.direction || item.stockMovement || '--',
+      boxTypes: (item.boxTypes || (item.boxType ? [item.boxType] : [])).join(', ') || '--',
+      loadedBoxCount: item.loadedBoxCount ?? 0,
+      unloadedBoxCount: item.unloadedBoxCount ?? 0,
+      boxCount: item.boxCount ?? item.count ?? 0,
+      eventCount: item.eventCount ?? 0,
+      sessionCount: item.sessionCount ?? 0,
     };
   });
 };
@@ -90,6 +108,19 @@ const buildExportColumns = (config) => {
       ...(config.showAlertThreshold === false
         ? []
         : [{ key: 'alertThreshold', label: 'Alert Threshold' }])
+    );
+  }
+
+  if (config.showStockCountingFields) {
+    cols.push(
+      { key: 'vehicleNumber', label: 'Vehicle Number' },
+      { key: 'direction', label: 'Movement' },
+      { key: 'boxTypes', label: 'Box Type' },
+      { key: 'loadedBoxCount', label: 'Loaded Boxes' },
+      { key: 'unloadedBoxCount', label: 'Unloaded Boxes' },
+      { key: 'boxCount', label: 'Total Boxes' },
+      { key: 'eventCount', label: 'Events' },
+      { key: 'sessionCount', label: 'Sessions' }
     );
   }
 
@@ -264,6 +295,17 @@ const exportToGridPDF = async (config, params) => {
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);
       if (config.showAlertThreshold !== false) details.push(['Alert Threshold', 'alertThreshold']);
+    }
+    if (config.showStockCountingFields) {
+      details.push(
+        ['Vehicle', 'vehicleNumber'],
+        ['Movement', 'direction'],
+        ['Box Type', 'boxTypes'],
+        ['Loaded', 'loadedBoxCount'],
+        ['Unloaded', 'unloadedBoxCount'],
+        ['Total Boxes', 'boxCount'],
+        ['Events', 'eventCount']
+      );
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;

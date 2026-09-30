@@ -251,6 +251,7 @@ describe("PythonService.startNewDetection", () => {
     "sandDustWasteScrapDisposalDetectionSettings",
     "unauthorizedAnimalEntryDetectionSettings",
     "spillsDirtyMessyAreasDetectionSettings",
+    "loadingUnloadingStockCountingSettings",
   ])("builds the exact DS payload for %s", async (mode) => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 
@@ -261,6 +262,7 @@ describe("PythonService.startNewDetection", () => {
       stream_url: "rtsp://industrial.test/stream",
       detection_modes: [mode],
       zones: [[1, 2]],
+      zone_configs: [{ name: "Loading Bay" }],
       severity: "high",
     });
 
@@ -269,7 +271,99 @@ describe("PythonService.startNewDetection", () => {
       nvr_id: "industrial-nvr",
       admin_id: "industrial-admin",
       stream_url: "rtsp://industrial.test/stream",
-      detectors: [{ name: mode }],
+      detectors: [{
+        name: mode,
+        zones: [[1, 2]],
+        zone_configs: [{ name: "Loading Bay" }],
+        ...(mode === "loadingUnloadingStockCountingSettings"
+          ? { trigger_notification: true }
+          : { severity: "high" }),
+      }],
+    });
+  });
+
+  it("omits legacy stock movement modes from the DS payload", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    await PythonService.startNewDetection({
+      camera_id: "stock-camera",
+      nvr_id: "stock-nvr",
+      admin_id: "stock-admin",
+      stream_url: "rtsp://stock.test/stream",
+      detection_modes: ["loadingUnloadingStockCountingSettings"],
+      zones: [
+        [[0, 0], [10, 0], [10, 10]],
+        [[20, 20], [30, 20], [30, 30]],
+      ],
+      zone_configs: [
+        { name: "Loading Bay", mode: "loading" },
+        { name: "Unloading Bay", mode: "unloading" },
+      ],
+      confidence_thresholds: { mode: "both" },
+    });
+
+    expect(axios.post.mock.calls[0][1].detectors).toEqual([{
+      name: "loadingUnloadingStockCountingSettings",
+      zones: [
+        [[0, 0], [10, 0], [10, 10]],
+        [[20, 20], [30, 20], [30, 30]],
+      ],
+      zone_configs: [{ name: "Loading Bay" }, { name: "Unloading Bay" }],
+      trigger_notification: true,
+    }]);
+  });
+
+  it("includes the stock crossing line, inside reference point and notification flag", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    await PythonService.startNewDetection({
+      camera_id: "stock-camera",
+      nvr_id: "stock-nvr",
+      admin_id: "stock-admin",
+      stream_url: "rtsp://stock.test/stream",
+      detection_modes: ["loadingUnloadingStockCountingSettings"],
+      zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
+      zone_configs: [{ name: "Loading/Unloading Bay" }],
+      confidence_thresholds: {
+        line_coordinates: [[400, 70], [400, 575]],
+        inside_reference_point: [600, 320],
+        trigger_notification: false,
+      },
+    });
+
+    expect(axios.post.mock.calls[0][1].detectors[0]).toEqual({
+      name: "loadingUnloadingStockCountingSettings",
+      zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
+      zone_configs: [{ name: "Loading/Unloading Bay" }],
+      line_coordinates: [[400, 70], [400, 575]],
+      inside_reference_point: [600, 320],
+      trigger_notification: false,
+    });
+  });
+
+  it("builds the exact blurred-camera detector payload", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    await PythonService.startNewDetection({
+      camera_id: "blur-camera",
+      nvr_id: "blur-nvr",
+      admin_id: "blur-admin",
+      stream_url: "rtsp://blur.test/stream",
+      detection_modes: ["blurredCameraDetectionSettings"],
+      severity: "high",
+      confidence_thresholds: { trigger_notification: true },
+    });
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "blur-camera",
+      nvr_id: "blur-nvr",
+      admin_id: "blur-admin",
+      stream_url: "rtsp://blur.test/stream",
+      detectors: [{
+        name: "blurredCameraDetectionSettings",
+        severity: "high",
+        trigger_notification: true,
+      }],
     });
   });
 
@@ -419,6 +513,7 @@ describe("PythonService.stopNewDetection", () => {
     "sandDustWasteScrapDisposalDetectionSettings",
     "unauthorizedAnimalEntryDetectionSettings",
     "spillsDirtyMessyAreasDetectionSettings",
+    "loadingUnloadingStockCountingSettings",
   ])("stops only the selected industrial detector %s", async (mode) => {
     axios.post.mockResolvedValueOnce({ data: { stopped: true } });
 

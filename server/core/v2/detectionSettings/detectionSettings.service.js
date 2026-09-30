@@ -41,6 +41,8 @@ import {
   sandDustWasteScrapDisposalDetectionSettings,
   unauthorizedAnimalEntryDetectionSettings,
   spillsDirtyMessyAreasDetectionSettings,
+  loadingUnloadingStockCountingSettings,
+  blurredCameraDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -90,6 +92,8 @@ import {
   SandDustWasteScrapDisposalDetectionSetting,
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
+  LoadingUnloadingStockCountingSetting,
+  BlurredCameraDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -149,6 +153,8 @@ const modelMap = {
   sandDustWasteScrapDisposalDetectionSettings: SandDustWasteScrapDisposalDetectionSetting,
   unauthorizedAnimalEntryDetectionSettings: UnauthorizedAnimalEntryDetectionSetting,
   spillsDirtyMessyAreasDetectionSettings: SpillsDirtyMessyAreasDetectionSetting,
+  loadingUnloadingStockCountingSettings: LoadingUnloadingStockCountingSetting,
+  blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -1753,6 +1759,8 @@ class DetectionSettingService {
         sandDustWasteScrapDisposalDetectionSettings,
         unauthorizedAnimalEntryDetectionSettings,
         spillsDirtyMessyAreasDetectionSettings,
+        loadingUnloadingStockCountingSettings,
+        blurredCameraDetectionSettings,
       };
 
       return res.status(200).json(

@@ -746,6 +746,20 @@ class IncidentsController {
     return incidentsService.getSpillsDirtyMessyAreasDetectionLogs(req, res, next);
   }
 
+  async getLoadingUnloadingStockCountingLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Loading/Unloading Stock Counting Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getLoadingUnloadingStockCountingLogs(req, res, next);
+  }
+
+  async getBlurredCameraDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Blurred Camera Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getBlurredCameraDetectionLogs(req, res, next);
+  }
+
   async getUnauthorizedAccessLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Unauthorized Access logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, search. Paginated via skip/limit.'

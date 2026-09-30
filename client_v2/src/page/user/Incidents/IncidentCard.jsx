@@ -34,6 +34,7 @@ const INDUSTRIAL_DETECTION_TYPES = new Set([
   'sandDustWasteScrapDisposalDetection',
   'unauthorizedAnimalEntryDetection',
   'spillsDirtyMessyAreasDetection',
+  'loadingUnloadingStockCountingDetection',
 ]);
 
 // These two incident types show their detected count, but not the threshold
@@ -52,7 +53,9 @@ const HIDE_ALERT_THRESHOLD_TYPES = new Set([
  * Exported so the Incident Center lightbox shows exactly the same thing.
  */
 export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, variant = 'card', showPlate = true }) {
-  if (!hasReadablePlate(item?.vehicleNumber)) return null;
+  const hasPlate = hasReadablePlate(item?.vehicleNumber);
+  const stockCounting = item?.incidentType === 'loadingUnloadingStockCountingDetection';
+  if (!hasPlate && !stockCounting) return null;
 
   const dark = variant === 'lightbox';
   const plateStyle = dark
@@ -61,9 +64,9 @@ export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, vari
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-      {showPlate && <span style={plateStyle}>{formatPlate(item.vehicleNumber)}</span>}
+      {showPlate && <span style={plateStyle}>{hasPlate ? formatPlate(item.vehicleNumber) : 'Unknown'}</span>}
 
-      {item.taggedUser ? (
+      {hasPlate && (item.taggedUser ? (
         <span style={{
           display: 'flex', alignItems: 'center', gap: 5, minWidth: 0,
           fontSize: dark ? 13 : 11.5,
@@ -131,7 +134,7 @@ export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, vari
         <span style={{ fontSize: 11.5, color: dark ? 'rgba(255,255,255,.5)' : 'var(--tx3)' }}>
           Not tagged
         </span>
-      )}
+      ))}
     </div>
   );
 }

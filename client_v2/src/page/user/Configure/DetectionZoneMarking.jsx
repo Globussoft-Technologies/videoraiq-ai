@@ -14,6 +14,7 @@ import {
   DEFAULT_MAX_POINTS,
   MIN_POINTS_TO_CLOSE,
   isAttendanceDetectionType,
+  isStockCountingType,
   isVehicleCheckInOutType,
 } from './DetectionZoneMarking/constants';
 import { allTypesFor, extraFieldsFor, lineFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
@@ -101,6 +102,9 @@ export default function DetectionZoneMarking({
   // type, PLUS one crossing line (+ inside reference point) via a dedicated
   // line sub-tool. So it keeps the full polygon toolbar and adds "Draw Line".
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
+  const isStockCounting = isStockCountingType(activeType?.settingType);
+  const hasAuxiliaryLine = isCheckInOut || isStockCounting;
+  const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // A line only needs its 2 endpoints (+ inside reference point) to be savable;
   // every other type still needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
   const minPointsToSave = isLineCrossing ? 3 : MIN_POINTS_TO_CLOSE;
@@ -146,7 +150,7 @@ export default function DetectionZoneMarking({
     setLineDrawing(false);
     setLinePoints([]);
     setLineZone(
-      isVehicleCheckInOutType(activeType?.settingType)
+      (isVehicleCheckInOutType(activeType?.settingType) || isStockCountingType(activeType?.settingType))
         ? lineFor(activeType?.setting)
         : { points: [], insideReferencePoint: null },
     );
@@ -513,7 +517,7 @@ export default function DetectionZoneMarking({
     // Check-In / Check-Out: the polygon zones above are saved as usual; a single
     // crossing line + inside reference point ride alongside in their own keys.
     const line = lineOverride || lineZone;
-    const checkInOutExtras = isCheckInOut
+    const auxiliaryLineExtras = hasAuxiliaryLine
       ? {
           line_coordinates: (line.points || []).slice(0, 2).map(p => [p.x, p.y]),
           ...(line.insideReferencePoint
@@ -522,8 +526,15 @@ export default function DetectionZoneMarking({
                 Number(line.insideReferencePoint.y),
               ] }
             : {}),
-          camType: ['checkin', 'checkout'],
-          zone_name: laneName || activeType.setting?.settings?.zone_name || detectionName || undefined,
+          ...(isCheckInOut
+            ? {
+                camType: ['checkin', 'checkout'],
+                zone_name: laneName || activeType.setting?.settings?.zone_name || detectionName || undefined,
+              }
+            : {}),
+          ...(isStockCounting
+            ? { trigger_notification: activeType.setting?.settings?.trigger_notification ?? true }
+            : {}),
         }
       : null;
     const zoneConfigs = nextZones.map(z => ({
@@ -545,6 +556,8 @@ export default function DetectionZoneMarking({
     const savedSettingType = isAttendanceDetection ? ATTENDANCE_DETECTION_SETTING_TYPE : activeType.settingType;
     if (activeType.settingId) {
       const setting = activeType.setting;
+      const storedSettings = { ...(setting.settings || {}) };
+      if (isStockCounting) delete storedSettings.mode;
       const fallbackTelegramChatId =
         nextZones.find(zone => Array.isArray(zone?.telegramChatIds) && zone.telegramChatIds.length)?.telegramChatIds?.[0] ||
         nextZones.find(zone => String(zone?.telegramChatId || '').trim())?.telegramChatId ||
@@ -567,7 +580,7 @@ export default function DetectionZoneMarking({
         enabled: setting.enabled,
         channelId: [camera._id],
         settings: {
-          ...setting.settings,
+          ...storedSettings,
           levelOfImportance: priority ?? setting.settings?.levelOfImportance,
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
@@ -575,7 +588,7 @@ export default function DetectionZoneMarking({
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
-          ...(checkInOutExtras || {}),
+          ...(auxiliaryLineExtras || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -608,7 +621,7 @@ export default function DetectionZoneMarking({
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
-          ...(checkInOutExtras || {}),
+          ...(auxiliaryLineExtras || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -635,7 +648,7 @@ export default function DetectionZoneMarking({
     // The in-progress polygon on the canvas is folded straight into the save,
     // so drawing once and hitting Save works without a separate commit step.
     if (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave) return;
-    if (isCheckInOut && !hasLine) {
+    if (hasAuxiliaryLine && !hasLine) {
       toast.error('Draw the crossing line and its inside reference point before saving.');
       return;
     }
@@ -766,9 +779,9 @@ export default function DetectionZoneMarking({
     const nextZones = zones.filter((_, i) => i !== index);
     if (!activeType?.settingId) {
       setZones(nextZones); // never saved â€” just drop it locally
-      if (isCheckInOut && nextZones.length === 0) {
+      if (hasAuxiliaryLine && nextZones.length === 0) {
         setLineZone({ points: [], insideReferencePoint: null });
-        setLaneNameDraft('');
+        if (isCheckInOut) setLaneNameDraft('');
       }
       setZoneDeleteIndex(null);
       return;
@@ -778,11 +791,11 @@ export default function DetectionZoneMarking({
       // Check-In / Check-Out needs at least one zone to mean anything â€” deleting
       // the last one resets this camera's detection link (line included)
       // instead of leaving an orphaned line with zero zones behind it.
-      if (isCheckInOut && nextZones.length === 0) {
+      if (hasAuxiliaryLine && nextZones.length === 0) {
         await deleteZoneDetectionSetting(activeType.settingId, camera._id);
         setZones([]);
         setLineZone({ points: [], insideReferencePoint: null });
-        setLaneNameDraft('');
+        if (isCheckInOut) setLaneNameDraft('');
         toast.success('Detection settings reset successfully.');
       } else {
         await persistZones({ nextZones, lineOverride: effectiveLine });
@@ -811,6 +824,10 @@ export default function DetectionZoneMarking({
       toast.success('Detection settings reset successfully.');
       setZones([]);
       setPoints([]);
+      if (hasAuxiliaryLine) {
+        setLineZone({ points: [], insideReferencePoint: null });
+        setLinePoints([]);
+      }
       setShowDeleteConfirm(false);
       onSaved?.();
     } catch (err) {
@@ -1001,7 +1018,7 @@ export default function DetectionZoneMarking({
                 Crossing is always exactly 2 points, so the +/- stepper (which
                 adjusts a polygon's point cap) doesn't apply and is hidden. */}
             <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
-              {!isLineCrossing && (
+              {!isLineCrossing && !isBlurredCameraDetection && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); decreaseMaxPoints(); }}
@@ -1036,7 +1053,7 @@ export default function DetectionZoneMarking({
                 shape renders in blue so it's visually distinct while drawing. Line Crossing draws
                 an open line (polyline, no fill) instead of a closed filled polygon â€” it's a
                 crossing line, not an area. */}
-            {isFullscreen && (
+            {isFullscreen && !isBlurredCameraDetection && (
               <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 8 }}>
                 <button
                   type="button"
@@ -1087,7 +1104,7 @@ export default function DetectionZoneMarking({
                       // Check-In/Check-Out keeps the polygon tools for its gate
                       // zones and adds the crossing-line sub-tool, same as the
                       // docked toolbar (ZoneToolbar's drawLineButton).
-                      ...(isCheckInOut
+                      ...(hasAuxiliaryLine
                         ? [{
                             label: lineDrawing ? 'Stop Line' : 'Draw Line',
                             icon: Pencil,
@@ -1195,8 +1212,8 @@ export default function DetectionZoneMarking({
                 </g>
               ))}
 
-              {/* Check-In / Check-Out crossing line + inside reference point */}
-              {isCheckInOut && videoSize.w > 0 && (() => {
+              {/* Crossing line + inside reference point used by vehicle and stock flows. */}
+              {hasAuxiliaryLine && videoSize.w > 0 && (() => {
                 const committed = lineZone.points.length >= 2;
                 const linePts = committed ? lineZone.points : linePoints.slice(0, 2);
                 const refPt = committed
@@ -1324,15 +1341,15 @@ export default function DetectionZoneMarking({
               </span>
             )}
 
-            {zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
+            {!isBlurredCameraDetection && zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <span style={{
                   fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',
                   background: 'rgba(8,11,17,.6)', border: '1px solid rgba(255,255,255,.15)',
                   borderRadius: 20, padding: '6px 14px',
                 }}>
-                  {isCheckInOut
-                    ? 'click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the gate zones'
+                  {hasAuxiliaryLine
+                    ? `click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the ${isStockCounting ? 'stock' : 'gate'} zones`
                     : isLineCrossing
                     ? 'click "Draw Line", then click two line endpoints and one inside reference point'
                     : 'click "Start Drawing", then click to place zone points'}
@@ -1341,10 +1358,10 @@ export default function DetectionZoneMarking({
             )}
           </div>
 
-          <ZoneToolbar
+          {!isBlurredCameraDetection && <ZoneToolbar
             activeType={activeType}
             isLineCrossing={isLineCrossing}
-            isCheckInOut={isCheckInOut}
+            isCheckInOut={hasAuxiliaryLine}
             lineDrawing={lineDrawing}
             onDrawLine={startLineDrawing}
             drawing={drawing}
@@ -1364,7 +1381,7 @@ export default function DetectionZoneMarking({
             onUndo={handleUndo}
             onClearAll={handleClearAllClick}
             onSave={handleOpenSaveModal}
-          />
+          />}
         </div>
 
         {/* Right rail */}
@@ -1390,7 +1407,7 @@ export default function DetectionZoneMarking({
               </div>
             </div>
 
-            {activeType && (
+            {activeType && !isBlurredCameraDetection && (
               <ZoneSettingsPanel
                 zones={zones}
                 extraFields={extraFieldsFor(activeType.settingType)}
@@ -1415,7 +1432,7 @@ export default function DetectionZoneMarking({
               />
             )}
 
-            {activeType && (
+            {activeType && !isBlurredCameraDetection && (
               <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
@@ -1481,7 +1498,7 @@ export default function DetectionZoneMarking({
         )}
       </div>
 
-      {embedded && zoneSettingsOpen && activeType && createPortal(
+      {embedded && zoneSettingsOpen && activeType && !isBlurredCameraDetection && createPortal(
         <div
           onClick={onZoneSettingsClose}
           style={{
@@ -1552,7 +1569,7 @@ export default function DetectionZoneMarking({
         document.body,
       )}
 
-      {showSaveModal && activeType && (
+      {showSaveModal && activeType && !isBlurredCameraDetection && (
         <SaveDetectionAreaModal
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}

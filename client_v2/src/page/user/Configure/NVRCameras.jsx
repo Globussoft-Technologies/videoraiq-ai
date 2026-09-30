@@ -123,6 +123,8 @@ const ENGINE_LABELS = {
   sandDustWasteScrapDisposalDetectionSettings: 'WASTE',
   unauthorizedAnimalEntryDetectionSettings: 'ANML',
   spillsDirtyMessyAreasDetectionSettings: 'MESSY',
+  loadingUnloadingStockCountingSettings: 'STOCK',
+  blurredCameraDetectionSettings: 'BLUR',
 };
 
 const ENGINE_NAMES = {
@@ -156,6 +158,8 @@ const ENGINE_NAMES = {
   sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
+  loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
+  blurredCameraDetectionSettings: 'Blurred Camera Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {
