@@ -401,7 +401,10 @@ const StockCountingAnalytics = () => {
     stroke: { curve: 'smooth', width: 2 },
     fill: { type: 'gradient', gradient: { opacityFrom: 0.35, opacityTo: 0.04 } },
     tooltip: { enabled: false },
-    yaxis: { show: false, min: 0, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
+    // Let each compact chart scale to its own range. Pinning the minimum to
+    // zero compresses low-variance data into an almost straight horizontal
+    // line instead of the clearly visible wave used by the stat-card design.
+    yaxis: { show: false, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
     xaxis: {
       categories: points.map((_, index) => index),
       labels: { show: false },
