@@ -8,7 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
-import { putMedia } from "../../../utils/mediaStorage.js";
+import { putMediaV2 as putMedia } from "../adminStorage/mediaStorage.v2.js";
 import Admin from "../admin/admin.model.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import MeasurementIncident from "../measurementLogs/measurementLog.model.js";
@@ -423,7 +423,7 @@ function summariseRows(rows) {
   };
 }
 
-async function uploadFiles(report, buffers) {
+export async function uploadFiles(report, buffers) {
   const stamp = moment().format("YYYY-MM-DD");
   const base = `qc-measurement-${stamp}`;
   const folderName = String(report.adminId);
@@ -431,6 +431,7 @@ async function uploadFiles(report, buffers) {
   for (const [format, buffer] of Object.entries(buffers)) {
     if (!buffer) continue;
     const path = await putMedia({
+      adminId: report.adminId,
       buffer,
       mediaType: "report",
       folderName,

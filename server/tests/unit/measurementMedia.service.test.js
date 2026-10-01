@@ -158,11 +158,48 @@ describe("measurement media upload", () => {
       }),
     }));
     expect(mocks.putMedia).toHaveBeenCalledWith(expect.objectContaining({
+      adminId: undefined,
       mediaType: "image",
       folderName: "measurement-results",
       objectId: expect.stringMatching(/^[a-f\d]{32}$/),
     }));
     expect(mocks.putFallback).not.toHaveBeenCalled();
+  });
+
+  it("uses the authenticated admin and scopes SKU incident lookup to that tenant", async () => {
+    let inserted;
+    mocks.incidentFindOne.mockReturnValue({
+      sort: vi.fn().mockReturnValue(result(null)),
+    });
+    mocks.mediaFindOneAndUpdate
+      .mockImplementationOnce((_filter, update) => {
+        inserted = { _id: "asset-db-id", ...update.$setOnInsert };
+        return result(inserted);
+      })
+      .mockImplementationOnce((_filter, update) => result({ ...inserted, ...update.$set }));
+    mocks.putMedia.mockResolvedValue("/aws/uploads/images/measurement-results/result.jpg");
+
+    const req = uploadRequest();
+    req.verified.userData = {
+      adminId: "69ce6a00d5b1b9d2ca5003b2",
+      user_id: 34,
+    };
+    req.query.sku = "G_OK8478";
+    req.query.stationId = "88:a2:9e:d0:95:ec";
+    const res = responseDouble();
+
+    await service.upload(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.incidentFindOne).toHaveBeenCalledWith({
+      adminId: req.verified.userData.adminId,
+      qrSku: "G_OK8478",
+      stationId: "88:a2:9e:d0:95:ec",
+      status: "pending",
+    });
+    expect(mocks.putMedia).toHaveBeenCalledWith(expect.objectContaining({
+      adminId: req.verified.userData.adminId,
+    }));
   });
 
   it("returns a renderable backend path after saving a failed cloud upload to MinIO", async () => {

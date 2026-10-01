@@ -71,14 +71,15 @@ function responseData(asset) {
   };
 }
 
-async function findIncident({ incidentId, sku, stationId }) {
+async function findIncident({ incidentId, sku, stationId, adminId }) {
   if (incidentId && mongoose.isValidObjectId(incidentId)) {
     const byId = await MeasurementIncident.findById(incidentId).lean();
-    if (byId) return byId;
+    if (byId && (!adminId || String(byId.adminId) === String(adminId))) return byId;
   }
   const normalizedSku = clean(sku).toUpperCase();
   if (!normalizedSku) return null;
   const filter = { qrSku: normalizedSku, status: "pending" };
+  if (adminId) filter.adminId = String(adminId);
   const normalizedStation = clean(stationId).toLowerCase();
   if (normalizedStation) filter.stationId = normalizedStation;
   return MeasurementIncident.findOne(filter).sort({ createdAt: -1 }).lean();
@@ -429,10 +430,12 @@ class MeasurementMediaService {
     }
 
     try {
+      const tokenAdminId = clean(req.verified?.userData?.adminId);
       const incident = await findIncident({
         incidentId: req.query.incidentId,
         sku: req.query.sku,
         stationId: req.query.stationId,
+        adminId: tokenAdminId,
       });
       const suppliedKey = clean(req.get("x-idempotency-key") || req.query.idempotencyKey);
       const contentType = file.mimetype || mime.lookup(file.originalname) || "application/octet-stream";
@@ -441,7 +444,9 @@ class MeasurementMediaService {
         originalName: file.originalname,
         contentType,
         folderName,
-        adminId: incident?.adminId || req.verified?.userData?.adminId || null,
+        // A user JWT is the authoritative tenant identity. Service tokens do
+        // not carry an adminId, so those calls derive it from the incident.
+        adminId: tokenAdminId || incident?.adminId || null,
         incidentId: incident?._id || null,
         stationId: req.query.stationId || incident?.stationId,
         sku: req.query.sku || incident?.qrSku,
