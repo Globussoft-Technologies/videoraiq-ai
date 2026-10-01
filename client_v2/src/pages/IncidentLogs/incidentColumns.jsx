@@ -249,7 +249,11 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       {
         accessorKey: 'vehicleNumber',
         header: sortableHeader('Vehicle Number', 'vehicleNumber', onSort, sortable),
-        cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.vehicleNumber || 'Unknown'}</span>,
+        cell: ({ row }) => (
+          <span className="inline-flex rounded-md border border-[var(--bd2)] bg-[var(--bg2)] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.04em] text-[var(--tx)]">
+            {row.original.vehicleNumber || 'Unknown'}
+          </span>
+        ),
       },
       {
         accessorKey: 'direction',

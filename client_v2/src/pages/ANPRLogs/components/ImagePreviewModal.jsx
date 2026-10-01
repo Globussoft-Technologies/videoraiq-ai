@@ -9,6 +9,7 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
  */
 const ImagePreviewModal = ({
   previewImage,
+  imageKey,
   loading = false,
   setLoading,
   hasPrevious = false,
@@ -171,6 +172,7 @@ const ImagePreviewModal = ({
       }
     >
       <ImageWithLoader
+        key={imageKey || previewImage}
         src={previewImage}
         alt="incident preview"
         className={

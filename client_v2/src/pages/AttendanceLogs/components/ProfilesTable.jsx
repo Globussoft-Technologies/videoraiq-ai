@@ -9,7 +9,7 @@ import 'react-loading-skeleton/dist/skeleton.css';
  * The header row always renders (even with no rows), so switching to
  * table/row view always shows the column headings.
  */
-function ProfilesTable({ data, columns, loading, renderExpandedRow }) {
+function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassName = '' }) {
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const table = useReactTable({
     data,
@@ -37,7 +37,7 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow }) {
   if (loading) {
     return (
       <table className="min-w-full bg-[var(--bg1solid)]">
-        <thead className="bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap">
+        <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap ${headerClassName}`}>
           <tr className="border-b border-[var(--bd)]">
             {expandable && <th className="w-10 px-3 py-3" aria-label="Expand row" />}
             {table.getAllColumns().map((column) => (
@@ -70,7 +70,7 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow }) {
 
   return (
     <table className="min-w-full bg-[var(--bg1solid)]">
-      <thead className="bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap">
+      <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap ${headerClassName}`}>
         <tr className="border-b border-[var(--bd)]">
           {expandable && <th className="w-10 px-3 py-3" aria-label="Expand row" />}
           {table.getAllColumns().map((column) => (

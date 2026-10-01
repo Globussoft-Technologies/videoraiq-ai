@@ -270,7 +270,9 @@ export const STOCK_COUNTING_CONFIG = {
   showVehicleNumberFilter: true,
   vehicleNumbersEndpoint: '/incidents/logs/loading-unloading-stock-counting-detection/numbers',
   tableOnly: true,
+  enableViewExports: false,
   statsLabel: 'Vehicles',
+  useVehicleStyleExport: true,
 };
 
 export const BLURRED_CAMERA_CONFIG = {

@@ -66,7 +66,7 @@ export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, vari
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
       {showPlate && <span style={plateStyle}>{hasPlate ? formatPlate(item.vehicleNumber) : 'Unknown'}</span>}
 
-      {hasPlate && (item.taggedUser ? (
+      {hasPlate && !stockCounting && (item.taggedUser ? (
         <span style={{
           display: 'flex', alignItems: 'center', gap: 5, minWidth: 0,
           fontSize: dark ? 13 : 11.5,

@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
-import { LayoutGrid, List, Loader2 } from 'lucide-react';
+import { LayoutGrid, List, Loader2, Truck } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 
@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/
 import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
+import { handleStockCountingExport } from './stockCountingExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import { getNVRs, getchannels, fetchIncidentLogs, fetchIncidentVehicleNumbers } from './Api';
 
@@ -25,6 +26,10 @@ const incidentImageUrl = (value) => {
   if (/^(https?:|data:|blob:)/i.test(image)) return image;
   return `${import.meta.env.VITE_INCIDENT_URL || ''}${image}`;
 };
+
+const stockEventPreviewKey = (row, event, index) => (
+  `stock-event:${event?._id || event?.eventId || `${row?.aggregationKey || row?._id || 'row'}-${index}`}`
+);
 
 function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
   const exporting = !!exportingFormat;
@@ -114,6 +119,7 @@ const IncidentLogsPage = ({ config }) => {
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
+  const [exportingFormat, setExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
@@ -317,14 +323,33 @@ const IncidentLogsPage = ({ config }) => {
 
   const unauthorizedAccessLogs = config.storagePrefix === 'unauthorized_access';
   const enableViewExports = unauthorizedAccessLogs || config.enableViewExports === true;
-  // Every incident-log configuration uses the same paginated row list, so the
-  // image viewer can navigate through the currently loaded records for all
-  // logs (Wrong Location, Unauthorized Access, Fire/Smoke, etc.).
+  // The stock table keeps its event images inside collapsed row data. Include
+  // those images in navigation even before the user expands a vehicle row.
   const previewNavigationEnabled = true;
-  const previewRows = useMemo(
-    () => (previewNavigationEnabled ? rows.filter((row) => row.incidentImageUrl) : []),
-    [previewNavigationEnabled, rows]
-  );
+  const previewRows = useMemo(() => {
+    if (!previewNavigationEnabled) return [];
+    const items = [];
+    rows.forEach((row) => {
+      if (row.incidentImageUrl) {
+        items.push({
+          previewKey: `incident:${row._id || row.aggregationKey || items.length}`,
+          incidentImageUrl: row.incidentImageUrl,
+        });
+      }
+      if (config.showStockCountingFields) {
+        (row.events || []).forEach((event, index) => {
+          const eventImageUrl = incidentImageUrl(event?.Image);
+          if (eventImageUrl) {
+            items.push({
+              previewKey: stockEventPreviewKey(row, event, index),
+              incidentImageUrl: eventImageUrl,
+            });
+          }
+        });
+      }
+    });
+    return items;
+  }, [previewNavigationEnabled, rows, config.showStockCountingFields]);
 
   const showPreviewAt = useCallback(
     (index) => {
@@ -338,9 +363,13 @@ const IncidentLogsPage = ({ config }) => {
   );
 
   const openPreview = useCallback(
-    (url) => {
+    (url, previewKey) => {
       if (!url) return;
-      setPreviewIndex(previewNavigationEnabled ? previewRows.findIndex((row) => row.incidentImageUrl === url) : -1);
+      setPreviewIndex(previewNavigationEnabled
+        ? previewRows.findIndex((row) => (
+          previewKey ? row.previewKey === previewKey : row.incidentImageUrl === url
+        ))
+        : -1);
       setPreviewImageLoading(true);
       setPreviewImage(url);
     },
@@ -358,58 +387,103 @@ const IncidentLogsPage = ({ config }) => {
       const events = Array.isArray(row?.events) ? row.events : [];
       return (
         <div className="bg-[var(--bg2)] px-5 py-4">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)]">
-            All stock movements for {row?.vehicleNumber || 'Unknown'}
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)]">
+            <span>All stock movements for</span>
+            <Truck
+              className="h-3.5 w-3.5 shrink-0 text-black dark:text-[var(--blue)]"
+              strokeWidth={2.75}
+              aria-hidden="true"
+            />
+            <span>{row?.vehicleNumber || 'Unknown'}</span>
           </div>
           {events.length === 0 ? (
             <div className="py-3 text-xs text-[var(--tx3)]">No individual events are available.</div>
           ) : (
-            <div className="divide-y divide-[var(--bd)] overflow-hidden rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)]">
+            <div className="relative divide-y divide-[var(--bd)] overflow-hidden rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)]">
+              {events.length > 1 && (
+                <span className="absolute bottom-[42px] left-[26px] top-[42px] z-10 w-px bg-[var(--blue)] sm:left-[28px]" />
+              )}
               {events.map((event, index) => {
                 const direction = String(event?.direction || '').toLowerCase();
                 const imageUrl = incidentImageUrl(event?.Image);
+                const eventTime = event?.timeOfIncident
+                  ? moment.utc(event.timeOfIncident).tz(moment.tz.guess())
+                  : null;
                 return (
                   <div
                     key={event?._id || event?.eventId || `${row?.aggregationKey || row?._id}-${index}`}
-                    className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
+                    className="grid min-h-[78px] grid-cols-[20px_82px_60px_125px_minmax(320px,1fr)] items-center gap-x-3 px-4 py-2.5 transition-colors hover:bg-[var(--bg2)] sm:grid-cols-[24px_92px_68px_145px_minmax(360px,1fr)]"
                   >
-                    <span
-                      className={`inline-flex min-w-[76px] justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
-                        direction === 'loading'
-                          ? 'bg-[var(--ok)]/15 text-[var(--ok)]'
-                          : direction === 'unloading'
-                            ? 'bg-[var(--warn)]/15 text-[var(--warn)]'
-                            : 'bg-[var(--bg3)] text-[var(--tx2)]'
-                      }`}
-                    >
-                      {direction || '--'}
-                    </span>
-                    <span className="text-xs font-semibold text-[var(--tx)]">
-                      Boxes: {event?.boxCount ?? 0}
-                    </span>
-                    <span className="text-xs capitalize text-[var(--tx2)]">
-                      Type: {event?.boxType || '--'}
-                    </span>
-                    <span className="text-xs text-[var(--tx2)]">
-                      {event?.timeOfIncident
-                        ? moment.utc(event.timeOfIncident).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
-                        : '--'}
-                    </span>
-                    <span className="text-[11px] text-[var(--tx3)]">
-                      {[event?.nvrName, event?.channelName].filter(Boolean).join(' · ') || '--'}
-                    </span>
-                    {event?.zone && (
-                      <span className="text-[11px] text-[var(--tx3)]">Zone: {event.zone}</span>
-                    )}
-                    {imageUrl && (
+                    <div className="relative flex h-full min-h-[64px] items-center justify-center">
+                      <span className="relative z-20 h-2 w-2 rounded-full bg-[var(--blue)]" />
+                    </div>
+
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-[var(--tx)]">
+                        {eventTime ? eventTime.format('hh:mm A') : '--'}
+                      </div>
+                      <div className="mt-0.5 text-[11px] font-medium text-[var(--tx3)]">
+                        {eventTime ? eventTime.format('DD MMM YYYY') : '--'}
+                      </div>
+                    </div>
+
+                    {imageUrl ? (
                       <button
                         type="button"
-                        onClick={() => openPreview(imageUrl)}
-                        className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--blue)] hover:underline"
+                        onClick={() => openPreview(imageUrl, stockEventPreviewKey(row, event, index))}
+                        className="mt-0.5 h-12 w-[60px] cursor-pointer overflow-hidden rounded-md border border-[var(--bd)] bg-[var(--bg3)] shadow-sm transition hover:border-[var(--blue)] sm:w-16"
+                        title="View incident image"
                       >
-                        View image
+                        <img
+                          src={imageUrl}
+                          alt={`${direction || 'Stock movement'} incident`}
+                          className="h-full w-full object-cover"
+                        />
                       </button>
+                    ) : (
+                      <div className="mt-0.5 flex h-12 w-[60px] items-center justify-center rounded-md border border-[var(--bd)] bg-[var(--bg3)] text-[9px] font-medium text-[var(--tx3)] sm:w-16">
+                        No image
+                      </div>
                     )}
+
+                    <div className="min-w-0 leading-tight">
+                      <div className="truncate text-xs text-[var(--tx2)]">
+                        <span className="font-bold text-[var(--tx)]">NVR Name:</span>{' '}
+                        <span className="font-semibold">{event?.nvrName || '--'}</span>
+                      </div>
+                      <div className="mt-1 truncate text-[11px] text-[var(--tx2)]">
+                        <span className="font-bold text-[var(--tx)]">Camera Name:</span>{' '}
+                        <span className="font-semibold">{event?.channelName || '--'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+                        <span
+                          className={`inline-flex min-w-[76px] justify-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${
+                            direction === 'loading'
+                              ? 'bg-[var(--ok)]/15 text-[var(--ok)]'
+                              : direction === 'unloading'
+                                ? 'bg-[var(--warn)]/15 text-[var(--warn)]'
+                                : 'bg-[var(--bg3)] text-[var(--tx2)]'
+                          }`}
+                        >
+                          {direction || '--'}
+                        </span>
+                        <span className="text-[13px] text-[var(--tx2)]">
+                          <span className="font-bold text-[var(--tx)]">Boxes:</span>{' '}
+                          <span className="font-semibold">{event?.boxCount ?? 0}</span>
+                        </span>
+                        <span className="text-[13px] text-[var(--tx2)]">
+                          <span className="font-bold text-[var(--tx)]">Box Type:</span>{' '}
+                          <span className="font-semibold capitalize">{event?.boxType || '--'}</span>
+                        </span>
+                        {event?.description && (
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--tx2)]" title={event.description}>
+                          <span className="font-bold text-[var(--tx)]">Description:</span>{' '}
+                          {event.description}
+                        </span>
+                        )}
+                    </div>
                   </div>
                 );
               })}
@@ -476,10 +550,18 @@ const IncidentLogsPage = ({ config }) => {
     [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, searchInput]
   );
 
-  const handleExport = useCallback(
-    (format) => handleIncidentExport(format, config, exportParams),
-    [config, exportParams]
-  );
+  const handleExport = useCallback(async (format) => {
+    setExportingFormat(format);
+    try {
+      if (config.useVehicleStyleExport) {
+        await handleStockCountingExport(format, config, exportParams);
+      } else {
+        await handleIncidentExport(format, config, exportParams);
+      }
+    } finally {
+      setExportingFormat('');
+    }
+  }, [config, exportParams]);
 
   const handlePdfExport = useCallback(
     async (format) => {
@@ -504,6 +586,7 @@ const IncidentLogsPage = ({ config }) => {
     <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
       <ImagePreviewModal
         previewImage={previewImage}
+        imageKey={previewRows[previewIndex]?.previewKey}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
         hasPrevious={previewNavigationEnabled && previewIndex > 0}
@@ -536,6 +619,10 @@ const IncidentLogsPage = ({ config }) => {
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
         renderExpandedRow={config.showStockCountingFields ? renderStockEvents : undefined}
+        tableContainerClassName={config.showStockCountingFields ? '!border-[var(--blue)]' : ''}
+        tableHeaderClassName={config.showStockCountingFields
+          ? '!bg-slate-700 !text-white [&_tr]:!border-slate-700 [&_th]:!text-white [&_button]:!text-white'
+          : ''}
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : d);
           let s = start ? toIso(start) : null;
@@ -558,7 +645,15 @@ const IncidentLogsPage = ({ config }) => {
           dispatch({ type: 'SET_END_DATE', value: e });
         }}
       >
-        {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
+        {canEdit && (
+          <ExportButton
+            onClick={() => handleExport('excel')}
+            disabled={Boolean(exportingFormat) || !rows.length}
+            className="disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportingFormat === 'excel' ? 'Exporting…' : 'Excel'}
+          </ExportButton>
+        )}
         {canEdit && enableViewExports ? (
           <PdfViewPopover
             open={pdfViewOpen}
@@ -567,7 +662,15 @@ const IncidentLogsPage = ({ config }) => {
             onSelect={handlePdfExport}
           />
         ) : (
-          canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+          canEdit && (
+            <ExportButton
+              onClick={() => handleExport('pdf')}
+              disabled={Boolean(exportingFormat) || !rows.length}
+              className="disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exportingFormat === 'pdf' ? 'Exporting…' : 'PDF'}
+            </ExportButton>
+          )
         )}
 
         <IncidentFilterPopover
