@@ -30,6 +30,9 @@
   --tx: #e9edf7;
   --tx2: #98a2bd;
   --tx3: #7c88a5;
+  --disabled-bg: #20242d;
+  --disabled-bd: #454b57;
+  --disabled-tx: #a1a7b2;
   --appbg: radial-gradient(1200px 620px at 82% -12%, rgba(168, 85, 247, 0.11), transparent 60%),
     radial-gradient(1000px 520px at -5% 112%, rgba(59, 130, 246, 0.11), transparent 55%), #07090c;
   --glass: rgba(11, 14, 22, 0.66);
@@ -64,6 +67,9 @@
   --tx: #0f172a;
   --tx2: #52607c;
   --tx3: #94a3b8;
+  --disabled-bg: #e5e7eb;
+  --disabled-bd: #c5c9d0;
+  --disabled-tx: #58606c;
   --appbg: radial-gradient(1200px 620px at 82% -12%, rgba(168, 85, 247, 0.12), transparent 60%),
     radial-gradient(1000px 520px at -5% 112%, rgba(59, 130, 246, 0.12), transparent 55%), #e6eaf2;
   --glass: rgba(255, 255, 255, 0.72);

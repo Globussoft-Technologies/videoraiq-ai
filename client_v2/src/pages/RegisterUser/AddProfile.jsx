@@ -29,7 +29,7 @@ import RegisterUserCard from './RegisterUserCard';
 import VerifyUserDialog from './VerifyUserDialog';
 import ImportEmpUsersModal from './ImportEmpUsers';
 import { UserDetailModal } from './UserDetailModal';
-import MultiSelect from './MultiSelect';
+import MultiSelect from '@/components/MultiSelect';
 import UsersListView from './UsersListView';
 import BulkUploadModal from './BulkUploadModal';
 import GenerateRegLinkModal, { buildRegistrationLink } from './GenerateRegLinkModal';
@@ -465,10 +465,10 @@ const AddProfile = () => {
   };
 
   const actionBtn =
-    'flex items-center focus:outline-none gap-1.5 px-3 py-2 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-lg text-xs font-medium transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20';
+    'flex grow shrink-0 items-center justify-center focus:outline-none gap-1.5 h-10 px-3 whitespace-nowrap bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-lg text-xs font-medium transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20';
 
   return (
-    <div className="p-[22px] flex flex-col gap-[18px] min-h-full">
+    <div className="p-[22px] flex flex-col gap-[18px] min-h-full min-w-0">
       {/* Register New User (inline, two-step) */}
       <RegisterUserCard
         departments={formDepartments}
@@ -476,9 +476,9 @@ const AddProfile = () => {
         onCreated={fetchUsers}
       />
 
-      <div data-tour="reg-directory" className="w-full flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
+      <div data-tour="reg-directory" className="w-full min-w-0 flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
-        <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex min-w-0 flex-col gap-3">
           <div data-tour="reg-search" className="relative w-full md:w-56">
             <Input
               type="text"
@@ -490,8 +490,9 @@ const AddProfile = () => {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
           </div>
 
-          <div data-tour="reg-actions" className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center rounded-[14px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
+          {/* Share spare width between controls; scroll within the card on narrow screens. */}
+          <div data-tour="reg-actions" className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 [&>*]:shrink-0">
+            <div className="flex grow items-center rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
               {[
                 { value: 'active', label: 'Active' },
                 { value: 'suspended', label: 'Suspended' },
@@ -503,7 +504,7 @@ const AddProfile = () => {
                     setStatusFilter(option.value);
                     setCurrentPage(1);
                   }}
-                  className={`min-w-[92px] rounded-[11px] px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                  className={`grow h-full rounded-md px-3 text-xs font-semibold transition-colors cursor-pointer ${
                     statusFilter === option.value
                       ? option.value === 'active'
                         ? 'bg-[var(--ok)] text-white'
@@ -516,7 +517,7 @@ const AddProfile = () => {
               ))}
             </div>
 
-            <div className="flex items-center rounded-[14px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
+            <div className="flex grow items-center rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
               {[
                 { value: 'verified', label: 'Verified' },
                 { value: 'not_verified', label: 'Not Verified' },
@@ -530,7 +531,7 @@ const AddProfile = () => {
                       setVerificationFilter((prev) => (prev === option.value ? null : option.value));
                       setCurrentPage(1);
                     }}
-                    className={`min-w-[110px] rounded-[11px] px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    className={`grow h-full rounded-md px-3 text-xs font-semibold transition-colors cursor-pointer ${
                       isActive
                         ? option.value === 'verified'
                           ? 'bg-[var(--blue)] text-white'
@@ -544,8 +545,9 @@ const AddProfile = () => {
               })}
             </div>
 
-            <div className="w-40 xl:w-48">
+            <div className="grow basis-40 min-w-40">
               <MultiSelect
+                className="[&>button]:px-3 [&>button]:text-xs"
                 options={locations}
                 value={selectedLocations}
                 onChange={(val) => {
@@ -555,8 +557,9 @@ const AddProfile = () => {
                 placeholder="Select location"
               />
             </div>
-            <div className="w-40 xl:w-48">
+            <div className="grow basis-40 min-w-40">
               <MultiSelect
+                className="[&>button]:px-3 [&>button]:text-xs"
                 options={departments}
                 value={selectedDepartments}
                 onChange={(val) => {
@@ -572,7 +575,7 @@ const AddProfile = () => {
               <button
                 title="Grid View"
                 onClick={() => setViewMode('grid')}
-                className={`flex items-center justify-center w-10 h-full transition-colors cursor-pointer ${
+                className={`flex items-center justify-center w-8 h-full transition-colors cursor-pointer ${
                   viewMode === 'grid' ? 'bg-[var(--blue)] text-white' : 'bg-[var(--bg2)] text-[var(--tx2)] hover:bg-[var(--bg3)]'
                 }`}
               >
@@ -582,7 +585,7 @@ const AddProfile = () => {
               <button
                 title="Table View"
                 onClick={() => setViewMode('table')}
-                className={`flex items-center justify-center w-10 h-full transition-colors cursor-pointer ${
+                className={`flex items-center justify-center w-8 h-full transition-colors cursor-pointer ${
                   viewMode === 'table' ? 'bg-[var(--blue)] text-white' : 'bg-[var(--bg2)] text-[var(--tx2)] hover:bg-[var(--bg3)]'
                 }`}
               >
@@ -597,14 +600,16 @@ const AddProfile = () => {
               </button>
             )}
 
-            <VerifyUserDialog
-              trigger={
-                <button data-tour="reg-verify" className={actionBtn}>
-                  <User className="w-4 h-4" />
-                  <span>Verify User</span>
-                </button>
-              }
-            />
+            <div className="grow">
+              <VerifyUserDialog
+                trigger={
+                  <button data-tour="reg-verify" className={`${actionBtn} w-full`}>
+                    <User className="w-4 h-4" />
+                    <span>Verify User</span>
+                  </button>
+                }
+              />
+            </div>
 
             <button data-tour="reg-bulk" onClick={() => setShowBulkModal(true)} className={actionBtn}>
               <FilePlus className="w-4 h-4" />
@@ -619,8 +624,8 @@ const AddProfile = () => {
             )}
 
             {canCreateUsers && registrationLink && (
-              <div className="flex items-stretch gap-2 h-10 p-1 rounded-xl border border-[var(--ok)]/20 bg-[var(--ok)]/5 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0 w-64 px-2" title={registrationLink.url}>
+              <div className="flex grow items-stretch gap-2 h-10 p-1 rounded-lg border border-[var(--ok)]/20 bg-[var(--ok)]/5 shadow-sm">
+                <div className="flex grow items-center gap-3 min-w-0 w-64 px-2" title={registrationLink.url}>
                   <span className="shrink-0 w-3 h-3 rounded-full bg-[var(--ok)] ring-4 ring-[var(--ok)]/10" />
                   <div className="min-w-0 leading-tight">
                     <p className="text-sm font-semibold text-[var(--ok)]">Active Link</p>
@@ -663,19 +668,21 @@ const AddProfile = () => {
             )}
 
             {/* Edit uses the existing modal register form (opens when editUser is set). */}
-            <RegisterForm
-              fetchUsers={fetchUsers}
-              editUser={editUser}
-              setEditUser={setEditUser}
-              locations={locations.map((loc) => loc.label)}
-              trigger={<span className="hidden" />}
-            />
+            <div className="hidden">
+              <RegisterForm
+                fetchUsers={fetchUsers}
+                editUser={editUser}
+                setEditUser={setEditUser}
+                locations={locations.map((loc) => loc.label)}
+                trigger={<span className="hidden" />}
+              />
+            </div>
 
             {canDeleteUsers && selectedUserIds.length > 0 && (
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
+                className="cursor-pointer flex grow items-center justify-center gap-1.5 h-10 px-3 whitespace-nowrap bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
               >
                 <Trash className="w-4 h-4" />
                 <span>Delete selected ({selectedUserIds.length})</span>
@@ -686,7 +693,7 @@ const AddProfile = () => {
               <button
                 type="button"
                 onClick={handleDeleteAllClick}
-                className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
+                className="cursor-pointer flex grow items-center justify-center gap-1.5 h-10 px-3 whitespace-nowrap bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Delete All</span>

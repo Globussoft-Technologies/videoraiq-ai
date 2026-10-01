@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Maximize2, X } from 'lucide-react';
@@ -142,6 +142,14 @@ function ReportModal({ item, onClose, onSuccess }) {
 }
 
 function Lightbox({ src, alt, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
     <div
       onClick={onClose}

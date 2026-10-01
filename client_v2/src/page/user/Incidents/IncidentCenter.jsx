@@ -98,7 +98,7 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
       : `${selected.size} selected`;
 
   return (
-    <div ref={ref} style={{ position: 'relative', userSelect: 'none' }}>
+    <div ref={ref} className="vq-inc-detection-control" style={{ position: 'relative', userSelect: 'none' }}>
       <div
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -363,9 +363,10 @@ async function fetchDepartments() {
   return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
 }
 
-function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime, timeRangeError }) {
+function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime, timeRangeError, disabled = false }) {
   const [open, setOpen] = useState(false);
   const ref             = useRef(null);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   // Collapsed by default so the popover isn't dominated by an empty time
   // picker — auto-expands once (and stays expanded) as soon as either time is
   // set, so an active filter is never hidden behind a collapsed section.
@@ -414,11 +415,15 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(o => !o)}
+        className="vq-inc-filter-trigger"
+        disabled={disabled}
+        title={disabled ? 'No incidents available to filter. Change the date or detection type.' : undefined}
+        aria-expanded={open && !disabled}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px',
           border: `1px solid ${activeCount > 0 ? 'var(--blue)' : 'var(--bd2)'}`,
           background: activeCount > 0 ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
-          borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+          borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12.5, fontWeight: 600,
           color: activeCount > 0 ? 'var(--blue)' : 'var(--tx2)',
           boxShadow: open ? '0 0 0 3px rgba(59,130,246,.15)' : 'none',
           transition: 'all .15s',
@@ -433,7 +438,7 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
         )}
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div className="vq-inc-filterspopover" style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300,
           width: 280, maxWidth: 'min(280px, calc(100vw - 24px))', background: 'var(--bg1solid)',
@@ -1467,6 +1472,11 @@ export default function IncidentCenter() {
   }, [grid, stats]);
 
   const totalCount = grid.data?.totalCount ?? 0;
+  // Only a successful, settled response establishes an empty result. Loading
+  // and failed requests must not look like a confirmed absence of incidents.
+  const noIncidents = !!grid.data && !grid.loading && !grid.error && totalCount === 0 && items.length === 0;
+  const resolveDisabled = resolvingBulk || !items.length;
+  useEffect(() => { if (resolveDisabled) setResolveMenuOpen(false); }, [resolveDisabled]);
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const currentPageIds = useMemo(
@@ -1757,6 +1767,11 @@ export default function IncidentCenter() {
   }, []);
 
   const s    = stats.data || {};
+  // Keep active filters editable so a zero-result selection never traps the
+  // user. Date/detection, Clear and refresh remain available for recovery.
+  const additionalFiltersDisabled = noIncidents && !(nvrIds.length || channelIds.length || deptIds.length || locIds.length || timeFrom || timeTo);
+  const severityFiltersDisabled = noIncidents && !sevSet.size && !statusSet.size;
+  const statusFiltersDisabled = severityFiltersDisabled && !(s.incidentsResolved > 0);
   const incidentCounts = grid.data?.counts || {};
   const severityCounts = incidentCounts.severity || {};
   const statusCounts = incidentCounts.status || {};
@@ -1779,6 +1794,34 @@ export default function IncidentCenter() {
   return (
     <div ref={pageRef} className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%', overflow: isPageFS ? 'auto' : undefined }}>
       <style>{`
+        .vq-inc-toolbar .vq-inc-filter-trigger:disabled,
+        .vq-inc-toolbar .vq-inc-chip:disabled,
+        .vq-inc-toolbar select:disabled {
+          background: var(--bg2) !important;
+          border-color: var(--bd2) !important;
+          color: var(--tx2) !important;
+          box-shadow: none !important;
+          opacity: .45 !important;
+          cursor: not-allowed !important;
+        }
+        .vq-inc-toolbar .vq-inc-chip[aria-pressed='true']:disabled,
+        .vq-inc-toolbar .vq-inc-resolve:disabled {
+          background: var(--tx3) !important;
+          border-color: transparent !important;
+          color: #fff !important;
+          opacity: .45 !important;
+          cursor: not-allowed !important;
+        }
+        .vq-inc-date-control > div { width: 276px; max-width: 100%; }
+        .vq-inc-date-control > div > button { height: 36px; }
+        .vq-inc-toolbar[data-empty='true'] .vq-inc-detection-control > div:first-child,
+        .vq-inc-toolbar[data-empty='true'] .vq-inc-date-control > div > button,
+        .vq-inc-toolbar[data-empty='true'] .vq-inc-refresh-control > div > div:first-child,
+        .vq-inc-toolbar[data-empty='true'] .vq-inc-view-controls {
+          opacity: .5;
+        }
+        .vq-inc-toolbar button:focus-visible,
+        .vq-inc-recovery:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
         @keyframes vq-resolve-success {
           0% { opacity: 0; transform: translateY(-2px) scale(.98); }
           35% { opacity: 1; transform: translateY(0) scale(1.02); }
@@ -1829,7 +1872,7 @@ export default function IncidentCenter() {
       </div>
 
       {/* ── Filter bar — everything on one wrapping line ─────────────────────── */}
-      <div style={{
+      <div className="vq-inc-toolbar" data-empty={noIncidents} style={{
         background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         boxShadow: '0 1px 3px rgba(0,0,0,.07)',
@@ -1843,7 +1886,8 @@ export default function IncidentCenter() {
         />
 
         {/* Date range */}
-        <PresetDateRangePicker
+        <div className="vq-inc-date-control">
+          <PresetDateRangePicker
           startDate={dateFrom || null}
           endDate={dateTo || null}
           maxDate={new Date()}
@@ -1853,7 +1897,8 @@ export default function IncidentCenter() {
             setDateTo(toIso(end));
             setPage(0);
           }}
-        />
+          />
+        </div>
 
         {/* Additional filters popover */}
         <FiltersPopover
@@ -1864,12 +1909,13 @@ export default function IncidentCenter() {
           fromTime={timeFrom}     setFromTime={v => { setTimeFrom(v); setPage(0); }}
           toTime={timeTo}         setToTime={v => { setTimeTo(v); setPage(0); }}
           timeRangeError={timeRangeError}
+          disabled={additionalFiltersDisabled}
         />
 
         {/* Vehicle Detection only: search by plate or tagged user name, plus
             the all/tagged/untagged filter. Both are hidden for detection types
             that carry no vehicle number, where they'd match nothing. */}
-        {showsVehicleControls && (
+        {showsVehicleControls && (!noIncidents || vehicleSearch || tagStatus) && (
           <>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search
@@ -1918,6 +1964,10 @@ export default function IncidentCenter() {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button
             onClick={() => { setSevSet(new Set()); setStatusSet(new Set()); setPage(0); }}
+            className="vq-inc-chip"
+            disabled={severityFiltersDisabled}
+            aria-pressed={!sevSet.size && !statusSet.size}
+            title={severityFiltersDisabled ? 'No incidents available to filter.' : undefined}
             style={{ ...chip(!sevSet.size && !statusSet.size), padding: '5px 16px' }}
           >
             All
@@ -1925,6 +1975,10 @@ export default function IncidentCenter() {
           {SEVERITIES.map((x) => (
             <button key={x.key}
               onClick={() => { toggleSet(setSevSet)(x.key); setPage(0); }}
+              className="vq-inc-chip"
+              disabled={severityFiltersDisabled}
+              aria-pressed={sevSet.has(x.key)}
+              title={severityFiltersDisabled ? 'No incidents available to filter.' : undefined}
               style={chip(sevSet.has(x.key), x.key === 'high' ? 'var(--crit)' : x.key === 'moderate' ? 'var(--warn)' : '#6b7796')}
             >
               {x.label}
@@ -1939,6 +1993,10 @@ export default function IncidentCenter() {
           {STATUSES.map((x) => (
             <button key={x.key}
               onClick={() => { toggleSet(setStatusSet)(x.key); setPage(0); }}
+              className="vq-inc-chip"
+              disabled={statusFiltersDisabled}
+              aria-pressed={statusSet.has(x.key)}
+              title={statusFiltersDisabled ? 'No incidents available to filter.' : undefined}
               style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
             >
               {x.label}
@@ -1956,9 +2014,11 @@ export default function IncidentCenter() {
             <div style={{ display: 'flex', alignItems: 'stretch' }}>
               <button
                 type="button"
+                className="vq-inc-resolve"
                 onClick={() => setResolveMenuOpen((open) => !open)}
-                disabled={resolvingBulk || !items.length}
-                aria-expanded={resolveMenuOpen}
+                disabled={resolveDisabled}
+                title={!items.length ? 'No incidents available to resolve.' : undefined}
+                aria-expanded={resolveMenuOpen && !resolveDisabled}
                 style={{ display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 600, color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderRight: '1px solid rgba(255,255,255,.45)', borderRadius: '7px 0 0 7px', padding: '6px 10px', cursor: resolvingBulk || !items.length ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !items.length ? 0.65 : 1, whiteSpace: 'nowrap' }}
               >
                 {resolvingBulk
@@ -1975,16 +2035,19 @@ export default function IncidentCenter() {
               </button>
               <button
                 type="button"
+                className="vq-inc-resolve"
                 aria-label="Choose resolve action"
                 onClick={() => setResolveMenuOpen((open) => !open)}
-                disabled={resolvingBulk}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderLeft: 0, borderRadius: '0 7px 7px 0', padding: '0 7px', cursor: resolvingBulk ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? 0.65 : 1 }}
+                disabled={resolveDisabled}
+                title={!items.length ? 'No incidents available to resolve.' : undefined}
+                aria-expanded={resolveMenuOpen && !resolveDisabled}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderLeft: 0, borderRadius: '0 7px 7px 0', padding: '0 7px', cursor: resolveDisabled ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? 0.65 : 1 }}
               >
                 <ChevronDown size={13} />
               </button>
             </div>
-            {resolveMenuOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300, minWidth: 292, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
+            {resolveMenuOpen && !resolveDisabled && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300, minWidth: 292, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
                 <div style={{ padding: '4px 10px 9px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Resolve scope</div>
                 {resolveMode !== 'filtered' && resolveMode !== 'page' && selectedForResolve.size > 0 && (
                   <label onMouseEnter={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 'rgba(34,197,94,.16)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 650 : 500, transition: 'background .15s' }}>
@@ -2070,6 +2133,8 @@ export default function IncidentCenter() {
             <span>Show</span>
             <select
               value={pageSize}
+              disabled={noIncidents}
+              aria-label="Incidents per page"
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
               style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
             >
@@ -2078,11 +2143,14 @@ export default function IncidentCenter() {
               ))}
             </select>
           </div>
-          <RefreshControl
-            storageKey="incident_center"
-            onManualRefresh={refreshIncidentData}
-          />
+          <div className="vq-inc-refresh-control">
+            <RefreshControl
+              storageKey="incident_center"
+              onManualRefresh={refreshIncidentData}
+            />
+          </div>
           <button
+            className="vq-inc-view-controls"
             onClick={togglePageFullscreen}
             title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}
@@ -2206,19 +2274,18 @@ export default function IncidentCenter() {
                 {dateFrom && dateTo
                   ? `No incidents found for ${dateFrom === dateTo ? fmt(dateFrom) : `${fmt(dateFrom)} – ${fmt(dateTo)}`}`
                   : hasFilters
-                    ? 'No incidents match your filters'
+                    ? 'No incidents found for the selected filters'
                     : 'No incidents yet'}
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--tx3)', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>
-                {dateFrom && dateTo
-                  ? 'There are no recorded incidents for the selected date range. Try a different date or clear the filter to see all incidents.'
-                  : hasFilters
-                    ? 'Try adjusting or clearing your filters to see more results.'
+              <div style={{ fontSize: 12.5, color: 'var(--tx3)', textAlign: 'center', maxWidth: dateFrom && dateTo ? 360 : 420, lineHeight: 1.6 }}>
+                {(dateFrom && dateTo) || hasFilters
+                  ? 'There are no recorded incidents for the selected date range. Try a different date or clear the filters to see all incidents.'
                     : 'Incidents will appear here once detections are recorded.'}
               </div>
               {(dateFrom || hasFilters) && (
                 <button
                   onClick={clearAll}
+                  className="vq-inc-recovery"
                   style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--blue)', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)', borderRadius: 8, padding: '7px 18px', cursor: 'pointer' }}
                 >
                   Clear all filters
