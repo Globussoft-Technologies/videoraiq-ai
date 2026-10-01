@@ -95,6 +95,16 @@ function valueExists(value) {
   return value !== undefined && value !== null && value !== '';
 }
 
+// Car-model incidents have their own dedicated Car Logs view and should not
+// appear in the compact live detection feed. Keep this check tolerant of the
+// different incident/detection field names used by the socket payloads.
+function isCarModelDetection(item) {
+  const type = String(
+    item?.incidentType || item?.detectionType || item?.incidentName || item?.displayName || ''
+  ).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return type === 'carmodeldetection' || type.includes('carmodel');
+}
+
 function detectionDetails(item) {
   const type = String(item?.incidentType || item?.detectionType || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const details = [];
@@ -323,6 +333,7 @@ export default function LiveCameraLogsOverlay({ channel }) {
   const detectionItems = useMemo(() => (
     (Array.isArray(allDetections) ? allDetections : [])
       .filter((item) => getDetectionCameraId(item) === cameraId)
+      .filter((item) => !isCarModelDetection(item))
       .map(mapDetection)
       .slice(0, 5)
   ), [allDetections, cameraId]);
