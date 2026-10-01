@@ -16,7 +16,13 @@ import { buildColumns, renderIncidentCard } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
-import { getNVRs, getchannels, fetchIncidentLogs, fetchIncidentVehicleNumbers } from './Api';
+import {
+  getNVRs,
+  getchannels,
+  fetchIncidentLogs,
+  fetchIncidentVehicleNumbers,
+  fetchIncidentBoxTypes,
+} from './Api';
 
 const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
 
@@ -101,6 +107,7 @@ const IncidentLogsPage = ({ config }) => {
     severity,
     status,
     vehicleNumber,
+    boxType,
     limit,
   } = state;
 
@@ -123,6 +130,14 @@ const IncidentLogsPage = ({ config }) => {
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
+  const [boxTypeList, setBoxTypeList] = useState([]);
+  const [stockSummary, setStockSummary] = useState({
+    vehicles: 0,
+    loadedBoxes: 0,
+    unloadedBoxes: 0,
+    totalBoxes: 0,
+    events: 0,
+  });
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -192,10 +207,31 @@ const IncidentLogsPage = ({ config }) => {
     return () => clearTimeout(timer);
   }, [config.title, config.vehicleNumbersEndpoint, vehicleNumberSearch, startDate, endDate, nvrIds, channelIds]);
 
+  useEffect(() => {
+    if (!config.boxTypesEndpoint) {
+      setBoxTypeList([]);
+      return undefined;
+    }
+    fetchIncidentBoxTypes({
+      endpoint: config.boxTypesEndpoint,
+      startDate,
+      endDate,
+      nvrIds,
+      channelIds,
+      vehicleNumber,
+    })
+      .then((res) => setBoxTypeList(res?.data?.body?.data?.boxTypes || []))
+      .catch((err) => {
+        console.log(`Error fetching ${config.title} box types:`, err);
+        setBoxTypeList([]);
+      });
+    return undefined;
+  }, [config.boxTypesEndpoint, config.title, startDate, endDate, nvrIds, channelIds, vehicleNumber]);
+
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, status, vehicleNumber, limit]);
+  }, [nvrIds, channelIds, severity, status, vehicleNumber, boxType, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -219,6 +255,7 @@ const IncidentLogsPage = ({ config }) => {
         status: config.showStatus ? status : undefined,
         search: searchInput,
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
+        boxType: config.showBoxTypeFilter ? boxType : undefined,
       });
 
       const data = res?.data?.body?.data;
@@ -262,8 +299,17 @@ const IncidentLogsPage = ({ config }) => {
 
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
+      if (config.showStockCountingFields) {
+        setStockSummary(data?.summary || {
+          vehicles: total,
+          loadedBoxes: 0,
+          unloadedBoxes: 0,
+          totalBoxes: 0,
+          events: 0,
+        });
+      }
 
-      if (config.showStats !== false) {
+      if (config.showStats !== false && !config.showStockCountingFields) {
         try {
           const totals = await Promise.all(
             SEVERITY_LEVELS.map(async (level) => {
@@ -281,6 +327,7 @@ const IncidentLogsPage = ({ config }) => {
                 status: config.showStatus ? status : undefined,
                 search: searchInput,
                 vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
+                boxType: config.showBoxTypeFilter ? boxType : undefined,
               });
               return [level, countRes?.data?.body?.data?.totalCount || 0];
             })
@@ -297,7 +344,7 @@ const IncidentLogsPage = ({ config }) => {
       dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, vehicleNumber, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, vehicleNumber, boxType, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -526,13 +573,21 @@ const IncidentLogsPage = ({ config }) => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     if (config.showStats === false) return [];
+    if (config.showStockCountingFields) {
+      return [
+        { label: config.statsLabel || 'Vehicles', value: stockSummary.vehicles ?? totalCount ?? 0, color: 'var(--blue)' },
+        { label: 'Loaded Boxes', value: stockSummary.loadedBoxes || 0, color: 'var(--ok)' },
+        { label: 'Unloaded Boxes', value: stockSummary.unloadedBoxes || 0, color: 'var(--warn)' },
+        { label: 'Total Boxes', value: stockSummary.totalBoxes || 0, color: 'var(--violet)' },
+      ];
+    }
     return [
       { label: config.statsLabel || 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
       { label: 'High', value: severityTotals.high || 0, color: 'var(--crit)' },
       { label: 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, severityTotals, totalCount]);
+  }, [config.showStats, config.showStockCountingFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({
@@ -546,8 +601,9 @@ const IncidentLogsPage = ({ config }) => {
       status: config.showStatus ? status : undefined,
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
+      boxType: config.showBoxTypeFilter ? boxType : undefined,
     }),
-    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, searchInput]
+    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -692,6 +748,13 @@ const IncidentLogsPage = ({ config }) => {
           vehicleNumberList={vehicleNumberList}
           vehicleNumberSearch={vehicleNumberSearch}
           setVehicleNumberSearch={setVehicleNumberSearch}
+          showBoxType={config.showBoxTypeFilter}
+          boxType={boxType}
+          setBoxType={(v) => dispatch({ type: 'SET_BOX_TYPE', value: v })}
+          boxTypeOptions={boxTypeList.map((value) => ({
+            value,
+            label: value.replace(/\b\w/g, (letter) => letter.toUpperCase()),
+          }))}
         />
 
         <AutoRefreshComponent

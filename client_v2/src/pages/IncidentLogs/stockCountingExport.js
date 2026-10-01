@@ -53,6 +53,7 @@ const fetchAllForExport = async (config, filters = {}) => {
     status: filters.status,
     search: filters.searchInput,
     vehicleNumber: filters.vehicleNumber,
+    boxType: filters.boxType,
   });
 
   return response?.data?.body?.data?.data || [];

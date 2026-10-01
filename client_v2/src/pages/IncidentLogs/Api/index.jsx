@@ -54,6 +54,7 @@ export const fetchIncidentLogs = async ({
   status,
   search,
   vehicleNumber,
+  boxType,
 }) => {
   return axios.request({
     method,
@@ -71,6 +72,44 @@ export const fetchIncidentLogs = async ({
       ...(status && { status }),
       ...(search && { search }),
       ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
+      ...(boxType?.trim() && { boxType: boxType.trim() }),
+    },
+    headers: getHeaders(),
+  });
+};
+
+export const fetchIncidentBoxTypes = async ({
+  endpoint,
+  search,
+  startDate,
+  endDate,
+  nvrIds,
+  channelIds,
+  vehicleNumber,
+}) => {
+  return axios.get(`${HOST}${endpoint}`, {
+    params: {
+      ...(search && { search }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
+      ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+      ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
+    },
+    headers: getHeaders(),
+  });
+};
+
+export const fetchStockCountingAnalytics = async (filters = {}) => {
+  return axios.get(`${HOST}/incidents/logs/loading-unloading-stock-counting-detection/analytics`, {
+    params: {
+      ...(filters.startDate && { startDate: filters.startDate }),
+      ...(filters.endDate && { endDate: filters.endDate }),
+      ...(filters.nvrIds?.length && { nvrIds: filters.nvrIds.join(',') }),
+      ...(filters.channelIds?.length && { channelIds: filters.channelIds.join(',') }),
+      ...(filters.vehicleNumber?.trim() && { vehicleNumber: filters.vehicleNumber.trim() }),
+      ...(filters.boxType?.trim() && { boxType: filters.boxType.trim() }),
+      ...(filters.search?.trim() && { search: filters.search.trim() }),
     },
     headers: getHeaders(),
   });

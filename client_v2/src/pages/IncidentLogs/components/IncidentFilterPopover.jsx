@@ -40,6 +40,11 @@ const IncidentFilterPopover = ({
   vehicleNumberList = [],
   vehicleNumberSearch = '',
   setVehicleNumberSearch,
+  showBoxType = false,
+  boxType = '',
+  setBoxType,
+  boxTypeOptions = [],
+  triggerClassName = '',
 }) => {
   const activeFiltersCount = useMemo(
     () =>
@@ -49,9 +54,10 @@ const IncidentFilterPopover = ({
         showSeverity && !!severity,
         showStatus && !!status,
         showVehicleNumber && !!vehicleNumber.trim(),
+        showBoxType && !!boxType,
       ].filter(Boolean)
         .length,
-    [nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber]
+    [nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
 
   const resetFilters = () => {
@@ -63,12 +69,13 @@ const IncidentFilterPopover = ({
       setVehicleNumber('');
       setVehicleNumberSearch?.('');
     }
+    if (showBoxType) setBoxType('');
   };
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button className="flex bg-[var(--violet)]/10 border border-[var(--violet)]/30 rounded-lg text-[var(--violet)] font-semibold hover:bg-[var(--violet)]/15 cursor-pointer items-center gap-2 relative h-10">
+        <Button className={`flex bg-[var(--violet)]/10 border border-[var(--violet)]/30 rounded-lg text-[var(--violet)] font-semibold hover:bg-[var(--violet)]/15 cursor-pointer items-center gap-2 relative h-10 ${triggerClassName}`}>
           <Filter className="w-4 h-4" />
           Filters
           {activeFiltersCount > 0 && (
@@ -126,6 +133,15 @@ const IncidentFilterPopover = ({
                   fullWidth
                 />
               </div>
+            )}
+            {showBoxType && (
+              <InlineSelect
+                value={boxType}
+                onChange={setBoxType}
+                options={boxTypeOptions}
+                placeholder="Box Type"
+                allLabel="All Box Types"
+              />
             )}
             {showSeverity && (
               <InlineSelect

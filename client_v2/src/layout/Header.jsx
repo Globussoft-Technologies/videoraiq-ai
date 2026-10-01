@@ -14,13 +14,15 @@ import StartTourMenu from '../components/Tour/StartTourMenu';
 
 // Static index of navigable pages, built once from the sidebar config.
 const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
-  g.items.filter(isClientNavItemVisible).map((it) => ({
-    kind: 'Page',
-    kindColor: 'var(--blue)',
-    label: it.label,
-    sub: g.label,
-    to: `/${it.path}`,
-  }))
+  g.items.filter(isClientNavItemVisible).flatMap((it) => (
+    (it.children?.length ? it.children : [it]).map((entry) => ({
+      kind: 'Page',
+      kindColor: 'var(--blue)',
+      label: entry.label === 'Logs' ? it.label : `${it.label} - ${entry.label}`,
+      sub: g.label,
+      to: `/${entry.path}`,
+    }))
+  ))
 );
 
 const DETECTION_SEARCH_INDEX = [

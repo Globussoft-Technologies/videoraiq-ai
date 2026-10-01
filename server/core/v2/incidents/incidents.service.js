@@ -4600,6 +4600,7 @@ console.log(result,'result');
         channelIds,
         severity,
         vehicleNumber,
+        boxType,
         search,
         sortField,
         sortOrder,
@@ -4642,6 +4643,12 @@ console.log(result,'result');
         };
       }
       if (severity) match.severity = severity;
+      if (boxType && String(boxType).trim()) {
+        match.boxType = {
+          $regex: `^\\s*${escapeRegex(String(boxType).trim())}\\s*$`,
+          $options: "i",
+        };
+      }
       if (vehicleNumber && String(vehicleNumber).trim()) {
         const escapedVehicle = escapeRegex(String(vehicleNumber).trim());
         match.vehicleNumber = {
@@ -4896,8 +4903,22 @@ console.log(result,'result');
 
       const parsedSkip = Math.max(0, Number.parseInt(skip, 10) || 0);
       const parsedLimit = Math.min(10000, Math.max(1, Number.parseInt(limit, 10) || 10));
-      const [countResult, logs] = await Promise.all([
+      const [countResult, summaryResult, logs] = await Promise.all([
         Incident.aggregate([...pipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...pipeline,
+          {
+            $group: {
+              _id: null,
+              vehicles: { $sum: 1 },
+              loadedBoxes: { $sum: "$loadedBoxCount" },
+              unloadedBoxes: { $sum: "$unloadedBoxCount" },
+              totalBoxes: { $sum: "$boxCount" },
+              events: { $sum: "$eventCount" },
+            },
+          },
+          { $project: { _id: 0 } },
+        ]),
         Incident.aggregate([...pipeline, { $skip: parsedSkip }, { $limit: parsedLimit }]),
       ]);
 
@@ -4906,6 +4927,13 @@ console.log(result,'result');
           "Loading/unloading stock counting logs fetched successfully",
           {
             totalCount: countResult[0]?.totalCount || 0,
+            summary: summaryResult[0] || {
+              vehicles: 0,
+              loadedBoxes: 0,
+              unloadedBoxes: 0,
+              totalBoxes: 0,
+              events: 0,
+            },
             data: logs,
           },
         ),
@@ -5003,6 +5031,313 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch loading/unloading stock vehicle numbers", 500));
+    }
+  }
+
+  async getLoadingUnloadingStockCountingBoxTypes(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const { search, startDate, endDate, nvrId, nvrIds, channelId, channelIds, vehicleNumber } =
+        req.query || {};
+      const toArray = (value) =>
+        value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
+      const toObjectIds = (values) =>
+        values
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "loadingUnloadingStockCountingDetection",
+        boxType: { $type: "string", $nin: [""] },
+      };
+      if (startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+      const requestedNvrs = toArray(nvrId || nvrIds);
+      if (requestedNvrs.length) match.nvrId = { $in: toObjectIds(requestedNvrs) };
+      const requestedChannels = toArray(channelId || channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = requestedChannels;
+      if (Array.isArray(authorizedChannels)) {
+        const authorizedSet = new Set(authorizedChannels.map((id) => id.toString()));
+        effectiveChannelIds = requestedChannels.length
+          ? requestedChannels.filter((id) => authorizedSet.has(id))
+          : [...authorizedSet];
+      }
+      if (requestedChannels.length || Array.isArray(authorizedChannels)) {
+        match.channelId = { $in: toObjectIds(effectiveChannelIds) };
+      }
+      if (vehicleNumber && String(vehicleNumber).trim()) {
+        match.vehicleNumber = {
+          $regex: `^\\s*${escapeRegex(String(vehicleNumber).trim())}\\s*$`,
+          $options: "i",
+        };
+      }
+
+      const pipeline = [
+        { $match: match },
+        {
+          $group: {
+            _id: { $toLower: { $trim: { input: "$boxType" } } },
+            count: { $sum: 1 },
+          },
+        },
+        { $match: { _id: { $ne: "" } } },
+      ];
+      if (search && String(search).trim()) {
+        pipeline.push({
+          $match: { _id: { $regex: escapeRegex(String(search).trim()), $options: "i" } },
+        });
+      }
+      pipeline.push({ $sort: { _id: 1 } });
+      const rows = await Incident.aggregate(pipeline);
+      return res.status(200).json(
+        Response.userSuccessResp("Stock box types fetched successfully", {
+          totalCount: rows.length,
+          boxTypes: rows.map((row) => row._id),
+          boxTypeCounts: Object.fromEntries(rows.map((row) => [row._id, row.count])),
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch stock box types", 500));
+    }
+  }
+
+  async getLoadingUnloadingStockCountingAnalytics(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+      const {
+        startDate, endDate, nvrId, nvrIds, channelId, channelIds,
+        vehicleNumber, boxType, search,
+      } = req.query || {};
+      const toArray = (value) =>
+        value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
+      const toObjectIds = (values) =>
+        values
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "loadingUnloadingStockCountingDetection",
+      };
+      if (startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+      const requestedNvrs = toArray(nvrId || nvrIds);
+      if (requestedNvrs.length) match.nvrId = { $in: toObjectIds(requestedNvrs) };
+      const requestedChannels = toArray(channelId || channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = requestedChannels;
+      if (Array.isArray(authorizedChannels)) {
+        const authorizedSet = new Set(authorizedChannels.map((id) => id.toString()));
+        effectiveChannelIds = requestedChannels.length
+          ? requestedChannels.filter((id) => authorizedSet.has(id))
+          : [...authorizedSet];
+      }
+      if (requestedChannels.length || Array.isArray(authorizedChannels)) {
+        match.channelId = { $in: toObjectIds(effectiveChannelIds) };
+      }
+      if (vehicleNumber && String(vehicleNumber).trim()) {
+        match.vehicleNumber = {
+          $regex: `^\\s*${escapeRegex(String(vehicleNumber).trim())}\\s*$`,
+          $options: "i",
+        };
+      }
+      if (boxType && String(boxType).trim()) {
+        match.boxType = {
+          $regex: `^\\s*${escapeRegex(String(boxType).trim())}\\s*$`,
+          $options: "i",
+        };
+      }
+      if (search && String(search).trim()) {
+        const rx = { $regex: escapeRegex(String(search).trim()), $options: "i" };
+        match.$or = [
+          { vehicleNumber: rx }, { boxType: rx }, { direction: rx },
+          { incidentName: rx }, { description: rx }, { zone: rx },
+        ];
+      }
+
+      const result = await Incident.aggregate([
+        { $match: match },
+        {
+          $set: {
+            _direction: {
+              $toLower: { $ifNull: ["$direction", { $ifNull: ["$stockMovement", "unknown"] }] },
+            },
+            _boxCount: {
+              $convert: {
+                input: { $ifNull: ["$boxCount", { $ifNull: ["$count", 0] }] },
+                to: "double", onError: 0, onNull: 0,
+              },
+            },
+            _boxType: {
+              $let: {
+                vars: { value: { $toLower: { $trim: { input: { $ifNull: ["$boxType", ""] } } } } },
+                in: { $cond: [{ $eq: ["$$value", ""] }, "unknown", "$$value"] },
+              },
+            },
+            _vehicle: {
+              $let: {
+                vars: { value: { $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } } } },
+                in: { $cond: [{ $eq: ["$$value", ""] }, "UNKNOWN", "$$value"] },
+              },
+            },
+            _date: {
+              $dateToString: { date: "$timeOfIncident", format: "%Y-%m-%d", timezone: "Asia/Kolkata" },
+            },
+            _hour: {
+              $hour: { date: "$timeOfIncident", timezone: "Asia/Kolkata" },
+            },
+          },
+        },
+        {
+          $facet: {
+            summary: [
+              {
+                $group: {
+                  _id: null,
+                  totalEvents: { $sum: 1 },
+                  vehicles: { $addToSet: "$_vehicle" },
+                  loadedBoxes: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
+                  unloadedBoxes: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
+                  totalBoxes: { $sum: "$_boxCount" },
+                  loadingEvents: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, 1, 0] } },
+                  unloadingEvents: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, 1, 0] } },
+                },
+              },
+              {
+                $project: {
+                  _id: 0, totalEvents: 1, loadedBoxes: 1, unloadedBoxes: 1,
+                  totalBoxes: 1, loadingEvents: 1, unloadingEvents: 1,
+                  totalVehicles: {
+                    $size: { $filter: { input: "$vehicles", as: "vehicle", cond: { $ne: ["$$vehicle", "UNKNOWN"] } } },
+                  },
+                  netFlow: { $subtract: ["$loadedBoxes", "$unloadedBoxes"] },
+                },
+              },
+            ],
+            trends: [
+              {
+                $group: {
+                  _id: "$_date",
+                  loaded: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
+                  unloaded: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
+                  total: { $sum: "$_boxCount" },
+                  events: { $sum: 1 },
+                },
+              },
+              { $sort: { _id: 1 } },
+              { $project: { _id: 0, date: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
+            ],
+            boxTypes: [
+              {
+                $group: {
+                  _id: "$_boxType",
+                  loaded: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
+                  unloaded: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
+                  total: { $sum: "$_boxCount" },
+                  events: { $sum: 1 },
+                },
+              },
+              { $sort: { total: -1, _id: 1 } },
+              { $project: { _id: 0, boxType: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
+            ],
+            topVehicles: [
+              { $match: { _vehicle: { $ne: "UNKNOWN" } } },
+              {
+                $group: {
+                  _id: "$_vehicle",
+                  loaded: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
+                  unloaded: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
+                  total: { $sum: "$_boxCount" },
+                  events: { $sum: 1 },
+                },
+              },
+              { $sort: { total: -1, events: -1 } },
+              { $limit: 8 },
+              { $project: { _id: 0, vehicleNumber: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
+            ],
+            hourlyActivity: [
+              {
+                $group: {
+                  _id: "$_hour",
+                  loaded: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
+                  unloaded: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
+                  total: { $sum: "$_boxCount" },
+                  events: { $sum: 1 },
+                },
+              },
+              { $sort: { _id: 1 } },
+              { $project: { _id: 0, hour: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
+            ],
+          },
+        },
+      ]);
+
+      const analytics = result[0] || {};
+      const summary = analytics.summary?.[0] || {
+        totalEvents: 0, totalVehicles: 0, loadedBoxes: 0, unloadedBoxes: 0,
+        totalBoxes: 0, loadingEvents: 0, unloadingEvents: 0, netFlow: 0,
+      };
+      const topType = analytics.boxTypes?.[0];
+      const peakHour = [...(analytics.hourlyActivity || [])]
+        .sort((a, b) => b.events - a.events)[0];
+      const movement = summary.loadedBoxes === summary.unloadedBoxes
+        ? "balanced"
+        : summary.loadedBoxes > summary.unloadedBoxes ? "inbound" : "outbound";
+      const insights = summary.totalEvents
+        ? [
+            {
+              type: "flow",
+              title: "Box movement",
+              message: movement === "balanced"
+                ? "The same number of boxes came in and went out."
+                : `${Math.abs(summary.netFlow)} more ${Math.abs(summary.netFlow) === 1 ? "box" : "boxes"} ${movement === "inbound" ? "came in than went out" : "went out than came in"}.`,
+            },
+            ...(topType ? [{
+              type: "boxType",
+              title: "Most moved box type",
+              message: `${topType.boxType} was moved the most (${topType.total} ${topType.total === 1 ? "box" : "boxes"}).`,
+            }] : []),
+            ...(peakHour ? [{
+              type: "peak",
+              title: "Busiest time",
+              message: `${momentTZ().hour(peakHour.hour).minute(0).format("hh:mm A")} to ${momentTZ().hour((peakHour.hour + 1) % 24).minute(0).format("hh:mm A")} had the most activity (${peakHour.events} ${peakHour.events === 1 ? "movement" : "movements"}).`,
+            }] : []),
+          ]
+        : [];
+
+      return res.status(200).json(
+        Response.userSuccessResp("Stock analytics fetched successfully", {
+          summary,
+          trends: analytics.trends || [],
+          boxTypes: analytics.boxTypes || [],
+          topVehicles: analytics.topVehicles || [],
+          hourlyActivity: analytics.hourlyActivity || [],
+          insights,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch stock analytics", 500));
     }
   }
 

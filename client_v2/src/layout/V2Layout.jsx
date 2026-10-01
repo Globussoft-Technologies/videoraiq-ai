@@ -77,6 +77,9 @@ function currentViewKey(pathname) {
   // /dashboard -> overview ; /live -> wall ; /<key> -> key ; /logs/<key> -> key
   const m = pathname.replace(/^\//, '');
   const segs = m.split('/');
+  if (segs[0] === 'logs' && segs[1] === 'stock-counting' && segs[2] === 'analytics') {
+    return 'stock-counting-analytics';
+  }
   let seg = segs[0] || 'overview';
   if (seg === 'logs') seg = segs[1] || 'overview';
   return PATH_TO_KEY[seg] || seg;

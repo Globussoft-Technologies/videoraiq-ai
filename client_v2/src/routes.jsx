@@ -54,6 +54,7 @@ import WasteDisposalLogs from './pages/WasteDisposalLogs/WasteDisposalLogs';
 import AnimalEntryLogs from './pages/AnimalEntryLogs/AnimalEntryLogs';
 import MessyAreaLogs from './pages/MessyAreaLogs/MessyAreaLogs';
 import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
+import StockCountingAnalytics from './pages/StockCountingAnalytics/StockCountingAnalytics';
 import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
@@ -147,6 +148,7 @@ export const v2Routes = (
     <Route path="logs/animal-entry" element={guard('logs', 'animalEntryLogs', <AnimalEntryLogs />)} />
     <Route path="logs/messy-area" element={guard('logs', 'messyAreaLogs', <MessyAreaLogs />)} />
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
+    <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
 
     {/* Configure */}

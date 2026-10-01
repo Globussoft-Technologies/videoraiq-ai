@@ -143,6 +143,16 @@ router.get(
   incidentsController.getLoadingUnloadingStockCountingVehicleNumbers,
 );
 router.get(
+  "/logs/loading-unloading-stock-counting-detection/box-types",
+  viewAccessCheck,
+  incidentsController.getLoadingUnloadingStockCountingBoxTypes,
+);
+router.get(
+  "/logs/loading-unloading-stock-counting-detection/analytics",
+  viewAccessCheck,
+  incidentsController.getLoadingUnloadingStockCountingAnalytics,
+);
+router.get(
   "/logs/loading-unloading-stock-counting-detection",
   viewAccessCheck,
   incidentsController.getLoadingUnloadingStockCountingLogs,

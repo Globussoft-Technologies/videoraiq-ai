@@ -767,6 +767,14 @@ class IncidentsController {
     return incidentsService.getLoadingUnloadingStockCountingVehicleNumbers(req, res, next);
   }
 
+  async getLoadingUnloadingStockCountingBoxTypes(req, res, next) {
+    return incidentsService.getLoadingUnloadingStockCountingBoxTypes(req, res, next);
+  }
+
+  async getLoadingUnloadingStockCountingAnalytics(req, res, next) {
+    return incidentsService.getLoadingUnloadingStockCountingAnalytics(req, res, next);
+  }
+
   async getBlurredCameraDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Blurred Camera Detection logs.'

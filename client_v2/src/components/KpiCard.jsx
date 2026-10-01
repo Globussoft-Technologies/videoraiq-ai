@@ -11,7 +11,8 @@ function kpiSpark(values, label, fallbackSpark = true) {
   const nums = (Array.isArray(values) ? values : [])
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
-  if (nums.length > 1) return nums;
+  const hasVariation = nums.length > 1 && nums.some((value) => value !== nums[0]);
+  if (hasVariation) return nums;
   if (!fallbackSpark) return [0, 0];
   const index = Math.abs(String(label || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % FALLBACK_SPARKS.length;
   return FALLBACK_SPARKS[index];
@@ -75,8 +76,8 @@ export default function KpiCard({
         </div>
       )}
       {!unavailable && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginTop: 12 }}>
-          <Sparkline values={sparkValues} color={color} />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginTop: 10 }}>
+          <Sparkline values={sparkValues} color={color} height={26} area smooth />
           {delta != null && (
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: deltaColor || 'var(--tx2)' }}>
               {delta}

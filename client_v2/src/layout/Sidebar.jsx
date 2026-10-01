@@ -72,6 +72,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const logOrder = useLogOrder();
   const [dragKey, setDragKey] = useState(null);
   const [overKey, setOverKey] = useState(null);
+  const [expandedChildMenus, setExpandedChildMenus] = useState(() => new Set(['stock-counting']));
   const [logsHeaderHover, setLogsHeaderHover] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -118,6 +119,28 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
     if (onLogsRoute || tourActive) setLogsCollapsed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onLogsRoute, tourActive]);
+  useEffect(() => {
+    const activeParents = NAV_GROUPS.flatMap((group) => group.items || [])
+      .filter((item) => item.children?.some((child) => {
+        const childPath = `/${child.path}`;
+        return location.pathname === childPath || location.pathname.startsWith(`${childPath}/`);
+      }))
+      .map((item) => item.key);
+    if (!activeParents.length) return;
+    setExpandedChildMenus((current) => {
+      const next = new Set(current);
+      activeParents.forEach((key) => next.add(key));
+      return next;
+    });
+  }, [location.pathname]);
+  const toggleChildMenu = (key) => {
+    setExpandedChildMenus((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   const logsExpanded = !logsCollapsed;
   const toggleLogsCollapsed = () => {
     setLogsCollapsed((c) => {
@@ -371,6 +394,91 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
               const draggableHere = group.label === LOGS_GROUP_LABEL && logOrder.enabled && !collapsed;
               const isDragging = draggableHere && dragKey === item.key;
               const isDropTarget = draggableHere && overKey === item.key && dragKey && dragKey !== item.key;
+              const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+              const childRouteActive = hasChildren && item.children.some((child) => {
+                const path = `/${child.path}`;
+                return location.pathname === path || location.pathname.startsWith(`${path}/`);
+              });
+              const childrenExpanded = expandedChildMenus.has(item.key);
+              if (hasChildren && !collapsed) {
+                return (
+                  <div
+                    key={item.key}
+                    draggable={draggableHere}
+                    onDragStart={draggableHere ? (e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDragKey(item.key);
+                    } : undefined}
+                    onDragEnd={draggableHere ? () => { setDragKey(null); setOverKey(null); } : undefined}
+                    onDragOver={draggableHere ? (e) => { e.preventDefault(); setOverKey(item.key); } : undefined}
+                    onDragLeave={draggableHere ? () => setOverKey((key) => (key === item.key ? null : key)) : undefined}
+                    onDrop={draggableHere ? (e) => {
+                      e.preventDefault();
+                      moveLogItem(logOrder.order, dragKey, item.key);
+                      setDragKey(null);
+                      setOverKey(null);
+                    } : undefined}
+                    style={{
+                      opacity: isDragging ? 0.5 : 1,
+                      borderTop: isDropTarget ? '2px solid var(--blue)' : '2px solid transparent',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      data-tour={`nav-${item.key}`}
+                      aria-expanded={childrenExpanded}
+                      onClick={() => toggleChildMenu(item.key)}
+                      style={{
+                        ...navItemStyle(childRouteActive, false),
+                        width: '100%',
+                        border: 0,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {draggableHere && <GripVertical size={13} style={{ color: 'var(--tx3)', flexShrink: 0, marginRight: -3 }} />}
+                      <Icon size={18} strokeWidth={1.7} />
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      <ChevronDown
+                        size={14}
+                        style={{
+                          color: 'var(--tx3)',
+                          transform: childrenExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                          transition: 'transform .15s ease',
+                        }}
+                      />
+                    </button>
+                    {childrenExpanded && <div style={{ margin: '3px 0 4px 28px', paddingLeft: 10, borderLeft: '1px solid var(--bd)' }}>
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon;
+                        return (
+                          <NavLink
+                            key={child.key}
+                            to={child.path}
+                            end={child.path === item.path}
+                            onClick={() => isMobile && onMobileClose?.()}
+                            style={({ isActive }) => ({
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '7px 9px',
+                              marginTop: 2,
+                              borderRadius: 8,
+                              textDecoration: 'none',
+                              fontSize: 12,
+                              fontWeight: isActive ? 700 : 500,
+                              color: isActive ? 'var(--blue)' : 'var(--tx2)',
+                              background: isActive ? 'rgba(59,130,246,.12)' : 'transparent',
+                            })}
+                          >
+                            <ChildIcon size={15} strokeWidth={1.8} />
+                            <span>{child.label}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>}
+                  </div>
+                );
+              }
               return (
                 <NavLink
                   key={item.key}
