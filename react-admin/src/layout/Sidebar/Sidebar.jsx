@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import Cookies from 'js-cookie'
 import {
   LayoutGrid,
   Building2,
-  ScanEye,
-  CreditCard,
-  Menu,
   MonitorCog,
   Shield,
   LogOut,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  UserRound,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { useTheme } from '../../context/ThemeContext'
@@ -42,6 +40,28 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [clientCount, setClientCount] = useState(null)
   const menuRef = useRef(null)
+  const triggerRef = useRef(null)
+
+  // The menu exposes two actions, with standard menu keyboard navigation.
+  useEffect(() => {
+    if (!menuOpen) return
+    menuRef.current?.querySelector('[role="menuitem"]')?.focus()
+  }, [menuOpen])
+
+  const handleMenuKeyDown = (event) => {
+    const items = Array.from(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])
+    const index = items.indexOf(document.activeElement)
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setMenuOpen(false)
+      triggerRef.current?.focus()
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault()
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      items[next]?.focus()
+    }
+  }
 
   // Fetch only one row; the API's totalCount is the authoritative client total.
   useEffect(() => {
@@ -191,14 +211,25 @@ const Sidebar = () => {
       <div className="border-t border-gray-200 px-3 py-3 dark:border-white/8">
         {!collapsed && <ThemeToggle />}
 
-        <div className="relative mt-3" ref={menuRef}>
+        <div className="relative mt-3" ref={menuRef} onKeyDown={handleMenuKeyDown}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false)
+          }}>
           {/* Profile trigger row */}
           <button
             type="button"
+            ref={triggerRef}
+            aria-label="Account menu"
             onClick={() => setMenuOpen((v) => !v)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                setMenuOpen(true)
+              }
+            }}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/4 ${
+            className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 dark:hover:bg-white/4 ${
               collapsed ? 'justify-center' : ''
             }`}
           >
@@ -228,6 +259,7 @@ const Sidebar = () => {
           {menuOpen && (
             <div
               role="menu"
+              aria-label="Account"
               className={`absolute bottom-full mb-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#12151d] ${
                 collapsed ? 'left-0 w-56' : 'inset-x-0'
               }`}
@@ -246,6 +278,16 @@ const Sidebar = () => {
               </div>
 
               <div className="border-t border-gray-100 dark:border-white/6" />
+
+              <Link
+                to="/profile"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-purple-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-purple-500 dark:text-gray-200 dark:hover:bg-white/6"
+              >
+                <UserRound size={16} strokeWidth={2.2} aria-hidden="true" />
+                View Profile
+              </Link>
 
               {/* Sign out */}
               <button

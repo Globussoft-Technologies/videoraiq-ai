@@ -14,7 +14,10 @@ export const setAuthUser = (user) => {
 export const getAuthUser = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
+    const user = raw ? JSON.parse(raw) : null
+    if (!user || typeof user !== 'object' || Array.isArray(user)) return null
+    if (['name', 'email'].some((field) => user[field] != null && typeof user[field] !== 'string')) return null
+    return user
   } catch {
     return null
   }

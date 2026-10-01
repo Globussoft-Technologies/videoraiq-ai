@@ -11,6 +11,7 @@ import SubscriptionPlans from './pages/subscriptionPlans/SubscriptionPlans'
 import FleetOverview from './pages/fleet/FleetOverview'
 import SessionManagement from './pages/sessionManagement/SessionManagement'
 import ComingSoon from './pages/placeholder/ComingSoon'
+import Profile from './pages/profile/Profile'
 
 const App = () => {
   return (
@@ -26,6 +27,7 @@ const App = () => {
           </RequireAuth>
         }
       >
+        <Route path="/profile" element={<Profile />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/clients/:adminId" element={<ClientConfig />} />
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
