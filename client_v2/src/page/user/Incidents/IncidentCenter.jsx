@@ -1323,6 +1323,7 @@ export default function IncidentCenter() {
   const [selectedForResolve, setSelectedForResolve] = useState(() => new Set());
   const [pageScopePage, setPageScopePage] = useState(null);
   const [resolveMenuOpen, setResolveMenuOpen] = useState(false);
+  const [resolveMenuLayout, setResolveMenuLayout] = useState({ left: 0, width: 292 });
   const [resolveMode, setResolveMode] = useState(null);
   const [resolveConfirm, setResolveConfirm] = useState(null);
   const [resolvingBulk, setResolvingBulk] = useState(false);
@@ -1477,6 +1478,29 @@ export default function IncidentCenter() {
   const noIncidents = !!grid.data && !grid.loading && !grid.error && totalCount === 0 && items.length === 0;
   const resolveDisabled = resolvingBulk || !items.length;
   useEffect(() => { if (resolveDisabled) setResolveMenuOpen(false); }, [resolveDisabled]);
+  useLayoutEffect(() => {
+    if (!resolveMenuOpen || resolveDisabled) return;
+    const trigger = resolveMenuRef.current;
+    const toolbar = trigger?.closest('.vq-inc-toolbar');
+    if (!toolbar) return;
+    const updatePosition = () => {
+      const triggerRect = trigger.getBoundingClientRect();
+      const toolbarRect = toolbar.getBoundingClientRect();
+      const width = Math.min(292, Math.max(0, toolbarRect.width - 32));
+      const left = Math.max(toolbarRect.left + 16 - triggerRect.left,
+        Math.min(0, toolbarRect.right - 16 - triggerRect.left - width));
+      setResolveMenuLayout({ left, width });
+    };
+    updatePosition();
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(trigger);
+    observer.observe(toolbar);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [resolveMenuOpen, resolveDisabled]);
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const currentPageIds = useMemo(
@@ -2047,7 +2071,7 @@ export default function IncidentCenter() {
               </button>
             </div>
             {resolveMenuOpen && !resolveDisabled && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300, minWidth: 292, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', ...resolveMenuLayout, boxSizing: 'border-box', zIndex: 300, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
                 <div style={{ padding: '4px 10px 9px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Resolve scope</div>
                 {resolveMode !== 'filtered' && resolveMode !== 'page' && selectedForResolve.size > 0 && (
                   <label onMouseEnter={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 'rgba(34,197,94,.16)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 650 : 500, transition: 'background .15s' }}>
