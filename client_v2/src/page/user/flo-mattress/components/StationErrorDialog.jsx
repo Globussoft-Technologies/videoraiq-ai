@@ -37,11 +37,11 @@ export default function StationErrorDialog({ error, onDismiss }) {
       ? 'Measurement service connection failed'
       : (isMeasurementServiceError ? 'Measurement could not be started' : 'QR image could not be processed'));
   const message = isMeasurementTimeout
-    ? ''
+    ? 'The QR data and captured image were saved, but the measurement result was not received in time. Please check the measurement service and try again.'
     : isUploadError
     ? 'The camera image could not be saved. Please try again.'
     : isMeasurementServiceError
-    ? 'The measurement could not be started. Please make sure the camera area is clear and try again.'
+    ? 'The QR data and captured image were saved, but the depth measurement could not be started. Please check the measurement service and try again.'
     : 'The QR code could not be read. Keep the complete QR clear inside the guide and try again.';
 
   return (

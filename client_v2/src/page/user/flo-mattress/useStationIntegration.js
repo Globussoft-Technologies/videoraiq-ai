@@ -6,9 +6,9 @@ import {
   captureAndUpload,
   isCameraOnline,
   logStationError,
-  measurementStartUrl,
+  measurementStartProxyUrl,
   mergeBootstrap,
-  qrExtractionUrl,
+  qrExtractionProxyUrl,
   readStationFromLocation,
   resolvePiUrl,
   saveStation,
@@ -160,16 +160,16 @@ export default function useStationIntegration() {
         } else if (progress.incidentCompleted && !progress.measurementStarted) {
           reportedError = new Error('The QR incident was saved, but the depth measurement service did not accept the SKU within 15 seconds.');
           reportedError.stage = 'measurement-start-timeout';
-          reportedError.endpoint = measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip);
+          reportedError.endpoint = measurementStartProxyUrl(station?.backend?.ip);
         } else if (progress.captureCompleted && !progress.qrCompleted) {
           reportedError = new Error('The image was captured, but the manual DS QR fallback did not return a readable QR within 15 seconds.');
           reportedError.stage = 'ds-qr-extraction-timeout';
-          reportedError.endpoint = qrExtractionUrl(station?.pi?.api, station?.pi?.device?.ip);
+          reportedError.endpoint = qrExtractionProxyUrl(station?.backend?.ip);
         } else {
           reportedError = new Error('The capture flow did not finish within 15 seconds. Check the camera, upload API, and measurement service logs.');
           reportedError.stage = progress.captureCompleted ? 'start-request-timeout' : 'camera-capture-timeout';
           reportedError.endpoint = progress.captureCompleted
-            ? `${backendCaptureUrl(station?.backend?.ip)} | ${measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip)}`
+            ? `${backendCaptureUrl(station?.backend?.ip)} | ${measurementStartProxyUrl(station?.backend?.ip)}`
             : station?.pi?.api;
         }
       }

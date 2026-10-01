@@ -106,7 +106,7 @@ export async function fetchMeasurementIncidentLog(station, signal, { page = 1, l
   if (stationId) query.set('stationId', stationId);
   if (status) query.set('status', status);
   const response = await fetch(
-    `${backendOrigin(station?.backend?.ip)}/api/v2/measurement-incidents?${query.toString()}`,
+    `${backendApiUrl(station?.backend?.ip, 'measurement-incidents')}?${query.toString()}`,
     {
       signal,
       cache: 'no-store',
@@ -349,7 +349,7 @@ function configuredBackendUrl() {
   return clean(import.meta.env?.VITE_BACKEND);
 }
 
-export function backendCaptureUrl(
+function backendApiBaseUrl(
   ip,
   pageProtocol = window.location.protocol,
   configuredBackend = configuredBackendUrl(),
@@ -372,14 +372,28 @@ export function backendCaptureUrl(
     url = new URL(`${protocol}://${raw}`);
   }
 
-  url.pathname = '/api/v2/measurements/captures';
+  const configuredPath = url.pathname.replace(/\/+$/, '');
+  url.pathname = /\/api\/v2$/i.test(configuredPath)
+    ? configuredPath
+    : `${configuredPath === '/' ? '' : configuredPath}/api/v2`;
   url.search = '';
   url.hash = '';
+  return url;
+}
+
+function backendApiUrl(ip, route = '', pageProtocol = window.location.protocol) {
+  const url = backendApiBaseUrl(ip, pageProtocol);
+  const suffix = clean(route).replace(/^\/+/, '');
+  if (suffix) url.pathname = `${url.pathname.replace(/\/+$/, '')}/${suffix}`;
   return url.toString();
 }
 
+export function backendCaptureUrl(ip, pageProtocol = window.location.protocol) {
+  return backendApiUrl(ip, 'measurements/captures', pageProtocol);
+}
+
 export function backendOrigin(ip, pageProtocol = window.location.protocol) {
-  return new URL(backendCaptureUrl(ip, pageProtocol)).origin;
+  return backendApiBaseUrl(ip, pageProtocol).origin;
 }
 
 export function relativeCapturePath(uploaded) {
@@ -411,7 +425,10 @@ export function resolveBackendImageUrl(image, backendIp, pageProtocol = window.l
     const publicPath = source.startsWith('/api/')
       ? source
       : `/api/v1/uploads/${source.replace(/^\/+/, '')}`;
-    return new URL(publicPath, `${backendOrigin(backendIp, pageProtocol)}/`).toString();
+    const apiBase = backendApiBaseUrl(backendIp, pageProtocol);
+    const proxyPrefix = apiBase.pathname.replace(/\/api\/v2\/?$/i, '');
+    apiBase.pathname = `${proxyPrefix}${publicPath}`.replace(/\/{2,}/g, '/');
+    return apiBase.toString();
   } catch {
     return '';
   }
@@ -438,6 +455,14 @@ export function qrExtractionUrl(piApi, deviceIp = '') {
   const url = new URL(measurementStartUrl(piApi, deviceIp));
   url.pathname = '/v1/qr/extract-dimensions';
   return url.toString();
+}
+
+export function measurementStartProxyUrl(backendIp) {
+  return backendApiUrl(backendIp, 'measurements/start');
+}
+
+export function qrExtractionProxyUrl(backendIp) {
+  return backendApiUrl(backendIp, 'measurements/qr/extract');
 }
 
 export function hasMeasuredData(incident) {
@@ -878,7 +903,7 @@ function reportMeasurementApiDiagnostic(station, diagnostic) {
   const backendIp = station?.backend?.ip;
   const token = station?.backend?.token;
   if (!backendIp || !token) return;
-  fetch(`${backendOrigin(backendIp)}/api/v2/measurements/diagnostics`, {
+  fetch(backendApiUrl(backendIp, 'measurements/diagnostics'), {
     method: 'POST',
     keepalive: true,
     headers: {
@@ -892,7 +917,7 @@ function reportMeasurementApiDiagnostic(station, diagnostic) {
 }
 
 export async function startDepthMeasurement(station, qrDimensions, signal) {
-  const endpoint = measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip);
+  const endpoint = measurementStartProxyUrl(station?.backend?.ip);
   const requestPayload = measurementStartPayload(qrDimensions);
   const startedAt = Date.now();
   reportMeasurementApiDiagnostic(station, {
@@ -906,7 +931,10 @@ export async function startDepthMeasurement(station, qrDimensions, signal) {
       method: 'POST',
       signal,
       cache: 'no-store',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${station?.backend?.token || ''}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(requestPayload),
     });
     let payload;
@@ -956,7 +984,7 @@ export async function startDepthMeasurement(station, qrDimensions, signal) {
       message: error.message,
     });
     const wrapped = new Error(networkFailure
-      ? `Unable to reach the measurement API at ${endpoint}. Check port 8000 and browser CORS access.`
+      ? `Unable to reach the measurement proxy at ${endpoint}.`
       : error.message);
     wrapped.stage = 'measurement-start';
     wrapped.endpoint = endpoint;
@@ -967,7 +995,7 @@ export async function startDepthMeasurement(station, qrDimensions, signal) {
 }
 
 export async function extractQrWithDs(station, jpegBlob, signal, { automatic = false } = {}) {
-  const endpoint = qrExtractionUrl(station?.pi?.api, station?.pi?.device?.ip);
+  const endpoint = qrExtractionProxyUrl(station?.backend?.ip);
   const startedAt = Date.now();
   const form = new FormData();
   form.append('image', jpegBlob, 'qr_code.jpg');
@@ -976,6 +1004,7 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
       method: 'POST',
       signal,
       cache: 'no-store',
+      headers: { Authorization: `Bearer ${station?.backend?.token || ''}` },
       body: form,
     });
     let payload;
@@ -1099,7 +1128,7 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
       });
     }
     const wrapped = new Error(networkFailure
-      ? `Unable to reach the DS QR fallback API at ${endpoint}.`
+      ? `Unable to reach the DS QR proxy at ${endpoint}.`
       : error.message);
     wrapped.stage = 'ds-qr-extraction-fallback';
     wrapped.endpoint = endpoint;
@@ -1112,7 +1141,7 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
 }
 
 export async function createMeasurementIncident(station, { qrMetadata, qrResponse, qrImagePath, qrImage, signal }) {
-  const response = await fetch(`${backendOrigin(station.backend.ip)}/api/v2/measurement-incidents`, {
+  const response = await fetch(backendApiUrl(station.backend.ip, 'measurement-incidents'), {
     method: 'POST',
     signal,
     headers: {
@@ -1136,7 +1165,7 @@ async function deleteUploadedCapture(station, uploaded) {
   const filename = clean(uploaded?.filename);
   if (!filename) return;
   const response = await fetch(
-    `${backendOrigin(station.backend.ip)}/api/v2/measurements/captures/${encodeURIComponent(filename)}`,
+    backendApiUrl(station.backend.ip, `measurements/captures/${encodeURIComponent(filename)}`),
     {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${station.backend.token}` },
@@ -1150,7 +1179,7 @@ async function deleteUploadedCapture(station, uploaded) {
 export async function fetchMeasurementIncident(station, incidentId, signal) {
   if (!incidentId) return null;
   const response = await fetch(
-    `${backendOrigin(station.backend.ip)}/api/v2/measurement-incidents/${encodeURIComponent(incidentId)}`,
+    backendApiUrl(station.backend.ip, `measurement-incidents/${encodeURIComponent(incidentId)}`),
     {
       signal,
       cache: 'no-store',
@@ -1169,7 +1198,7 @@ export async function fetchMeasurementIncidentBySku(station, sku, signal) {
   if (stationId) query.set('stationId', stationId);
   const suffix = query.size ? `?${query.toString()}` : '';
   const response = await fetch(
-    `${backendOrigin(station.backend.ip)}/api/v2/measurement-incidents/by-sku/${encodeURIComponent(normalizedSku)}${suffix}`,
+    `${backendApiUrl(station.backend.ip, `measurement-incidents/by-sku/${encodeURIComponent(normalizedSku)}`)}${suffix}`,
     {
       signal,
       cache: 'no-store',
@@ -1184,7 +1213,7 @@ export async function updateMeasurementIncident(station, incidentId, method, bod
   if (!incidentId) throw new Error('Measurement incident is not available yet');
   const suffix = method === 'PATCH' ? '/status' : '';
   const response = await fetch(
-    `${backendOrigin(station.backend.ip)}/api/v2/measurement-incidents/${encodeURIComponent(incidentId)}${suffix}`,
+    `${backendApiUrl(station.backend.ip, `measurement-incidents/${encodeURIComponent(incidentId)}`)}${suffix}`,
     {
       method,
       headers: {
@@ -1249,15 +1278,6 @@ export async function scanCameraForQr(station, camera, signal, { useDsFallback =
   }
   const qrResponse = await decodeQrImage(jpegBlob, { required: false, fastOnly: true });
   return qrResponse ? { jpegBlob, qrResponse } : null;
-}
-
-async function deleteMeasurementIncident(station, incidentId) {
-  if (!incidentId) return;
-  const response = await fetch(
-    `${backendOrigin(station.backend.ip)}/api/v2/measurement-incidents/${encodeURIComponent(incidentId)}`,
-    { method: 'DELETE', headers: { Authorization: `Bearer ${station.backend.token}` } },
-  );
-  if (!response.ok && response.status !== 404) throw new Error(`Incident cleanup failed (${response.status})`);
 }
 
 export async function captureAndUpload({ station, camera, signal, progress = {}, jpegBlob: suppliedBlob, qrResponse: suppliedQrResponse, captureMode = 'manual' }) {
@@ -1351,48 +1371,38 @@ export async function captureAndUpload({ station, camera, signal, progress = {},
 
   const dsMeasurementRequestId = clean(qrResponse?.measurement_request_id)
     || clean(qrResponse?.measurementRequestId);
-  let measurementResponse = {};
-  try {
-    if (dsMeasurementRequestId) {
-      // The DS QR endpoint has already launched the depth job. Starting it a
-      // second time can leave the Pi busy until the outer request deadline.
-      progress.measurementStarted = true;
-      try {
-        logStationSuccess('measurement-already-started', {
-          incidentId: incident?._id,
-          sku: qrResponse.dimensions.sku,
-          stationId: station.pi.device.mac,
-          source: qrResponse?.source || 'ds-qr-extraction',
-          message: 'Skipped duplicate measurement start because DS already returned a measurement request ID',
-          details: { measurementRequestId: dsMeasurementRequestId },
-        });
-      } catch (logError) {
-        console.warn('[VideoraIQ measurement diagnostic error]', logError);
-      }
-    } else {
-      measurementResponse = await startDepthMeasurement(station, qrResponse.dimensions, signal);
-      progress.measurementStarted = true;
+  if (dsMeasurementRequestId) {
+    // The DS QR endpoint has already launched the depth job. Starting it a
+    // second time can leave the Pi busy until the outer request deadline.
+    progress.measurementStarted = true;
+    try {
+      logStationSuccess('measurement-already-started', {
+        incidentId: incident?._id,
+        sku: qrResponse.dimensions.sku,
+        stationId: station.pi.device.mac,
+        source: qrResponse?.source || 'ds-qr-extraction',
+        message: 'Skipped duplicate measurement start because DS already returned a measurement request ID',
+        details: { measurementRequestId: dsMeasurementRequestId },
+      });
+    } catch (logError) {
+      console.warn('[VideoraIQ measurement diagnostic error]', logError);
     }
-  } catch (error) {
-    await deleteMeasurementIncident(station, incident?._id).catch((cleanupError) => {
-      console.error('[VideoraIQ incident cleanup error]', cleanupError);
-    });
-    await deleteUploadedCapture(station, uploaded).catch((cleanupError) => {
-      console.error('[VideoraIQ capture cleanup error]', cleanupError);
-    });
-    throw error;
   }
 
-  const completeQrResponse = { ...qrResponse, ...measurementResponse };
-  incident = {
-    ...incident,
-    requestPayload: {
-      ...(incident?.requestPayload || {}),
-      qrResponse: completeQrResponse,
-    },
+  // Return as soon as the QR data, captured image, and incident are safely
+  // stored. The dashboard starts (or continues) the depth measurement after
+  // it has rendered this scan, so a DS connection failure can never discard
+  // an otherwise valid capture.
+  const result = {
+    jpegBlob,
+    uploaded,
+    qrResponse,
+    incident,
+    capturedAt,
+    camera,
+    captureMode,
+    measurementStartRequired: !dsMeasurementRequestId,
   };
-
-  const result = { jpegBlob, uploaded, qrResponse: completeQrResponse, incident, capturedAt, camera, captureMode };
   logStationSuccess('qr-incident-created', {
     incidentId: incident?._id,
     sku: incident?.qrSku || incident?.qrMetadata?.sku,

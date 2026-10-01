@@ -4,11 +4,14 @@ import DashboardBanner from './components/DashboardBanner';
 import DashboardBottomBar from './components/DashboardBottomBar';
 import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
+import StationErrorDialog from './components/StationErrorDialog';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasCompleteMeasuredData, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementDataForDisplay, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasCompleteMeasuredData, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementDataForDisplay, measurementStartProxyUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, startDepthMeasurement, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
 import useStationKioskFocus from './useStationKioskFocus';
+
+const MEASUREMENT_ERROR_REVEAL_DELAY_MS = 5000;
 
 export default function FloMattressDashboard() {
   const navigate = useNavigate();
@@ -17,10 +20,14 @@ export default function FloMattressDashboard() {
   const station = location.state?.station || readStationFromLocation();
   const { incident, setIncident, connected } = useMeasurementSocket(station, location.state?.incident || location.state?.capture?.incident);
   const [actionError, setActionError] = useState('');
+  const [measurementStartError, setMeasurementStartError] = useState(null);
+  const [measurementStartDialogOpen, setMeasurementStartDialogOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const resetInFlightRef = useRef(false);
   const measurementTimeoutHandledRef = useRef(false);
+  const measurementStartAttemptRef = useRef('');
+  const measurementErrorRevealTimerRef = useRef();
   const measurementSoundRef = useRef({ incidentId: '', complete: false });
   const intentionalFullscreenExitRef = useRef(false);
   const wasFullscreenRef = useRef(Boolean(document.fullscreenElement));
@@ -38,6 +45,81 @@ export default function FloMattressDashboard() {
   const [measurementDeadlineReached, setMeasurementDeadlineReached] = useState(false);
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
   const stop = useCallback(() => navigate('/start-measure'), [navigate]);
+  const queueMeasurementError = useCallback((diagnostic) => {
+    window.clearTimeout(measurementErrorRevealTimerRef.current);
+    setMeasurementStartError(diagnostic);
+    setMeasurementStartDialogOpen(false);
+    measurementErrorRevealTimerRef.current = window.setTimeout(() => {
+      setMeasurementStartDialogOpen(true);
+    }, MEASUREMENT_ERROR_REVEAL_DELAY_MS);
+  }, []);
+  const dismissMeasurementError = useCallback(() => {
+    window.clearTimeout(measurementErrorRevealTimerRef.current);
+    setMeasurementStartDialogOpen(false);
+    stop();
+  }, [stop]);
+
+  useEffect(() => () => {
+    window.clearTimeout(measurementErrorRevealTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!measurementReady) return;
+    window.clearTimeout(measurementErrorRevealTimerRef.current);
+    setMeasurementStartError(null);
+    setMeasurementStartDialogOpen(false);
+  }, [measurementReady]);
+
+  useEffect(() => {
+    const capture = location.state?.capture;
+    const incidentId = String(incident?._id || '');
+    if (!capture?.measurementStartRequired || !incidentId || measurementReady) return undefined;
+    if (measurementStartAttemptRef.current === incidentId) return undefined;
+    measurementStartAttemptRef.current = incidentId;
+
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15_000);
+
+    startDepthMeasurement(station, capture.qrResponse?.dimensions || incident?.qrMetadata || {}, controller.signal)
+      .then((measurementResponse) => {
+        setIncident((current) => ({
+          ...current,
+          requestPayload: {
+            ...(current?.requestPayload || {}),
+            qrResponse: {
+              ...(current?.requestPayload?.qrResponse || capture.qrResponse || {}),
+              ...measurementResponse,
+            },
+          },
+        }));
+      })
+      .catch((error) => {
+        if (controller.signal.aborted && !timedOut) return;
+        let reportedError = error;
+        if (timedOut) {
+          reportedError = new Error('The scanned data and image were saved, but the depth measurement service did not respond within 15 seconds.');
+          reportedError.stage = 'measurement-start-timeout';
+          reportedError.endpoint = measurementStartProxyUrl(station?.backend?.ip);
+          reportedError.errorType = 'timeout';
+        }
+        const diagnostic = logStationError(reportedError, {
+          incidentId,
+          sku: incident?.qrSku || incident?.qrMetadata?.sku,
+          piApi: station?.pi?.api,
+        });
+        queueMeasurementError(diagnostic);
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [incident?._id, location.state?.capture, measurementReady, queueMeasurementError, setIncident, station]);
 
   useEffect(() => {
     const incidentId = String(incident?._id || '');
@@ -91,7 +173,7 @@ export default function FloMattressDashboard() {
   }, [incident?._id, estimate]);
 
   useEffect(() => {
-    if (measurementReady || estimate <= 0 || !measurementDeadlineReached || !incident?._id || measurementTimeoutHandledRef.current) return undefined;
+    if (measurementReady || measurementStartError || estimate <= 0 || !measurementDeadlineReached || !incident?._id || measurementTimeoutHandledRef.current) return undefined;
     measurementTimeoutHandledRef.current = true;
     let active = true;
 
@@ -112,7 +194,7 @@ export default function FloMattressDashboard() {
       const timeoutError = new Error('Something went wrong while waiting for the measurement. Please try again.');
       timeoutError.stage = 'ds-measurement-timeout';
       try {
-        timeoutError.endpoint = measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip);
+        timeoutError.endpoint = measurementStartProxyUrl(station?.backend?.ip);
       } catch {
         timeoutError.endpoint = station?.pi?.api || '';
       }
@@ -124,12 +206,12 @@ export default function FloMattressDashboard() {
         finalCheckError,
       };
       const diagnostic = logStationError(timeoutError, { piApi: station?.pi?.api });
-      navigate('/start-measure', { replace: true, state: { station, stationError: diagnostic } });
+      queueMeasurementError(diagnostic);
     };
 
     handleMeasurementTimeout();
     return () => { active = false; };
-  }, [estimate, incident?._id, incident?.qrMetadata?.sku, incident?.qrSku, measurementDeadlineReached, measurementReady, navigate, setIncident, station]);
+  }, [estimate, incident?._id, incident?.qrMetadata?.sku, incident?.qrSku, measurementDeadlineReached, measurementReady, measurementStartError, queueMeasurementError, setIncident, station]);
   const reset = useCallback(async () => {
     if (resetInFlightRef.current) return;
     resetInFlightRef.current = true;
@@ -171,6 +253,9 @@ export default function FloMattressDashboard() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      // The error dialog owns its dismissal shortcuts while it is visible.
+      // In particular, Escape must not delete this already-saved scan.
+      if (measurementStartDialogOpen) return;
       // Reset always takes precedence on the review screen. The reset guard
       // prevents duplicate deletion when Escape also exits fullscreen.
       if (matchesEscapeShortcut(event)) {
@@ -197,12 +282,19 @@ export default function FloMattressDashboard() {
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [decide, incident, logOpen, measurementReady, reset, stop, toggleFullscreen, toggleLogs, updating]);
+  }, [decide, incident, logOpen, measurementReady, measurementStartDialogOpen, reset, stop, toggleFullscreen, toggleLogs, updating]);
 
   return (
     <main ref={kioskSurfaceRef} tabIndex={-1} className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)] outline-none">
       <StationTopbar running onStartStop={stop} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} />
       <DashboardBanner incident={incident} connected={connected} />
+      {measurementStartDialogOpen && measurementStartError && (
+        <div role="alert" className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800">
+          QR data and image are saved. {measurementStartError.stage === 'ds-measurement-timeout'
+            ? 'The measurement result was not received in time; check the Raspberry Pi measurement service and retry.'
+            : 'The measurement service could not be started; check the Raspberry Pi measurement service and retry.'}
+        </div>
+      )}
       {actionError && <div role="alert" className="border-b border-red-300 bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{actionError}</div>}
       <section className="relative min-h-0 flex-1 overflow-hidden px-4 py-3 md:px-5">
         <div className="absolute inset-0 opacity-[0.38] [background-image:linear-gradient(var(--grid)_1px,transparent_1px),linear-gradient(90deg,var(--grid)_1px,transparent_1px)] [background-size:44px_44px]" />
@@ -213,6 +305,10 @@ export default function FloMattressDashboard() {
       </section>
       <DashboardBottomBar onAccept={() => decide('accepted')} onReject={() => decide('rejected')} onReset={reset} disabled={!measurementReady || updating} resetDisabled={updating} status={incident?.status} />
       <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} escapeBehavior="reset" />
+      <StationErrorDialog
+        error={measurementStartDialogOpen ? measurementStartError : null}
+        onDismiss={dismissMeasurementError}
+      />
     </main>
   );
 }
