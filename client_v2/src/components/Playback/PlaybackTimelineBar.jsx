@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ZoomIn, ZoomOut, Clock, ShieldAlert } from 'lucide-react';
 import { useTheme } from '../../theme/ThemeContext';
+import { detectionLabel, mediaUrl } from '../../lib/format';
+import { fetchIncidentById } from '../../helpers/incidents';
+import { incidentPreviewImageUrls } from './incidentPreviewImages';
 import { isFutureSeek } from './playbackTimeGuard';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -37,31 +41,104 @@ function getOptimalLabelStepSec(tickStepSec, windowDurationMs, containerWidth, s
 const INCIDENT_COLOR = {
   faceRecognition: '#3b82f6',
   motionDetection: '#f5a623',
-  genericObjectDetection: '#f5a623',
+  genericObjectDetection: '#a3e635',
   unauthorizedAccess: '#ef4444',
   lineCrossing: '#f97316',
-  fireSmokeDetection: '#ef4444',
-  weaponDetection: '#ef4444',
-  unattendedBaggageDetection: '#f5a623',
-  crowdDetection: '#f5a623',
+  fireSmokeDetection: '#dc2626',
+  weaponDetection: '#fb7185',
+  unattendedBaggageDetection: '#d97706',
+  crowdDetection: '#eab308',
   doorDetection: '#06b6d4',
-  vehicleDetection: '#06b6d4',
-  deskAbsence: '#f5a623',
-  guardAbsence: '#ef4444',
-  loiteringDetection: '#f5a623',
+  vehicleDetection: '#0ea5e9',
+  deskAbsence: '#84cc16',
+  guardAbsence: '#e11d48',
+  loiteringDetection: '#d946ef',
   workingAtHeightDetection: '#f59e0b',
-  oilLeakageDetection: '#06b6d4',
+  oilLeakageDetection: '#2dd4bf',
   equipmentOilLeakageDetection: '#0891b2',
   vehicleFuelOilLeakageDetection: '#0e7490',
   gunnyBagsMaterialsWrongLocationDetection: '#8b5cf6',
   sandDustWasteScrapDisposalDetection: '#78716c',
-  unauthorizedAnimalEntryDetection: '#ef4444',
+  unauthorizedAnimalEntryDetection: '#c084fc',
   spillsDirtyMessyAreasDetection: '#14b8a6',
   loadingUnloadingStockCountingDetection: '#6366f1',
+  faceAuthentication: '#2563eb',
+  personalProtectiveEquipment: '#22c55e',
+  lightDetection: '#fde047',
+  guardSleepingDetection: '#be123c',
+  conveyorDetection: '#a78bfa',
+  crusherDetection: '#a855f7',
+  cylinderDetection: '#f472b6',
+  waterSpillageDetection: '#38bdf8',
+  vehicleObstruction: '#facc15',
+  unauthorizedParkingDetection: '#fdba74',
+  personFallSickDetection: '#f43f5e',
+  vehicleTypeDetection: '#60a5fa',
+  tableOccupancyDetection: '#4ade80',
+  foodServicePPEDetection: '#10b981',
+  mobilePhoneDetection: '#e879f9',
+  carModelDetection: '#818cf8',
+  vehicleCheckInOut: '#67e8f9',
+  blurredCameraDetection: '#94a3b8',
+  countPersons: '#bef264',
+  countVehicles: '#93c5fd',
+  loiteringWithoutAuth: '#c026d3',
+  loiteringWithAuth: '#f0abfc',
 };
 
 function eventColor(type) {
-  return INCIDENT_COLOR[type] || '#8b5cf6';
+  if (INCIDENT_COLOR[type]) return INCIDENT_COLOR[type];
+  // Keep unlisted detection types stable rather than painting all of them purple.
+  let hash = 0;
+  for (const char of String(type || 'Detection')) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `hsl(${hash % 360}, ${65 + (hash % 15)}%, ${55 + (hash % 10)}%)`;
+}
+
+function previewImageUrls(path) {
+  const imagePath = typeof path === 'string' ? path.trim() : '';
+  return incidentPreviewImageUrls(imagePath, {
+    primaryUrl: mediaUrl(imagePath),
+    incidentBase: import.meta.env.VITE_INCIDENT_URL || '',
+    backendBase: import.meta.env.VITE_BACKEND || '',
+  });
+}
+
+function IncidentPreviewImage({ path, incidentId, label, loadIncident }) {
+  const [detailPath, setDetailPath] = useState('');
+  const [failedUrls, setFailedUrls] = useState(() => new Set());
+  const [loadingDetails, setLoadingDetails] = useState(!!incidentId);
+  const [loadedUrl, setLoadedUrl] = useState('');
+  const imageRef = useRef(null);
+  const candidates = [...new Set([...previewImageUrls(detailPath), ...previewImageUrls(path)])];
+  const url = candidates.find((candidate) => !failedUrls.has(candidate));
+
+  // This component only mounts for the hovered incident. Reuse the same
+  // read-only detail API used by Alerts, with a cache owned by this timeline.
+  useEffect(() => {
+    let cancelled = false;
+    if (!incidentId) { setLoadingDetails(false); return; }
+    loadIncident(incidentId).then((incident) => {
+      if (cancelled) return;
+      setDetailPath(incident?.Image || incident?.image || incident?.imageUrl || '');
+      setLoadingDetails(false);
+    });
+    return () => { cancelled = true; };
+  }, [incidentId, loadIncident]);
+
+  useLayoutEffect(() => {
+    if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) setLoadedUrl(url);
+  }, [url]);
+
+  const loading = url ? loadedUrl !== url : loadingDetails;
+  return (
+    <div className="relative flex h-36 items-center justify-center rounded-md overflow-hidden bg-black/10" aria-busy={loading}>
+      {url && (
+        <img key={url} ref={imageRef} src={url} alt={`${label} incident`} className="w-full h-full object-contain" decoding="async" onLoad={() => setLoadedUrl(url)} onError={() => setFailedUrls((prev) => new Set([...prev, url]))} />
+      )}
+      {loading && <span className="absolute text-xs opacity-70">Loading incident image…</span>}
+      {!url && !loadingDetails && <span className="text-xs opacity-70">Image unavailable</span>}
+    </div>
+  );
 }
 
 function pad2(n) {
@@ -81,6 +158,7 @@ export default function PlaybackTimelineBar({
   date,
   cursorMs,
   onSeek,
+  onIncidentSeek,
   segments = [],
   events = [],
   loadingMeta = false,
@@ -107,12 +185,110 @@ export default function PlaybackTimelineBar({
   const [isHovering, setIsHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
   const justDraggedRef = useRef(false);
+  const previewRef = useRef(null);
+  const previewCloseTimerRef = useRef(null);
+  const incidentDetailsRef = useRef(new Map());
+  const [incidentPreview, setIncidentPreview] = useState(null);
+  const [previewPosition, setPreviewPosition] = useState({ left: 8, top: 8 });
 
   const dayStart = useMemo(() => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, [date]);
+
+  const incidentMarkers = useMemo(() => events.flatMap((event, index) => {
+    if (!event?.timeOfIncident) return [];
+    const timeMs = new Date(event.timeOfIncident).getTime() - dayStart;
+    if (!Number.isFinite(timeMs) || timeMs < 0 || timeMs >= DAY_MS) return [];
+    return [{
+      key: `${event._id || 'incident'}-${index}`,
+      timeMs,
+      label: detectionLabel(event.incidentType),
+      name: event.incidentName,
+      color: eventColor(event.incidentType),
+      incidentId: event._id || event.id,
+      imagePath: event.Image || event.images?.frameImage || event.images?.personImage || event.image || event.imageUrl || event.snapshotUrl || event.carImage || event.carImageUrl,
+    }];
+  }), [events, dayStart]);
+
+  const cancelPreviewClose = useCallback(() => {
+    clearTimeout(previewCloseTimerRef.current);
+  }, []);
+  const loadPreviewIncident = useCallback((incidentId) => {
+    const cache = incidentDetailsRef.current;
+    if (!cache.has(incidentId)) {
+      const request = fetchIncidentById(incidentId).catch(() => {
+        // A temporary detail failure must not poison later hovers.
+        if (cache.get(incidentId) === request) cache.delete(incidentId);
+        return null;
+      });
+      cache.set(incidentId, request);
+    }
+    return cache.get(incidentId);
+  }, []);
+  const closeIncidentPreview = useCallback(() => {
+    clearTimeout(previewCloseTimerRef.current);
+    setIncidentPreview(null);
+  }, []);
+  const schedulePreviewClose = useCallback(() => {
+    clearTimeout(previewCloseTimerRef.current);
+    previewCloseTimerRef.current = setTimeout(() => setIncidentPreview(null), 200);
+  }, []);
+
+  useEffect(() => {
+    incidentDetailsRef.current.clear();
+    closeIncidentPreview();
+  }, [incidentMarkers, closeIncidentPreview]);
+  useEffect(() => { closeIncidentPreview(); }, [timelineZoomLevel, closeIncidentPreview]);
+  useEffect(() => () => clearTimeout(previewCloseTimerRef.current), []);
+
+  const showIncidentPreview = (marker, element) => {
+    if (dragging) return;
+    cancelPreviewClose();
+    const trackWidth = trackRef.current?.getBoundingClientRect().width || trackWidthPx;
+    // At the 24-hour scale several incidents can occupy the same few pixels.
+    const nearby = incidentMarkers.filter((item) => Math.abs(item.timeMs - marker.timeMs) / DAY_MS * trackWidth <= 8);
+    nearby.sort((a, b) => a.timeMs - b.timeMs);
+    const rect = element.getBoundingClientRect();
+    setIncidentPreview({ items: nearby, activeKey: marker.key, anchor: { x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom } });
+  };
+
+  useLayoutEffect(() => {
+    if (!incidentPreview || !previewRef.current) return;
+    const { width, height } = previewRef.current.getBoundingClientRect();
+    const { anchor } = incidentPreview;
+    const top = anchor.top >= height + 16 ? anchor.top - height - 8 : anchor.bottom + 8;
+    setPreviewPosition({
+      left: Math.max(8, Math.min(window.innerWidth - width - 8, anchor.x - width / 2)),
+      top: Math.max(8, Math.min(window.innerHeight - height - 8, top)),
+    });
+  }, [incidentPreview]);
+
+  useEffect(() => {
+    if (!incidentPreview) return;
+    const onScroll = (event) => {
+      if (!previewRef.current?.contains(event.target)) closeIncidentPreview();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeIncidentPreview();
+    };
+    const onPointerDown = (event) => {
+      if (!previewRef.current?.contains(event.target) && !trackRef.current?.contains(event.target)) closeIncidentPreview();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', closeIncidentPreview);
+    document.addEventListener('fullscreenchange', closeIncidentPreview);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', closeIncidentPreview);
+      document.removeEventListener('fullscreenchange', closeIncidentPreview);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [incidentPreview, closeIncidentPreview]);
 
   const lastFutureWarningRef = useRef(0);
   const notifyFutureSeek = useCallback(() => {
@@ -142,10 +318,11 @@ export default function PlaybackTimelineBar({
   }, []);
 
   const handleScroll = useCallback(() => {
+    closeIncidentPreview();
     if (scrollRef.current) {
       setScrollLeft(scrollRef.current.scrollLeft);
     }
-  }, []);
+  }, [closeIncidentPreview]);
 
   useEffect(() => {
     if (!playing || dragging) return;
@@ -244,6 +421,7 @@ export default function PlaybackTimelineBar({
   };
 
   const handlePointerDown = (e) => {
+    closeIncidentPreview();
     e.preventDefault();
     const ms = msFromClientX(e.clientX);
     if (isFutureSeek(dayStart, ms)) {
@@ -275,6 +453,18 @@ export default function PlaybackTimelineBar({
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+  };
+
+  const seekToIncident = (marker, e) => {
+    e.stopPropagation();
+    // Marker clicks must not also start the parent track's drag-to-seek path.
+    justDraggedRef.current = false;
+    if (isFutureSeek(dayStart, marker.timeMs)) {
+      notifyFutureSeek();
+      return;
+    }
+    closeIncidentPreview();
+    (onIncidentSeek || onSeek)(marker.timeMs);
   };
 
   const handlePointerMove = (e) => {
@@ -369,6 +559,7 @@ export default function PlaybackTimelineBar({
   );
   const cursorVisible = cursorPx >= scrollLeft && cursorPx <= scrollLeft + containerWidth;
   const cursorLabelOffset = clampLabelCenter(cursorPx) - cursorPx;
+  const previewIncident = incidentPreview?.items.find((item) => item.key === incidentPreview.activeKey);
 
   return (
     <div 
@@ -426,12 +617,24 @@ export default function PlaybackTimelineBar({
             <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${cursorPct}%`, background: 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.25) 100%)' }} />
             {futureStartMs < DAY_MS && <div className="absolute top-0 bottom-0 right-0 bg-[#0c1017] pointer-events-none" style={{ left: `${(futureStartMs / DAY_MS) * 100}%` }} />}
           </div>
-          {events.map((ev) => {
-            const t = new Date(ev.timeOfIncident).getTime();
-            const leftPct = ((t - dayStart) / DAY_MS) * 100;
-            if (leftPct < 0 || leftPct > 100) return null;
-            return <div key={ev._id} className="absolute top-0 bottom-0 w-1 z-20 pointer-events-none" style={{ left: `${leftPct}%`, backgroundColor: eventColor(ev.incidentType), transform: 'translateX(-50%)' }} />;
-          })}
+          {incidentMarkers.map((marker) => (
+            <button
+              key={marker.key}
+              type="button"
+              aria-label={`${marker.label} at ${formatClock(marker.timeMs)}. Jump to incident.`}
+              aria-haspopup="dialog"
+              className="absolute top-0 bottom-0 w-2 z-20 p-0 border-0 bg-transparent cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              style={{ left: `${marker.timeMs / DAY_MS * 100}%`, transform: 'translateX(-50%)' }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => seekToIncident(marker, e)}
+              onMouseEnter={(e) => showIncidentPreview(marker, e.currentTarget)}
+              onMouseLeave={schedulePreviewClose}
+              onFocus={(e) => showIncidentPreview(marker, e.currentTarget)}
+              onBlur={(e) => { if (!previewRef.current?.contains(e.relatedTarget)) schedulePreviewClose(); }}
+            >
+              <span className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 pointer-events-none" style={{ backgroundColor: marker.color }} />
+            </button>
+          ))}
           {isHovering && hoverX > 0 && <div className="absolute top-0 bottom-0 w-[1px] bg-white/50 pointer-events-none z-25" style={{ left: `${hoverX}px` }} />}
           <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,1)]" style={{ left: `${cursorPct}%` }}>
             {cursorVisible && (
@@ -490,6 +693,55 @@ export default function PlaybackTimelineBar({
           })}
         </div>
       </div>
+      {previewIncident && createPortal(
+        <div
+          ref={previewRef}
+          role="dialog"
+          aria-label="Incident preview"
+          className="fixed rounded-xl border p-3 shadow-2xl text-sm"
+          style={{ ...previewPosition, width: 'min(300px, calc(100vw - 16px))', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto', zIndex: 10000, backgroundColor: isDark ? '#111827' : '#ffffff', color: isDark ? '#f1f5f9' : '#0f172a', borderColor: isDark ? '#334155' : '#cbd5e1' }}
+          onMouseEnter={cancelPreviewClose}
+          onMouseLeave={schedulePreviewClose}
+          onFocusCapture={cancelPreviewClose}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) schedulePreviewClose(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start gap-2 mb-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: previewIncident.color }} />
+            <div className="min-w-0">
+              <div className="font-semibold break-words">{previewIncident.label}</div>
+              {previewIncident.name && previewIncident.name !== previewIncident.label && <div className="text-xs opacity-75 break-words">{previewIncident.name}</div>}
+              <div className="font-mono text-xs mt-1">{formatClock(previewIncident.timeMs)}</div>
+            </div>
+          </div>
+          <IncidentPreviewImage key={`${previewIncident.key}-${previewIncident.imagePath || ''}`} path={previewIncident.imagePath} incidentId={previewIncident.incidentId} label={previewIncident.label} loadIncident={loadPreviewIncident} />
+          {incidentPreview.items.length > 1 && (
+            <div className="mt-2">
+              <div className="text-xs opacity-75 mb-1">{incidentPreview.items.length} nearby incidents — select to jump</div>
+              <div className="max-h-28 overflow-y-auto space-y-1">
+                {incidentPreview.items.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className="w-full flex items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500"
+                    style={{ backgroundColor: item.key === previewIncident.key ? (isDark ? '#334155' : '#e2e8f0') : undefined }}
+                    onMouseEnter={() => setIncidentPreview((prev) => prev && ({ ...prev, activeKey: item.key }))}
+                    onFocus={() => setIncidentPreview((prev) => prev && ({ ...prev, activeKey: item.key }))}
+                    onClick={(e) => seekToIncident(item, e)}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="flex-1">{item.label}</span>
+                    <span className="font-mono shrink-0">{formatClock(item.timeMs)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button type="button" className="w-full mt-2 rounded-md py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400" onClick={(e) => seekToIncident(previewIncident, e)}>Jump to {formatClock(previewIncident.timeMs)}</button>
+        </div>,
+        document.fullscreenElement || document.body
+      )}
     </div>
   );
 }

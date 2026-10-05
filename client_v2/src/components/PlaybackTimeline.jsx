@@ -88,6 +88,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const scrubTimerRef = useRef(null);
   const seekTokenRef = useRef(0);
   const streamStartMsRef = useRef(0);
+  const incidentStartRef = useRef(false);
   const clockAnchoredRef = useRef(false);
   const fragmentAnchorsRef = useRef([]);
   const playlistClockRef = useRef(null);
@@ -198,7 +199,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   }, []);
 
   // Resolve + load a playable segment for the current cursor (debounced)
-  const loadAt = useCallback((ms, mutexRetries = 0) => {
+  const loadAt = useCallback((ms, mutexRetries = 0, incidentStart = false) => {
     if (!channelId) return;
     if (isFutureSeek(day.getTime(), ms)) {
       triggerFutureAlert();
@@ -208,6 +209,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     const token = ++seekTokenRef.current;
     // The playback API encodes startTime to whole seconds.
     const requestedMs = Math.floor(ms / 1000) * 1000;
+    incidentStartRef.current = incidentStart;
     transportRef.current?.prepare({ autoplay: true });
     // Drop the old DASH session now: each segment it keeps downloading makes the
     // backend ping the NVR's keepalive, holding the one-session lock the new
@@ -253,7 +255,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
             duration: HONEYWELL_MUTEX_RETRY_MS + 1000,
           });
           scrubTimerRef.current = setTimeout(() => {
-            if (token === seekTokenRef.current) loadAt(requestedMs, mutexRetries + 1);
+            if (token === seekTokenRef.current) loadAt(requestedMs, mutexRetries + 1, incidentStart);
           }, HONEYWELL_MUTEX_RETRY_MS);
           return;
         }
@@ -304,6 +306,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     let resumePosition = null;
     let failed = false;
     const seekToken = seekTokenRef.current;
+    const startAtIncident = incidentStartRef.current;
     const isSecurusPlayback = /\/securus-playback\//i.test(videoUrl);
     const isCurrent = () => !cancelled && !failed && seekToken === seekTokenRef.current;
     const failPlayback = (error) => {
@@ -404,7 +407,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           try { hls.destroy(); } catch { /* noop */ }
         }
         transportRef.current?.attach();
-        hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, startPosition: resumePosition ?? -1 });
+        // A recording requested at an incident starts at that incident. The
+        // default -1 selects the live edge of a growing HLS playlist and can
+        // skip footage that the timeline has just asked to play.
+        hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, startPosition: resumePosition ?? (startAtIncident ? 0 : -1) });
         hls.attachMedia(video);
         hls.loadSource(videoUrl);
 
@@ -590,7 +596,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   }, [cursorMs, saveFrameAt]);
 
   const seekTo = useCallback(
-    (ms) => {
+    (ms, { incident = false } = {}) => {
       const clamped = Math.max(0, Math.min(DAY_MS - 1, ms));
       if (isFutureSeek(day.getTime(), clamped)) {
         triggerFutureAlert();
@@ -611,8 +617,9 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         // Media time 0 is the manifest start, not the clicked time.
         streamStartMsRef.current = loaded.start;
         video.currentTime = offsetSec;
+        if (incident) transportRef.current?.play();
       } else {
-        loadAt(clamped);
+        loadAt(clamped, 0, incident);
       }
 
       // Attempt immediate capture if the video element is already rendering
@@ -622,6 +629,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     },
     [day, loadAt, saveFrameAt, triggerFutureAlert]
   );
+
+  const jumpToIncident = useCallback((ms) => seekTo(ms, { incident: true }), [seekTo]);
 
   const skipBy = useCallback((deltaMs) => seekTo(cursorMs + deltaMs), [seekTo, cursorMs]);
   const skipToStart = useCallback(() => seekTo(0), [seekTo]);
@@ -827,6 +836,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         date={day}
         cursorMs={cursorMs}
         onSeek={seekTo}
+        onIncidentSeek={jumpToIncident}
         segments={segments}
         events={events}
         loadingMeta={loadingMeta}
