@@ -53,6 +53,11 @@ const deliveryHistorySchema = new mongoose.Schema(
 const attendanceAutoEmailReportSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
+    // Kept in this collection so existing schedules and the scheduler remain
+    // backward compatible. Records created before this field are attendance.
+    contentType: { type: String, enum: ["attendance", "incidents"], default: "attendance" },
+    incidentTypes: [{ type: String, trim: true }],
+    pdfLayout: { type: String, enum: ["list", "grid"], default: "list" },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "users", default: null },
     recipients: [{ type: String, required: true, lowercase: true, trim: true }],

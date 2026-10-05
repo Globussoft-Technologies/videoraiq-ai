@@ -20,12 +20,22 @@ import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTr
 import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
 import { buildAttendanceWorkbook } from "./attendanceWorkbook.js";
 import { buildBreakPdf, buildBreakWorkbook } from "./breakLogReport.js";
+import {
+  buildIncidentGridPdf,
+  buildIncidentListPdf,
+  buildIncidentWorkbook,
+  incidentRowsForReport,
+} from "./incidentReport.js";
 
 const LOGO_URL = "https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png";
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
 // Fixed label shown in the email, subject and PDF — the report's own title
 // (an internal name like "Email Test") is never surfaced to recipients.
 const REPORT_DISPLAY_TITLE = "Attendance Report Email";
+const INCIDENT_REPORT_DISPLAY_TITLE = "Incident Report Email";
+// SendGrid's complete message limit is about 30 MB. Keeping raw fallback
+// attachments under 20 MiB leaves room for base64 expansion and the HTML body.
+const MAX_FALLBACK_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const V2_BLUE = "#609ff7";
 const V2_PURPLE = "#9274f5";
 let runner = null;
@@ -946,8 +956,17 @@ function pdfExternalLinkNewWindow(document, x, y, width, height, url) {
 
 function emailHtml(report, details) {
   const count = details.rowCount || 0;
-  const preheader = `${REPORT_DISPLAY_TITLE} — ${count} attendance record${count === 1 ? "" : "s"} · ${details.label}`;
+  const incidentReport = report.contentType === "incidents";
+  const displayTitle = incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+  const reportHeading = incidentReport ? "Incident Report" : "Attendance Report";
+  const recordLabel = incidentReport ? "incident" : "employee attendance record";
+  const preheader = `${displayTitle} — ${count} ${recordLabel}${count === 1 ? "" : "s"} · ${details.label}`;
   const buttonRow = details.files.map(downloadButton).join("");
+  const attachmentFallback = Array.isArray(details.attachments) && details.attachments.length > 0;
+  const deliveryLabel = attachmentFallback ? "Attached Report" : "Download Report";
+  const deliveryRow = attachmentFallback
+    ? `<td align="center" style="${SANS}font-size:14px;line-height:1.6;color:${MAIL.tx2};padding:2px 8px 10px;">The requested report file${details.attachments.length === 1 ? " is" : "s are"} attached to this email.</td>`
+    : buttonRow;
   const tz = details.timezone || DEFAULT_TIMEZONE;
   const nowTz = moment().tz(tz);
   const startStr = details.start ? moment(details.start).tz(tz).format("DD MMM YYYY") : "";
@@ -964,7 +983,7 @@ function emailHtml(report, details) {
   <meta name="x-apple-disable-message-reformatting">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>${escapeHtml(REPORT_DISPLAY_TITLE)}</title>
+  <title>${escapeHtml(displayTitle)}</title>
   <!--[if mso]><style>table,td,div,p,a{font-family:Arial,sans-serif !important;}</style><![endif]-->
 </head>
 <body style="margin:0;padding:0;background:${MAIL.paper};">
@@ -985,7 +1004,7 @@ function emailHtml(report, details) {
                   <span style="${SANS}font-size:21px;font-weight:800;color:#ffffff;letter-spacing:.2px;margin-left:8px;">Videora<span style="font-weight:800;">IQ</span></span>
                 </td>
                 <td valign="middle" align="right">
-                  <span style="${SANS}font-size:19px;font-weight:800;color:#ffffff;letter-spacing:.2px;">Attendance Report</span>
+                  <span style="${SANS}font-size:19px;font-weight:800;color:#ffffff;letter-spacing:.2px;">${escapeHtml(reportHeading)}</span>
                   &nbsp;&nbsp;
                   <span style="display:inline-block;width:42px;height:42px;background:rgba(255,255,255,.16);border-radius:11px;vertical-align:middle;text-align:center;line-height:42px;">
                     <img src="${ICON.calendarWhite}" width="19" height="19" alt="" style="vertical-align:-4px;border:0;">
@@ -1002,7 +1021,7 @@ function emailHtml(report, details) {
                 <td valign="top">
 
                   <div style="${SANS}font-size:28px;font-weight:800;color:${MAIL.tx};line-height:1.15;">
-                    ${escapeHtml(REPORT_DISPLAY_TITLE)}
+                    ${escapeHtml(displayTitle)}
                   </div>
 
                   <!-- meta line -->
@@ -1031,7 +1050,7 @@ function emailHtml(report, details) {
                           </td>
                           <td valign="middle" style="padding-left:16px;">
                             <span style="${SANS}font-size:24px;font-weight:800;color:${MAIL.navy};">${escapeHtml(String(count))}</span>
-                            <span style="${SANS}font-size:15px;color:${MAIL.tx2};">&nbsp; employee attendance record${count === 1 ? "" : "s"} included.</span>
+                            <span style="${SANS}font-size:15px;color:${MAIL.tx2};">&nbsp; ${escapeHtml(recordLabel)}${count === 1 ? "" : "s"} included.</span>
                           </td>
                         </tr></table>
                       </td>
@@ -1048,14 +1067,14 @@ function emailHtml(report, details) {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 20px;">
                 <tr>
                   <td style="border-top:1px dashed ${MAIL.rule};font-size:0;line-height:0;">&nbsp;</td>
-                  <td width="150" align="center" style="${SANS}font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${MAIL.tx3};white-space:nowrap;">Download Report</td>
+                  <td width="150" align="center" style="${SANS}font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${MAIL.tx3};white-space:nowrap;">${deliveryLabel}</td>
                   <td style="border-top:1px dashed ${MAIL.rule};font-size:0;line-height:0;">&nbsp;</td>
                 </tr>
               </table>
 
               <!-- buttons -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 6px;">
-                <tr>${buttonRow}</tr>
+                <tr>${deliveryRow}</tr>
               </table>
 
             </td>
@@ -1096,8 +1115,8 @@ function emailHtml(report, details) {
 // Downloaded files are always named "attendance-report" (the media backend
 // prepends its own timestamp + id), so the report title never leaks into the
 // filename.
-function safeReportName() {
-  return "attendance-report";
+function safeReportName(report) {
+  return report?.contentType === "incidents" ? "incident-report" : "attendance-report";
 }
 
 // Stored media paths are relative (see toRelativeMediaPath in mediaStorage.js)
@@ -1115,9 +1134,9 @@ export function publicUrlFor(mediaPath) {
   return `${base}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
 }
 
-function reportDownloadUrl(mediaPath, extension) {
+function reportDownloadUrl(mediaPath, extension, report) {
   const url = new URL(publicUrlFor(mediaPath));
-  url.searchParams.set("download", `attendance-report.${extension}`);
+  url.searchParams.set("download", `${safeReportName(report)}.${extension}`);
   return url.toString();
 }
 
@@ -1130,29 +1149,75 @@ function reportDownloadUrl(mediaPath, extension) {
  * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
 export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
-  const safeName = safeReportName();
+  const safeName = safeReportName(report);
   const files = [];
   if (pdfBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
-    files.push({ format: "pdf", path, url: reportDownloadUrl(path, "pdf") });
+    const path = await putMedia({ adminId: report.adminId, buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf`, fallbackToEnv: true });
+    files.push({ format: "pdf", path, url: reportDownloadUrl(path, "pdf", report) });
   }
   if (csvBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
-    files.push({ format: "csv", path, url: reportDownloadUrl(path, "csv") });
+    const path = await putMedia({ adminId: report.adminId, buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv`, fallbackToEnv: true });
+    files.push({ format: "csv", path, url: reportDownloadUrl(path, "csv", report) });
   }
   if (xlsxBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
-    files.push({ format: "xlsx", path, url: reportDownloadUrl(path, "xlsx") });
+    const path = await putMedia({ adminId: report.adminId, buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx`, fallbackToEnv: true });
+    files.push({ format: "xlsx", path, url: reportDownloadUrl(path, "xlsx", report) });
   }
   if (breakPdfBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf` });
-    files.push({ format: "breakPdf", path, url: reportDownloadUrl(path, "pdf") });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf`, fallbackToEnv: true });
+    files.push({ format: "breakPdf", path, url: reportDownloadUrl(path, "pdf", report) });
   }
   if (breakXlsxBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx` });
-    files.push({ format: "breakXlsx", path, url: reportDownloadUrl(path, "xlsx") });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx`, fallbackToEnv: true });
+    files.push({ format: "breakXlsx", path, url: reportDownloadUrl(path, "xlsx", report) });
   }
   return files;
+}
+
+function attachmentFor(format, buffer, report) {
+  const extension = format === "breakPdf" ? "pdf" : format === "breakXlsx" ? "xlsx" : format;
+  const baseName = format.startsWith("break") ? "break-logs" : safeReportName(report);
+  const type = extension === "pdf"
+    ? "application/pdf"
+    : extension === "csv"
+      ? "text/csv"
+      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  return {
+    content: buffer.toString("base64"),
+    filename: `${baseName}.${extension}`,
+    type,
+    disposition: "attachment",
+  };
+}
+
+export async function prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
+  try {
+    const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+    return { files, attachments: [], deliveryMode: "links" };
+  } catch (storageError) {
+    const generated = [
+      ["pdf", pdfBuffer],
+      ["csv", csvBuffer],
+      ["xlsx", xlsxBuffer],
+      ["breakPdf", breakPdfBuffer],
+      ["breakXlsx", breakXlsxBuffer],
+    ].filter(([, buffer]) => Buffer.isBuffer(buffer));
+    const totalBytes = generated.reduce((sum, [, buffer]) => sum + buffer.length, 0);
+    if (!generated.length || totalBytes > MAX_FALLBACK_ATTACHMENT_BYTES) {
+      const reason = totalBytes > MAX_FALLBACK_ATTACHMENT_BYTES
+        ? `generated files are ${(totalBytes / 1024 / 1024).toFixed(1)} MiB (attachment fallback limit is 20 MiB)`
+        : "no generated files are available for attachment fallback";
+      throw new Error(`Report storage is unavailable and ${reason}: ${storageError.message}`);
+    }
+    logger.warn(
+      `[ATTENDANCE_AUTO_EMAIL_REPORT] Storage unavailable; sending ${generated.length} generated file(s) as email attachments: ${storageError.message}`,
+    );
+    return {
+      files: [],
+      attachments: generated.map(([format, buffer]) => attachmentFor(format, buffer, report)),
+      deliveryMode: "attachments",
+    };
+  }
 }
 
 // Delivery history is capped per report so the document doesn't grow
@@ -1175,7 +1240,58 @@ async function recordDelivery(report, { period, rowCount, recipients, files }) {
   );
 }
 
+async function sendReportEmail(report, details, recipients) {
+  const incidentReport = report.contentType === "incidents";
+  const category = incidentReport ? "Incident report" : "Attendance report";
+  const displayTitle = incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+  const email = {
+    from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
+    to: recipients,
+    subject: `[${category}] ${displayTitle} | ${details.label}`,
+    html: emailHtml(report, details),
+    ...(details.attachments?.length ? { attachments: details.attachments } : {}),
+  };
+  sendGridMail.setApiKey(config.get("sendgrid.key"));
+  try {
+    const sendStatus = await sendGridMail.send(email);
+    await trackOutboundEmail(email, sendStatus, { adminId: report.adminId, category });
+    await recordDelivery(report, { period: details.label, rowCount: details.rowCount, recipients, files: details.files });
+    return details;
+  } catch (error) {
+    const sendGridDetail = error?.response?.body?.errors?.map((item) => item.message).filter(Boolean).join("; ");
+    if (sendGridDetail) error.message = `${error.message}: ${sendGridDetail}`;
+    logger.error(
+      `[ATTENDANCE_AUTO_EMAIL_REPORT] SendGrid rejected the send (report=${report._id}): ` +
+      `status=${error?.code || error?.response?.statusCode || "n/a"} body=${JSON.stringify(error?.response?.body || {})}`
+    );
+    await trackFailedEmail(email, error, { adminId: report.adminId, category });
+    throw error;
+  }
+}
+
+async function deliverIncidentReport(report, options = {}) {
+  const summary = rangeForReport(report, options.reference);
+  const details = await incidentRowsForReport(report, summary);
+  const wantsPdf = report.formats.includes("pdf");
+  const wantsXlsx = report.formats.includes("xlsx");
+  const pdfBuffer = wantsPdf
+    ? report.pdfLayout === "grid"
+      ? await buildIncidentGridPdf(details)
+      : await buildIncidentListPdf(details)
+    : null;
+  const xlsxBuffer = wantsXlsx ? await buildIncidentWorkbook(details) : null;
+  const delivery = await prepareReportDelivery(report, null, pdfBuffer, xlsxBuffer, null, null);
+  const { files } = delivery;
+  const recipients = options.recipients?.length ? options.recipients : report.recipients;
+  logger.info(
+    `[INCIDENT_AUTO_EMAIL_REPORT] report=${report._id} rows=${details.rowCount} ` +
+    `layout=${report.pdfLayout || "list"} files=${files.length}${details.limited ? " limited=true" : ""}`
+  );
+  return sendReportEmail(report, { ...details, ...delivery }, recipients);
+}
+
 async function deliver(report, options = {}) {
+  if (report.contentType === "incidents") return deliverIncidentReport(report, options);
   // Collect one report row per employee-day, then fill each row's
   // "period" total (a per-employee sum that isn't knowable until every day
   // has been read). buildCsv/buildPdf expand these into the spreadsheet grid.
@@ -1233,7 +1349,8 @@ async function deliver(report, options = {}) {
   const breakMs = Date.now() - breakT0;
 
   const uploadT0 = Date.now();
-  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+  const delivery = await prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+  const { files } = delivery;
   const uploadMs = Date.now() - uploadT0;
 
   // Diagnostics: pins down exactly what a run looked like (row count,
@@ -1249,36 +1366,9 @@ async function deliver(report, options = {}) {
     `uploadMs=${uploadMs} files=${files.length}`
   );
 
-  const details = { ...summary, files };
+  const details = { ...summary, ...delivery };
   const recipients = options.recipients?.length ? options.recipients : report.recipients;
-  const email = {
-    from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
-    to: recipients,
-    subject: `[Attendance Report] ${REPORT_DISPLAY_TITLE} | ${details.label}`,
-    html: emailHtml(report, details),
-  };
-  sendGridMail.setApiKey(config.get("sendgrid.key"));
-  try {
-    const sendT0 = Date.now();
-    const sendStatus = await sendGridMail.send(email);
-    logger.info(`[ATTENDANCE_AUTO_EMAIL_REPORT] SendGrid accepted the send in ${Date.now() - sendT0}ms (report=${report._id})`);
-    await trackOutboundEmail(email, sendStatus, { adminId: report.adminId, category: "Attendance report" });
-    await recordDelivery(report, { period: details.label, rowCount: details.rowCount, recipients, files });
-    return details;
-  } catch (error) {
-    // SendGrid's SDK error carries the actual reason (e.g. bad from-address,
-    // unverified sender) in response.body.errors, not in error.message —
-    // surface it so failures aren't reported to admins as a generic,
-    // unactionable error.
-    const sendGridDetail = error?.response?.body?.errors?.map((item) => item.message).filter(Boolean).join("; ");
-    if (sendGridDetail) error.message = `${error.message}: ${sendGridDetail}`;
-    logger.error(
-      `[ATTENDANCE_AUTO_EMAIL_REPORT] SendGrid rejected the send (report=${report._id}): ` +
-      `status=${error?.code || error?.response?.statusCode || "n/a"} body=${JSON.stringify(error?.response?.body || {})}`
-    );
-    await trackFailedEmail(email, error, { adminId: report.adminId, category: "Attendance report" });
-    throw error;
-  }
+  return sendReportEmail(report, details, recipients);
 }
 
 function dueKey(report, now = moment()) {
@@ -1316,9 +1406,10 @@ class AttendanceAutoEmailReportService {
           testMailError = deliverError.message;
         }
       }
+      const reportKind = data.contentType === "incidents" ? "Incident" : "Attendance";
       const message = testMailError
-        ? "Attendance auto email report created, but the test mail failed to send"
-        : "Attendance auto email report created";
+        ? `${reportKind} auto email report created, but the test mail failed to send`
+        : `${reportKind} auto email report created`;
       return res.status(201).json(Response.userSuccessResp(message, { ...report.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
@@ -1390,11 +1481,24 @@ class AttendanceAutoEmailReportService {
     try {
       const { value, error } = updateReportSchema.validate(req.body, { abortEarly: false, stripUnknown: true });
       if (error) return res.status(400).json(Response.validationFailResp("Validation failed", error.details.map((item) => item.message).join(", ")));
+      const { sendTestMail, ...data } = value;
       const current = await Report.findOne({ _id: req.params.id, adminId: adminIdFrom(req) });
       if (!current) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
+      const effectiveContentType = data.contentType ?? current.contentType ?? "attendance";
+      const effectiveIncidentTypes = data.incidentTypes ?? current.incidentTypes ?? [];
+      const effectiveTarget = data.target ?? current.target ?? { scope: "organization" };
+      const effectiveFormats = data.formats ?? current.formats ?? [];
+      if (effectiveContentType === "incidents" && !effectiveIncidentTypes.length) {
+        return res.status(400).json(Response.validationFailResp("Validation failed", "Select at least one incident type"));
+      }
+      if (effectiveContentType === "incidents" && effectiveTarget.scope !== "organization") {
+        return res.status(400).json(Response.validationFailResp("Validation failed", "Audience filtering is only available for attendance reports"));
+      }
+      if (effectiveContentType === "incidents" && effectiveFormats.some((format) => format === "breakPdf" || format === "breakXlsx")) {
+        return res.status(400).json(Response.validationFailResp("Validation failed", "Break log formats are only available for attendance reports"));
+      }
       const timezone = await savedAdminTimezone(adminIdFrom(req));
       if (!timezone) return res.status(400).json(Response.validationFailResp("Timezone setup required", "Select and save the organisation timezone through PUT /api/v2/admin/timezone before saving an attendance auto email report."));
-      const { sendTestMail, ...data } = value;
       if (data.schedule) data.schedule = normalizeSchedule(data.schedule, timezone);
       Object.assign(current, data, { timezone, lastRunKey: null });
       await current.save();
@@ -1407,9 +1511,10 @@ class AttendanceAutoEmailReportService {
           testMailError = deliverError.message;
         }
       }
+      const reportKind = current.contentType === "incidents" ? "Incident" : "Attendance";
       const message = testMailError
-        ? "Attendance auto email report updated, but the test mail failed to send"
-        : "Attendance auto email report updated";
+        ? `${reportKind} auto email report updated, but the test mail failed to send`
+        : `${reportKind} auto email report updated`;
       return res.json(Response.userSuccessResp(message, { ...current.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
@@ -1431,8 +1536,17 @@ class AttendanceAutoEmailReportService {
     try {
       const report = await Report.findOne({ _id: req.params.id, adminId: adminIdFrom(req) }).lean();
       if (!report) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
+      if (report.contentType === "incidents") {
+        const details = await incidentRowsForReport(report, rangeForReport(report));
+        const headers = ["#", "Incident", "NVR", "Camera", "Department", "Location", "Severity", "Status", "Time", "Vehicle", "Image"];
+        const tableRows = details.rows.map((row, index) => ({
+          kind: "session",
+          cells: [index + 1, row.incident, row.nvr, row.camera, row.department, row.location, row.severity, row.status, row.time, row.vehicleNumber, imageCell(row.image)],
+        }));
+        return res.json(Response.userSuccessResp("Incident report preview", { ...details, headers, tableRows, contentType: "incidents" }));
+      }
       const details = await reportRows(report);
-      return res.json(Response.userSuccessResp("Attendance report preview", details));
+      return res.json(Response.userSuccessResp("Attendance report preview", { ...details, contentType: "attendance" }));
     } catch (error) {
       return res.status(500).json(Response.errorResp("Failed to preview attendance report", error.message));
     }
@@ -1448,10 +1562,10 @@ class AttendanceAutoEmailReportService {
         if (error) return res.status(400).json(Response.validationFailResp("Validation failed", error.message));
       }
       const details = await deliver(report, { recipients });
-      return res.json(Response.userSuccessResp("Attendance report sent", { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, files: details.files?.map((file) => ({ format: file.format, url: file.url })) }));
+      return res.json(Response.userSuccessResp(`${report.contentType === "incidents" ? "Incident" : "Attendance"} report sent`, { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, deliveryMode: details.deliveryMode || "links", files: details.files?.map((file) => ({ format: file.format, url: file.url })) }));
     } catch (error) {
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Send failed: ${error.message}`);
-      return res.status(500).json(Response.errorResp("Failed to send attendance report", error.message));
+      return res.status(500).json(Response.errorResp("Failed to send auto email report", error.message));
     }
   }
 

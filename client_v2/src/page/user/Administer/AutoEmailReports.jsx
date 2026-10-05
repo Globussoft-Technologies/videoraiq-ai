@@ -25,6 +25,8 @@ import SingleDatePicker from '../../../components/SingleDatePicker';
 import PageLoader from '../../../components/PageLoader';
 import { getRecipients } from '../../../api/administer';
 import { fetchTimezone, getTimezones, updateTimezone } from '../../../helpers/administer';
+import { fetchDetectionTypes } from '../../../helpers/incidents';
+import { detectionLabel } from '../../../lib/format';
 import {
   createAutoEmailReport,
   deleteAutoEmailReport,
@@ -52,6 +54,9 @@ const FILTERS = [
 
 const emptyForm = () => ({
   title: '',
+  contentType: 'attendance',
+  incidentTypes: [],
+  pdfLayout: 'list',
   recipients: [],
   frequency: 'weekly',
   time: '00:00',
@@ -138,6 +143,9 @@ function formFromReport(report = {}) {
 
   return {
     title: report.title || '',
+    contentType: report.contentType === 'incidents' ? 'incidents' : 'attendance',
+    incidentTypes: Array.isArray(report.incidentTypes) ? report.incidentTypes : [],
+    pdfLayout: report.pdfLayout === 'grid' ? 'grid' : 'list',
     recipients: Array.isArray(report.recipients) ? report.recipients : [],
     frequency: schedule.frequency || 'weekly',
     time: schedule.time || '00:00',
@@ -169,19 +177,22 @@ function buildPayload(form) {
     schedule.endDate = form.endDate;
   }
 
-  const target = { scope: form.scope };
-  if (form.scope === 'employees') target.employeeIds = form.employeeIds;
-  if (form.scope === 'departments') target.departmentIds = form.departmentIds;
+  const target = { scope: form.contentType === 'incidents' ? 'organization' : form.scope };
+  if (form.contentType === 'attendance' && form.scope === 'employees') target.employeeIds = form.employeeIds;
+  if (form.contentType === 'attendance' && form.scope === 'departments') target.departmentIds = form.departmentIds;
 
   const payload = {
     title: form.title.trim(),
+    contentType: form.contentType,
+    pdfLayout: form.pdfLayout,
     recipients: form.recipients,
     schedule,
     target,
-    formats: [form.pdf && 'pdf', form.xlsx && 'xlsx', form.breakPdf && 'breakPdf', form.breakXlsx && 'breakXlsx'].filter(Boolean),
+    formats: [form.pdf && 'pdf', form.xlsx && 'xlsx', form.contentType === 'attendance' && form.breakPdf && 'breakPdf', form.contentType === 'attendance' && form.breakXlsx && 'breakXlsx'].filter(Boolean),
     enabled: form.enabled,
     sendTestMail: Boolean(form.sendTestMail),
   };
+  if (form.contentType === 'incidents') payload.incidentTypes = form.incidentTypes;
   return payload;
 }
 
@@ -250,6 +261,7 @@ function ReportFormModal({
   recipients,
   employees,
   departments,
+  incidentTypes,
   adminTimezone,
   timezoneValue,
   setTimezoneValue,
@@ -260,14 +272,27 @@ function ReportFormModal({
   const employeeOptions = employees.map((user) => ({ id: String(user._id || user.id), label: employeeLabel(user) })).filter((item) => item.id);
   const departmentOptions = departments.map((department) => ({ id: String(department._id || department.id), label: departmentLabel(department) })).filter((item) => item.id);
   const recipientOptions = recipients.map((recipient) => ({ id: recipientValue(recipient), label: recipientValue(recipient) })).filter((item) => item.id);
+  const incidentOptions = incidentTypes.map((incident) => ({
+    id: String(incident.incidentType || incident.value || incident._id || ''),
+    label: incident.incidentName || incident.label || incident.incidentType || 'Unnamed incident',
+  })).filter((item) => item.id);
+  form.incidentTypes.forEach((incidentType) => {
+    if (!incidentOptions.some((option) => option.id === incidentType)) {
+      incidentOptions.push({ id: incidentType, label: detectionLabel(incidentType) });
+    }
+  });
   const targetCount = form.scope === 'employees' ? form.employeeIds.length : form.departmentIds.length;
-  const needsTarget = form.scope !== 'organization';
+  const needsTarget = form.contentType === 'attendance' && form.scope !== 'organization';
   const needsCustomRange = form.frequency === 'custom';
+  const hasFormat = form.contentType === 'incidents'
+    ? form.pdf || form.xlsx
+    : form.pdf || form.xlsx || form.breakPdf || form.breakXlsx;
   const canSave = Boolean(adminTimezone)
     && form.title.trim().length >= 2
     && form.title.trim().length <= 120
     && form.recipients.length
-    && (form.pdf || form.xlsx || form.breakPdf || form.breakXlsx)
+    && hasFormat
+    && (form.contentType !== 'incidents' || form.incidentTypes.length > 0)
     && (!needsTarget || targetCount > 0)
     && (!needsCustomRange || (form.startDate && form.endDate));
 
@@ -276,8 +301,8 @@ function ReportFormModal({
       <div style={{ width: 'min(100%, 760px)', maxHeight: 'min(900px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 14, boxShadow: '0 24px 70px rgba(0,0,0,.42)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '15px 18px', background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff' }}>
           <div>
-            <h2 id="auto-report-title" style={{ margin: 0, fontFamily: 'var(--disp)', fontSize: 17, fontWeight: 700 }}>{report ? 'Edit Attendance Email Report' : 'New Attendance Email Report'}</h2>
-            <p style={{ margin: '3px 0 0', fontSize: 11.5, opacity: .86 }}>Attendance logs are delivered using the saved admin timezone.</p>
+            <h2 id="auto-report-title" style={{ margin: 0, fontFamily: 'var(--disp)', fontSize: 17, fontWeight: 700 }}>{report ? 'Edit Auto Email Report' : 'New Auto Email Report'}</h2>
+            <p style={{ margin: '3px 0 0', fontSize: 11.5, opacity: .86 }}>Selected records are delivered using the saved admin timezone.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close report form" title="Close" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', padding: 0, border: 0, borderRadius: 8, background: 'rgba(255,255,255,.16)', color: '#fff', cursor: 'pointer' }}><X size={17} /></button>
         </div>
@@ -363,37 +388,84 @@ function ReportFormModal({
           </Section>
 
           <Section title="Content" icon={FileText}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 42, padding: '0 12px', border: '1px solid rgba(59,130,246,.3)', borderRadius: 8, background: 'rgba(59,130,246,.09)', color: 'var(--tx)' }}>
-              <input type="checkbox" checked readOnly aria-label="Attendance logs included" />
-              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Attendance logs</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+              {[['attendance', 'Attendance logs'], ['incidents', 'Incident logs']].map(([value, label]) => (
+                <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '0 11px', border: `1px solid ${form.contentType === value ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form.contentType === value ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: form.contentType === value ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+                  <input
+                    type="radio"
+                    name="auto-report-content"
+                    checked={form.contentType === value}
+                    onChange={() => setForm((current) => ({
+                      ...current,
+                      contentType: value,
+                      scope: current.scope === 'employees' && value === 'incidents' ? 'organization' : current.scope,
+                      breakPdf: value === 'incidents' ? false : current.breakPdf,
+                      breakXlsx: value === 'incidents' ? false : current.breakXlsx,
+                    }))}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
+            {form.contentType === 'incidents' && (
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel required>Select Incident</FieldLabel>
+                <MultiSelect
+                  options={incidentOptions}
+                  value={form.incidentTypes}
+                  onChange={(value) => setForm((current) => ({ ...current, incidentTypes: value }))}
+                  placeholder="Select Incident"
+                  searchPlaceholder="Search incidents..."
+                  msg="No incidents found"
+                  maxHeight="max-h-64"
+                />
+              </div>
+            )}
           </Section>
 
           <Section title="Report format" icon={FileText}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-              {[['pdf', 'PDF'], ['xlsx', 'Download Excel'], ['breakPdf', 'Download Break Log PDF'], ['breakXlsx', 'Download Break Log Excel']].map(([key, label]) => (
+              {(form.contentType === 'incidents'
+                ? [['pdf', 'PDF'], ['xlsx', 'Download Excel']]
+                : [['pdf', 'PDF'], ['xlsx', 'Download Excel'], ['breakPdf', 'Download Break Log PDF'], ['breakXlsx', 'Download Break Log Excel']]
+              ).map(([key, label]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form[key] ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form[key] ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5 }}>
                   <input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} />
                   {label}
                 </label>
               ))}
             </div>
+            {form.contentType === 'incidents' && form.pdf && (
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel required>PDF layout</FieldLabel>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+                  {[['list', 'List View PDF'], ['grid', 'Grid View PDF']].map(([value, label]) => (
+                    <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form.pdfLayout === value ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form.pdfLayout === value ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: form.pdfLayout === value ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+                      <input type="radio" name="auto-report-pdf-layout" checked={form.pdfLayout === value} onChange={() => setForm((current) => ({ ...current, pdfLayout: value }))} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </Section>
 
-          <Section title="Filter" icon={Search}>
-            <div style={{ display: 'grid', gap: 7 }}>
-              {FILTERS.map((filter) => (
-                <div key={filter.value}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form.scope === filter.value ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`, borderRadius: form.scope === filter.value && filter.value !== 'organization' ? '8px 8px 0 0' : 8, background: form.scope === filter.value ? 'rgba(59,130,246,.09)' : 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-                    <input type="radio" name="auto-report-filter" checked={form.scope === filter.value} onChange={() => setForm((current) => ({ ...current, scope: filter.value }))} />
-                    {filter.label}
-                  </label>
-                  {form.scope === filter.value && filter.value === 'employees' && <div style={{ padding: 10, border: '1px solid var(--bd)', borderTop: 0, borderRadius: '0 0 8px 8px', background: 'var(--bg1)' }}><MultiSelect options={employeeOptions} value={form.employeeIds} onChange={(value) => setForm((current) => ({ ...current, employeeIds: value }))} placeholder="Select employees" searchPlaceholder="Search employees..." msg="No employees found" maxHeight="max-h-48" /></div>}
-                  {form.scope === filter.value && filter.value === 'departments' && <div style={{ padding: 10, border: '1px solid var(--bd)', borderTop: 0, borderRadius: '0 0 8px 8px', background: 'var(--bg1)' }}><MultiSelect options={departmentOptions} value={form.departmentIds} onChange={(value) => setForm((current) => ({ ...current, departmentIds: value }))} placeholder="Select departments" searchPlaceholder="Search departments..." msg="No departments found" maxHeight="max-h-48" /></div>}
-                </div>
-              ))}
-            </div>
-          </Section>
+          {form.contentType === 'attendance' && (
+            <Section title="Filter" icon={Search}>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {FILTERS.map((filter) => (
+                  <div key={filter.value}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form.scope === filter.value ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`, borderRadius: form.scope === filter.value && filter.value !== 'organization' ? '8px 8px 0 0' : 8, background: form.scope === filter.value ? 'rgba(59,130,246,.09)' : 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+                      <input type="radio" name="auto-report-filter" checked={form.scope === filter.value} onChange={() => setForm((current) => ({ ...current, scope: filter.value }))} />
+                      {filter.label}
+                    </label>
+                    {form.scope === filter.value && filter.value === 'employees' && <div style={{ padding: 10, border: '1px solid var(--bd)', borderTop: 0, borderRadius: '0 0 8px 8px', background: 'var(--bg1)' }}><MultiSelect options={employeeOptions} value={form.employeeIds} onChange={(value) => setForm((current) => ({ ...current, employeeIds: value }))} placeholder="Select employees" searchPlaceholder="Search employees..." msg="No employees found" maxHeight="max-h-48" /></div>}
+                    {form.scope === filter.value && filter.value === 'departments' && <div style={{ padding: 10, border: '1px solid var(--bd)', borderTop: 0, borderRadius: '0 0 8px 8px', background: 'var(--bg1)' }}><MultiSelect options={departmentOptions} value={form.departmentIds} onChange={(value) => setForm((current) => ({ ...current, departmentIds: value }))} placeholder="Select departments" searchPlaceholder="Search departments..." msg="No departments found" maxHeight="max-h-48" /></div>}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           <Section title="Delivery" icon={Send}>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -478,7 +550,7 @@ function PreviewModal({ preview, onClose }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div>
             <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{preview?.label || 'Preview'}</div>
-            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || 'Timezone not set'} - {rows.length} attendance record{rows.length === 1 ? '' : 's'}</div>
+            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || 'Timezone not set'} - {rows.length} {preview?.contentType === 'incidents' ? 'incident' : 'attendance record'}{rows.length === 1 ? '' : 's'}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close preview" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}><X size={16} /></button>
         </div>
@@ -543,6 +615,7 @@ export default function AutoEmailReports() {
   const timezoneApi = useApi(() => fetchTimezone(), [], { enabled: canViewReports });
   const timezonesApi = useApi(() => getTimezones('asia'), [], { enabled: canViewReports && !timezoneApi.data });
   const audienceApi = useApi(() => getAttendanceAudienceOptions({ search: '' }), [formOpen], { enabled: formOpen && (canCreateReports || canEditReports) });
+  const incidentTypesApi = useApi(() => fetchDetectionTypes({ limit: 100 }), [formOpen], { enabled: formOpen && (canCreateReports || canEditReports) });
 
   const reports = reportsApi.data?.reports || [];
   const total = reportsApi.data?.total || 0;
@@ -550,6 +623,7 @@ export default function AutoEmailReports() {
   const recipients = recipientsApi.data?.recipients || [];
   const employees = audienceApi.data?.employees || [];
   const departments = audienceApi.data?.departments || [];
+  const incidentTypes = Array.isArray(incidentTypesApi.data) ? incidentTypesApi.data : [];
   const adminTimezone = timezoneApi.data || '';
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
 
@@ -627,7 +701,7 @@ export default function AutoEmailReports() {
       setFormOpen(false);
       await reportsApi.refetch();
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to save attendance email report.'));
+      toast.error(errorMessage(error, 'Failed to save auto email report.'));
     } finally {
       setSaving(false);
     }
@@ -639,12 +713,12 @@ export default function AutoEmailReports() {
     setDeleting(true);
     try {
       await deleteAutoEmailReport(deleteTarget._id);
-      toast.success('Attendance email report deleted.');
+      toast.success('Auto email report deleted.');
       setDeleteTarget(null);
       if (reports.length === 1 && page > 1) setPage((current) => current - 1);
       else await reportsApi.refetch();
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to delete attendance email report.'));
+      toast.error(errorMessage(error, 'Failed to delete auto email report.'));
     } finally {
       setDeleting(false);
     }
@@ -694,8 +768,10 @@ export default function AutoEmailReports() {
     ...report,
     frequencyLabel: frequencyLabel(report.schedule, report.timezone || adminTimezone),
     recipientsLabel: recipientsLabel(report.recipients),
-    attendanceLabel: formatsLabel(report.formats),
-  })), [reports]);
+    contentLabel: report.contentType === 'incidents'
+      ? `Incidents (${report.incidentTypes?.length || 0}) · ${report.pdfLayout === 'grid' ? 'Grid' : 'List'} · ${formatsLabel(report.formats)}`
+      : `Attendance · ${formatsLabel(report.formats)}`,
+  })), [reports, adminTimezone]);
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -714,21 +790,21 @@ export default function AutoEmailReports() {
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 13, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
-          <div><div style={{ fontFamily: 'var(--disp)', fontSize: 15, fontWeight: 700, color: 'var(--tx)' }}>Auto Email Reports</div><div style={{ marginTop: 3, fontSize: 11, color: 'var(--tx3)' }}>Attendance logs delivered on a schedule.</div></div>
+          <div><div style={{ fontFamily: 'var(--disp)', fontSize: 15, fontWeight: 700, color: 'var(--tx)' }}>Auto Email Reports</div><div style={{ marginTop: 3, fontSize: 11, color: 'var(--tx3)' }}>Attendance and incident reports delivered on a schedule.</div></div>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>{total} report{total === 1 ? '' : 's'}</span>
         </div>
 
         <div className="vq-auto-report-table-scroll" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 780 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1.1fr 1.5fr .8fr 180px', gap: 12, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
-              <span>TITLE</span><span>FREQUENCY</span><span>RECIPIENTS</span><span>ATTENDANCE</span><span>ACTION</span>
+              <span>TITLE</span><span>FREQUENCY</span><span>RECIPIENTS</span><span>CONTENT</span><span>ACTION</span>
             </div>
             {reportsApi.loading ? <div style={{ padding: 38, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>Loading reports...</div> : reportsApi.error ? <div style={{ padding: 38, textAlign: 'center', color: 'var(--crit)', fontSize: 12.5 }}>Failed to load reports. <button type="button" onClick={reportsApi.refetch} style={{ border: 0, background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontWeight: 700 }}>Retry</button></div> : tableRows.length === 0 ? <div style={{ padding: 44, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No auto email reports found.</div> : tableRows.map((report) => (
               <div key={report._id} style={{ display: 'grid', gridTemplateColumns: '1.35fr 1.1fr 1.5fr .8fr 180px', gap: 12, alignItems: 'center', minHeight: 64, padding: '10px 16px', borderBottom: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12.5 }}>
                 <div style={{ minWidth: 0 }}><div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}><span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={report.title}>{report.title}</span><span style={{ flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: report.enabled ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.16)', color: report.enabled ? 'var(--ok)' : 'var(--tx3)', fontSize: 10, fontWeight: 700 }}>{report.enabled ? 'Enabled' : 'Paused'}</span></div><div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--tx3)' }}>{report.timezone || adminTimezone || 'Timezone not set'}</div></div>
                 <span style={{ color: 'var(--tx2)' }}>{report.frequencyLabel}</span>
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--tx2)' }} title={Array.isArray(report.recipients) ? report.recipients.join(', ') : ''}>{report.recipientsLabel}</span>
-                <span style={{ color: 'var(--tx2)' }}>{report.attendanceLabel}</span>
+                <span style={{ color: 'var(--tx2)' }} title={report.contentType === 'incidents' ? (report.incidentTypes || []).join(', ') : ''}>{report.contentLabel}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <IconButton data-tour="reports-preview" title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
                   {canEditReports && (
@@ -770,6 +846,7 @@ export default function AutoEmailReports() {
           recipients={recipients}
           employees={employees}
           departments={departments}
+          incidentTypes={incidentTypes}
           adminTimezone={adminTimezone}
           timezoneValue={timezoneValue}
           setTimezoneValue={setTimezoneValue}
@@ -780,7 +857,7 @@ export default function AutoEmailReports() {
       )}
       {preview && <PreviewModal preview={preview} onClose={() => setPreview(null)} />}
       {canDeleteReports && (
-        <ConfirmationModal open={!!deleteTarget} title="Delete Attendance Email Report" message={<>Delete <strong>{deleteTarget?.title}</strong>? This action cannot be undone.</>} confirmLabel="Delete" onClose={() => setDeleteTarget(null)} onConfirm={deleteReport} loading={deleting} />
+        <ConfirmationModal open={!!deleteTarget} title="Delete Auto Email Report" message={<>Delete <strong>{deleteTarget?.title}</strong>? This action cannot be undone.</>} confirmLabel="Delete" onClose={() => setDeleteTarget(null)} onConfirm={deleteReport} loading={deleting} />
       )}
     </div>
   );

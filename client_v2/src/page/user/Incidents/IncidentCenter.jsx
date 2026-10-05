@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
-  import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
@@ -29,6 +29,7 @@ import { getLocations, getChannels } from '../../../helpers/monitoring';
 import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
+import { exportIncidentCenter } from './incidentCenterExport';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 const DELETE_BATCH_SIZE = 250;
@@ -1250,6 +1251,131 @@ function GoToPage({ pages, page, onGo }) {
 }
 
 /* ── Main page ─────────────────────────────────────────────────────────────── */
+const LIST_SEVERITY_COLORS = {
+  high: 'var(--crit)', critical: 'var(--crit)',
+  moderate: 'var(--warn)', medium: 'var(--warn)',
+  low: 'var(--tx3)',
+};
+
+function IncidentListRow({
+  item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
+  hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete,
+}) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const id = item._id || item.id;
+  const image = item.Image ? mediaUrl(item.Image) : '';
+  const incident = item.incidentName || detectionLabel(item.incidentType || item.displayName);
+  const camera = item.channelData?.customName || item.channelData?.name || '--';
+  const nvr = item.nvrData?.nvrName || (typeof item.location === 'string' ? item.location : '') || '--';
+  const severity = String(item.severity || 'low').toLowerCase();
+  const status = item.resolved ? 'Resolved' : item.report?.status === true ? 'Reported' : 'New';
+  const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
+  const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
+  const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
+
+  const handleRowClick = () => {
+    if (deleteMode) onToggleDelete?.();
+    else if (image) onOpenLightbox?.();
+  };
+
+  const handleResolve = async (event) => {
+    event.stopPropagation();
+    if (resolving) return;
+    setResolving(true);
+    try {
+      const next = !item.resolved;
+      await apiMarkResolved(id, item.incidentType, next);
+      onResolvedChange?.(id, next);
+      toast.success(next ? 'Incident resolved' : 'Incident reopened');
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to update incident');
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  return (
+    <>
+      {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
+      <div
+        role="row"
+        onClick={handleRowClick}
+        className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
+        style={{
+          display: 'grid', gridTemplateColumns: '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 90px 100px 135px 160px',
+          gap: 12, alignItems: 'center', minWidth: 1050, padding: '10px 12px',
+          background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
+          borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
+        }}
+      >
+        <div role="cell" style={{ display: 'flex', justifyContent: 'center' }}>
+          {(deleteMode || !hideResolveControls) && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); toggleSelection?.(); }}
+              aria-label={selectionActive ? 'Deselect incident' : 'Select incident'}
+              aria-pressed={!!selectionActive}
+              style={{
+                width: 20, height: 20, padding: 0, borderRadius: 5,
+                border: `2px solid ${selectionActive ? (deleteMode ? 'var(--crit)' : 'var(--ok)') : 'var(--bd2)'}`,
+                background: selectionActive ? (deleteMode ? 'var(--crit)' : 'var(--ok)') : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              {selectionActive && <Check size={12} color="#fff" strokeWidth={3} />}
+            </button>
+          )}
+        </div>
+
+        <div role="cell" style={{ width: 94, height: 58, borderRadius: 8, overflow: 'hidden', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {image ? <img src={image} alt={incident} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageOff size={22} color="#6b7280" />}
+        </div>
+
+        <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
+          <span style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
+          <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
+        </div>
+
+        <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span title={camera} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera}</span>
+          <span title={nvr} style={{ fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
+        </div>
+
+        <div role="cell">
+          <span style={{ display: 'inline-flex', border: `1px solid ${LIST_SEVERITY_COLORS[severity] || 'var(--tx3)'}`, color: LIST_SEVERITY_COLORS[severity] || 'var(--tx3)', borderRadius: 20, padding: '3px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' }}>
+            {severity === 'moderate' ? 'Medium' : severity}
+          </span>
+        </div>
+
+        <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
+        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident || item.createdAt) || '--'}</div>
+
+        <div role="cell" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); setReportOpen(true); }}
+            style={{ border: '1px solid var(--bd2)', background: 'var(--bg2)', color: 'var(--blue)', borderRadius: 7, padding: '5px 8px', fontSize: 10.5, fontWeight: 650, cursor: 'pointer' }}
+          >
+            {item.report?.status ? 'View report' : 'Report'}
+          </button>
+          {!hideResolveControls && (
+            <button
+              type="button"
+              onClick={handleResolve}
+              disabled={resolving}
+              style={{ border: '1px solid var(--bd2)', background: item.resolved ? 'var(--bg2)' : 'rgba(34,197,94,.1)', color: item.resolved ? 'var(--tx2)' : 'var(--ok)', borderRadius: 7, padding: '5px 8px', fontSize: 10.5, fontWeight: 650, cursor: resolving ? 'wait' : 'pointer', opacity: resolving ? .6 : 1 }}
+            >
+              {resolving ? 'Saving...' : item.resolved ? 'Reopen' : 'Resolve'}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function IncidentCenter() {
   const ctx    = useOutletContext() || {};
   const ctxLoc = ctx.location || '';
@@ -1281,6 +1407,8 @@ export default function IncidentCenter() {
 
   const [page,       setPage]       = useState(0);
   const [pageSize,   setPageSize]   = useState(12);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('incident_center_view') === 'list' ? 'list' : 'grid');
+  const [exportingFormat, setExportingFormat] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(null);
   // Incident whose plate the Tag User dialog is currently linking to a user.
   const [tagIncident, setTagIncident] = useState(null);
@@ -1430,10 +1558,27 @@ export default function IncidentCenter() {
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
 
+  useEffect(() => {
+    localStorage.setItem('incident_center_view', viewMode);
+  }, [viewMode]);
+
   const refreshIncidentData = useCallback(() => {
     grid.refetch({ silent: true });
     stats.refetch({ silent: true });
   }, [grid, stats]);
+
+  const handleExport = useCallback(async (format) => {
+    if (exportingFormat || !grid.data?.totalCount) return;
+    setExportingFormat(format);
+    try {
+      await exportIncidentCenter(format, serverFilter, { viewMode });
+    } catch (err) {
+      console.error('Incident Center export failed:', err);
+      toast.error(`Failed to export ${format === 'excel' ? 'Excel' : 'PDF'}`);
+    } finally {
+      setExportingFormat('');
+    }
+  }, [exportingFormat, grid.data?.totalCount, serverFilter, viewMode]);
 
   const handleResolvedChange = useCallback((incidentId, resolved) => {
     grid.setData((prev) => {
@@ -1846,6 +1991,13 @@ export default function IncidentCenter() {
         }
         .vq-inc-toolbar button:focus-visible,
         .vq-inc-recovery:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+        .vq-inc-list-row:last-child { border-bottom: 0 !important; }
+        .vq-inc-list-row:not(.is-selected):hover { background: var(--bg2) !important; }
+        .vq-inc-display-button[aria-pressed='true'] {
+          background: var(--blue) !important;
+          border-color: var(--blue) !important;
+          color: #fff !important;
+        }
         @keyframes vq-resolve-success {
           0% { opacity: 0; transform: translateY(-2px) scale(.98); }
           35% { opacity: 1; transform: translateY(0) scale(1.02); }
@@ -1859,6 +2011,8 @@ export default function IncidentCenter() {
           .vq-inc-page { padding: 14px 12px !important; }
           .vq-inc-kpis { grid-template-columns: 1fr !important; }
           .vq-inc-cards { grid-template-columns: 1fr !important; }
+          .vq-inc-pagination-row { grid-template-columns: 1fr !important; justify-items: center; }
+          .vq-inc-pagination-summary { justify-self: start !important; }
           .vq-inc-datepicker, .vq-inc-multiselect, .vq-inc-filterspopover {
             width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important;
           }
@@ -2150,22 +2304,51 @@ export default function IncidentCenter() {
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
-            {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
-            <span>Show</span>
-            <select
-              value={pageSize}
-              disabled={noIncidents}
-              aria-label="Incidents per page"
-              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-              style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
+          <div aria-label="Incident view" style={{ display: 'flex', padding: 2, border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)' }}>
+            <button
+              type="button"
+              className="vq-inc-display-button"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+              title="Grid view"
+              onClick={() => setViewMode('grid')}
+              style={{ width: 29, height: 28, padding: 0, border: '1px solid transparent', borderRadius: 6, background: 'transparent', color: 'var(--tx3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              type="button"
+              className="vq-inc-display-button"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+              title="List view"
+              onClick={() => setViewMode('list')}
+              style={{ width: 29, height: 28, padding: 0, border: '1px solid transparent', borderRadius: 6, background: 'transparent', color: 'var(--tx3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            >
+              <List size={14} />
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => handleExport('pdf')}
+              disabled={!totalCount || !!exportingFormat}
+              title={`Download all filtered incidents as a ${viewMode} view PDF`}
+              style={{ height: 34, display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: '#ef4444', fontSize: 11.5, fontWeight: 650, cursor: !totalCount || exportingFormat ? 'not-allowed' : 'pointer', opacity: !totalCount || exportingFormat ? .5 : 1 }}
+            >
+              {exportingFormat === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              {exportingFormat === 'pdf' ? 'Exporting...' : 'PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('excel')}
+              disabled={!totalCount || !!exportingFormat}
+              title="Download all filtered incidents as Excel"
+              style={{ height: 34, display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: '#16a34a', fontSize: 11.5, fontWeight: 650, cursor: !totalCount || exportingFormat ? 'not-allowed' : 'pointer', opacity: !totalCount || exportingFormat ? .5 : 1 }}
+            >
+              {exportingFormat === 'excel' ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
+              {exportingFormat === 'excel' ? 'Exporting...' : 'Excel'}
+            </button>
           </div>
           <div className="vq-inc-refresh-control">
             <RefreshControl
@@ -2316,7 +2499,7 @@ export default function IncidentCenter() {
                 </button>
               )}
             </div>
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {items.map((item, i) => (
                 <IncidentCard
@@ -2338,13 +2521,67 @@ export default function IncidentCenter() {
                 />
               ))}
             </div>
+          ) : (
+            <div data-tour="incidents-list" role="table" aria-label="Incidents" style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 12, background: 'var(--bg1solid)', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
+              <div
+                role="row"
+                style={{ display: 'grid', gridTemplateColumns: '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 90px 100px 135px 160px', gap: 12, alignItems: 'center', minWidth: 1050, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
+              >
+                <span role="columnheader">Select</span>
+                <span role="columnheader">Evidence</span>
+                <span role="columnheader">Incident</span>
+                <span role="columnheader">Camera / NVR</span>
+                <span role="columnheader">Severity</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Time</span>
+                <span role="columnheader" style={{ textAlign: 'right' }}>Actions</span>
+              </div>
+              {items.map((item, i) => (
+                <IncidentListRow
+                  key={item._id || item.id}
+                  item={item}
+                  onRefresh={refreshIncidentData}
+                  onResolvedChange={handleResolvedChange}
+                  onOpenLightbox={() => setLightboxIndex(i)}
+                  onTagUser={setTagIncident}
+                  onUntagUser={setUntagIncident}
+                  onViewUser={setViewUser}
+                  hideResolveControls={isResolvedView}
+                  resolveSelected={resolveMode === 'filtered' || resolveMode === 'page' || selectedForResolve.has(item._id || item.id)}
+                  onToggleResolve={() => handleToggleResolveSelection(item._id || item.id)}
+                  deleteMode={isDeleteMode}
+                  selectedForDelete={selectedForDelete.includes(item._id || item.id)}
+                  onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
+                />
+              ))}
+            </div>
           )}
         </AsyncBoundary>
       </div>
 
       {/* ── Pagination ──────────────────────────────────────────────────────── */}
-      {items.length > 0 && pages > 1 && (
-        <div className="vq-inc-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 8, flexWrap: 'wrap' }}>
+      {items.length > 0 && (
+        <div className="vq-inc-pagination-row" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, paddingBottom: 8 }}>
+          <div className="vq-inc-pagination-summary" style={{ display: 'flex', alignItems: 'center', gap: 10, justifySelf: 'start', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
+              {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
+            </span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
+              <span>Show</span>
+              <select
+                value={pageSize}
+                aria-label="Incidents per page"
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {pages > 1 && (
+          <div className="vq-inc-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
           <button
             onClick={() => setPage(0)}
             disabled={page === 0}
@@ -2387,6 +2624,8 @@ export default function IncidentCenter() {
           <span style={{ fontSize: 12, color: 'var(--tx3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
             of {pages}
           </span>
+          </div>
+          )}
         </div>
       )}
 
