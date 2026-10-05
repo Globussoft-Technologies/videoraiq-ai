@@ -304,6 +304,9 @@ class ChannelController {
   async getHoneywellPlaybackSegment(req, res, next) {
     return await ChannelService.getHoneywellPlaybackSegment(req, res, next);
   }
+  async getSecurusPlaybackFile(req, res, next) {
+    return await ChannelService.getSecurusPlaybackFile(req, res, next);
+  }
   async getPlaybackTimeline(req, res, next) {
     /* #swagger.tags = ['Channel']
     #swagger.description = 'Get playback timeline for a channel'

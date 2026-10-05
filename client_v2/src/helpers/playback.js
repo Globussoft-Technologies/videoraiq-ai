@@ -82,7 +82,18 @@ export const getPlaybackTimeline = async ({ nvrId, cameraId, channel, startTime,
   const token = getAccessToken();
   const res = await axios.post(
     `${Api_url}/channel/playback-timeline`,
-    { nvrId, cameraId, channel, startTime, endTime },
+    {
+      nvrId,
+      cameraId,
+      channel,
+      startTime,
+      endTime,
+      // Securus DVRIP uses the NVR's local wall clock. Keep explicit compact
+      // values alongside ISO timestamps so deployments in another timezone do
+      // not shift the device query.
+      deviceStartTime: toCompactLocalTime(startTime),
+      deviceEndTime: toCompactLocalTime(endTime),
+    },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   const body = unwrap(res);
@@ -91,6 +102,16 @@ export const getPlaybackTimeline = async ({ nvrId, cameraId, channel, startTime,
 
 /** Normalize the Hikvision CMSearchResult XML (parsed via xml2js, explicitArray:false) into [{start,end}]. */
 export function normalizeRecordingSegments(timeline) {
+  if (Array.isArray(timeline?.segments)) {
+    return timeline.segments
+      .map((segment) => {
+        const start = new Date(segment?.startTime);
+        const end = new Date(segment?.endTime);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+        return { start, end };
+      })
+      .filter(Boolean);
+  }
   const items = timeline?.CMSearchResult?.matchList?.searchMatchItem;
   if (!items) return [];
   const arr = Array.isArray(items) ? items : [items];

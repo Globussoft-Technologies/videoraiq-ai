@@ -1210,15 +1210,16 @@ async function updateTiandyChannels(nvr, plainPassword, res) {
 // ─── Securus (XiongMai Sofia DVR/NVR) ────────────────────────────────────────
 // Protocol: DVRIP binary TCP on port 34567
 // Packet: 20-byte header + JSON body
-// Auth: Sofia password hash = first 8 chars of even-indexed MD5 hex, uppercased
+// Auth: Sofia password hash = pairwise MD5-byte sums mapped to base62
 
 import net from "net";
 
 function sofiaPwdHash(password, createHash) {
-  const md5 = createHash("md5").update(password).digest("hex");
+  const md5 = createHash("md5").update(password).digest();
+  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   let hash = "";
-  for (let i = 0; i < 16; i++) hash += md5[i * 2];
-  return hash.toUpperCase();
+  for (let i = 0; i < 16; i += 2) hash += alphabet[(md5[i] + md5[i + 1]) % 62];
+  return hash;
 }
 
 function dvripPacket(sessionId, sequence, msgId, jsonBody) {

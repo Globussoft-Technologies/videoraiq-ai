@@ -24,6 +24,16 @@ import {
   resolvePlaybackHost,
 } from "../../../utils/rtspStream.js";
 import { getHoneywellPlaybackManifest, fetchHoneywellPlaybackSegment, keepHoneywellPlaybackAlive } from "../NVR/honeywellTvt.js";
+import {
+  parseCompactDeviceTime,
+  searchSecurusRecordings,
+  toCompactDeviceTime,
+  toDeviceLocalIso,
+} from "../NVR/securusDvrip.js";
+import {
+  serveSecurusPlaybackFile,
+  startSecurusPlaybackSession,
+} from "../NVR/securusPlayback.js";
 import { isapiPrefix } from "../NVR/isapiPrefix.js";
 import { redis } from "../../../utils/database.js";
 
@@ -1174,6 +1184,68 @@ class ChannelService {
         );
       }
 
+      // Securus/XiongMai recordings are native DVRIP streams, not RTSP URLs.
+      // Read them in this backend and expose an authenticated HLS session to
+      // the existing browser player.
+      if (brand === "securus") {
+        const requestedStart = parseCompactDeviceTime(startTime);
+        const requestedEnd = endTime
+          ? parseCompactDeviceTime(endTime)
+          : new Date(requestedStart.getTime() + 30 * 60 * 1000);
+        if (requestedEnd <= requestedStart) {
+          return res.status(400).json(Response.userFailResp("Invalid Securus playback range"));
+        }
+        const searchStart = new Date(requestedStart.getTime() - 5 * 60 * 1000);
+        const searchEnd = new Date(Math.min(
+          requestedEnd.getTime(),
+          requestedStart.getTime() + 30 * 60 * 1000,
+        ));
+        const recordings = await searchSecurusRecordings({
+          ip: decrypt(nvr.ip),
+          username: nvr.username || "admin",
+          password: decrypt(nvr.password),
+          channelId: channel.channelId,
+          start: searchStart,
+          end: searchEnd,
+        });
+        const selectedIndex = recordings.findIndex((recording) =>
+          recording.end >= requestedStart && recording.start <= requestedStart,
+        );
+        const firstIndex = selectedIndex >= 0
+          ? selectedIndex
+          : recordings.findIndex((recording) => recording.start >= requestedStart);
+        if (firstIndex < 0) {
+          return res.status(404).json(Response.notFoundResp("No Securus recording found for this time"));
+        }
+        // Include the following files from the same query so continuous play
+        // can cross the NVR's short physical recording-file boundaries.
+        const selectedRecordings = recordings
+          .slice(firstIndex)
+          .filter((recording) => recording.start < requestedEnd)
+          .map((recording) => ({
+            path: recording.path,
+            start_time: toCompactDeviceTime(recording.start),
+            end_time: toCompactDeviceTime(recording.end),
+          }));
+        if (selectedRecordings.length === 0) {
+          return res.status(404).json(Response.notFoundResp("No Securus recording found for this range"));
+        }
+
+        const playback = await startSecurusPlaybackSession({
+          ip: decrypt(nvr.ip),
+          username: nvr.username || "admin",
+          password: decrypt(nvr.password),
+          recordings: selectedRecordings,
+          key: `${channel._id}:${sessionId}`,
+        });
+        const playbackUrl =
+          `${req.protocol}://${req.get("host")}${req.baseUrl}/securus-playback/${playback.id}/playlist.m3u8` +
+          `?token=${encodeURIComponent(req.header("x-access-token") || "")}`;
+        return res.status(200).json(
+          Response.userSuccessResp("Playback URL retrieved successfully", { playbackUrl }),
+        );
+      }
+
       const effectiveAppEnv = await resolveAppEnv(channel?.userId);
       const camera_id = isLocalAppEnv(effectiveAppEnv) ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
 
@@ -1193,7 +1265,7 @@ class ChannelService {
         startTime,
         endTime,
         channel?.userId,
-        streamHost
+        streamHost,
       );
 
       if (!rtspUrl) {
@@ -1219,6 +1291,15 @@ class ChannelService {
         .json(
           Response.errorResp("Failed to retrieve playback URL", error.message)
         );
+    }
+  }
+
+  async getSecurusPlaybackFile(req, res, _next) {
+    try {
+      return await serveSecurusPlaybackFile(req, res);
+    } catch (error) {
+      logger.error("Securus playback proxy error:", error);
+      return res.status(500).send("Failed to serve Securus playback");
     }
   }
 
@@ -1315,7 +1396,7 @@ class ChannelService {
 
   async getPlaybackTimeline(req, res, _next) {
     try {
-      const { nvrId, cameraId, channel, startTime, endTime } = req.body;
+      const { nvrId, cameraId, channel, startTime, endTime, deviceStartTime, deviceEndTime } = req.body;
       if (!nvrId || !cameraId || !channel || !startTime || !endTime) {
         return res
           .status(400)
@@ -1336,6 +1417,30 @@ class ChannelService {
       const ip = decrypt(nvr.ip);
       const brand = (nvr.brand || "").toLowerCase(); // hikvision, dahua, prama
       const port = nvr?.port || 80;
+
+      if (brand === "securus") {
+        const rangeStart = parseCompactDeviceTime(deviceStartTime || startTime);
+        const rangeEnd = parseCompactDeviceTime(deviceEndTime || endTime);
+        const recordings = await searchSecurusRecordings({
+          ip,
+          username,
+          password,
+          channelId: channel,
+          start: rangeStart,
+          end: rangeEnd,
+        });
+        return res.status(200).json(
+          Response.userSuccessResp("Playback timeline fetched successfully", {
+            timeline: {
+              segments: recordings.map((recording) => ({
+                startTime: toDeviceLocalIso(recording.start),
+                endTime: toDeviceLocalIso(recording.end),
+                path: recording.path,
+              })),
+            },
+          }),
+        );
+      }
 
       const client = new DigestFetch(username, password);
 

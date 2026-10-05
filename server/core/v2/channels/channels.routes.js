@@ -24,6 +24,7 @@ router.get("/all-channels",viewAccessCheck, ChannelControllerontroller.getFilter
 // viewAccessCheck like the other playback reads, not editAccessCheck.
 router.get("/honeywell-playback/:proxyId/stream.mpd", viewAccessCheck, ChannelControllerontroller.getHoneywellPlaybackManifest);
 router.get("/honeywell-playback/:proxyId/:track/:file", viewAccessCheck, ChannelControllerontroller.getHoneywellPlaybackSegment);
+router.get("/securus-playback/:sessionId/:file", viewAccessCheck, ChannelControllerontroller.getSecurusPlaybackFile);
 router.get("/:id",viewAccessCheck, ChannelControllerontroller.getChannelById);
 
 export default router;

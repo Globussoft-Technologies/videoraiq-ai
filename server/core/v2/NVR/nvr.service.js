@@ -1981,12 +1981,13 @@ class NVRService {
         const dvripPort = 34567;
         const onvifPort = 8899;
 
-        // Sofia password hash: 8 chars from even-indexed MD5 hex positions, uppercased
+        // Sofia password hash: pairwise MD5-byte sums mapped to base62
         const sofiaPwdHash = (pwd) => {
-          const md5 = createHash("md5").update(pwd).digest("hex");
+          const md5 = createHash("md5").update(pwd).digest();
+          const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
           let h = "";
-          for (let i = 0; i < 8; i++) h += md5[i * 2];
-          return h.toUpperCase();
+          for (let i = 0; i < 16; i += 2) h += alphabet[(md5[i] + md5[i + 1]) % 62];
+          return h;
         };
 
         const buildPacket = (sessionId, seq, msgId, jsonBody) => {
