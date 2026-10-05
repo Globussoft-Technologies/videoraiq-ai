@@ -24,6 +24,9 @@ const MAX_NATIVE_RATE = 4;
 const FAST_FORWARD_TICK_MS = 500;
 const MANIFEST_RETRY_MS = 1000;
 const MANIFEST_RETRY_LIMIT = 20;
+const SECURUS_MANIFEST_RETRY_LIMIT = 4;
+const SECURUS_RECOVERY_DELAY_MS = 500;
+const SECURUS_RECOVERY_LIMIT = 3;
 const HONEYWELL_MUTEX_RETRY_MS = 5000;
 const HONEYWELL_MUTEX_RETRY_LIMIT = 18; // ~90s, past the NVR's ~60s session timeout
 
@@ -97,11 +100,17 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   // Auto-reopens after a DASH failure since playback last ran; capped so a dead
   // NVR ends in the "Press play to retry" state instead of a reload loop.
   const dashRecoveriesRef = useRef(0);
+  // Securus files are short and switching the native DVRIP media socket at a
+  // file boundary can occasionally leave hls.js at a dead playlist edge. A
+  // manual Play already fixes that by opening a new backend session; keep a
+  // bounded automatic equivalent so normal playback does not require a click.
+  const securusRecoveriesRef = useRef(0);
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
       onPlaying: (value) => {
         if (value) dashRecoveriesRef.current = 0;
+        if (value) securusRecoveriesRef.current = 0;
         playbackProgressRef.current.playing = value;
         setPlaying(value);
       },
@@ -130,6 +139,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     setTimelineZoomLevel(0);
     setThumbnailCache(new Map());
     loadedRangeMsRef.current = null;
+    securusRecoveriesRef.current = 0;
   }, [channelId, +day]);
 
   // Fetch event markers + recording-segment availability for the day
@@ -294,6 +304,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     let resumePosition = null;
     let failed = false;
     const seekToken = seekTokenRef.current;
+    const isSecurusPlayback = /\/securus-playback\//i.test(videoUrl);
     const isCurrent = () => !cancelled && !failed && seekToken === seekTokenRef.current;
     const failPlayback = (error) => {
       if (!isCurrent()) return;
@@ -302,6 +313,35 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       transportRef.current?.fail(error);
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
       if (dash) { try { dash.destroy(); } catch { /* noop */ } }
+    };
+    const recoverSecurusPlayback = () => {
+      if (!isSecurusPlayback || !isCurrent() ||
+          !transportRef.current?.wantsPlayback ||
+          securusRecoveriesRef.current >= SECURUS_RECOVERY_LIMIT) {
+        return false;
+      }
+
+      // Preserve the point the user had reached before replacing this HLS
+      // session. startSecurusPlaybackSession removes the previous backend
+      // session for the same camera/browser key before opening the new one.
+      const resumeAtMs = Math.min(
+        DAY_MS - 1,
+        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
+      );
+      securusRecoveriesRef.current += 1;
+      failed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      playbackProgressRef.current = { playing: false, buffering: true };
+      setPlaying(false);
+      setBuffering(true);
+      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      retryTimer = setTimeout(() => {
+        if (!cancelled && seekToken === seekTokenRef.current &&
+            transportRef.current?.wantsPlayback) {
+          loadAtRef.current?.(resumeAtMs);
+        }
+      }, SECURUS_RECOVERY_DELAY_MS);
+      return true;
     };
 
     // Honeywell/TVT NVRs serve recordings as DASH (.mpd), not HLS — a static,
@@ -387,7 +427,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data?.fatal || !isCurrent()) return;
           const status = data?.response?.status || data?.networkDetails?.status;
-          if (status === 404 && attempts < MANIFEST_RETRY_LIMIT) {
+          const retryLimit = isSecurusPlayback
+            ? SECURUS_MANIFEST_RETRY_LIMIT
+            : MANIFEST_RETRY_LIMIT;
+          if (status === 404 && attempts < retryLimit) {
             attempts += 1;
             playbackProgressRef.current = { playing: false, buffering: true };
             setBuffering(true);
@@ -396,6 +439,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
             retryTimer = setTimeout(attach, MANIFEST_RETRY_MS);
             return;
           }
+          if (recoverSecurusPlayback()) return;
           failPlayback();
         });
       };
@@ -556,6 +600,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       streamStartMsRef.current = clamped;
       lastSeekMsRef.current = clamped;
       dashRecoveriesRef.current = 0; // a fresh user action gets fresh retries
+      securusRecoveriesRef.current = 0;
 
       // Already buffered in the current DASH session — just move the playhead.
       // Anything else opens a new session at the target (loadAt autoplays).
