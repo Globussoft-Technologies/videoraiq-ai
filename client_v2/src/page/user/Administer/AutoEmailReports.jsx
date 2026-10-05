@@ -39,6 +39,7 @@ import {
 } from '../../../helpers/autoEmailReports';
 
 const PAGE_SIZE = 10;
+const REPORT_TITLE_MAX_LENGTH = 120;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const FREQUENCIES = [
   { value: 'daily', label: 'Daily' },
@@ -54,7 +55,7 @@ const FILTERS = [
 
 const emptyForm = () => ({
   title: '',
-  contentType: 'attendance',
+  contentTypes: ['attendance'],
   incidentTypes: [],
   pdfLayout: 'list',
   recipients: [],
@@ -135,8 +136,17 @@ function formatsLabel(formats = []) {
   return formats.map((item) => item.toUpperCase()).join(', ');
 }
 
+function reportContentTypes(report = {}) {
+  if (Array.isArray(report.contentTypes) && report.contentTypes.length) return report.contentTypes;
+  return [report.contentType === 'incidents' ? 'incidents' : 'attendance'];
+}
+
+function includesContent(report, contentType) {
+  return reportContentTypes(report).includes(contentType);
+}
+
 function preparesIncidentGridPdf(report = {}) {
-  return report.contentType === 'incidents'
+  return includesContent(report, 'incidents')
     && report.pdfLayout === 'grid'
     && Array.isArray(report.formats)
     && report.formats.includes('pdf');
@@ -150,7 +160,7 @@ function formFromReport(report = {}) {
 
   return {
     title: report.title || '',
-    contentType: report.contentType === 'incidents' ? 'incidents' : 'attendance',
+    contentTypes: reportContentTypes(report),
     incidentTypes: Array.isArray(report.incidentTypes) ? report.incidentTypes : [],
     pdfLayout: report.pdfLayout === 'grid' ? 'grid' : 'list',
     recipients: Array.isArray(report.recipients) ? report.recipients : [],
@@ -173,6 +183,8 @@ function formFromReport(report = {}) {
 }
 
 function buildPayload(form) {
+  const hasAttendance = form.contentTypes.includes('attendance');
+  const hasIncidents = form.contentTypes.includes('incidents');
   const schedule = {
     frequency: form.frequency,
     time: form.time || '00:00',
@@ -184,23 +196,42 @@ function buildPayload(form) {
     schedule.endDate = form.endDate;
   }
 
-  const target = { scope: form.contentType === 'incidents' ? 'organization' : form.scope };
-  if (form.contentType === 'attendance' && form.scope === 'employees') target.employeeIds = form.employeeIds;
-  if (form.contentType === 'attendance' && form.scope === 'departments') target.departmentIds = form.departmentIds;
+  const target = { scope: hasAttendance ? form.scope : 'organization' };
+  if (hasAttendance && form.scope === 'employees') target.employeeIds = form.employeeIds;
+  if (hasAttendance && form.scope === 'departments') target.departmentIds = form.departmentIds;
 
   const payload = {
     title: form.title.trim(),
-    contentType: form.contentType,
+    contentTypes: form.contentTypes,
+    contentType: form.contentTypes.length === 1 ? form.contentTypes[0] : 'attendance',
     pdfLayout: form.pdfLayout,
     recipients: form.recipients,
     schedule,
     target,
-    formats: [form.pdf && 'pdf', form.xlsx && 'xlsx', form.contentType === 'attendance' && form.breakPdf && 'breakPdf', form.contentType === 'attendance' && form.breakXlsx && 'breakXlsx'].filter(Boolean),
+    formats: [form.pdf && 'pdf', form.xlsx && 'xlsx', hasAttendance && form.breakPdf && 'breakPdf', hasAttendance && form.breakXlsx && 'breakXlsx'].filter(Boolean),
     enabled: form.enabled,
     sendTestMail: Boolean(form.sendTestMail),
   };
-  if (form.contentType === 'incidents') payload.incidentTypes = form.incidentTypes;
+  payload.incidentTypes = hasIncidents ? form.incidentTypes : [];
   return payload;
+}
+
+function reportFormError(form, adminTimezone) {
+  const hasAttendance = form.contentTypes.includes('attendance');
+  const hasIncidents = form.contentTypes.includes('incidents');
+  if (!adminTimezone) return 'Timezone setup required.';
+  if (form.title.trim().length < 2) return 'Report title must contain at least 2 characters.';
+  if (form.title.length > REPORT_TITLE_MAX_LENGTH) return `Report title cannot exceed ${REPORT_TITLE_MAX_LENGTH} characters.`;
+  if (!/^[A-Za-z0-9 ]+$/.test(form.title.trim())) return 'Emojis and special characters are not allowed in the report title. Use only letters, numbers, and spaces.';
+  if (!form.recipients.length) return 'Select at least one verified email recipient.';
+  if (!form.contentTypes.length) return 'Select at least one content type.';
+  if (hasIncidents && !form.incidentTypes.length) return 'Select at least one incident type.';
+  if (hasIncidents && !form.pdf && !form.xlsx) return 'Incident reports require PDF or Excel format.';
+  if (!form.pdf && !form.xlsx && !(hasAttendance && (form.breakPdf || form.breakXlsx))) return 'Select at least one report format.';
+  if (hasAttendance && form.scope === 'employees' && !form.employeeIds.length) return 'Select at least one employee.';
+  if (hasAttendance && form.scope === 'departments' && !form.departmentIds.length) return 'Select at least one department.';
+  if (form.frequency === 'custom' && (!form.startDate || !form.endDate)) return 'Select the custom report start and end dates.';
+  return '';
 }
 
 function diffPayload(base, next) {
@@ -288,20 +319,8 @@ function ReportFormModal({
       incidentOptions.push({ id: incidentType, label: detectionLabel(incidentType) });
     }
   });
-  const targetCount = form.scope === 'employees' ? form.employeeIds.length : form.departmentIds.length;
-  const needsTarget = form.contentType === 'attendance' && form.scope !== 'organization';
-  const needsCustomRange = form.frequency === 'custom';
-  const hasFormat = form.contentType === 'incidents'
-    ? form.pdf || form.xlsx
-    : form.pdf || form.xlsx || form.breakPdf || form.breakXlsx;
-  const canSave = Boolean(adminTimezone)
-    && form.title.trim().length >= 2
-    && form.title.trim().length <= 120
-    && form.recipients.length
-    && hasFormat
-    && (form.contentType !== 'incidents' || form.incidentTypes.length > 0)
-    && (!needsTarget || targetCount > 0)
-    && (!needsCustomRange || (form.startDate && form.endDate));
+  const hasAttendance = form.contentTypes.includes('attendance');
+  const hasIncidents = form.contentTypes.includes('incidents');
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="auto-report-title" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)', backdropFilter: 'blur(5px)' }}>
@@ -332,8 +351,11 @@ function ReportFormModal({
           )}
 
           <div style={{ padding: '15px 0' }}>
-            <FieldLabel required>Reports Title</FieldLabel>
-            <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Enter report title" maxLength={120} style={{ width: '100%', height: 38, padding: '0 11px', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx)', outline: 'none', fontSize: 12.5 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <FieldLabel required>Reports Title</FieldLabel>
+              <span style={{ marginBottom: 7, color: form.title.length >= REPORT_TITLE_MAX_LENGTH ? 'var(--crit)' : 'var(--tx3)', fontSize: 10.5 }}>{form.title.length}/{REPORT_TITLE_MAX_LENGTH}</span>
+            </div>
+            <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Enter report title" maxLength={REPORT_TITLE_MAX_LENGTH} style={{ width: '100%', height: 38, padding: '0 11px', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx)', outline: 'none', fontSize: 12.5 }} />
           </div>
 
           <Section title="Frequency" icon={Clock3}>
@@ -396,25 +418,26 @@ function ReportFormModal({
 
           <Section title="Content" icon={FileText}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-              {[['attendance', 'Attendance logs'], ['incidents', 'Incident logs']].map(([value, label]) => (
-                <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '0 11px', border: `1px solid ${form.contentType === value ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form.contentType === value ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: form.contentType === value ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+              {[['attendance', 'Attendance logs'], ['incidents', 'Incident logs']].map(([value, label]) => {
+                const selected = form.contentTypes.includes(value);
+                return (
+                <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '0 11px', border: `1px solid ${selected ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: selected ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: selected ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
                   <input
-                    type="radio"
-                    name="auto-report-content"
-                    checked={form.contentType === value}
+                    type="checkbox"
+                    checked={selected}
                     onChange={() => setForm((current) => ({
                       ...current,
-                      contentType: value,
-                      scope: current.scope === 'employees' && value === 'incidents' ? 'organization' : current.scope,
-                      breakPdf: value === 'incidents' ? false : current.breakPdf,
-                      breakXlsx: value === 'incidents' ? false : current.breakXlsx,
+                      contentTypes: selected
+                        ? current.contentTypes.filter((item) => item !== value)
+                        : [...current.contentTypes, value],
                     }))}
                   />
                   {label}
                 </label>
-              ))}
+                );
+              })}
             </div>
-            {form.contentType === 'incidents' && (
+            {hasIncidents && (
               <div style={{ marginTop: 12 }}>
                 <FieldLabel required>Select Incident</FieldLabel>
                 <MultiSelect
@@ -432,17 +455,14 @@ function ReportFormModal({
 
           <Section title="Report format" icon={FileText}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-              {(form.contentType === 'incidents'
-                ? [['pdf', 'PDF'], ['xlsx', 'Download Excel']]
-                : [['pdf', 'PDF'], ['xlsx', 'Download Excel'], ['breakPdf', 'Download Break Log PDF'], ['breakXlsx', 'Download Break Log Excel']]
-              ).map(([key, label]) => (
+              {([['pdf', 'PDF'], ['xlsx', 'Download Excel'], ...(hasAttendance ? [['breakPdf', 'Download Break Log PDF'], ['breakXlsx', 'Download Break Log Excel']] : [])]).map(([key, label]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form[key] ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form[key] ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5 }}>
                   <input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} />
                   {label}
                 </label>
               ))}
             </div>
-            {form.contentType === 'incidents' && form.pdf && (
+            {hasIncidents && form.pdf && (
               <div style={{ marginTop: 12 }}>
                 <FieldLabel required>PDF layout</FieldLabel>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
@@ -457,7 +477,7 @@ function ReportFormModal({
             )}
           </Section>
 
-          {form.contentType === 'attendance' && (
+          {hasAttendance && (
             <Section title="Filter" icon={Search}>
               <div style={{ display: 'grid', gap: 7 }}>
                 {FILTERS.map((filter) => (
@@ -490,7 +510,7 @@ function ReportFormModal({
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, padding: '13px 18px', borderTop: '1px solid var(--bd)', background: 'var(--bg1)' }}>
           <button type="button" onClick={onClose} style={{ minHeight: 36, padding: '0 14px', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Cancel</button>
-          <button type="button" disabled={!canSave || saving} onClick={() => onSave(buildPayload(form))} style={{ minHeight: 36, padding: '0 16px', border: 0, borderRadius: 8, background: canSave && !saving ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', color: canSave && !saving ? '#fff' : 'var(--tx3)', cursor: canSave && !saving ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: 700 }}>{saving ? 'Saving...' : report ? 'Update Report' : 'Save Report'}</button>
+          <button type="button" disabled={saving} onClick={() => { const message = reportFormError(form, adminTimezone); if (message) toast.error(message); else onSave(buildPayload(form)); }} style={{ minHeight: 36, padding: '0 16px', border: 0, borderRadius: 8, background: !saving ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', color: !saving ? '#fff' : 'var(--tx3)', cursor: !saving ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: 700 }}>{saving ? 'Saving...' : report ? 'Update Report' : 'Save Report'}</button>
         </div>
       </div>
     </div>
@@ -545,51 +565,48 @@ function flatCell(row, header, index) {
   return value === null || value === undefined || value === '' || value === '-' ? '-' : String(value);
 }
 
+function PreviewSection({ section }) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  const tableRows = Array.isArray(section?.tableRows) ? section.tableRows : null;
+  const headers = Array.isArray(section?.headers) && section.headers.length ? section.headers : PREVIEW_HEADERS_FALLBACK;
+  return (
+    <div>
+      {section?.title && <div style={{ marginBottom: 9, color: 'var(--tx)', fontSize: 13, fontWeight: 700 }}>{section.title}</div>}
+      {(tableRows ? !tableRows.length : !rows.length) ? (
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No preview rows returned.</div>
+      ) : (
+        <table style={{ minWidth: 'max-content', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
+          <thead><tr>{headers.map((label) => <th key={label} style={tableHeadStyle}>{label}</th>)}</tr></thead>
+          <tbody>
+            {tableRows
+              ? tableRows.map((line, index) => (
+                <tr key={index}>{line.cells.map((cell, cellIndex) => <td key={cellIndex} style={{ ...tableCellStyle, ...(PREVIEW_LINE_STYLE[line.kind] || {}) }}>{previewCellContent(cell)}</td>)}</tr>
+              ))
+              : rows.map((row, index) => (
+                <tr key={row?._id || index}>{headers.map((label) => <td key={label} style={tableCellStyle}>{flatCell(row, label, index)}</td>)}</tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function PreviewModal({ preview, onClose }) {
-  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
-  const tableRows = Array.isArray(preview?.tableRows) ? preview.tableRows : null;
-  const headers = Array.isArray(preview?.headers) && preview.headers.length
-    ? preview.headers
-    : PREVIEW_HEADERS_FALLBACK;
+  const sections = Array.isArray(preview?.sections) && preview.sections.length ? preview.sections : [preview];
+  const totalRows = preview?.rowCount ?? sections.reduce((sum, section) => sum + (section?.rowCount ?? section?.rows?.length ?? 0), 0);
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 1200px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div>
             <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{preview?.label || 'Preview'}</div>
-            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || 'Timezone not set'} - {rows.length} {preview?.contentType === 'incidents' ? 'incident' : 'attendance record'}{rows.length === 1 ? '' : 's'}</div>
+            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || sections[0]?.timezone || 'Timezone not set'} - {totalRows} report record{totalRows === 1 ? '' : 's'}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close preview" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}><X size={16} /></button>
         </div>
-        <div style={{ overflow: 'auto', padding: 16 }}>
-          {(tableRows ? !tableRows.length : !rows.length) ? (
-            <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No preview rows returned.</div>
-          ) : (
-            <table style={{ minWidth: 'max-content', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
-              <thead>
-                <tr>{headers.map((label) => <th key={label} style={tableHeadStyle}>{label}</th>)}</tr>
-              </thead>
-              <tbody>
-                {tableRows
-                  ? tableRows.map((line, index) => (
-                    <tr key={index}>
-                      {line.cells.map((cell, cellIndex) => (
-                        <td key={cellIndex} style={{ ...tableCellStyle, ...(PREVIEW_LINE_STYLE[line.kind] || {}) }}>
-                          {previewCellContent(cell)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                  : rows.map((row, index) => (
-                    <tr key={row?._id || index}>
-                      {headers.map((label) => (
-                        <td key={label} style={tableCellStyle}>{flatCell(row, label, index)}</td>
-                      ))}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          )}
+        <div style={{ overflow: 'auto', padding: 16, display: 'grid', gap: 24 }}>
+          {sections.map((section, index) => <PreviewSection key={section?.contentType || index} section={section} />)}
         </div>
       </div>
     </div>
@@ -783,14 +800,19 @@ export default function AutoEmailReports() {
     }
   };
 
-  const tableRows = useMemo(() => reports.map((report) => ({
-    ...report,
-    frequencyLabel: frequencyLabel(report.schedule, report.timezone || adminTimezone),
-    recipientsLabel: recipientsLabel(report.recipients),
-    contentLabel: report.contentType === 'incidents'
-      ? `Incidents (${report.incidentTypes?.length || 0}) · ${report.pdfLayout === 'grid' ? 'Grid' : 'List'} · ${formatsLabel(report.formats)}`
-      : `Attendance · ${formatsLabel(report.formats)}`,
-  })), [reports, adminTimezone]);
+  const tableRows = useMemo(() => reports.map((report) => {
+    const contentTypes = reportContentTypes(report);
+    const contentLabels = [
+      contentTypes.includes('attendance') && 'Attendance',
+      contentTypes.includes('incidents') && `Incidents (${report.incidentTypes?.length || 0}) · ${report.pdfLayout === 'grid' ? 'Grid' : 'List'}`,
+    ].filter(Boolean);
+    return {
+      ...report,
+      frequencyLabel: frequencyLabel(report.schedule, report.timezone || adminTimezone),
+      recipientsLabel: recipientsLabel(report.recipients),
+      contentLabel: `${contentLabels.join(' + ')} · ${formatsLabel(report.formats)}`,
+    };
+  }), [reports, adminTimezone]);
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -823,7 +845,7 @@ export default function AutoEmailReports() {
                 <div style={{ minWidth: 0 }}><div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}><span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={report.title}>{report.title}</span><span style={{ flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: report.enabled ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.16)', color: report.enabled ? 'var(--ok)' : 'var(--tx3)', fontSize: 10, fontWeight: 700 }}>{report.enabled ? 'Enabled' : 'Paused'}</span></div><div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--tx3)' }}>{report.timezone || adminTimezone || 'Timezone not set'}</div></div>
                 <span style={{ color: 'var(--tx2)' }}>{report.frequencyLabel}</span>
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--tx2)' }} title={Array.isArray(report.recipients) ? report.recipients.join(', ') : ''}>{report.recipientsLabel}</span>
-                <span style={{ color: 'var(--tx2)' }} title={report.contentType === 'incidents' ? (report.incidentTypes || []).join(', ') : ''}>{report.contentLabel}</span>
+                <span style={{ color: 'var(--tx2)' }} title={includesContent(report, 'incidents') ? (report.incidentTypes || []).join(', ') : ''}>{report.contentLabel}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <IconButton data-tour="reports-preview" title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
                   {canEditReports && (
