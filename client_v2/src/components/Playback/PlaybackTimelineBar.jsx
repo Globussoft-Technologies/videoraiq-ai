@@ -94,6 +94,32 @@ function eventColor(type) {
   return `hsl(${hash % 360}, ${65 + (hash % 15)}%, ${55 + (hash % 10)}%)`;
 }
 
+// Use the same severity labels and colors as Incident Center.
+const INCIDENT_SEVERITY = {
+  high: { label: 'HIGH', color: '#ef4444' },
+  critical: { label: 'CRIT', color: '#ef4444' },
+  moderate: { label: 'MEDIUM', color: '#f59e0b' },
+  medium: { label: 'MEDIUM', color: '#f59e0b' },
+  low: { label: 'LOW', color: '#6b7796' },
+};
+
+function IncidentSeverityBadge({ value }) {
+  const severityKey = String(value || '').toLowerCase();
+  const severity = INCIDENT_SEVERITY[severityKey] || {
+    label: String(value || 'LOW').toUpperCase(),
+    color: '#6b7796',
+  };
+  return (
+    <span
+      aria-label={`Severity: ${severity.label}`}
+      className="shrink-0 rounded font-bold"
+      style={{ color: severity.color, border: `1px solid ${severity.color}`, fontSize: 10, lineHeight: '14px', padding: '3px 8px' }}
+    >
+      {severity.label}
+    </span>
+  );
+}
+
 function previewImageUrls(path) {
   const imagePath = typeof path === 'string' ? path.trim() : '';
   return incidentPreviewImageUrls(imagePath, {
@@ -131,7 +157,7 @@ function IncidentPreviewImage({ path, incidentId, label, loadIncident }) {
 
   const loading = url ? loadedUrl !== url : loadingDetails;
   return (
-    <div className="relative flex h-36 items-center justify-center rounded-md overflow-hidden bg-black/10" aria-busy={loading}>
+    <div className="relative flex items-center justify-center rounded-md overflow-hidden bg-black/10" style={{ height: 'clamp(80px, 20vh, 144px)', minHeight: 60, flexShrink: 1 }} aria-busy={loading}>
       {url && (
         <img key={url} ref={imageRef} src={url} alt={`${label} incident`} className="w-full h-full object-contain" decoding="async" onLoad={() => setLoadedUrl(url)} onError={() => setFailedUrls((prev) => new Set([...prev, url]))} />
       )}
@@ -189,7 +215,7 @@ export default function PlaybackTimelineBar({
   const previewCloseTimerRef = useRef(null);
   const incidentDetailsRef = useRef(new Map());
   const [incidentPreview, setIncidentPreview] = useState(null);
-  const [previewPosition, setPreviewPosition] = useState({ left: 8, top: 8 });
+  const [previewPosition, setPreviewPosition] = useState({ left: 8, bottom: 8, maxHeight: 'calc(100vh - 16px)', width: 300 });
 
   const dayStart = useMemo(() => {
     const d = new Date(date);
@@ -206,6 +232,7 @@ export default function PlaybackTimelineBar({
       timeMs,
       label: detectionLabel(event.incidentType),
       name: event.incidentName,
+      severity: event.severity,
       color: eventColor(event.incidentType),
       incidentId: event._id || event.id,
       imagePath: event.Image || event.images?.frameImage || event.images?.personImage || event.image || event.imageUrl || event.snapshotUrl || event.carImage || event.carImageUrl,
@@ -255,13 +282,20 @@ export default function PlaybackTimelineBar({
   };
 
   useLayoutEffect(() => {
-    if (!incidentPreview || !previewRef.current) return;
-    const { width, height } = previewRef.current.getBoundingClientRect();
+    if (!incidentPreview || !scrollRef.current) return;
     const { anchor } = incidentPreview;
-    const top = anchor.top >= height + 16 ? anchor.top - height - 8 : anchor.bottom + 8;
+    const timeline = scrollRef.current.getBoundingClientRect();
+    const leftEdge = Math.max(8, timeline.left);
+    const rightEdge = Math.min(window.innerWidth - 8, timeline.right);
+    const width = Math.min(300, Math.max(0, rightEdge - leftEdge));
+    // The scroll area starts with the red/blue time-label row above the track.
+    // Keep the preview above that row so both the time and track stay visible.
+    const previewBottom = Math.min(window.innerHeight - 8, timeline.top - 8);
     setPreviewPosition({
-      left: Math.max(8, Math.min(window.innerWidth - width - 8, anchor.x - width / 2)),
-      top: Math.max(8, Math.min(window.innerHeight - height - 8, top)),
+      left: Math.max(leftEdge, Math.min(rightEdge - width, anchor.x - width / 2)),
+      bottom: window.innerHeight - previewBottom,
+      maxHeight: Math.max(0, previewBottom - 8),
+      width,
     });
   }, [incidentPreview]);
 
@@ -491,6 +525,22 @@ export default function PlaybackTimelineBar({
   );
 
   const futureStartMs = Math.max(0, Math.min(DAY_MS, Date.now() - dayStart));
+  const recordingRanges = useMemo(() => {
+    // NVR searches can return touching or overlapping recording fragments.
+    // Draw their coverage once so fragment borders do not stack into stripes.
+    const ranges = segments.flatMap((segment) => {
+      const start = Math.max(0, new Date(segment.start).getTime() - dayStart);
+      const end = Math.min(DAY_MS, new Date(segment.end).getTime() - dayStart);
+      return Number.isFinite(start) && Number.isFinite(end) && end > start ? [{ start, end }] : [];
+    }).sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const range of ranges) {
+      const previous = merged[merged.length - 1];
+      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+      else merged.push({ ...range });
+    }
+    return merged;
+  }, [segments, dayStart]);
   const thumbStepMs = Math.max(15 * 1000, windowDurationMs / 10);
   const getNearestFrame = useCallback(
     (targetMs) => {
@@ -520,12 +570,13 @@ export default function PlaybackTimelineBar({
   const visibleThumbs = useMemo(() => {
     const list = [];
     for (let t = Math.floor(bufferedStartMs / thumbStepMs) * thumbStepMs; t <= bufferedEndMs; t += thumbStepMs) {
-      if (t < 0 || t > DAY_MS || t >= futureStartMs) continue;
+      if (t < 0 || t >= DAY_MS) continue;
       const leftPct = (t / DAY_MS) * 100;
-      const widthPct = (thumbStepMs / DAY_MS) * 100;
-      const frameUrl = getNearestFrame(t);
-      const recorded = isRecorded(t);
-      list.push({ timeMs: t, leftPct, widthPct, frameUrl, recorded });
+      const widthPct = (Math.min(thumbStepMs, DAY_MS - t) / DAY_MS) * 100;
+      const future = t >= futureStartMs;
+      const recorded = !future && isRecorded(t);
+      const frameUrl = recorded ? getNearestFrame(t) : null;
+      list.push({ timeMs: t, leftPct, widthPct, frameUrl, recorded, future });
     }
     return list;
   }, [bufferedStartMs, bufferedEndMs, thumbStepMs, getNearestFrame, isRecorded, futureStartMs]);
@@ -563,8 +614,9 @@ export default function PlaybackTimelineBar({
 
   return (
     <div 
-      className="relative flex flex-col gap-2 p-3 sm:p-3.5 rounded-xl border shadow-sm select-none transition-all"
+      className="vq-pbtl-timeline relative flex flex-col gap-2 p-3 sm:p-3.5 rounded-xl border shadow-sm select-none transition-all"
       style={{
+        flexShrink: 0,
         backgroundColor: isDark ? 'var(--bg1)' : '#ffffff',
         borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)'
       }}
@@ -594,28 +646,24 @@ export default function PlaybackTimelineBar({
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
+      <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="vq-pbtl-scroll relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
         {isHovering && hoverMs !== null && (
           <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-40 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
         <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)', cursor: isHovering && hoverMs !== null && isFutureSeek(dayStart, hoverMs) ? 'not-allowed' : 'pointer' }}>
           <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
             <div className="absolute inset-0 opacity-15 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #374151 0, #374151 2px, transparent 2px, transparent 8px)' }} />
-            {segments.map((seg, i) => {
-              const s = new Date(seg.start).getTime();
-              const e = new Date(seg.end).getTime();
-              const left = Math.max(0, ((s - dayStart) / DAY_MS) * 100);
-              const right = Math.min(100, ((e - dayStart) / DAY_MS) * 100);
-              return <div key={i} className="absolute top-0 bottom-0 bg-blue-500/10 border-x border-blue-400/30" style={{ left: `${left}%`, width: `${Math.max(0.1, right - left)}%` }} />;
-            })}
-            {visibleThumbs.map((th) => th.recorded && (
-              <div key={th.timeMs} className="absolute top-0 bottom-0 flex flex-col justify-end p-0.5 border-r border-white/10 overflow-hidden pointer-events-none" style={{ left: `${th.leftPct}%`, width: `${th.widthPct}%`, minWidth: 40 }}>
-                {th.frameUrl ? <img src={th.frameUrl} alt="" className="w-full h-full object-cover rounded opacity-80" loading="lazy" /> : <div className="w-full h-full bg-slate-800/40 rounded flex items-center justify-center border border-white/5"><span className="text-[8px] font-mono text-white/35">{formatClock(th.timeMs, false)}</span></div>}
-                <div className="absolute bottom-0.5 left-1 px-1 py-0.2 rounded bg-black/70 text-[8px] font-mono text-white/80">{formatClock(th.timeMs, currentZoomConfig.showSeconds)}</div>
+            {recordingRanges.map((range) => (
+              <div key={range.start} className="absolute top-0 bottom-0 bg-blue-500/10" style={{ left: `${range.start / DAY_MS * 100}%`, width: `${(range.end - range.start) / DAY_MS * 100}%` }} />
+            ))}
+            {visibleThumbs.map((th) => (
+              <div key={th.timeMs} className="absolute top-0 bottom-0 flex flex-col justify-end p-0.5 border-r border-white/10 overflow-hidden pointer-events-none" style={{ left: `${th.leftPct}%`, width: `${th.widthPct}%` }}>
+                {th.frameUrl ? <img src={th.frameUrl} alt="" className="w-full h-full object-cover rounded opacity-80" loading="lazy" /> : <div className={`w-full h-full rounded border border-white/5 ${th.recorded ? 'bg-slate-800/40' : 'bg-slate-800/10'}`} />}
+                <div className="absolute bottom-0.5 left-1 px-1 py-0.2 rounded bg-black/70 text-[8px] font-mono" style={{ color: th.future ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.8)' }}>{formatClock(th.timeMs, currentZoomConfig.showSeconds)}</div>
               </div>
             ))}
             <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${cursorPct}%`, background: 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.25) 100%)' }} />
-            {futureStartMs < DAY_MS && <div className="absolute top-0 bottom-0 right-0 bg-[#0c1017] pointer-events-none" style={{ left: `${(futureStartMs / DAY_MS) * 100}%` }} />}
+            {futureStartMs < DAY_MS && <div className="absolute top-0 bottom-0 right-0 pointer-events-none" style={{ left: `${(futureStartMs / DAY_MS) * 100}%`, backgroundColor: 'rgba(12,16,23,0.45)' }} />}
           </div>
           {incidentMarkers.map((marker) => (
             <button
@@ -698,8 +746,8 @@ export default function PlaybackTimelineBar({
           ref={previewRef}
           role="dialog"
           aria-label="Incident preview"
-          className="fixed rounded-xl border p-3 shadow-2xl text-sm"
-          style={{ ...previewPosition, width: 'min(300px, calc(100vw - 16px))', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto', zIndex: 10000, backgroundColor: isDark ? '#111827' : '#ffffff', color: isDark ? '#f1f5f9' : '#0f172a', borderColor: isDark ? '#334155' : '#cbd5e1' }}
+          className="fixed flex flex-col rounded-xl border p-3 shadow-2xl text-sm"
+          style={{ ...previewPosition, overflow: 'hidden', zIndex: 10000, fontFamily: 'var(--ui)', backgroundColor: isDark ? '#111827' : '#ffffff', color: isDark ? '#f1f5f9' : '#0f172a', borderColor: isDark ? '#334155' : '#cbd5e1' }}
           onMouseEnter={cancelPreviewClose}
           onMouseLeave={schedulePreviewClose}
           onFocusCapture={cancelPreviewClose}
@@ -707,25 +755,26 @@ export default function PlaybackTimelineBar({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start gap-2 mb-2">
+          <div className="flex shrink-0 items-start gap-2 mb-2">
             <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: previewIncident.color }} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="font-semibold break-words">{previewIncident.label}</div>
               {previewIncident.name && previewIncident.name !== previewIncident.label && <div className="text-xs opacity-75 break-words">{previewIncident.name}</div>}
               <div className="font-mono text-xs mt-1">{formatClock(previewIncident.timeMs)}</div>
             </div>
+            <IncidentSeverityBadge value={previewIncident.severity} />
           </div>
           <IncidentPreviewImage key={`${previewIncident.key}-${previewIncident.imagePath || ''}`} path={previewIncident.imagePath} incidentId={previewIncident.incidentId} label={previewIncident.label} loadIncident={loadPreviewIncident} />
           {incidentPreview.items.length > 1 && (
-            <div className="mt-2">
-              <div className="text-xs opacity-75 mb-1">{incidentPreview.items.length} nearby incidents — select to jump</div>
-              <div className="max-h-28 overflow-y-auto space-y-1">
+            <div className="mt-2 flex flex-col min-h-0" style={{ flex: '0 1 auto' }}>
+              <div className="shrink-0 text-xs opacity-75 mb-1">{incidentPreview.items.length} nearby incidents — select to jump</div>
+              <div className="min-h-0 max-h-28 overflow-y-auto space-y-1" style={{ overscrollBehavior: 'contain' }}>
                 {incidentPreview.items.map((item) => (
                   <button
                     key={item.key}
                     type="button"
                     className="w-full flex items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500"
-                    style={{ backgroundColor: item.key === previewIncident.key ? (isDark ? '#334155' : '#e2e8f0') : undefined }}
+                    style={{ color: isDark ? '#f1f5f9' : '#0f172a', backgroundColor: item.key === previewIncident.key ? (isDark ? '#334155' : '#e2e8f0') : undefined }}
                     onMouseEnter={() => setIncidentPreview((prev) => prev && ({ ...prev, activeKey: item.key }))}
                     onFocus={() => setIncidentPreview((prev) => prev && ({ ...prev, activeKey: item.key }))}
                     onClick={(e) => seekToIncident(item, e)}
@@ -738,7 +787,7 @@ export default function PlaybackTimelineBar({
               </div>
             </div>
           )}
-          <button type="button" className="w-full mt-2 rounded-md py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400" onClick={(e) => seekToIncident(previewIncident, e)}>Jump to {formatClock(previewIncident.timeMs)}</button>
+          <button type="button" className="w-full mt-2 shrink-0 rounded-md py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400" style={{ backgroundColor: '#7c3aed', color: '#ffffff', minHeight: 36, cursor: 'pointer' }} onClick={(e) => seekToIncident(previewIncident, e)}>Jump to {formatClock(previewIncident.timeMs)}</button>
         </div>,
         document.fullscreenElement || document.body
       )}

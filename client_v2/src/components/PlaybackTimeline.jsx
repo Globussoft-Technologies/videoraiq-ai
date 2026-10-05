@@ -644,8 +644,18 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   }, [day, seekTo, triggerFutureAlert]);
 
   return (
-    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: '16px 16px 10px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, minHeight: 0, width: '100%', height: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div className="vq-pbtl-player" style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: '16px 16px 10px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, minHeight: 0, width: '100%', height: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       <style>{`
+        @media (max-width: 1440px), (max-height: 850px) {
+          .vq-pbtl-player { padding: 12px !important; gap: 8px !important; }
+          .vq-pbtl-video { min-height: 160px !important; }
+          .vq-pbtl-timeline { padding: 10px !important; }
+          .vq-pbtl-scroll { padding-bottom: 12px !important; }
+          .vq-pbtl-clock, .vq-pbtl-speed { min-width: 0 !important; }
+        }
+        @media (max-height: 700px) and (min-width: 641px) {
+          .vq-pbtl-video { min-height: 100px !important; }
+        }
         @media (max-width: 640px) {
           .vq-pbtl-video { height: 42vh !important; min-height: 220px !important; }
           .vq-pbtl-camlabel { font-size: 11px !important; padding: 5px 8px !important; max-width: calc(100% - 56px) !important; }
@@ -663,7 +673,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       `}</style>
 
       {/* Video surface */}
-      <div className="vq-pbtl-video" style={{ position: 'relative', flex: '1 1 auto', minHeight: isExpanded ? 0 : 300, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
+      <div className="vq-pbtl-video" style={{ position: 'relative', flex: '1 1 0', minHeight: isExpanded ? 0 : 300, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
         {/* Keep the video mounted so fullscreen preserves HLS and playback state. */}
         <FullscreenZoomSurface enabled={isExpanded} resetKey={`${channelId || 'camera'}-${+day}`}>
           <video
@@ -727,7 +737,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       </div>
 
       {/* Transport row */}
-      <div className="vq-pbtl-transport" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', rowGap: 8 }}>
+      <div className="vq-pbtl-transport" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', rowGap: 8, flexShrink: 0 }}>
         <span
           className="vq-pbtl-clock"
           style={{
