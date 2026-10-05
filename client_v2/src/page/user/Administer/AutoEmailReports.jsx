@@ -76,12 +76,13 @@ const emptyForm = () => ({
   sendTestMail: false,
 });
 
-const errorMessage = (error, fallback) => (
-  error?.response?.data?.body?.message
-  || error?.response?.data?.message
-  || error?.message
-  || fallback
-);
+const errorMessage = (error, fallback) => {
+  const body = error?.response?.data?.body;
+  const detail = body?.error;
+  const detailText = Array.isArray(detail) ? detail.join(', ') : typeof detail === 'string' ? detail : '';
+  if (body?.message === 'Validation failed' && detailText) return detailText;
+  return body?.message || detailText || error?.response?.data?.message || error?.message || fallback;
+};
 
 function recipientValue(recipient) {
   return recipient?.email || recipient?.Email || recipient?.emailId || recipient?.value || '';

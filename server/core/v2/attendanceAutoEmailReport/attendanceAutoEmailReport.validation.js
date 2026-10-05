@@ -18,7 +18,12 @@ const schedule = Joi.object({
   frequency: Joi.string().valid("daily", "weekly", "monthly", "custom").required(),
   time: time.default("00:00"),
   weekday: Joi.number().integer().min(0).max(6).default(1),
-  dayOfMonth: Joi.number().integer().min(1).max(28).default(1),
+  dayOfMonth: Joi.number().integer().min(1).max(28).default(1).messages({
+    "number.base": "Monthly day must be a number between 1 and 28.",
+    "number.integer": "Monthly day must be a whole number between 1 and 28.",
+    "number.min": "Monthly day must be between 1 and 28.",
+    "number.max": "Monthly day must be between 1 and 28.",
+  }),
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
 }).custom((value, helpers) => {
