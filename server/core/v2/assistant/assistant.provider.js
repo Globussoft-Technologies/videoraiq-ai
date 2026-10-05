@@ -206,4 +206,87 @@ export async function generateAssistantText({ systemInstruction, messages }) {
   return text;
 }
 
-export default { generateAssistantText, resolveProviderSettings };
+function parseTranscriptResponse(value) {
+  const raw = clean(value).replace(/^```(?:json)?\s*|\s*```$/gi, "").trim();
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      text: clean(parsed?.text || parsed?.transcript),
+      language: clean(parsed?.language) || null,
+      confidence: Number.isFinite(Number(parsed?.confidence)) ? Number(parsed.confidence) : null,
+    };
+  } catch {
+    return { text: raw, language: null, confidence: null };
+  }
+}
+
+async function transcribeWithGemini(settings, audio) {
+  const ai = new GoogleGenAI({
+    apiKey: settings.apiKey,
+    ...(settings.baseUrl ? { httpOptions: { baseUrl: settings.baseUrl, headers: { Authorization: `Bearer ${settings.apiKey}` } } } : {}),
+  });
+  const response = await ai.models.generateContent({
+    model: settings.model,
+    contents: [{
+      role: "user",
+      parts: [
+        { text: "Transcribe this audio exactly as spoken. Detect the language automatically, preserve the original language and mixed-language wording, and do not translate. Return only valid JSON in this shape: {\\\"text\\\":\\\"...\\\",\\\"language\\\":\\\"ISO-639-1 or null\\\",\\\"confidence\\\":0.0}." },
+        { inlineData: { mimeType: audio.mimetype, data: audio.buffer.toString("base64") } },
+      ],
+    }],
+    config: { temperature: 0, maxOutputTokens: 2_000 },
+  });
+  return parseTranscriptResponse(response?.text);
+}
+
+async function transcribeWithOpenAICompatible(settings, audio) {
+  const form = new FormData();
+  form.append("file", new Blob([audio.buffer], { type: audio.mimetype }), audio.originalname || "voice.webm");
+  form.append("model", settings.model || "whisper-1");
+  form.append("response_format", "verbose_json");
+  const headers = {};
+  if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+  const response = await fetch(joinEndpoint(settings.baseUrl || "https://api.openai.com/v1", "/audio/transcriptions"), {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || "Speech transcription failed.");
+    error.statusCode = response.status >= 500 ? 502 : response.status;
+    throw error;
+  }
+  return {
+    text: clean(payload?.text),
+    language: clean(payload?.language) || null,
+    confidence: null,
+  };
+}
+
+export async function transcribeAudio(audio) {
+  const settings = resolveProviderSettings();
+  requireSettings(settings);
+  if (!audio?.buffer?.length) {
+    const error = new Error("Audio recording is empty.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const result = settings.provider === "gemini"
+    ? await transcribeWithGemini(settings, audio)
+    : (settings.provider === "openai" || settings.provider === "openai-compatible")
+      ? await transcribeWithOpenAICompatible(settings, audio)
+      : (() => {
+          const error = new Error("The configured speech transcription provider is not supported.");
+          error.statusCode = 503;
+          throw error;
+        })();
+  if (!result.text) {
+    const error = new Error("No speech was detected in the recording.");
+    error.statusCode = 422;
+    throw error;
+  }
+  return result;
+}
+
+export default { generateAssistantText, resolveProviderSettings, transcribeAudio };

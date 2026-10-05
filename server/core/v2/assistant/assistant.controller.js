@@ -2,6 +2,7 @@ import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import conversationService from "./assistantConversation.service.js";
 import assistantService from "./assistant.service.js";
+import { transcribeAudio } from "./assistant.provider.js";
 import authorizedUsersService from "../authorizedUsers/authorizedUsers.service.js";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -159,6 +160,33 @@ function registerUiForState(state, previousUi) {
 }
 
 class AssistantController {
+  async transcribe(req, res) {
+    try {
+      const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId.trim() : "";
+      if (conversationId) await conversationService.findOwnedConversation(req, conversationId);
+      if (!req.file?.buffer?.length) {
+        return res.status(400).json(Response.validationFailResp("Audio recording is required.", "Validation failed."));
+      }
+      const result = await transcribeAudio({
+        buffer: req.file.buffer,
+        mimetype: req.file.mimetype || "audio/webm",
+        originalname: req.file.originalname || "voice.webm",
+      });
+      return res.status(200).json(Response.userSuccessResp("Audio transcribed.", result));
+    } catch (error) {
+      const statusCode = Number(error?.statusCode) || 500;
+      logger.error(`Assistant transcription failed: ${error?.stack || error?.message || error}`);
+      const message = statusCode === 422
+        ? "No speech was detected in the recording."
+        : statusCode === 503
+          ? "Voice transcription is not configured on this server."
+          : statusCode === 404
+            ? "Conversation was not found."
+            : "Couldn't understand the recording. Please try again.";
+      return res.status(statusCode).json({ status: "failed", message });
+    }
+  }
+
   async list(req, res) {
     try {
       const result = await conversationService.listConversations(req);
