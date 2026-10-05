@@ -1,6 +1,15 @@
 import Joi from "joi";
 
 const objectId = Joi.string().hex().length(24);
+const reportTitle = Joi.string()
+  .trim()
+  .min(2)
+  .max(120)
+  .pattern(/^[A-Za-z0-9 ]+$/)
+  .messages({
+    "string.max": "Report title cannot exceed 120 characters.",
+    "string.pattern.base": "Emojis and special characters are not allowed in the report title. Use only letters, numbers, and spaces.",
+  });
 const time = Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).messages({
   "string.pattern.base": "schedule.time must be HH:mm",
 });
@@ -37,14 +46,26 @@ const target = Joi.object({
 }, "target validation").messages({ "any.custom": "{{#message}}" });
 
 const validateContentSelection = (value, helpers) => {
-  if (value.contentType === "incidents") {
+  const contentTypes = value.contentTypes?.length
+    ? [...new Set(value.contentTypes)]
+    : [value.contentType || "attendance"];
+  value.contentTypes = contentTypes;
+  // Retain the legacy scalar for older readers while contentTypes is the
+  // authoritative selection for new and combined reports.
+  value.contentType = contentTypes.length === 1
+    ? contentTypes[0]
+    : (contentTypes.includes("attendance") ? "attendance" : contentTypes[0]);
+  if (contentTypes.includes("incidents")) {
     if (!value.incidentTypes?.length) {
       return helpers.error("any.custom", { message: "Select at least one incident type" });
     }
-    if (value.target?.scope && value.target.scope !== "organization") {
+    if (!(value.formats || []).some((format) => format === "pdf" || format === "xlsx")) {
+      return helpers.error("any.custom", { message: "Incident reports require PDF or Excel format" });
+    }
+    if (!contentTypes.includes("attendance") && value.target?.scope && value.target.scope !== "organization") {
       return helpers.error("any.custom", { message: "Audience filtering is only available for attendance reports" });
     }
-    if ((value.formats || []).some((format) => format === "breakPdf" || format === "breakXlsx")) {
+    if (!contentTypes.includes("attendance") && (value.formats || []).some((format) => format === "breakPdf" || format === "breakXlsx")) {
       return helpers.error("any.custom", { message: "Break log formats are only available for attendance reports" });
     }
   }
@@ -52,8 +73,9 @@ const validateContentSelection = (value, helpers) => {
 };
 
 const report = Joi.object({
-  title: Joi.string().trim().min(2).max(120).required(),
-  contentType: Joi.string().valid("attendance", "incidents").default("attendance"),
+  title: reportTitle.required(),
+  contentType: Joi.string().valid("attendance", "incidents"),
+  contentTypes: Joi.array().items(Joi.string().valid("attendance", "incidents")).min(1).unique(),
   incidentTypes: Joi.array().items(Joi.string().trim().min(1).max(120)).unique().default([]),
   pdfLayout: Joi.string().valid("list", "grid").default("list"),
   recipients: Joi.array().items(Joi.string().email()).min(1).required(),
@@ -66,9 +88,10 @@ const report = Joi.object({
 
 export const createReportSchema = report;
 export const updateReportSchema = Joi.object({
-  title: Joi.string().trim().min(2).max(120),
+  title: reportTitle,
   contentType: Joi.string().valid("attendance", "incidents"),
-  incidentTypes: Joi.array().items(Joi.string().trim().min(1).max(120)).min(1).unique(),
+  contentTypes: Joi.array().items(Joi.string().valid("attendance", "incidents")).min(1).unique(),
+  incidentTypes: Joi.array().items(Joi.string().trim().min(1).max(120)).unique(),
   pdfLayout: Joi.string().valid("list", "grid"),
   recipients: Joi.array().items(Joi.string().email()).min(1),
   schedule,

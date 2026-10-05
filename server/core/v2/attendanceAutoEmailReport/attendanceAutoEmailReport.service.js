@@ -33,6 +33,7 @@ const DEFAULT_TIMEZONE = "Asia/Kolkata";
 // (an internal name like "Email Test") is never surfaced to recipients.
 const REPORT_DISPLAY_TITLE = "Attendance Report Email";
 const INCIDENT_REPORT_DISPLAY_TITLE = "Incident Report Email";
+const COMBINED_REPORT_DISPLAY_TITLE = "Attendance & Incident Report Email";
 // SendGrid's complete message limit is about 30 MB. Keeping raw fallback
 // attachments under 20 MiB leaves room for base64 expansion and the HTML body.
 const MAX_FALLBACK_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -40,6 +41,28 @@ const V2_BLUE = "#609ff7";
 const V2_PURPLE = "#9274f5";
 let runner = null;
 let runnerBusy = false;
+
+function reportContentTypes(report = {}) {
+  const selected = Array.isArray(report.contentTypes) && report.contentTypes.length
+    ? report.contentTypes
+    : [report.contentType || "attendance"];
+  return [...new Set(selected.map(String))].filter((value) => value === "attendance" || value === "incidents");
+}
+
+function reportIncludes(report, contentType) {
+  return reportContentTypes(report).includes(contentType);
+}
+
+function reportForContent(report, contentType) {
+  const value = typeof report?.toObject === "function" ? report.toObject() : report;
+  return { ...value, contentType, contentTypes: [contentType] };
+}
+
+function reportKind(report) {
+  const types = reportContentTypes(report);
+  if (types.length > 1) return "Attendance & Incident";
+  return types[0] === "incidents" ? "Incident" : "Attendance";
+}
 
 function adminIdFrom(req) {
   return req?.verified?.userData?.adminId;
@@ -910,7 +933,8 @@ function downloadButton(file) {
     breakPdf: "Download Break Log PDF",
     breakXlsx: "Download Break Log Excel",
   };
-  const label = LABELS[format] || `Download ${file.format.toUpperCase()}`;
+  const contentLabel = file.contentType === "incidents" ? "Incident " : file.contentType === "attendance" ? "Attendance " : "";
+  const label = LABELS[format] || `Download ${contentLabel}${file.format.toUpperCase()}`;
   const url = escapeHtml(file.url);
   const PALETTES = {
     pdf: [MAIL.navy, MAIL.navyDark],
@@ -956,10 +980,12 @@ function pdfExternalLinkNewWindow(document, x, y, width, height, url) {
 
 function emailHtml(report, details) {
   const count = details.rowCount || 0;
-  const incidentReport = report.contentType === "incidents";
-  const displayTitle = incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
-  const reportHeading = incidentReport ? "Incident Report" : "Attendance Report";
-  const recordLabel = incidentReport ? "incident" : "employee attendance record";
+  const incidentReport = reportIncludes(report, "incidents");
+  const attendanceReport = reportIncludes(report, "attendance");
+  const combinedReport = incidentReport && attendanceReport;
+  const displayTitle = combinedReport ? COMBINED_REPORT_DISPLAY_TITLE : incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+  const reportHeading = combinedReport ? "Attendance & Incident Report" : incidentReport ? "Incident Report" : "Attendance Report";
+  const recordLabel = combinedReport ? "report record" : incidentReport ? "incident" : "employee attendance record";
   const preheader = `${displayTitle} — ${count} ${recordLabel}${count === 1 ? "" : "s"} · ${details.label}`;
   const buttonRow = details.files.map(downloadButton).join("");
   const attachmentFallback = Array.isArray(details.attachments) && details.attachments.length > 0;
@@ -1153,23 +1179,23 @@ export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer
   const files = [];
   if (pdfBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf`, fallbackToEnv: true });
-    files.push({ format: "pdf", path, url: reportDownloadUrl(path, "pdf", report) });
+    files.push({ format: "pdf", contentType: report.contentType, path, url: reportDownloadUrl(path, "pdf", report) });
   }
   if (csvBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv`, fallbackToEnv: true });
-    files.push({ format: "csv", path, url: reportDownloadUrl(path, "csv", report) });
+    files.push({ format: "csv", contentType: report.contentType, path, url: reportDownloadUrl(path, "csv", report) });
   }
   if (xlsxBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx`, fallbackToEnv: true });
-    files.push({ format: "xlsx", path, url: reportDownloadUrl(path, "xlsx", report) });
+    files.push({ format: "xlsx", contentType: report.contentType, path, url: reportDownloadUrl(path, "xlsx", report) });
   }
   if (breakPdfBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf`, fallbackToEnv: true });
-    files.push({ format: "breakPdf", path, url: reportDownloadUrl(path, "pdf", report) });
+    files.push({ format: "breakPdf", contentType: "attendance", path, url: reportDownloadUrl(path, "pdf", report) });
   }
   if (breakXlsxBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx`, fallbackToEnv: true });
-    files.push({ format: "breakXlsx", path, url: reportDownloadUrl(path, "xlsx", report) });
+    files.push({ format: "breakXlsx", contentType: "attendance", path, url: reportDownloadUrl(path, "xlsx", report) });
   }
   return files;
 }
@@ -1231,7 +1257,7 @@ async function recordDelivery(report, { period, rowCount, recipients, files }) {
     {
       $push: {
         history: {
-          $each: [{ sentAt: new Date(), period, rowCount, recipients, files: files.map(({ format, path }) => ({ format, path })) }],
+          $each: [{ sentAt: new Date(), period, rowCount, recipients, files: files.map(({ format, contentType, path }) => ({ format, contentType, path })) }],
           $position: 0,
           $slice: HISTORY_LIMIT,
         },
@@ -1241,9 +1267,11 @@ async function recordDelivery(report, { period, rowCount, recipients, files }) {
 }
 
 async function sendReportEmail(report, details, recipients) {
-  const incidentReport = report.contentType === "incidents";
-  const category = incidentReport ? "Incident report" : "Attendance report";
-  const displayTitle = incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+  const kind = reportKind(report);
+  const category = `${kind} report`;
+  const displayTitle = kind === "Attendance & Incident"
+    ? COMBINED_REPORT_DISPLAY_TITLE
+    : kind === "Incident" ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
   const email = {
     from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
     to: recipients,
@@ -1269,48 +1297,48 @@ async function sendReportEmail(report, details, recipients) {
   }
 }
 
-async function deliverIncidentReport(report, options = {}) {
-  const summary = rangeForReport(report, options.reference);
-  const details = await incidentRowsForReport(report, summary);
-  const wantsPdf = report.formats.includes("pdf");
-  const wantsXlsx = report.formats.includes("xlsx");
+async function prepareIncidentReport(report, options = {}) {
+  const incidentReport = reportForContent(report, "incidents");
+  const summary = rangeForReport(incidentReport, options.reference);
+  const details = await incidentRowsForReport(incidentReport, summary);
+  const wantsPdf = incidentReport.formats.includes("pdf");
+  const wantsXlsx = incidentReport.formats.includes("xlsx");
   const pdfBuffer = wantsPdf
-    ? report.pdfLayout === "grid"
+    ? incidentReport.pdfLayout === "grid"
       ? await buildIncidentGridPdf(details)
       : await buildIncidentListPdf(details)
     : null;
   const xlsxBuffer = wantsXlsx ? await buildIncidentWorkbook(details) : null;
-  const delivery = await prepareReportDelivery(report, null, pdfBuffer, xlsxBuffer, null, null);
+  const delivery = await prepareReportDelivery(incidentReport, null, pdfBuffer, xlsxBuffer, null, null);
   const { files } = delivery;
-  const recipients = options.recipients?.length ? options.recipients : report.recipients;
   logger.info(
-    `[INCIDENT_AUTO_EMAIL_REPORT] report=${report._id} rows=${details.rowCount} ` +
-    `layout=${report.pdfLayout || "list"} files=${files.length}${details.limited ? " limited=true" : ""}`
+    `[INCIDENT_AUTO_EMAIL_REPORT] report=${incidentReport._id} rows=${details.rowCount} ` +
+    `layout=${incidentReport.pdfLayout || "list"} files=${files.length}${details.limited ? " limited=true" : ""}`
   );
-  return sendReportEmail(report, { ...details, ...delivery }, recipients);
+  return { ...details, ...delivery };
 }
 
-async function deliver(report, options = {}) {
-  if (report.contentType === "incidents") return deliverIncidentReport(report, options);
+async function prepareAttendanceReport(report, options = {}) {
+  const attendanceReport = reportForContent(report, "attendance");
   // Collect one report row per employee-day, then fill each row's
   // "period" total (a per-employee sum that isn't knowable until every day
   // has been read). buildCsv/buildPdf expand these into the spreadsheet grid.
   const rows = [];
-  const summary = await streamReportRows(report, options.reference, (row) => rows.push(row));
+  const summary = await streamReportRows(attendanceReport, options.reference, (row) => rows.push(row));
   applyPeriodTotals(rows);
-  const wantsPdf = report.formats.includes("pdf");
+  const wantsPdf = attendanceReport.formats.includes("pdf");
   // CSV is no longer offered in the report email; keep the legacy format
   // accepted by validation so existing schedules can still be edited safely.
   const wantsCsv = false;
-  const wantsXlsx = report.formats.includes("xlsx");
-  const wantsBreakPdf = report.formats.includes("breakPdf");
-  const wantsBreakXlsx = report.formats.includes("breakXlsx");
+  const wantsXlsx = attendanceReport.formats.includes("xlsx");
+  const wantsBreakPdf = attendanceReport.formats.includes("breakPdf");
+  const wantsBreakXlsx = attendanceReport.formats.includes("breakXlsx");
 
   const csvT0 = Date.now();
-  const csvBuffer = wantsCsv ? buildCsv({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
+  const csvBuffer = wantsCsv ? buildCsv({ report: attendanceReport, rows, label: summary.label, timezone: summary.timezone }) : null;
   const csvMs = Date.now() - csvT0;
   const pdfT0 = Date.now();
-  const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
+  const pdfBuffer = wantsPdf ? await buildPdf({ report: attendanceReport, rows, label: summary.label, timezone: summary.timezone }) : null;
   const pdfMs = Date.now() - pdfT0;
 
   // Single-day Excel mirrors the PDF's expanded attendance table, including a
@@ -1318,7 +1346,7 @@ async function deliver(report, options = {}) {
   // retain the status-matrix workbook.
   const xlsxT0 = Date.now();
   const xlsxBuffer = wantsXlsx
-    ? usesDailyAttendanceWorkbook(report, summary)
+    ? usesDailyAttendanceWorkbook(attendanceReport, summary)
       ? await buildAttendanceWorkbook({
           headers: REPORT_HEADERS,
           lines: reportTableRows(rows),
@@ -1332,7 +1360,7 @@ async function deliver(report, options = {}) {
           timezone: summary.timezone,
           start: summary.start,
           end: summary.end,
-          frequency: report.schedule.frequency,
+          frequency: attendanceReport.schedule.frequency,
         })
     : null;
   const xlsxMs = Date.now() - xlsxT0;
@@ -1341,7 +1369,7 @@ async function deliver(report, options = {}) {
   // breakLogReport.js.
   const breakT0 = Date.now();
   const breakPdfBuffer = wantsBreakPdf
-    ? await buildBreakPdf({ report, rows, label: summary.label, timezone: summary.timezone })
+    ? await buildBreakPdf({ report: attendanceReport, rows, label: summary.label, timezone: summary.timezone })
     : null;
   const breakXlsxBuffer = wantsBreakXlsx
     ? await buildBreakWorkbook({ rows, label: summary.label, timezone: summary.timezone })
@@ -1349,7 +1377,7 @@ async function deliver(report, options = {}) {
   const breakMs = Date.now() - breakT0;
 
   const uploadT0 = Date.now();
-  const delivery = await prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+  const delivery = await prepareReportDelivery(attendanceReport, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
   const { files } = delivery;
   const uploadMs = Date.now() - uploadT0;
 
@@ -1357,7 +1385,7 @@ async function deliver(report, options = {}) {
   // per-format build time, upload time) instead of guessing from a generic
   // failure message if delivery ever fails downstream.
   logger.info(
-    `[ATTENDANCE_AUTO_EMAIL_REPORT] deliver diagnostics: report=${report._id} rows=${summary.rowCount} ` +
+    `[ATTENDANCE_AUTO_EMAIL_REPORT] deliver diagnostics: report=${attendanceReport._id} rows=${summary.rowCount} ` +
     `csvRawKB=${csvBuffer ? (csvBuffer.length / 1024).toFixed(1) : "n/a"} csvBuildMs=${csvMs} ` +
     `pdfRawKB=${pdfBuffer ? (pdfBuffer.length / 1024).toFixed(1) : "n/a"} pdfBuildMs=${pdfMs} ` +
     `xlsxRawKB=${xlsxBuffer ? (xlsxBuffer.length / 1024).toFixed(1) : "n/a"} xlsxBuildMs=${xlsxMs} ` +
@@ -1366,7 +1394,27 @@ async function deliver(report, options = {}) {
     `uploadMs=${uploadMs} files=${files.length}`
   );
 
-  const details = { ...summary, ...delivery };
+  return { ...summary, ...delivery };
+}
+
+async function deliver(report, options = {}) {
+  const types = reportContentTypes(report);
+  const prepared = [];
+  if (types.includes("attendance")) prepared.push(await prepareAttendanceReport(report, options));
+  if (types.includes("incidents")) prepared.push(await prepareIncidentReport(report, options));
+  if (!prepared.length) throw new Error("Select at least one report content type");
+
+  const details = prepared.length === 1 ? prepared[0] : {
+    ...prepared[0],
+    rowCount: prepared.reduce((sum, item) => sum + (item.rowCount || 0), 0),
+    files: prepared.flatMap((item) => item.files || []),
+    attachments: prepared.flatMap((item) => item.attachments || []),
+    deliveryMode: prepared.some((item) => item.deliveryMode === "attachments") ? "attachments" : "links",
+    contentCounts: {
+      attendance: prepared[0]?.rowCount || 0,
+      incidents: prepared[1]?.rowCount || 0,
+    },
+  };
   const recipients = options.recipients?.length ? options.recipients : report.recipients;
   return sendReportEmail(report, details, recipients);
 }
@@ -1406,10 +1454,10 @@ class AttendanceAutoEmailReportService {
           testMailError = deliverError.message;
         }
       }
-      const reportKind = data.contentType === "incidents" ? "Incident" : "Attendance";
+      const createdReportKind = reportKind(data);
       const message = testMailError
-        ? `${reportKind} auto email report created, but the test mail failed to send`
-        : `${reportKind} auto email report created`;
+        ? `${createdReportKind} auto email report created, but the test mail failed to send`
+        : `${createdReportKind} auto email report created`;
       return res.status(201).json(Response.userSuccessResp(message, { ...report.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
@@ -1484,18 +1532,34 @@ class AttendanceAutoEmailReportService {
       const { sendTestMail, ...data } = value;
       const current = await Report.findOne({ _id: req.params.id, adminId: adminIdFrom(req) });
       if (!current) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
-      const effectiveContentType = data.contentType ?? current.contentType ?? "attendance";
+      const effectiveContentTypes = data.contentTypes?.length
+        ? data.contentTypes
+        : data.contentType
+          ? [data.contentType]
+          : reportContentTypes(current);
       const effectiveIncidentTypes = data.incidentTypes ?? current.incidentTypes ?? [];
       const effectiveTarget = data.target ?? current.target ?? { scope: "organization" };
       const effectiveFormats = data.formats ?? current.formats ?? [];
-      if (effectiveContentType === "incidents" && !effectiveIncidentTypes.length) {
+      const includesAttendance = effectiveContentTypes.includes("attendance");
+      const includesIncidents = effectiveContentTypes.includes("incidents");
+      if (includesIncidents && !effectiveIncidentTypes.length) {
         return res.status(400).json(Response.validationFailResp("Validation failed", "Select at least one incident type"));
       }
-      if (effectiveContentType === "incidents" && effectiveTarget.scope !== "organization") {
+      if (includesIncidents && !effectiveFormats.some((format) => format === "pdf" || format === "xlsx")) {
+        return res.status(400).json(Response.validationFailResp("Validation failed", "Incident reports require PDF or Excel format"));
+      }
+      if (includesIncidents && !includesAttendance && effectiveTarget.scope !== "organization") {
         return res.status(400).json(Response.validationFailResp("Validation failed", "Audience filtering is only available for attendance reports"));
       }
-      if (effectiveContentType === "incidents" && effectiveFormats.some((format) => format === "breakPdf" || format === "breakXlsx")) {
+      if (!includesAttendance && effectiveFormats.some((format) => format === "breakPdf" || format === "breakXlsx")) {
         return res.status(400).json(Response.validationFailResp("Validation failed", "Break log formats are only available for attendance reports"));
+      }
+      if (data.contentTypes?.length) {
+        data.contentType = data.contentTypes.length === 1
+          ? data.contentTypes[0]
+          : (data.contentTypes.includes("attendance") ? "attendance" : data.contentTypes[0]);
+      } else if (data.contentType) {
+        data.contentTypes = [data.contentType];
       }
       const timezone = await savedAdminTimezone(adminIdFrom(req));
       if (!timezone) return res.status(400).json(Response.validationFailResp("Timezone setup required", "Select and save the organisation timezone through PUT /api/v2/admin/timezone before saving an attendance auto email report."));
@@ -1511,10 +1575,10 @@ class AttendanceAutoEmailReportService {
           testMailError = deliverError.message;
         }
       }
-      const reportKind = current.contentType === "incidents" ? "Incident" : "Attendance";
+      const updatedReportKind = reportKind(current);
       const message = testMailError
-        ? `${reportKind} auto email report updated, but the test mail failed to send`
-        : `${reportKind} auto email report updated`;
+        ? `${updatedReportKind} auto email report updated, but the test mail failed to send`
+        : `${updatedReportKind} auto email report updated`;
       return res.json(Response.userSuccessResp(message, { ...current.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
@@ -1536,8 +1600,15 @@ class AttendanceAutoEmailReportService {
     try {
       const report = await Report.findOne({ _id: req.params.id, adminId: adminIdFrom(req) }).lean();
       if (!report) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
-      if (report.contentType === "incidents") {
-        const details = await incidentRowsForReport(report, rangeForReport(report));
+      const types = reportContentTypes(report);
+      const sections = [];
+      if (types.includes("attendance")) {
+        const details = await reportRows(reportForContent(report, "attendance"));
+        sections.push({ ...details, contentType: "attendance", title: "Attendance logs" });
+      }
+      if (types.includes("incidents")) {
+        const incidentReport = reportForContent(report, "incidents");
+        const details = await incidentRowsForReport(incidentReport, rangeForReport(incidentReport));
         const headers = [
           "Sl No", "Incident", "NVR", "Camera", "Department", "Location", "Severity", "Status", "Time",
           ...(details.showVehicleNumber ? ["Vehicle Number"] : []),
@@ -1551,10 +1622,19 @@ class AttendanceAutoEmailReportService {
             imageCell(row.image),
           ],
         }));
-        return res.json(Response.userSuccessResp("Incident report preview", { ...details, headers, tableRows, contentType: "incidents" }));
+        sections.push({ ...details, headers, tableRows, contentType: "incidents", title: "Incident logs" });
       }
-      const details = await reportRows(report);
-      return res.json(Response.userSuccessResp("Attendance report preview", { ...details, contentType: "attendance" }));
+      if (sections.length === 1) {
+        return res.json(Response.userSuccessResp(`${reportKind(report)} report preview`, sections[0]));
+      }
+      return res.json(Response.userSuccessResp("Attendance & Incident report preview", {
+        contentType: "combined",
+        contentTypes: types,
+        label: sections[0]?.label || "Preview",
+        timezone: report.timezone,
+        rowCount: sections.reduce((sum, section) => sum + (section.rowCount ?? section.rows?.length ?? 0), 0),
+        sections,
+      }));
     } catch (error) {
       return res.status(500).json(Response.errorResp("Failed to preview attendance report", error.message));
     }
@@ -1570,7 +1650,7 @@ class AttendanceAutoEmailReportService {
         if (error) return res.status(400).json(Response.validationFailResp("Validation failed", error.message));
       }
       const details = await deliver(report, { recipients });
-      return res.json(Response.userSuccessResp(`${report.contentType === "incidents" ? "Incident" : "Attendance"} report sent`, { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, deliveryMode: details.deliveryMode || "links", files: details.files?.map((file) => ({ format: file.format, url: file.url })) }));
+      return res.json(Response.userSuccessResp(`${reportKind(report)} report sent`, { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, deliveryMode: details.deliveryMode || "links", files: details.files?.map((file) => ({ format: file.format, contentType: file.contentType, url: file.url })) }));
     } catch (error) {
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Send failed: ${error.message}`);
       return res.status(500).json(Response.errorResp("Failed to send auto email report", error.message));

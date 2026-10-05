@@ -40,6 +40,7 @@ const deliveryHistorySchema = new mongoose.Schema(
     files: [
       {
         format: { type: String, enum: ["pdf", "csv", "xlsx", "breakPdf", "breakXlsx"] },
+        contentType: { type: String, enum: ["attendance", "incidents"], default: undefined },
         // Relative storage path (as returned by putMedia) — resolved to a
         // full public URL with config.ImageView at read/link-build time, same
         // as every other stored media path in this codebase.
@@ -56,6 +57,7 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     // Kept in this collection so existing schedules and the scheduler remain
     // backward compatible. Records created before this field are attendance.
     contentType: { type: String, enum: ["attendance", "incidents"], default: "attendance" },
+    contentTypes: [{ type: String, enum: ["attendance", "incidents"] }],
     incidentTypes: [{ type: String, trim: true }],
     pdfLayout: { type: String, enum: ["list", "grid"], default: "list" },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true, index: true },
