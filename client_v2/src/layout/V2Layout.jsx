@@ -4,7 +4,6 @@ import useDetectionScheduleEvents from '../hooks/useDetectionScheduleEvents';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import AssistantLauncher from '../components/AssistantLauncher';
 import AppTour from '../components/Tour/AppTour';
 import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
@@ -339,8 +338,6 @@ function Shell() {
           </div>
         </div>
     
-        <AssistantLauncher />
-       
       </main>
       <AppTour />
     </div>
