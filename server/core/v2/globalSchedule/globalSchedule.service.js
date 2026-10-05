@@ -7,6 +7,7 @@ import GlobalScheduleValidation from "./globalSchedule.validation.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import Admin from "../admin/admin.model.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 /**
  * NVR-level global detection scheduling — CRUD only.
@@ -263,6 +264,9 @@ class GlobalScheduleService {
           .status(400)
           .json(Response.userFailResp("Validation Failed", error.message));
       }
+      if (value.schedule?.mode === "custom") {
+        value.schedule.timezone = getRequestTimezone(req);
+      }
 
       const nvr = await findOwnedNvr(value.nvrId, user_id);
       if (!nvr) {
@@ -366,6 +370,9 @@ class GlobalScheduleService {
         return res
           .status(400)
           .json(Response.userFailResp("Validation Failed", error.message));
+      }
+      if (value.schedule?.mode === "custom") {
+        value.schedule.timezone = getRequestTimezone(req);
       }
 
       const globalSchedule = await findOwnedSchedule(req.params.id, user_id);

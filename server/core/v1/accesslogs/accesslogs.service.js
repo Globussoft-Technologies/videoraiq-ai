@@ -15,6 +15,7 @@ import departmentModel from "../departments/departments.model.js"
 import config from "config";
 const accessLogsTimeDifference = config.get("accessLogsTimeDifference");
 import OptimizedAccessLogs from "./newAccessLogs.model.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 
 class AccessLogsService {
@@ -170,6 +171,7 @@ class AccessLogsService {
   async getAccessLogs(req, res, next) {
       try {
         const adminId = req.verified?.userData?.adminId;
+        const timezone = getRequestTimezone(req);
         if (!adminId) {
           return res.status(400).json(Response.errorResp("Missing adminId"));
         }
@@ -207,13 +209,13 @@ class AccessLogsService {
         // Date filter
         if (!startDate && !endDate) {
           match.createdAt = {
-            $gte: moment.tz("Asia/Kolkata").startOf("day").toDate(),
-            $lte: moment.tz("Asia/Kolkata").endOf("day").toDate()
+            $gte: moment.tz(timezone).startOf("day").toDate(),
+            $lte: moment.tz(timezone).endOf("day").toDate()
           };
         } else {
           match.createdAt = {};
-          if (startDate) match.createdAt.$gte = moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate();
-          if (endDate) match.createdAt.$lte = moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate();
+          if (startDate) match.createdAt.$gte = moment.tz(startDate, timezone).startOf("day").toDate();
+          if (endDate) match.createdAt.$lte = moment.tz(endDate, timezone).endOf("day").toDate();
         }
 
         // --------------------------
@@ -547,6 +549,7 @@ class AccessLogsService {
 async getLogs(req, res, next) {
       try {
         const adminId = req.verified?.userData?.adminId;
+        const timezone = getRequestTimezone(req);
         const accountUserId = req.verified?.userData?.user_id;
         let memberId = req.verified?.userData?.memberId;
         let authorizedChannels = req?.verified?.authorizedChannel?.channels || [];
@@ -690,8 +693,8 @@ async getLogs(req, res, next) {
               // liveDemoData: true -> demo logs only | false/omitted -> real logs only
               liveDemoData: liveDemoData ? true : { $ne: true },
               createdAt: {
-                $gte: !startDate ? moment.tz("Asia/Kolkata").startOf("day").toDate() : moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-                $lte: !endDate ? moment.tz("Asia/Kolkata").endOf("day").toDate() : moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate()
+                $gte: !startDate ? moment.tz(timezone).startOf("day").toDate() : moment.tz(startDate, timezone).startOf("day").toDate(),
+                $lte: !endDate ? moment.tz(timezone).endOf("day").toDate() : moment.tz(endDate, timezone).endOf("day").toDate()
               },
               // Both the empty-sessions check and the session-time filter read
               // the indexed field when sessions aren't being filtered.

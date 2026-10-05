@@ -35,6 +35,7 @@ import {
   findOpenCheckinToCarryOver,
   resolveCarryOverWindowMs,
 } from "../../v1/attendance/checkoutCarryOver.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 // Reused so Attendance Logs exports render byte-for-byte the same spreadsheet
 // layout as the scheduled auto email report (multi-row sessions + totals).
 import {
@@ -152,8 +153,8 @@ function buildLocationMatch(locations = []) {
  *
  * Shift times are local ("09:00") and timestamps are UTC instants, so grading
  * late/early needs a zone. The admin's own IANA setting is the right answer;
- * a request may override it (the export already accepts one), and everything
- * falls back to the same default the Analytics reports use.
+ * the authenticated admin setting is authoritative, and everything falls
+ * back to the same default the Analytics reports use.
  */
 async function resolveShiftTimezone(adminId, requested) {
   // Moment/Chrome still expose the legacy IANA link "Asia/Calcutta", while
@@ -967,11 +968,13 @@ class AttendanceService {
       // Match only by user and date range
       const matchStage = { user: new mongoose.Types.ObjectId(userId) };
 
-      const start = startDate ? new Date(startDate) : new Date();
-      const end = endDate ? new Date(endDate) : new Date(start);
-
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      const shiftTimezone = await resolveShiftTimezone(adminId, getRequestTimezone(req));
+      const start = startDate
+        ? moment.tz(startDate, "YYYY-MM-DD", shiftTimezone).startOf("day").toDate()
+        : moment.tz(shiftTimezone).startOf("day").toDate();
+      const end = endDate
+        ? moment.tz(endDate, "YYYY-MM-DD", shiftTimezone).endOf("day").toDate()
+        : moment(start).tz(shiftTimezone).endOf("day").toDate();
       matchStage.createdAt = { $gte: start, $lte: end };
 
       // Apply the location filtering restriction if employeeLocations is provided
@@ -1050,8 +1053,6 @@ class AttendanceService {
       // This org's Present / Half Day / Absent thresholds, read once per
       // pipeline build and baked into the aggregation below.
       const attendanceRules = await resolveAttendanceSettings(adminId);
-      const shiftTimezone = await resolveShiftTimezone(adminId, req.query?.timezone);
-
       const pipeline = [
         { $match: matchStage },
         { $unwind: "$events" }, // break out each event
@@ -1437,7 +1438,7 @@ class AttendanceService {
       });
 
       const adminId = req?.verified?.userData?.adminId;
-      const timezone = req.query.timezone || "UTC";
+      const timezone = getRequestTimezone(req);
       const rules = await resolveAttendanceSettings(adminId);
       const start = req.query.startDate ? moment(req.query.startDate).format("DD MMM YYYY") : "";
       const end = req.query.endDate ? moment(req.query.endDate).format("DD MMM YYYY") : start;

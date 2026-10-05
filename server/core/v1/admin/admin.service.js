@@ -15,6 +15,10 @@ import users from "./../users/users.model.js"
 import { isAllowedRetentionSpec, RETENTION_OPTION_MONTHS } from "../../../services/retention.service.js";
 import Channel from "../channels/channels.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import AttendanceAutoEmailReport from "../../v2/attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
+import MeasurementAutoEmailReport from "../../v2/measurementAutoEmailReport/measurementAutoEmailReport.model.js";
+import GlobalSchedule from "../../v2/globalSchedule/globalSchedule.model.js";
+import { DEFAULT_ADMIN_TIMEZONE } from "../../../utils/timezone.js";
 
 async function runWithConcurrency(tasks, limit) {
   const executing = new Set();
@@ -895,10 +899,27 @@ class AdminService {
         updatedAdmin.user_id,
         updatedAdmin.timezone,
       );
+      const [attendanceReportsUpdate, measurementReportsUpdate, globalSchedulesUpdate] = await Promise.all([
+        AttendanceAutoEmailReport.updateMany(
+          { adminId: updatedAdmin._id },
+          { $set: { timezone: updatedAdmin.timezone, lastRunKey: null } },
+        ),
+        MeasurementAutoEmailReport.updateMany(
+          { adminId: updatedAdmin._id },
+          { $set: { timezone: updatedAdmin.timezone, lastRunKey: null } },
+        ),
+        GlobalSchedule.updateMany(
+          { userId: updatedAdmin.user_id, "schedule.mode": "custom" },
+          { $set: { "schedule.timezone": updatedAdmin.timezone } },
+        ),
+      ]);
       return res.send(
         Response.userSuccessResp("Timezone updated successfully.", {
           timezone: updatedAdmin.timezone,
           schedulesUpdated,
+          attendanceReportsUpdated: attendanceReportsUpdate.modifiedCount || 0,
+          measurementReportsUpdated: measurementReportsUpdate.modifiedCount || 0,
+          globalSchedulesUpdated: globalSchedulesUpdate.modifiedCount || 0,
         }),
       );
     } catch (error) {
@@ -919,7 +940,7 @@ class AdminService {
       }
       return res.send(
         Response.userSuccessResp("Timezone fetched successfully.", {
-          timezone: admin.timezone || null,
+          timezone: admin.timezone || DEFAULT_ADMIN_TIMEZONE,
         }),
       );
     } catch (error) {

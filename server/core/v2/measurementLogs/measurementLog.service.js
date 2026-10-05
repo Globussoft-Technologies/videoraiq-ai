@@ -3,6 +3,7 @@ import moment from "moment-timezone";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import MeasurementIncident from "./measurementLog.model.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 const CM_PER_INCH = 2.54;
 const MM_PER_INCH = 25.4;
@@ -442,7 +443,7 @@ class MeasurementLogService {
       const adminId = adminIdFrom(req);
       if (!adminId) return res.status(401).json(Response.userFailResp("Authentication context is missing"));
 
-      const timezone = req.query.timezone || "Asia/Kolkata";
+      const timezone = getRequestTimezone(req);
       const allRows = req.query.all === "true";
       const skip = Math.max(parseInt(req.query.skip || "0", 10), 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit || "200", 10), 1), 1000);
@@ -510,7 +511,7 @@ class MeasurementLogService {
       const adminId = adminIdFrom(req);
       if (!adminId) return res.status(401).json(Response.userFailResp("Authentication context is missing"));
 
-      const timezone = req.query.timezone || "Asia/Kolkata";
+      const timezone = getRequestTimezone(req);
 
       // Default window: last 24h, unless the caller passed an explicit range.
       if (!req.query.fromDate && !req.query.toDate) {
@@ -655,7 +656,7 @@ class MeasurementLogService {
       const adminId = adminIdFrom(req);
       if (!adminId) return res.status(401).json(Response.userFailResp("Authentication context is missing"));
 
-      const timezone = req.query.timezone || "Asia/Kolkata";
+      const timezone = getRequestTimezone(req);
       const q = String(req.query.q || "").trim();
       const limit = Math.min(Math.max(parseInt(req.query.limit || "200", 10), 1), 1000);
 

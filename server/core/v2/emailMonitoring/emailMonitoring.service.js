@@ -5,6 +5,7 @@ import Response from "../../../utils/response.js";
 import Admin from "../admin/admin.model.js";
 import EmailMessage from "./emailMessage.model.js";
 import { trackSendGridEvents } from "./emailTracker.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 const REPORT_TZ = "Asia/Kolkata";
 const DEFAULT_RANGE = "today";
@@ -46,13 +47,13 @@ function trend(current, previous) {
   };
 }
 
-function getRange(query = {}) {
+function getRange(query = {}, timezone = REPORT_TZ) {
   const preset = String(query.range || DEFAULT_RANGE).toLowerCase();
-  const now = momentTz.tz(REPORT_TZ);
+  const now = momentTz.tz(timezone);
 
   if (query.startDate && query.endDate) {
-    const start = momentTz.tz(query.startDate, "YYYY-MM-DD", REPORT_TZ).startOf("day");
-    const end = momentTz.tz(query.endDate, "YYYY-MM-DD", REPORT_TZ).endOf("day");
+    const start = momentTz.tz(query.startDate, "YYYY-MM-DD", timezone).startOf("day");
+    const end = momentTz.tz(query.endDate, "YYYY-MM-DD", timezone).endOf("day");
     return describeRange(start, end, "custom");
   }
 
@@ -170,7 +171,8 @@ class EmailMonitoringService {
 
   async dashboard(req, res) {
     try {
-      const range = getRange(req.query);
+      const timezone = getRequestTimezone(req);
+      const range = getRange(req.query, timezone);
       const match = buildMatch(req.query, range);
 
       const [
@@ -187,13 +189,13 @@ class EmailMonitoringService {
       ] = await Promise.all([
         this._counts(match),
         this._counts(buildMatch(req.query, previousRange(range))),
-        this._hourly(match),
-        this._daily(match, range),
+        this._hourly(match, timezone),
+        this._daily(match, range, timezone),
         this._statusDistribution(match),
         this._domainTraffic(match),
-        this._heatmap(match),
+        this._heatmap(match, timezone),
         this._topSenders(match),
-        this._activity(req, match),
+        this._activity(req, match, timezone),
         EmailMessage.countDocuments(this._activityMatch(req, match)),
       ]);
 
@@ -214,7 +216,7 @@ class EmailMonitoringService {
           startDate: range.startDate,
           endDate: range.endDate,
           days: range.days,
-          timezone: REPORT_TZ,
+          timezone,
         },
         kpis: {
           sent: { count: sent, trend: trend(sent, previousSent) },
@@ -255,11 +257,12 @@ class EmailMonitoringService {
 
   async activity(req, res) {
     try {
-      const range = getRange(req.query);
+      const timezone = getRequestTimezone(req);
+      const range = getRange(req.query, timezone);
       const match = buildMatch(req.query, range);
       const activityMatch = this._activityMatch(req, match);
       const [rows, total] = await Promise.all([
-        this._activity(req, match),
+        this._activity(req, match, timezone),
         EmailMessage.countDocuments(activityMatch),
       ]);
 
@@ -269,7 +272,7 @@ class EmailMonitoringService {
           startDate: range.startDate,
           endDate: range.endDate,
           days: range.days,
-          timezone: REPORT_TZ,
+          timezone,
         },
         page: numberParam(req.query.page, 1, 10_000),
         limit: numberParam(req.query.limit, 25, 100),
@@ -303,13 +306,13 @@ class EmailMonitoringService {
     return rows[0] || { sent: 0, received: 0, failed: 0, pending: 0, total: 0 };
   }
 
-  async _hourly(match) {
+  async _hourly(match, timezone) {
     const rows = await EmailMessage.aggregate([
       { $match: match },
       {
         $group: {
           _id: {
-            hour: { $hour: { date: "$timestamp", timezone: REPORT_TZ } },
+            hour: { $hour: { date: "$timestamp", timezone } },
             direction: "$direction",
           },
           count: { $sum: 1 },
@@ -326,13 +329,13 @@ class EmailMonitoringService {
     return hours;
   }
 
-  async _daily(match, range) {
+  async _daily(match, range, timezone) {
     const rows = await EmailMessage.aggregate([
       { $match: match },
       {
         $group: {
           _id: {
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone: REPORT_TZ } },
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone } },
             direction: "$direction",
           },
           count: { $sum: 1 },
@@ -410,14 +413,14 @@ class EmailMonitoringService {
     }));
   }
 
-  async _heatmap(match) {
+  async _heatmap(match, timezone) {
     const rows = await EmailMessage.aggregate([
       { $match: match },
       {
         $group: {
           _id: {
-            day: { $isoDayOfWeek: { date: "$timestamp", timezone: REPORT_TZ } },
-            hour: { $multiply: [{ $floor: { $divide: [{ $hour: { date: "$timestamp", timezone: REPORT_TZ } }, 2] } }, 2] },
+            day: { $isoDayOfWeek: { date: "$timestamp", timezone } },
+            hour: { $multiply: [{ $floor: { $divide: [{ $hour: { date: "$timestamp", timezone } }, 2] } }, 2] },
           },
           count: { $sum: 1 },
         },
@@ -517,7 +520,7 @@ class EmailMonitoringService {
     return activityMatch;
   }
 
-  async _activity(req, match) {
+  async _activity(req, match, timezone) {
     const page = numberParam(req.query.page, 1, 10_000);
     const limit = numberParam(req.query.limit, 25, 100);
     const rows = await EmailMessage.find(this._activityMatch(req, match))
@@ -529,7 +532,7 @@ class EmailMonitoringService {
 
     return rows.map((row) => ({
       id: row._id,
-      time: momentTz(row.timestamp).tz(REPORT_TZ).format("HH:mm"),
+      time: momentTz(row.timestamp).tz(timezone).format("HH:mm"),
       timestamp: row.timestamp,
       organization: row.adminId
         ? [row.adminId.name_f, row.adminId.name_l].filter(Boolean).join(" ").trim() || row.adminId.login || row.adminId.email

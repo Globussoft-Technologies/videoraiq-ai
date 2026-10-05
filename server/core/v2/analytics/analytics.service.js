@@ -20,6 +20,7 @@ import {
 } from "../attendance/attendanceStatus.js";
 import AnalyticsValidator from "./analytics.validate.js";
 import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 const DEFAULT_DAYS = 30;
 const DEFAULT_TOP_CAMERAS_LIMIT = 5;
@@ -36,17 +37,12 @@ const UNKNOWN_ACCESS_NAMES = [
 // sessions, the after-hours window and the range itself — is resolved in this
 // one zone. Mixing zones (attendance in UTC, access in IST) put the two series
 // of the same chart on different calendars.
-const REPORT_TZ = "Asia/Kolkata";
 const AFTER_HOURS_START = 21; // exclusive upper bound: > 21:00 is after hours
 const AFTER_HOURS_END = 7; //  exclusive lower bound: < 07:00 is after hours
 
-// Client-selectable override for REPORT_TZ (the Analytics page's "Time zone"
-// dropdown) — any IANA zone is accepted, same as AnalyticsValidator's
-// commonRangeFields; momentTz.tz.zone() is the defensive fallback check here
-// for callers that skip validation.
+// Analytics always uses the authenticated admin's configured timezone.
 function resolveTimezone(req) {
-  const tz = req?.query?.timezone;
-  return tz && momentTz.tz.zone(tz) ? tz : REPORT_TZ;
+  return getRequestTimezone(req);
 }
 
 function toObjectIds(value) {
@@ -83,17 +79,17 @@ function buildCaseInsensitiveLocationMatch(values = []) {
   };
 }
 
-// Resolved in REPORT_TZ rather than server-local time so the window matches the
+// Resolved in the admin timezone rather than server-local time so the window matches the
 // $dateToString buckets below — otherwise a server running in UTC slices days
 // 5.5h away from where the Attendance/Access Logs pages slice them.
-function getDateWindow(query, fallbackDays = 7) {
+function getDateWindow(query, timezone, fallbackDays = 7) {
   const { startDate, endDate } = query;
   const start = startDate && endDate
-    ? momentTz.tz(startDate, "YYYY-MM-DD", REPORT_TZ).startOf("day")
-    : momentTz.tz(REPORT_TZ).subtract(fallbackDays - 1, "days").startOf("day");
+    ? momentTz.tz(startDate, "YYYY-MM-DD", timezone).startOf("day")
+    : momentTz.tz(timezone).subtract(fallbackDays - 1, "days").startOf("day");
   const end = startDate && endDate
-    ? momentTz.tz(endDate, "YYYY-MM-DD", REPORT_TZ).endOf("day")
-    : momentTz.tz(REPORT_TZ).endOf("day");
+    ? momentTz.tz(endDate, "YYYY-MM-DD", timezone).endOf("day")
+    : momentTz.tz(timezone).endOf("day");
   const days = Math.max(end.clone().startOf("day").diff(start.clone().startOf("day"), "days") + 1, 1);
 
   return {
@@ -406,7 +402,7 @@ class AnalyticsService {
    * Every attendance number on this widget comes from here, in one pass.
    *
    * The unit is an *attendance log* — one (employee, day) row matched on
-   * `createdAt` and bucketed in REPORT_TZ, exactly how the Attendance Logs page
+   * `createdAt` and bucketed in the admin timezone, exactly how the Attendance Logs page
    * defines a row. Present, absentees, check-in/check-out counts and the daily
    * series are all derived from that same set, so the KPI tiles, the event
    * strip and the chart can no longer disagree the way they did when the KPIs
@@ -415,7 +411,7 @@ class AnalyticsService {
    * `present` means the day's last event was a check-in (still inside); its
    * complement among attendees is `checkedOut`.
    */
-  async _attendanceRollup(scope, range, rules) {
+  async _attendanceRollup(scope, range, rules, timezone) {
     if (scope.eventScopeEmpty || !scope.employeeIds.length) return emptyAttendanceRollup();
 
     const cameraMatch = this._eventCameraMatch(scope);
@@ -452,8 +448,8 @@ class AnalyticsService {
         $group: {
           _id: {
             employee: "$employee",
-            date: shiftDayBucketExpr(REPORT_TZ, {
-              $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: REPORT_TZ },
+            date: shiftDayBucketExpr(timezone, {
+              $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone },
             }),
           },
           shift: { $first: "$shift" },
@@ -474,7 +470,7 @@ class AnalyticsService {
       // so the chart was contradicting the KPI tiles beside it.
       // Same shift context the Attendance Logs pipeline applies, so the chart
       // and the logs list can never grade the same employee-day differently.
-      ...shiftContextStage(REPORT_TZ),
+      ...shiftContextStage(timezone),
       attendanceStatusStage(rules),
       {
         $facet: {
@@ -582,7 +578,7 @@ class AnalyticsService {
    * collection this size the lookup was the most expensive stage here, and the
    * roster has already been loaded.
    */
-  async _accessRollup(scope, range) {
+  async _accessRollup(scope, range, timezone) {
     if (scope.eventScopeEmpty) return emptyAccessRollup();
 
     const sessionConditions = [];
@@ -595,7 +591,7 @@ class AnalyticsService {
         { $in: [{ $toLower: { $ifNull: ["$sessions.personName", ""] } }, UNKNOWN_ACCESS_NAMES] },
       ],
     };
-    const sessionHour = { $hour: { date: "$sessions.timestamp", timezone: REPORT_TZ } };
+    const sessionHour = { $hour: { date: "$sessions.timestamp", timezone } };
     const afterHours = {
       $or: [
         { $lt: [sessionHour, AFTER_HOURS_END] },
@@ -656,7 +652,7 @@ class AnalyticsService {
             {
               $group: {
                 _id: {
-                  $dateToString: { format: "%Y-%m-%d", date: "$sessions.timestamp", timezone: REPORT_TZ },
+                  $dateToString: { format: "%Y-%m-%d", date: "$sessions.timestamp", timezone },
                 },
                 sessions: { $sum: 1 },
                 unauthorized: { $sum: { $cond: [unauthorizedSession, 1, 0] } },
@@ -836,7 +832,8 @@ class AnalyticsService {
       const { error } = AnalyticsValidator.attendancePresence(req.query);
       if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
 
-      const date = req.query.date || momentTz.tz(REPORT_TZ).format("YYYY-MM-DD");
+      const timezone = resolveTimezone(req);
+      const date = req.query.date || momentTz.tz(timezone).format("YYYY-MM-DD");
       const userData = req?.verified?.userData || {};
       const adminId = userData.adminId || userData.user_id;
 
@@ -857,6 +854,7 @@ class AnalyticsService {
           startDate: date,
           endDate: date,
           export: true,
+          timezone,
         },
       };
 
@@ -982,7 +980,8 @@ class AnalyticsService {
       const { error } = AnalyticsValidator.attendanceSummary(req.query);
       if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
 
-      const range = getDateWindow(req.query, 7);
+      const timezone = resolveTimezone(req);
+      const range = getDateWindow(req.query, timezone, 7);
       const previousRange = {
         start: range.start.clone().subtract(range.days, "days"),
         end: range.start.clone().subtract(1, "millisecond"),
@@ -1004,10 +1003,10 @@ class AnalyticsService {
       // and previous periods are graded identically.
       const rules = await resolveAttendanceSettings(scope.adminId);
       const [attendance, previousAttendance, access, previousAccess] = await Promise.all([
-        this._attendanceRollup(scope, range, rules),
-        this._attendanceRollup(scope, previousRange, rules),
-        accessIncluded ? this._accessRollup(scope, range) : emptyAccessRollup(),
-        accessIncluded ? this._accessRollup(scope, previousRange) : emptyAccessRollup(),
+        this._attendanceRollup(scope, range, rules, timezone),
+        this._attendanceRollup(scope, previousRange, rules, timezone),
+        accessIncluded ? this._accessRollup(scope, range, timezone) : emptyAccessRollup(),
+        accessIncluded ? this._accessRollup(scope, previousRange, timezone) : emptyAccessRollup(),
       ]);
 
       const totalEmployees = scope.totalEmployees;
@@ -1260,7 +1259,7 @@ class AnalyticsService {
     }
   }
 
-  // Activity Heatmap — incident counts grouped by ISO day-of-week x hour-of-day (REPORT_TZ).
+  // Activity Heatmap — incident counts grouped in the admin timezone.
   async activityHeatmap(req, res, _next) {
     try {
       const { error } = AnalyticsValidator.activityHeatmap(req.query);
@@ -1304,7 +1303,7 @@ class AnalyticsService {
     }
   }
 
-  // Detections by Hour — today's (or a given date's) incident counts bucketed by hour (REPORT_TZ).
+  // Detections by Hour — today's incident counts bucketed in the admin timezone.
   async detectionsByHour(req, res, _next) {
     try {
       const { error } = AnalyticsValidator.detectionsByHour(req.query);

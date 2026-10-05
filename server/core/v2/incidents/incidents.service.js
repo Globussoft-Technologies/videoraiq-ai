@@ -25,6 +25,7 @@ import {
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
 import { deleteMediaV2 as deleteMedia, mediaExistsV2 as mediaExists } from "../adminStorage/mediaStorage.v2.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 
 import {
   Incident,
@@ -1226,7 +1227,7 @@ class IncidentsService {
       }
 
       if (startDate && endDate) {
-        const timezone = "Asia/Kolkata"; // your local timezone
+        const timezone = getRequestTimezone(req);
 
         matchStage.timeOfIncident = {
           $gte: momentTZ.tz(startDate, timezone).startOf("day").toDate(),
@@ -3332,8 +3333,8 @@ console.log(result,'result');
 
     if (startDate && endDate) {
       matchStage.timeOfIncident = {
-        $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-        $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+        $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
       };
     }
 
@@ -3444,13 +3445,13 @@ console.log(result,'result');
         {
           $addFields: {
             // timeOfIncident is a BSON Date â€” regex can't hit it directly, so
-            // render it to a string first (Asia/Kolkata, matching the date
+            // render it to a string first (admin timezone, matching the date
             // filter above and the UI). Nulls yield null and safely don't match.
             _searchTime: {
               $dateToString: {
                 date: "$timeOfIncident",
                 format: "%Y-%m-%d %H:%M",
-                timezone: "Asia/Kolkata",
+                timezone: getRequestTimezone(req),
               },
             },
             ...Object.fromEntries(
@@ -3656,8 +3657,8 @@ console.log(result,'result');
 
     if (startDate && endDate) {
       match.timeOfIncident = {
-        $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-        $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+        $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
       };
     }
 
@@ -3737,11 +3738,11 @@ console.log(result,'result');
 
       if (req.query?.startDate && req.query?.endDate) {
         const windowStart = momentTZ
-          .tz(req.query.startDate, "Asia/Kolkata")
+          .tz(req.query.startDate, getRequestTimezone(req))
           .startOf("day")
           .toDate();
         const windowEnd = momentTZ
-          .tz(req.query.endDate, "Asia/Kolkata")
+          .tz(req.query.endDate, getRequestTimezone(req))
           .endOf("day")
           .toDate();
 
@@ -4047,8 +4048,8 @@ console.log(result,'result');
 
       if (startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 
@@ -4632,8 +4633,8 @@ console.log(result,'result');
       };
       if (startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 
@@ -4870,7 +4871,7 @@ console.log(result,'result');
                 $dateToString: {
                   date: "$timeOfIncident",
                   format: "%Y-%m-%d %H:%M",
-                  timezone: "Asia/Kolkata",
+                  timezone: getRequestTimezone(req),
                 },
               },
               _searchBoxCount: { $toString: "$boxCount" },
@@ -4987,8 +4988,8 @@ console.log(result,'result');
       };
       if (startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 
@@ -5060,6 +5061,7 @@ console.log(result,'result');
           Response.userFailResp("User authentication failed.", "Unauthorized"),
         );
       }
+      const timezone = getRequestTimezone(req);
 
       const { search, startDate, endDate, nvrId, nvrIds, channelId, channelIds, vehicleNumber } =
         req.query || {};
@@ -5076,8 +5078,8 @@ console.log(result,'result');
       };
       if (startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, timezone).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, timezone).endOf("day").toDate(),
         };
       }
       const requestedNvrs = toArray(nvrId || nvrIds);
@@ -5139,6 +5141,7 @@ console.log(result,'result');
           Response.userFailResp("User authentication failed.", "Unauthorized"),
         );
       }
+      const timezone = getRequestTimezone(req);
       const {
         startDate, endDate, nvrId, nvrIds, channelId, channelIds,
         vehicleNumber, boxType, search,
@@ -5155,8 +5158,8 @@ console.log(result,'result');
       };
       if (startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, timezone).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, timezone).endOf("day").toDate(),
         };
       }
       const requestedNvrs = toArray(nvrId || nvrIds);
@@ -5219,10 +5222,10 @@ console.log(result,'result');
               },
             },
             _date: {
-              $dateToString: { date: "$timeOfIncident", format: "%Y-%m-%d", timezone: "Asia/Kolkata" },
+              $dateToString: { date: "$timeOfIncident", format: "%Y-%m-%d", timezone },
             },
             _hour: {
-              $hour: { date: "$timeOfIncident", timezone: "Asia/Kolkata" },
+              $hour: { date: "$timeOfIncident", timezone },
             },
           },
         },
@@ -5351,6 +5354,7 @@ console.log(result,'result');
           topVehicles: analytics.topVehicles || [],
           hourlyActivity: analytics.hourlyActivity || [],
           insights,
+          timezone,
         }),
       );
     } catch (error) {
@@ -5517,8 +5521,8 @@ console.log(result,'result');
       };
       if (!deleteAll && startDate && endDate) {
         match.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
       const toArray = (v) =>
@@ -5587,8 +5591,8 @@ console.log(result,'result');
 
       if (startDate && endDate) {
         matchStage.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 
@@ -5734,8 +5738,8 @@ console.log(result,'result');
 
       if (startDate && endDate) {
         matchStage.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 
@@ -5837,8 +5841,8 @@ console.log(result,'result');
 
       if (startDate && endDate) {
         matchStage.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
         };
       }
 

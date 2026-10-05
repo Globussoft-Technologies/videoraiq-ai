@@ -10,6 +10,7 @@ import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedCha
 import { checkActivePlan } from "./checkActivePlan.js";
 import { getEmpAuthInfo } from "../utils/helperFunctions.js";
 import sessionsService from "../core/v2/sessions/sessions.service.js";
+import { DEFAULT_ADMIN_TIMEZONE, validTimezone } from "../utils/timezone.js";
 
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
@@ -72,6 +73,7 @@ async function verifyToken(req, res, next) {
               .status(401)
               .send(Response.tokenFailResp("Registration link is invalid or has expired"));
           }
+          decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           // Check if the password was changed after the token was issued
           // if (admin.passwordChangedAt && decoded.iat * 1000 < admin.passwordChangedAt.getTime()) {
           //     return res.status(401).send(Response.tokenFailResp('Session expired. Please log in again.'));
@@ -85,6 +87,7 @@ async function verifyToken(req, res, next) {
               .status(401)
               .send(Response.tokenFailResp("admin not found"));
           }
+          decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           const user = await User.findOne({ _id: decoded?.memberId }); // Replace with your ID field
           authorizedChannel = await authorizedChannelsModel.findOne({
             userId: decoded?.memberId,

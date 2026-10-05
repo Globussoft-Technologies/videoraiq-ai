@@ -49,8 +49,9 @@ const adminSchema = new mongoose.Schema({
   // plan expiry. Set when stop-all fires; cleared (and resume-all fired) when the
   // admin logs in again with an active plan.
   streamsStopped: { type: Boolean, default: false },
-  // Per-admin IANA timezone (e.g. "Asia/Kolkata"). null = not set.
-  timezone: { type: String, default: null },
+  // Per-admin IANA timezone. Existing null values are resolved to the same
+  // fallback by verifyToken; new admins persist the default explicitly.
+  timezone: { type: String, default: "Asia/Kolkata" },
   // Camera purchase limit set by the super-admin app. Admins may add at most
   // this many cameras (channels) across all their NVRs. New clients start with
   // 20 cameras; an explicit 0 still means no cameras are allowed.

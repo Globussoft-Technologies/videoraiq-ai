@@ -16,8 +16,11 @@ import { isAllowedRetentionSpec, RETENTION_OPTION_MONTHS } from "../../../servic
 import Channel from "../channels/channels.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import AttendanceAutoEmailReport from "../attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
+import MeasurementAutoEmailReport from "../measurementAutoEmailReport/measurementAutoEmailReport.model.js";
+import GlobalSchedule from "../globalSchedule/globalSchedule.model.js";
 import permissionService from "../permission/permissions.utility.js";
 import logsConfigService from "../logsConfiguration/logsConfiguration.service.js";
+import { DEFAULT_ADMIN_TIMEZONE } from "../../../utils/timezone.js";
 import {
   TOUR_MODULES,
   normalizePermissionConfig,
@@ -1114,11 +1117,23 @@ class AdminService {
         { adminId: updatedAdmin._id },
         { $set: { timezone: updatedAdmin.timezone, lastRunKey: null } },
       );
+      const [measurementReportsUpdate, globalSchedulesUpdate] = await Promise.all([
+        MeasurementAutoEmailReport.updateMany(
+          { adminId: updatedAdmin._id },
+          { $set: { timezone: updatedAdmin.timezone, lastRunKey: null } },
+        ),
+        GlobalSchedule.updateMany(
+          { userId: updatedAdmin.user_id, "schedule.mode": "custom" },
+          { $set: { "schedule.timezone": updatedAdmin.timezone } },
+        ),
+      ]);
       return res.send(
         Response.userSuccessResp("Timezone updated successfully.", {
           timezone: updatedAdmin.timezone,
           schedulesUpdated,
           attendanceReportsUpdated: attendanceReportsUpdate.modifiedCount || 0,
+          measurementReportsUpdated: measurementReportsUpdate.modifiedCount || 0,
+          globalSchedulesUpdated: globalSchedulesUpdate.modifiedCount || 0,
         }),
       );
     } catch (error) {
@@ -1139,7 +1154,7 @@ class AdminService {
       }
       return res.send(
         Response.userSuccessResp("Timezone fetched successfully.", {
-          timezone: admin.timezone || null,
+          timezone: admin.timezone || DEFAULT_ADMIN_TIMEZONE,
         }),
       );
     } catch (error) {

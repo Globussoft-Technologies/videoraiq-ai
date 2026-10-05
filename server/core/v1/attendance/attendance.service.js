@@ -17,6 +17,7 @@ import {
   findOpenCheckinToCarryOver,
   resolveCarryOverWindowMs,
 } from "./checkoutCarryOver.js";
+import { getRequestTimezone } from "../../../utils/timezone.js";
 const ImageView = config.get("ImageView");
 
 class AttendanceService {
@@ -74,11 +75,9 @@ class AttendanceService {
         confidenceScore: confidenceScore || 0,
       };
 
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
+      const timezone = getRequestTimezone(req);
+      const startOfDay = moment.tz(timezone).startOf("day").toDate();
+      const endOfDay = moment.tz(timezone).endOf("day").toDate();
 
       const existingAttendance = await Attendance.findOne({
         user: user?._id,
@@ -373,11 +372,13 @@ class AttendanceService {
       // Match only by user and date range
       const matchStage = { user: new mongoose.Types.ObjectId(userId) };
 
-      const start = startDate ? new Date(startDate) : new Date();
-      const end = endDate ? new Date(endDate) : new Date(start);
-
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      const timezone = getRequestTimezone(req);
+      const start = startDate
+        ? moment.tz(startDate, "YYYY-MM-DD", timezone).startOf("day").toDate()
+        : moment.tz(timezone).startOf("day").toDate();
+      const end = endDate
+        ? moment.tz(endDate, "YYYY-MM-DD", timezone).endOf("day").toDate()
+        : moment(start).tz(timezone).endOf("day").toDate();
       matchStage.createdAt = { $gte: start, $lte: end };
 
       // Apply the location filtering restriction if employeeLocations is provided
@@ -771,7 +772,7 @@ class AttendanceService {
           .json(Response.userSuccessResp("No attendance data to export", []));
       }
 
-      const timezone = req.query.timezone || "UTC";
+      const timezone = getRequestTimezone(req);
       if (format === "excel") {
         return this.#exportExcel(res, data, timezone);
       }
@@ -795,11 +796,9 @@ class AttendanceService {
       }
 
       const adminId = req?.verified?.userData?.adminId;
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
+      const timezone = getRequestTimezone(req);
+      const startOfDay = moment.tz(date, "YYYY-MM-DD", timezone).startOf("day").toDate();
+      const endOfDay = moment.tz(date, "YYYY-MM-DD", timezone).endOf("day").toDate();
 
       const attendance = await Attendance.findOne({
         user: new mongoose.Types.ObjectId(adminId),
