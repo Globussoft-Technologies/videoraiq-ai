@@ -10,6 +10,7 @@ export const EMPTY_SUB =
   'Get quick answers from alerts, incidents, attendance, and camera data you have permission to view.';
 
 export const COMPOSER_PLACEHOLDER = 'Ask about alerts, cameras, attendance, or incidents…';
+export const MAX_ASSISTANT_MESSAGE_CHARS = 4000;
 
 /** Shown under the composer — the same permission promise the backend must honour. */
 export const COMPOSER_FOOTNOTE = "Answers are limited to data you're authorized to access.";

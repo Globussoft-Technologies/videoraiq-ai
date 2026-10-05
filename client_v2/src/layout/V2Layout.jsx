@@ -338,9 +338,9 @@ function Shell() {
             )}
           </div>
         </div>
-        {/* Assistant launcher hidden for now.
+    
         <AssistantLauncher />
-        */}
+       
       </main>
       <AppTour />
     </div>

@@ -1,35 +1,57 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 
 const RAIL_WIDTH = 268;
 const CHATS_PER_PAGE = 10;
 
-function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
+function ConversationRow({ conv, active, onSelect, onDelete, onRename, editingId, onEditingChange }) {
   const [hover, setHover] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(conv.title);
   const [saving, setSaving] = useState(false);
+  const [titleOverflow, setTitleOverflow] = useState(0);
   const cancelBlurRef = useRef(false);
+  const titleViewportRef = useRef(null);
+  const titleTextRef = useRef(null);
   const count = conv.messageCount ?? conv.messages?.length ?? 0;
 
   useEffect(() => setDraftTitle(conv.title), [conv.title]);
+
+  useEffect(() => {
+    const checkOverflow = () => setTitleOverflow(titleViewportRef.current && titleTextRef.current
+      ? Math.max(0, titleTextRef.current.scrollWidth - titleViewportRef.current.clientWidth) : 0);
+    checkOverflow();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(checkOverflow);
+    if (titleViewportRef.current) observer.observe(titleViewportRef.current);
+    return () => observer.disconnect();
+  }, [conv.title]);
 
   const saveTitle = async () => {
     const title = draftTitle.trim();
     if (!title || title === conv.title) {
       setDraftTitle(conv.title);
       setEditing(false);
+      onEditingChange?.(null);
       return;
     }
     setSaving(true);
     try {
       await onRename(conv.id, title);
       setEditing(false);
+      onEditingChange?.(null);
     } catch {
       setDraftTitle(conv.title);
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEditing = () => {
+    if (editingId && editingId !== conv.id) return;
+    setDraftTitle(conv.title);
+    setEditing(true);
+    onEditingChange?.(conv.id);
   };
 
   return (
@@ -39,11 +61,11 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={conv.title}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 10,
+        position: 'relative',
         padding: '9px 10px',
         borderRadius: 10,
         cursor: 'pointer',
@@ -56,7 +78,7 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
         transition: 'background .14s',
       }}
     >
-      <span style={{ minWidth: 0, flex: 1 }}>
+      <span style={{ minWidth: 0, flex: '1 1 0%', width: 0, overflow: 'hidden', paddingRight: hover || editing ? 60 : 0, transition: 'padding-right .14s ease' }}>
         {editing ? (
           <input
             autoFocus
@@ -67,7 +89,7 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => setDraftTitle(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
+              if (event.key === 'Enter') saveTitle();
               if (event.key === 'Escape') {
                 cancelBlurRef.current = true;
                 setDraftTitle(conv.title);
@@ -97,18 +119,17 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
           />
         ) : (
           <span
+            ref={titleViewportRef}
             style={{
               display: 'block',
-              fontSize: 12.5,
-              fontWeight: active ? 600 : 500,
-              color: active ? 'var(--blue)' : 'var(--tx)',
-              whiteSpace: 'nowrap',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              paddingRight: 4,
               lineHeight: 1.35,
             }}
           >
-            {conv.title}
+            <span ref={titleTextRef} style={{ display: 'block', width: 'max-content', maxWidth: 'none', fontSize: 12.5, fontWeight: active ? 600 : 500, color: active ? 'var(--blue)' : 'var(--tx)', whiteSpace: 'nowrap', transform: hover && titleOverflow ? `translateX(-${titleOverflow}px)` : 'translateX(0)', transition: hover && titleOverflow ? 'transform 4.2s ease' : 'none' }}>
+              {conv.title}
+            </span>
           </span>
         )}
         <span style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', marginTop: 3 }}>
@@ -121,13 +142,13 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
         onClick={(event) => {
           event.stopPropagation();
           setDraftTitle(conv.title);
-          setEditing(true);
+          startEditing();
         }}
         disabled={saving}
         aria-label={`Rename chat: ${conv.title}`}
         title="Rename chat"
         style={{
-          flex: '0 0 auto',
+          position: 'absolute', right: 34, top: '50%', transform: 'translateY(-50%)',
           width: 26,
           height: 26,
           borderRadius: 7,
@@ -137,8 +158,10 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
           cursor: saving ? 'wait' : 'pointer',
           background: 'transparent',
           border: 0,
-          opacity: hover || active || editing ? 1 : 0.58,
+          opacity: editing ? 0 : hover ? 1 : 0,
+          pointerEvents: editing ? 'none' : 'auto',
           color: 'var(--tx3)',
+          transition: 'opacity .14s ease',
         }}
       >
         <Pencil size={13} strokeWidth={1.8} />
@@ -153,7 +176,7 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
         aria-label={`Delete chat: ${conv.title}`}
         title="Delete chat"
         style={{
-          flex: '0 0 auto',
+          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
           width: 26,
           height: 26,
           borderRadius: 7,
@@ -163,7 +186,7 @@ function ConversationRow({ conv, active, onSelect, onDelete, onRename }) {
           cursor: 'pointer',
           background: 'transparent',
           border: 0,
-          opacity: hover || active ? 1 : 0.58,
+          opacity: hover ? 1 : 0,
           transition: 'opacity .14s, color .14s, background .14s',
           color: hover ? 'var(--crit)' : 'var(--tx3)',
         }}
@@ -192,8 +215,12 @@ export default function ChatHistoryRail({
   pagination = { page: 1, limit: CHATS_PER_PAGE, total: 0, totalPages: 1 },
   onPageChange,
   loading = false,
+  search = '',
+  onSearch,
 }) {
   const [newHover, setNewHover] = useState(false);
+  const [historyHovered, setHistoryHovered] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const listRef = useRef(null);
   const totalPages = Math.max(1, pagination.totalPages || 1);
   const pageSize = pagination.limit || CHATS_PER_PAGE;
@@ -281,13 +308,75 @@ export default function ChatHistoryRail({
           <Plus size={17} strokeWidth={2.1} />
           New chat
         </button>
+
+        <label
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            marginTop: 10,
+          }}
+        >
+          <Search
+            size={15}
+            strokeWidth={1.9}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: 10, color: 'var(--tx3)', pointerEvents: 'none' }}
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => onSearch?.(event.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+            style={{
+              width: '100%',
+              height: 36,
+              padding: '0 34px 0 32px',
+              borderRadius: 9,
+              border: '1px solid var(--bd)',
+              outline: 'none',
+              background: 'var(--bg2)',
+              color: 'var(--tx)',
+              fontFamily: 'var(--ui)',
+              fontSize: 12,
+            }}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => onSearch?.('')}
+              aria-label="Clear chat search"
+              title="Clear search"
+              style={{
+                position: 'absolute',
+                right: 4,
+                top: 4,
+                width: 28,
+                height: 28,
+                display: 'grid',
+                placeItems: 'center',
+                padding: 0,
+                border: 0,
+                borderRadius: 7,
+                background: 'transparent',
+                color: 'var(--blue)',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={14} strokeWidth={2.2} />
+            </button>
+          )}
+        </label>
       </div>
 
       {/* Thread list */}
       <div
         ref={listRef}
-        className="vq-scroll"
-        style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }}
+        className="vq-scroll chat-history-list"
+        onMouseEnter={() => setHistoryHovered(true)}
+        onMouseLeave={() => setHistoryHovered(false)}
+        style={{ flex: 1, minHeight: 0, overflowY: historyHovered ? 'auto' : 'hidden', padding: '0 2px 14px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}
       >
         {loading ? (
           <div style={{ padding: '18px 12px', fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center' }}>
@@ -303,7 +392,7 @@ export default function ChatHistoryRail({
               textAlign: 'center',
             }}
           >
-            No conversations yet. Your chats will appear here.
+            {search.trim() ? 'No chats match your search.' : 'No conversations yet. Your chats will appear here.'}
           </div>
         ) : (
           conversations.map((conv) => (
@@ -314,12 +403,14 @@ export default function ChatHistoryRail({
               onSelect={select}
               onDelete={onDelete}
               onRename={onRename}
+              editingId={editingId}
+              onEditingChange={setEditingId}
             />
           ))
         )}
       </div>
 
-      {totalPages > 1 && (
+      {false && totalPages > 1 && (
         <div
           style={{
             flex: '0 0 auto',
@@ -394,7 +485,12 @@ export default function ChatHistoryRail({
       <>
         {open && (
           <div
-            onClick={onClose}
+            // Only dismiss when the backdrop itself is clicked. The backdrop
+            // spans the page, so bubbling clicks from the chat composer would
+            // otherwise close the history drawer while the user is typing.
+            onClick={(event) => {
+              if (event.target === event.currentTarget) onClose?.();
+            }}
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 40 }}
           />
         )}

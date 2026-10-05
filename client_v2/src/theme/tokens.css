@@ -160,6 +160,20 @@
   scrollbar-width: thin;
   scrollbar-color: var(--scroll) transparent;
 }
+.vq-user-copy-action:focus-visible,
+.vq-user-message:hover .vq-user-copy-action,
+.vq-user-copy-action:hover {
+  opacity: 1 !important;
+}
+.chat-history-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.chat-history-list {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 .hide-scrollbar,
 .scrollbar-hide {
   -ms-overflow-style: none;

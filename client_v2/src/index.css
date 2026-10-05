@@ -27,6 +27,11 @@ body {
   font-family: var(--ui, 'Poppins', system-ui, sans-serif);
 }
 
+.assistant-image-preview-trigger,
+.assistant-image-preview-trigger img {
+  cursor: pointer !important;
+}
+
 /* Sonner toast close button: right side, vertically centered (default is top-left).
    Sonner's own rule targets [data-sonner-toast][data-styled='true'] [data-close-button]
    and reads position from CSS vars, so match that specificity and override the vars too. */
@@ -42,4 +47,21 @@ body {
    running underneath it. */
 [data-sonner-toast][data-styled='true'] [data-content] {
   padding-right: 20px;
+}
+.vq-assistant-pop {
+  transform-origin: bottom right;
+}
+
+@keyframes vq-assistant-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 600px) {
+  .vq-assistant-compact {
+    right: 12px;
+    bottom: 78px;
+    width: calc(100vw - 24px);
+    height: calc(100vh - 92px);
+  }
 }
