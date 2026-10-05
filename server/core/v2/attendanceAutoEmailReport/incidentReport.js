@@ -266,20 +266,16 @@ export async function buildIncidentWorkbook(details) {
     { header: "Detection", key: "detection", width: 30 },
     { header: "NVR", key: "nvr", width: 24 },
     { header: "Camera", key: "camera", width: 26 },
-    { header: "Department", key: "department", width: 25 },
-    { header: "Location", key: "location", width: 22 },
     { header: "Severity", key: "severity", width: 14 },
     { header: "Status", key: "status", width: 14 },
     { header: "Time of Incident", key: "time", width: 24 },
-    { header: "Confidence", key: "confidence", width: 14 },
     ...(showVehicleNumber ? [{ header: "Vehicle Number", key: "vehicleNumber", width: 20 }] : []),
-    { header: "Description", key: "description", width: 40 },
     { header: "Image", key: "image", width: 18 },
   ];
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3B82F6" } };
   details.rows.forEach((row, index) => {
-    const excelRow = sheet.addRow({ ...row, number: index + 1, confidence: row.confidence == null ? "-" : `${Math.round(Number(row.confidence))}%`, image: row.image ? "View image" : "-" });
+    const excelRow = sheet.addRow({ ...row, number: index + 1, image: row.image ? "View image" : "-" });
     if (row.image) {
       const cell = excelRow.getCell("image");
       cell.value = { text: "View image", hyperlink: row.image };

@@ -35,18 +35,6 @@ const statusOf = (item) => {
   return 'New';
 };
 
-const locationOf = (item) => {
-  const location = item?.locationData || item?.location;
-  if (typeof location === 'string') return location;
-  return location?.locationName || location?.name || '--';
-};
-
-const departmentOf = (item) => {
-  const department = item?.departmentData || item?.department || item?.channelData?.department?.[0];
-  if (typeof department === 'string') return department;
-  return department?.departmentName || department?.name || '--';
-};
-
 const fetchAllFilteredIncidents = async (filter) => {
   const rows = [];
   const seen = new Set();
@@ -77,21 +65,16 @@ const fetchAllFilteredIncidents = async (filter) => {
 };
 
 const mapRow = (item, index) => {
-  const confidence = item?.confidence ?? item?.accuracy ?? item?.score;
   return {
     'Sl No': index + 1,
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
-    Department: departmentOf(item),
-    Location: locationOf(item),
     Severity: text(item?.severity),
     Status: statusOf(item),
     'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, 'DD/MM/YYYY hh:mm A'),
-    Confidence: confidence == null ? '--' : `${Math.round(Number(confidence))}%`,
     'Vehicle Number': text(item?.vehicleNumber),
-    'Report Description': text(item?.report?.description),
     Image: item?.Image ? mediaUrl(item.Image) : '--',
   };
 };
