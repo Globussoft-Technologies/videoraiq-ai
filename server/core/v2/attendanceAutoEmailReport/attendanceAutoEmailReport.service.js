@@ -1538,10 +1538,18 @@ class AttendanceAutoEmailReportService {
       if (!report) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
       if (report.contentType === "incidents") {
         const details = await incidentRowsForReport(report, rangeForReport(report));
-        const headers = ["#", "Incident", "NVR", "Camera", "Department", "Location", "Severity", "Status", "Time", "Vehicle", "Image"];
+        const headers = [
+          "Sl No", "Incident", "NVR", "Camera", "Department", "Location", "Severity", "Status", "Time",
+          ...(details.showVehicleNumber ? ["Vehicle Number"] : []),
+          "Image",
+        ];
         const tableRows = details.rows.map((row, index) => ({
           kind: "session",
-          cells: [index + 1, row.incident, row.nvr, row.camera, row.department, row.location, row.severity, row.status, row.time, row.vehicleNumber, imageCell(row.image)],
+          cells: [
+            index + 1, row.incident, row.nvr, row.camera, row.department, row.location, row.severity, row.status, row.time,
+            ...(details.showVehicleNumber ? [row.vehicleNumber] : []),
+            imageCell(row.image),
+          ],
         }));
         return res.json(Response.userSuccessResp("Incident report preview", { ...details, headers, tableRows, contentType: "incidents" }));
       }

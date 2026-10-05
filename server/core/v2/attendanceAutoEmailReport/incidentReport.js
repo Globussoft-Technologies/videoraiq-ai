@@ -11,6 +11,14 @@ const BLUE = "#3b82f6";
 const INK = "#172033";
 const MUTED = "#65718a";
 const RULE = "#dfe5ef";
+const VEHICLE_NUMBER_INCIDENT_TYPES = new Set([
+  "vehicleDetection",
+  "vehicleObstruction",
+  "unauthorizedParkingDetection",
+  "loadingUnloadingStockCountingDetection",
+  "carModelDetection",
+  "vehicleCheckInOut",
+]);
 
 const humanize = (value) => String(value || "Detection")
   .replace(/([A-Z])/g, " $1")
@@ -35,8 +43,21 @@ const asText = (value, fallback = "-") => (
   value === null || value === undefined || value === "" ? fallback : String(value)
 );
 
+const hasVehicleNumber = (value) => Boolean(String(value ?? "").replace(/[^A-Za-z0-9]/g, ""));
+
+const vehicleNumberRequired = (item) => (
+  VEHICLE_NUMBER_INCIDENT_TYPES.has(item?.incidentType) || hasVehicleNumber(item?.vehicleNumber)
+);
+
+const showVehicleNumberFor = (details) => (
+  typeof details.showVehicleNumber === "boolean"
+    ? details.showVehicleNumber
+    : details.rows.some(vehicleNumberRequired)
+);
+
 const rowFromIncident = (item, timezone) => ({
   id: String(item._id),
+  incidentType: item.incidentType,
   incident: asText(item.incidentName || humanize(item.incidentType)),
   detection: humanize(item.incidentType),
   nvr: asText(item.nvrData?.nvrName),
@@ -77,7 +98,13 @@ export async function incidentRowsForReport(report, summary) {
   ]);
 
   const rows = incidents.map((item) => rowFromIncident(item, summary.timezone));
-  return { ...summary, rows, rowCount: rows.length, limited: incidents.length >= MAX_ROWS };
+  return {
+    ...summary,
+    rows,
+    rowCount: rows.length,
+    limited: incidents.length >= MAX_ROWS,
+    showVehicleNumber: incidents.some(vehicleNumberRequired),
+  };
 }
 
 const pdfBuffer = (draw, options = {}) => new Promise((resolve, reject) => {
@@ -96,17 +123,21 @@ const drawReportHeader = (document, details, suffix) => {
 };
 
 export function buildIncidentListPdf(details) {
+  const showVehicleNumber = showVehicleNumberFor(details);
   const columns = [
-    ["#", 18], ["Incident", 118], ["NVR", 70], ["Camera", 75], ["Severity", 48],
-    ["Status", 50], ["Time", 88], ["Vehicle", 70], ["Image", 44],
+    ["Sl No", "serialNumber", 25], ["Incident", "incident", showVehicleNumber ? 111 : 141],
+    ["NVR", "nvr", showVehicleNumber ? 66 : 76], ["Camera", "camera", showVehicleNumber ? 72 : 82],
+    ["Severity", "severity", 48], ["Status", "status", 50], ["Time", "time", 88],
+    ...(showVehicleNumber ? [["Vehicle Number", "vehicleNumber", 74]] : []),
+    ["Image", "image", 44],
   ];
   return pdfBuffer((document) => {
     const left = 28;
-    const tableWidth = columns.reduce((sum, [, width]) => sum + width, 0);
+    const tableWidth = columns.reduce((sum, [, , width]) => sum + width, 0);
     const drawTableHeader = (top) => {
       document.fillColor(BLUE).rect(left, top, tableWidth, 24).fill();
       let x = left;
-      columns.forEach(([label, width]) => {
+      columns.forEach(([label, , width]) => {
         document.font("Helvetica-Bold").fontSize(7).fillColor("#ffffff").text(label, x + 3, top + 8, { width: width - 6, ellipsis: true });
         x += width;
       });
@@ -124,11 +155,10 @@ export function buildIncidentListPdf(details) {
         y = drawPage();
       }
       if (index % 2 === 1) document.fillColor("#f7f9fc").rect(left, y, tableWidth, 27).fill();
-      const values = [index + 1, row.incident, row.nvr, row.camera, row.severity, row.status, row.time, row.vehicleNumber, row.image ? "View" : "-"];
       let x = left;
-      values.forEach((value, columnIndex) => {
-        const width = columns[columnIndex][1];
-        const linked = columnIndex === values.length - 1 && row.image;
+      columns.forEach(([, key, width]) => {
+        const value = key === "serialNumber" ? index + 1 : key === "image" ? (row.image ? "View" : "-") : row[key];
+        const linked = key === "image" && row.image;
         document.font("Helvetica").fontSize(6.8).fillColor(linked ? BLUE : INK)
           .text(String(value), x + 3, y + 8, { width: width - 6, height: 14, ellipsis: true, link: linked || undefined, underline: Boolean(linked) });
         x += width;
@@ -170,7 +200,8 @@ export async function buildIncidentGridPdf(details) {
     const columns = 4;
     const cardWidth = (document.page.width - margin * 2 - gap * (columns - 1)) / columns;
     const imageHeight = 75;
-    const cardHeight = 156;
+    const showVehicleNumber = showVehicleNumberFor(details);
+    const cardHeight = showVehicleNumber ? 156 : 146;
     let x = margin;
     let y = 60;
     let column = 0;
@@ -201,7 +232,8 @@ export async function buildIncidentGridPdf(details) {
 
         const detailsToDraw = [
           ["Incident", row.incident], ["NVR", row.nvr], ["Camera", row.camera],
-          ["Severity", row.severity], ["Status", row.status], ["Time", row.time], ["Vehicle", row.vehicleNumber],
+          ["Severity", row.severity], ["Status", row.status], ["Time", row.time],
+          ...(showVehicleNumber ? [["Vehicle Number", row.vehicleNumber]] : []),
         ];
         let textY = y + imageHeight + 9;
         detailsToDraw.forEach(([label, value]) => {
@@ -227,8 +259,9 @@ export async function buildIncidentGridPdf(details) {
 export async function buildIncidentWorkbook(details) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Incidents");
+  const showVehicleNumber = showVehicleNumberFor(details);
   sheet.columns = [
-    { header: "#", key: "number", width: 8 },
+    { header: "Sl No", key: "number", width: 8 },
     { header: "Incident", key: "incident", width: 34 },
     { header: "Detection", key: "detection", width: 30 },
     { header: "NVR", key: "nvr", width: 24 },
@@ -239,7 +272,7 @@ export async function buildIncidentWorkbook(details) {
     { header: "Status", key: "status", width: 14 },
     { header: "Time of Incident", key: "time", width: 24 },
     { header: "Confidence", key: "confidence", width: 14 },
-    { header: "Vehicle Number", key: "vehicleNumber", width: 20 },
+    ...(showVehicleNumber ? [{ header: "Vehicle Number", key: "vehicleNumber", width: 20 }] : []),
     { header: "Description", key: "description", width: 40 },
     { header: "Image", key: "image", width: 18 },
   ];
@@ -254,6 +287,6 @@ export async function buildIncidentWorkbook(details) {
     }
   });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: "A1", to: "N1" };
+  sheet.autoFilter = { from: "A1", to: `${sheet.getColumn(sheet.columnCount).letter}1` };
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

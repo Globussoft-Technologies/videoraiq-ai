@@ -9,11 +9,25 @@ import { formatUtcInConfiguredTimezone } from '../../../utils/timezone';
 
 const EXPORT_BATCH_SIZE = 500;
 const MAX_EXPORT_ROWS = 10000;
+const VEHICLE_NUMBER_INCIDENT_TYPES = new Set([
+  'vehicleDetection',
+  'vehicleObstruction',
+  'unauthorizedParkingDetection',
+  'loadingUnloadingStockCountingDetection',
+  'carModelDetection',
+  'vehicleCheckInOut',
+]);
 
 const text = (value, fallback = '--') => {
   if (value === null || value === undefined || value === '') return fallback;
   return String(value);
 };
+
+const hasVehicleNumber = (value) => Boolean(String(value ?? '').replace(/[^A-Za-z0-9]/g, ''));
+
+const vehicleNumberRequired = (item) => (
+  VEHICLE_NUMBER_INCIDENT_TYPES.has(item?.incidentType) || hasVehicleNumber(item?.vehicleNumber)
+);
 
 const statusOf = (item) => {
   if (item?.resolved) return 'Resolved';
@@ -65,7 +79,7 @@ const fetchAllFilteredIncidents = async (filter) => {
 const mapRow = (item, index) => {
   const confidence = item?.confidence ?? item?.accuracy ?? item?.score;
   return {
-    '#': index + 1,
+    'Sl No': index + 1,
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
@@ -84,14 +98,17 @@ const mapRow = (item, index) => {
 
 const fileStamp = () => moment().format('YYYY-MM-DD_HH-mm');
 
-const exportExcel = (rows) => {
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  worksheet['!cols'] = Object.keys(rows[0]).map((key) => ({
-    wch: Math.min(42, Math.max(key.length + 2, ...rows.map((row) => String(row[key] ?? '').length + 2))),
+const exportExcel = (rows, showVehicleNumber) => {
+  const exportRows = showVehicleNumber
+    ? rows
+    : rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'Vehicle Number')));
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  worksheet['!cols'] = Object.keys(exportRows[0]).map((key) => ({
+    wch: Math.min(42, Math.max(key.length + 2, ...exportRows.map((row) => String(row[key] ?? '').length + 2))),
   }));
 
-  const imageColumn = Object.keys(rows[0]).indexOf('Image');
-  rows.forEach((row, index) => {
+  const imageColumn = Object.keys(exportRows[0]).indexOf('Image');
+  exportRows.forEach((row, index) => {
     const url = row.Image;
     if (!url || url === '--') return;
     const address = XLSX.utils.encode_cell({ r: index + 1, c: imageColumn });
@@ -103,7 +120,7 @@ const exportExcel = (rows) => {
   XLSX.writeFile(workbook, `incident-center_${fileStamp()}.xlsx`);
 };
 
-const exportListPdf = (rows) => {
+const exportListPdf = (rows, showVehicleNumber) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
@@ -112,8 +129,23 @@ const exportListPdf = (rows) => {
   doc.setFontSize(8.5);
   doc.text(`Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}`, 14, 19);
 
-  const columns = ['#', 'Incident', 'NVR', 'Camera', 'Severity', 'Status', 'Time of Incident', 'Vehicle Number', 'Image'];
+  const columns = [
+    'Sl No', 'Incident', 'NVR', 'Camera', 'Severity', 'Status', 'Time of Incident',
+    ...(showVehicleNumber ? ['Vehicle Number'] : []),
+    'Image',
+  ];
   const imageColumn = columns.length - 1;
+  const columnWidths = {
+    'Sl No': 12,
+    Incident: showVehicleNumber ? 48 : 60,
+    NVR: showVehicleNumber ? 30 : 34,
+    Camera: showVehicleNumber ? 31 : 35,
+    Severity: 18,
+    Status: 18,
+    'Time of Incident': 31,
+    'Vehicle Number': 27,
+    Image: 20,
+  };
   autoTable(doc, {
     head: [columns],
     body: rows.map((row) => columns.map((column) => column === 'Image' ? (row.Image === '--' ? '--' : 'View image') : row[column])),
@@ -122,17 +154,7 @@ const exportListPdf = (rows) => {
     theme: 'grid',
     styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak', valign: 'middle' },
     headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 9 },
-      1: { cellWidth: 48 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 31 },
-      4: { cellWidth: 18 },
-      5: { cellWidth: 18 },
-      6: { cellWidth: 31 },
-      7: { cellWidth: 27 },
-      8: { cellWidth: 20 },
-    },
+    columnStyles: Object.fromEntries(columns.map((column, index) => [index, { cellWidth: columnWidths[column] }])),
     didDrawCell: (data) => {
       if (data.section !== 'body' || data.column.index !== imageColumn) return;
       const url = rows[data.row.index]?.Image;
@@ -204,7 +226,7 @@ const imageFormat = (dataUrl) => {
   return type === 'JPG' ? 'JPEG' : type || 'JPEG';
 };
 
-const exportGridPdf = async (rows) => {
+const exportGridPdf = async (rows, showVehicleNumber) => {
   const imageData = await mapWithConcurrency(rows, 20, async (row) => {
     if (!row.Image || row.Image === '--') return null;
     try {
@@ -229,7 +251,7 @@ const exportGridPdf = async (rows) => {
     ['Severity', 'Severity'],
     ['Status', 'Status'],
     ['Time', 'Time of Incident'],
-    ['Vehicle', 'Vehicle Number'],
+    ...(showVehicleNumber ? [['Vehicle Number', 'Vehicle Number']] : []),
   ];
   const detailGap = 4.3;
   const cardHeight = imageHeight + 6 + details.length * detailGap + 4;
@@ -324,9 +346,10 @@ export async function exportIncidentCenter(format, filter = {}, options = {}) {
   }
 
   const rows = incidents.map(mapRow);
-  if (format === 'excel') exportExcel(rows);
-  else if (format === 'pdf' && options.viewMode === 'grid') await exportGridPdf(rows);
-  else if (format === 'pdf') exportListPdf(rows);
+  const showVehicleNumber = incidents.some(vehicleNumberRequired);
+  if (format === 'excel') exportExcel(rows, showVehicleNumber);
+  else if (format === 'pdf' && options.viewMode === 'grid') await exportGridPdf(rows, showVehicleNumber);
+  else if (format === 'pdf') exportListPdf(rows, showVehicleNumber);
   else throw new Error(`Unsupported export format: ${format}`);
 
   toast.success(`${format === 'excel' ? 'Excel' : 'PDF'} downloaded (${rows.length} incidents)`);
