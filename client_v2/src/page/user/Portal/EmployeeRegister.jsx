@@ -630,18 +630,22 @@ export default function EmployeeRegister() {
                       {PHOTO_SLOTS.map((s) => {
                         const pic = photos[s.key];
                         return (
-                          <div key={s.key} className="flex overflow-hidden rounded-[16px] border border-[#e3e8f0] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.04)] sm:block">
-                            <div className="group relative flex aspect-[4/5] w-[104px] shrink-0 items-center justify-center overflow-hidden bg-[#f2f8ff] p-2 sm:w-full sm:max-h-[240px]">
+                          <div key={s.key} className="flex overflow-visible rounded-[16px] border border-[#e3e8f0] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.04)] sm:block">
+                            <div className="group relative isolate flex aspect-[4/5] w-[104px] shrink-0 items-center justify-center overflow-visible bg-transparent p-0 sm:w-full sm:max-h-[240px]">
                               {pic ? (
                                 <>
-                                  <img src={pic.url} alt={s.label} className="w-full h-full object-cover rounded-[12px]" />
+                                  <div className="absolute inset-0 overflow-hidden rounded-t-[16px]">
+                                    <img src={pic.url} alt={s.label} className="w-full h-full object-cover" />
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() => removePhoto(s.key)}
                                     disabled={isSubmitting}
-                                    className="absolute top-2 right-2 bg-[#ef4444] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    aria-label={`Remove ${s.label.toLowerCase()} photo`}
+                                    title="Remove photo"
+                                    className="absolute -right-2 -top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#cbd5e1] bg-white/95 p-1 text-[#64748b] shadow-sm backdrop-blur-sm transition-colors hover:border-[#94a3b8] hover:bg-[#f1f5f9] hover:text-[#334155] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/40 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                                   >
-                                    <X size={14} />
+                                    <X size={10} strokeWidth={2} />
                                   </button>
                                   <div className="absolute inset-x-2 bottom-2 hidden items-center gap-1.5 opacity-0 transition-opacity duration-150 sm:flex sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                                     <button
