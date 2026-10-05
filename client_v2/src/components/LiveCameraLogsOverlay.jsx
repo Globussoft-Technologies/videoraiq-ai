@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import moment from 'moment';
 import { ChevronDown, ChevronUp, GitBranch, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { detectionLabel } from '../lib/format';
+import { utcToConfiguredTimezone } from '@/utils/timezone';
 
 const IMAGE_BASE = import.meta.env.VITE_INCIDENT_URL || `${import.meta.env.VITE_BACKEND}/uploads/`;
 const INITIALS_URL = import.meta.env.VITE_INITIALS_URL || '';
@@ -154,8 +154,9 @@ function mapDetection(item, index) {
 
 function LogRow({ item, type }) {
   const Icon = type === 'attendance' ? UserCheck : ShieldAlert;
-  const time = item.time && moment(item.time).isValid()
-    ? moment(item.time).format('HH:mm:ss')
+  const displayTime = utcToConfiguredTimezone(item.time);
+  const time = displayTime
+    ? displayTime.format('HH:mm:ss')
     : '--';
 
   return (
@@ -189,8 +190,9 @@ function LogRow({ item, type }) {
 
 function DetectionLogRow({ item }) {
   const [open, setOpen] = useState(true);
-  const time = item.time && moment(item.time).isValid()
-    ? moment(item.time).format('HH:mm:ss')
+  const displayTime = utcToConfiguredTimezone(item.time);
+  const time = displayTime
+    ? displayTime.format('HH:mm:ss')
     : '--';
   const severity = String(item.severity || '').toLowerCase();
   const color =

@@ -9,6 +9,7 @@ import { SocketProvider } from '@/context/SocketContext';
 import { LogsConfigProvider } from '@/context/LogsConfigContext';
 import { AttendanceSocketProvider } from '@/context/AttendanceSocketContext';
 import { DetectionNotificationProvider } from '@/context/DetectionNotificationContext';
+import { TimezoneProvider } from '@/context/TimezoneContext';
 import { router } from './App';
 import './utils/setupAxiosSession';
 import './index.css';
@@ -16,7 +17,8 @@ import './index.css';
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>
-      <PermissionProvider>
+      <TimezoneProvider>
+        <PermissionProvider>
         <SocketProvider>
           {/* LicenseProvider sits inside SocketProvider: the superadmin pushes
               detection-licence changes over `detectionLicense_<adminId>`, so it
@@ -32,7 +34,8 @@ createRoot(document.getElementById('root')).render(
             </LogsConfigProvider>
           </LicenseProvider>
         </SocketProvider>
-      </PermissionProvider>
+        </PermissionProvider>
+      </TimezoneProvider>
     </AuthProvider>
   </StrictMode>
 );

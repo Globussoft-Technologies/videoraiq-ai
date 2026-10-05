@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { User, Building2, MapPin, LogIn, LogOut, Mail } from 'lucide-react';
 import moment from 'moment-timezone';
 import ImageWithLoader from './ImageWithLoader';
 import { avatarColor, initials } from './avatarUtils';
+import { useTimezone } from '@/context/TimezoneContext';
 
 /**
  * Employee profile dialog for the log pages — shows the profile picture plus
@@ -29,7 +30,7 @@ const Row = ({ icon: Icon, label, value, color = 'var(--blue)' }) => (
 );
 
 const LogEmployeeProfileDialog = ({ open = false, onOpenChange, onClose, profile = null, module }) => {
-  const [region] = useState(() => moment.tz.guess());
+  const { timezone: region } = useTimezone();
 
   const convertToRegionTime = (utcTime) => {
     if (!utcTime) return '--';

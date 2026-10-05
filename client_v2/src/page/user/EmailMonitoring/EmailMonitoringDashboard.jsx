@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { Badge, Panel, PanelHeader } from '../../../components/primitives';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import {
   EmailMonitoringAuthError,
   getEmailMonitoringActivity,
@@ -224,7 +225,7 @@ function normalizeActivity(data) {
     total: numberValue(data?.total, rows.length),
     rows: rows.map((row, index) => ({
       id: row.id || row.messageId || `${row.timestamp || row.time || 'row'}-${index}`,
-      time: textValue(row.time || (row.timestamp ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'), '-'),
+      time: textValue(row.time || formatUtcInConfiguredTimezone(row.timestamp, 'hh:mm A', '-'), '-'),
       organization: textValue(row.organization || row.organizationName, '-'),
       direction: titleCase(row.direction),
       sender: textValue(row.sender, '-'),

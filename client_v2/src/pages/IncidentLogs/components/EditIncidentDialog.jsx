@@ -6,6 +6,7 @@ import * as incidentApi from '../Api';
 import { parseTime, formatTime } from '@/pages/AttendanceLogs/components/timeUtils';
 import { UnifiedTimePicker } from '@/pages/AttendanceLogs/components/TimePickerComponents';
 import SingleDatePicker from '@/components/SingleDatePicker';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -14,11 +15,11 @@ const SEVERITY_OPTIONS = [
 ];
 
 const toDateInput = (value) => {
-  const m = moment(value);
+  const m = moment.utc(value).tz(getConfiguredTimezone());
   return m.isValid() ? m.format('YYYY-MM-DD') : '';
 };
 const toTimeParts = (value) => {
-  const m = moment(value);
+  const m = moment.utc(value).tz(getConfiguredTimezone());
   return m.isValid() ? parseTime(m.format('hh:mm A')) : parseTime('');
 };
 
@@ -99,7 +100,7 @@ const EditIncidentDialog = ({
       const timeString = formatTime(timeParts.hour, timeParts.minute, timeParts.period);
       const combined =
         timeString && form.incidentDate
-          ? moment(`${form.incidentDate} ${timeString}`, 'YYYY-MM-DD hh:mm A')
+          ? moment.tz(`${form.incidentDate} ${timeString}`, 'YYYY-MM-DD hh:mm A', getConfiguredTimezone())
           : null;
 
       await api.editIncidentDetails(row._id, {

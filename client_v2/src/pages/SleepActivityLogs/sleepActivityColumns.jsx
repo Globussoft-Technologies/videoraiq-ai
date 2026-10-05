@@ -1,12 +1,13 @@
 import React from 'react';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { Clock, Image, Moon, Server, Video } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
 const textCls = 'text-[var(--tx2)] text-[13px] font-medium whitespace-nowrap';
 
 const formatTime = (t) =>
-  t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 /** Is-sleeping badge. `true` → sleeping (critical), `false` → awake (ok). */
 export const SleepingBadge = ({ isSleeping }) => {

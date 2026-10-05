@@ -1,4 +1,5 @@
 import moment from 'moment';
+import { utcToConfiguredTimezone } from '@/utils/timezone';
 
 const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
 
@@ -16,7 +17,7 @@ export function mediaUrl(path) {
 /** "5 min ago" style relative time. */
 export function timeAgo(date) {
   if (!date) return '';
-  const m = moment(date);
+  const m = moment.utc(date);
   if (!m.isValid()) return '';
   return m.fromNow();
 }
@@ -24,15 +25,15 @@ export function timeAgo(date) {
 /** "14:32:05" local time-of-day. */
 export function timeOfDay(date) {
   if (!date) return '';
-  const m = moment(date);
-  return m.isValid() ? m.format('HH:mm:ss') : '';
+  const m = utcToConfiguredTimezone(date);
+  return m ? m.format('HH:mm:ss') : '';
 }
 
 /** "Jun 29, 14:32" */
 export function shortDateTime(date) {
   if (!date) return '';
-  const m = moment(date);
-  return m.isValid() ? m.format('MMM D, HH:mm') : '';
+  const m = utcToConfiguredTimezone(date);
+  return m ? m.format('MMM D, HH:mm') : '';
 }
 
 /** Thousands-separated integer. */

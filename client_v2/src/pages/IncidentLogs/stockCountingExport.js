@@ -5,6 +5,7 @@ import moment from 'moment-timezone';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { fetchIncidentLogs } from './Api';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 const EXPORT_LIMIT = 10000;
 const EXPORT_FILE_NAME = 'Loading-Unloading Stock Logs';
@@ -12,7 +13,7 @@ const EXPORT_FILE_NAME = 'Loading-Unloading Stock Logs';
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 const formatTime = (value) => (
   value
-    ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+    ? moment.utc(value).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
     : '--'
 );
 const vehicleNumberOf = (row) => String(row?.vehicleNumber || '').trim() || 'Unknown';

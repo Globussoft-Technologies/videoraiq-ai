@@ -3,13 +3,14 @@ import { ClipboardList, Expand, Pause, Play } from 'lucide-react';
 import FloBrand from './FloBrand';
 import FloButton from './FloButton';
 import FloThemeToggle from './FloThemeToggle';
+import { nowInConfiguredTimezone } from '@/utils/timezone';
 
 export default function StationTopbar({ running, onStartStop, onToggleLogs, onToggleFullscreen, stationId }) {
   const ActionIcon = running ? Pause : Play;
-  const [clock, setClock] = useState(() => new Date().toLocaleTimeString([], { hour12: false }));
+  const [clock, setClock] = useState(() => nowInConfiguredTimezone().format('HH:mm:ss'));
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date().toLocaleTimeString([], { hour12: false })), 1000);
+    const timer = window.setInterval(() => setClock(nowInConfiguredTimezone().format('HH:mm:ss')), 1000);
     return () => window.clearInterval(timer);
   }, []);
 

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import moment from 'moment';
 import { LogIn, LogOut, Clock, X, Mail, Building2, MapPin, ImageOff, Settings, Check } from 'lucide-react';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
+import { utcToConfiguredTimezone } from '@/utils/timezone';
 
 // Matches v1's AttendanceLogsLive: the Dubai deployment says "golf premise".
 // Unset (the default) falls back to the generic wording.
@@ -52,8 +52,9 @@ function buildAnnouncement(item, mode) {
 
 function buildMessage(it) {
   const action = it.cameraType === 'checkin' ? 'Entered' : 'Exited';
-  const time = it.timestamp && moment(it.timestamp).isValid()
-    ? moment(it.timestamp).format('HH:mm:ss')
+  const eventTime = utcToConfiguredTimezone(it.timestamp);
+  const time = eventTime
+    ? eventTime.format('HH:mm:ss')
     : '';
   const where = IS_DUBAI ? 'golf premise' : 'premise';
   return `${it.fullName || it.name} ${action} ${where}${time ? ` at ${time}` : ''}`;
@@ -143,8 +144,9 @@ function mapSocketItem(data) {
     data?.imageUrls?.[0]?.images?.frame;
   const capturedImage = captureImg ? img(captureImg) : null;
 
-  const timeStr = event.timestamp && moment(event.timestamp).isValid()
-    ? moment(event.timestamp).format('HH:mm')
+  const eventTime = utcToConfiguredTimezone(event.timestamp);
+  const timeStr = eventTime
+    ? eventTime.format('HH:mm')
     : '';
 
   return {
@@ -190,8 +192,9 @@ function DetailModal({ item, onClose }) {
   }, [onClose]);
 
   const isCheckIn = item.cameraType === 'checkin';
-  const time = item.timestamp && moment(item.timestamp).isValid()
-    ? moment(item.timestamp).format('DD MMM YYYY, HH:mm:ss')
+  const eventTime = utcToConfiguredTimezone(item.timestamp);
+  const time = eventTime
+    ? eventTime.format('DD MMM YYYY, HH:mm:ss')
     : '--';
 
   const rows = [

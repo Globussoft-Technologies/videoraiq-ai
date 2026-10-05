@@ -20,6 +20,7 @@ import AccessDenied from '@/components/AccessDenied';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import IncidentFilterPopover from '@/pages/IncidentLogs/components/IncidentFilterPopover';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import {
   fetchIncidentBoxTypes,
   fetchIncidentLogs,
@@ -668,7 +669,7 @@ const StockCountingAnalytics = () => {
                                           const imageUrl = incidentImageUrl(event.Image);
                                           const movement = String(event.direction || '').toLowerCase();
                                           const isLoadingMovement = movement === 'loading';
-                                          const eventMoment = moment(event.timeOfIncident);
+                                          const eventMoment = moment.utc(event.timeOfIncident).tz(getConfiguredTimezone());
 
                                           return (
                                             <div

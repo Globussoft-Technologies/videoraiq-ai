@@ -6,6 +6,7 @@ import { Panel, ActionLink, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { updateIncidentReportStatus, updateIncidentResolved } from '../../../helpers/monitoring';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 function btnStyle(variant) {
   const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
@@ -92,7 +93,7 @@ function ReportModal({ item, onClose, onSuccess }) {
               <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{existing.description}</div>
               {existing.reportedAt && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>
-                  Submitted on {new Date(existing.reportedAt).toLocaleString()}
+                  Submitted on {formatUtcInConfiguredTimezone(existing.reportedAt, 'DD MMM YYYY, hh:mm A')}
                 </div>
               )}
             </div>

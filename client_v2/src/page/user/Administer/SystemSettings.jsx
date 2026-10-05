@@ -30,6 +30,7 @@ import { useApi } from '../../../hooks/useApi';
 import { setLogOrderEnabled, useLogOrder } from '../../../lib/logOrder';
 import { fetchMyAccount, fetchAuthorizedUserById } from '../../../pages/MyProfile/Api';
 import { useAuth } from '../../../context/AuthContext';
+import { useTimezone } from '../../../context/TimezoneContext';
 import {
   fetchAdmin,
   fetchTimezone,
@@ -613,6 +614,7 @@ export default function SystemSettings() {
   // (same convention MyProfile.jsx relies on).
   const isAdmin = !user?.memberId;
   const { permissions } = usePermissions();
+  const { setTimezone: setGlobalTimezone } = useTimezone();
   const settingsPermissions = permissions?.settings || {};
   const hasSettingsPermission = (key) => settingsPermissions === true || settingsPermissions?.[key] === true;
   const canEditSettings = hasSettingsPermission('edit') || hasSettingsPermission('update');
@@ -673,7 +675,7 @@ export default function SystemSettings() {
   const adminName = myAccount.name || selfUserName || [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
   const orgName = admin.orgName || admin.organizationName || admin.orgId || adminName;
   const email = myAccount.email || selfUser.email || admin.email || '-';
-  const savedTimezone = timezoneApi.data || admin.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  const savedTimezone = timezoneApi.data || admin.timezone || 'Asia/Kolkata';
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
   const timezoneOptions = useMemo(() => {
     const set = new Set([savedTimezone, 'Asia/Kolkata', 'UTC', ...timezones].filter(Boolean));
@@ -909,6 +911,7 @@ export default function SystemSettings() {
     setTimezoneSaving(true);
     try {
       await updateTimezone(next);
+      setGlobalTimezone(next);
       await timezoneApi.refetch({ silent: true });
       await adminApi.refetch({ silent: true });
       toast.success('Timezone updated');

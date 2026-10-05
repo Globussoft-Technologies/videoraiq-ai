@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
-import TimezoneFilter, { defaultTimezone } from './TimezoneFilter';
 import { AnalyticsRefreshProvider, useAnalyticsRefreshAll } from './AnalyticsRefreshContext';
+import { useTimezone } from '@/context/TimezoneContext';
 import OverviewKpiRow from './OverviewKpiRow';
 import DetectionVolumeCard from './DetectionVolumeCard';
 import EngineShareCard from './EngineShareCard';
@@ -40,7 +40,7 @@ const INTERVAL_KEY = 'analytics_auto_refresh_interval';
  * timer is mostly wasted queries — several of these endpoints are the heaviest
  * on the server. Turning it on is a deliberate choice, and it persists.
  */
-function AnalyticsToolbar({ range, onRangeChange, timezone, onTimezoneChange }) {
+function AnalyticsToolbar({ range, onRangeChange, timezone }) {
   const refreshAll = useAnalyticsRefreshAll();
 
   const [autoRefresh, setAutoRefresh] = useState(() => localStorage.getItem(REFRESH_KEY) === 'true');
@@ -61,7 +61,7 @@ function AnalyticsToolbar({ range, onRangeChange, timezone, onTimezoneChange }) 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <RangeFilter range={range} onChange={onRangeChange} />
-      <TimezoneFilter timezone={timezone} onChange={onTimezoneChange} />
+      <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Timezone: {timezone}</span>
       <div style={{ marginLeft: 'auto' }}>
         <AutoRefreshComponent
           isActive={autoRefresh}
@@ -79,14 +79,14 @@ function AnalyticsToolbar({ range, onRangeChange, timezone, onTimezoneChange }) 
 
 export default function Analytics() {
   const [range, setRange] = useState(defaultRange);
-  const [timezone, setTimezone] = useState(defaultTimezone);
+  const { timezone } = useTimezone();
   const params = { ...rangeParams(range), timezone };
 
   return (
     <AnalyticsRefreshProvider>
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div data-tour="analytics-toolbar">
-        <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} onTimezoneChange={setTimezone} />
+        <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} />
       </div>
 
       <div data-tour="analytics-kpis">

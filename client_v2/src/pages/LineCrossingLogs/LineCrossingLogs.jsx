@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { toast } from 'sonner';
 import { Activity, BarChart3, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, DoorOpen, GitBranch, Maximize2, Move, PieChart, RefreshCw, TrendingDown, Trophy, Users, X } from 'lucide-react';
 import AccessDenied from '@/components/AccessDenied';
@@ -16,7 +17,6 @@ import SystemControls from '@/page/user/CommandCenter/SystemControls';
 import MultiSelect from '@/components/MultiSelect';
 import './lineCrossingLogs.css';
 
-const IST_ZONE = 'Asia/Kolkata';
 const ENDPOINT = '/incidents/logs/line-crossing';
 const LOG_PANEL_WIDTH = 315;
 const CHART_COLORS = ['#0b3b8f', '#ff7a1a', '#2563eb', '#ec4899', '#00b8d4', '#7c3aed', '#14b8a6'];
@@ -411,7 +411,7 @@ function buildChartOptions() {
       labels: {
         datetimeUTC: false,
         style: { fontSize: '10px', colors: 'var(--tx3)' },
-        formatter: (value) => moment(value).tz(IST_ZONE).format('HH:mm'),
+        formatter: (value) => moment(value).tz(getConfiguredTimezone()).format('HH:mm'),
       },
     },
     yaxis: {
@@ -421,7 +421,7 @@ function buildChartOptions() {
       labels: { style: { fontSize: '10px', colors: 'var(--tx3)' } },
     },
     tooltip: {
-      x: { formatter: (value) => moment(value).tz(IST_ZONE).format('DD MMM YYYY, HH:mm:ss') },
+      x: { formatter: (value) => moment(value).tz(getConfiguredTimezone()).format('DD MMM YYYY, HH:mm:ss') },
     },
     legend: { position: 'top', horizontalAlign: 'right', fontSize: '11px' },
   };
@@ -554,11 +554,11 @@ export default function LineCrossingLogs() {
   const [resettingAnalytics, setResettingAnalytics] = useState(false);
   const [resetTarget, setResetTarget] = useState('date');
   const [resetDraft, setResetDraft] = useState(() => {
-    const today = moment().tz(IST_ZONE).format('YYYY-MM-DD');
+    const today = moment().tz(getConfiguredTimezone()).format('YYYY-MM-DD');
     return { startDate: today, endDate: today, nvrIds: [], cameraIds: [] };
   });
   const [dateFilter, setDateFilter] = useState(() => {
-    const today = moment().tz(IST_ZONE).format('YYYY-MM-DD');
+    const today = moment().tz(getConfiguredTimezone()).format('YYYY-MM-DD');
     return { startDate: today, endDate: today };
   });
   const lineAudioMutedRef = useRef(true);
@@ -978,7 +978,7 @@ export default function LineCrossingLogs() {
     const grouped = new Map();
     const addPoint = (timestamp, entry, exit) => {
       if (!timestamp) return;
-      const hour = moment(timestamp).tz(IST_ZONE).startOf('hour').format('HH:00');
+      const hour = moment.utc(timestamp).tz(getConfiguredTimezone()).startOf('hour').format('HH:00');
       const current = grouped.get(hour) || { hour, entry: 0, exit: 0 };
       current.entry += Number(entry || 0);
       current.exit += Number(exit || 0);
@@ -1000,7 +1000,7 @@ export default function LineCrossingLogs() {
     const matrix = new Map();
     const addPoint = (camera, timestamp, entry, exit) => {
       if (!timestamp) return;
-      const hour = moment(timestamp).tz(IST_ZONE).startOf('hour').format('HH:00');
+      const hour = moment.utc(timestamp).tz(getConfiguredTimezone()).startOf('hour').format('HH:00');
       const key = `${camera}::${hour}`;
       matrix.set(key, (matrix.get(key) || 0) + Number(entry || 0) + Number(exit || 0));
     };
@@ -1130,12 +1130,12 @@ export default function LineCrossingLogs() {
           />
           <div style={{ width: 250, maxWidth: '100%' }}>
             <DateRangePicker
-              maxDate={moment.tz(IST_ZONE).toDate()}
-              startDate={dateFilter.startDate ? moment.tz(dateFilter.startDate, IST_ZONE).toDate() : null}
-              endDate={dateFilter.endDate ? moment.tz(dateFilter.endDate, IST_ZONE).toDate() : null}
+              maxDate={moment.tz(getConfiguredTimezone()).toDate()}
+              startDate={dateFilter.startDate ? moment.tz(dateFilter.startDate, getConfiguredTimezone()).toDate() : null}
+              endDate={dateFilter.endDate ? moment.tz(dateFilter.endDate, getConfiguredTimezone()).toDate() : null}
               onRangeChange={({ start, end }) => setDateFilter({
-                startDate: start ? moment(start).tz(IST_ZONE).format('YYYY-MM-DD') : '',
-                endDate: end ? moment(end).tz(IST_ZONE).format('YYYY-MM-DD') : '',
+                startDate: start ? moment(start).tz(getConfiguredTimezone()).format('YYYY-MM-DD') : '',
+                endDate: end ? moment(end).tz(getConfiguredTimezone()).format('YYYY-MM-DD') : '',
               })}
             />
           </div>
@@ -1473,7 +1473,7 @@ export default function LineCrossingLogs() {
             <tbody>
               {latestRecords.map((record) => (
                 <tr key={record._id} style={{ borderTop: '1px solid var(--bd)' }}>
-                  <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: 'var(--tx2)' }}>{moment(record.timeOfIncident || record.createdAt).tz(IST_ZONE).format('DD MMM HH:mm:ss')}</td>
+                  <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: 'var(--tx2)' }}>{moment.utc(record.timeOfIncident || record.createdAt).tz(getConfiguredTimezone()).format('DD MMM HH:mm:ss')}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--tx)', fontWeight: 700 }}>{record.channelData?.name || record.channelName || '--'}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--tx2)' }}>{record.nvrData?.nvrName || '--'}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--blue)', fontWeight: 700, textTransform: 'capitalize' }}>{record.type || '--'}</td>
@@ -1693,7 +1693,7 @@ export default function LineCrossingLogs() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: 'rgba(226,232,240,.68)', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 }}>
                           <Clock3 size={12} />
-                          {data?.timeOfIncident ? moment(data.timeOfIncident).tz(IST_ZONE).format('HH:mm:ss') : '--'}
+                          {data?.timeOfIncident ? moment.utc(data.timeOfIncident).tz(getConfiguredTimezone()).format('HH:mm:ss') : '--'}
                         </div>
                       </div>
                       <span style={{ width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'rgba(15,23,42,.55)', color: 'rgba(226,232,240,.9)', flexShrink: 0 }}>
@@ -1770,13 +1770,13 @@ export default function LineCrossingLogs() {
               <div>
                 <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Date range</div>
                 <DateRangePicker
-                  maxDate={moment.tz(IST_ZONE).toDate()}
-                  startDate={resetDraft.startDate ? moment.tz(resetDraft.startDate, IST_ZONE).toDate() : null}
-                  endDate={resetDraft.endDate ? moment.tz(resetDraft.endDate, IST_ZONE).toDate() : null}
+                  maxDate={moment.tz(getConfiguredTimezone()).toDate()}
+                  startDate={resetDraft.startDate ? moment.tz(resetDraft.startDate, getConfiguredTimezone()).toDate() : null}
+                  endDate={resetDraft.endDate ? moment.tz(resetDraft.endDate, getConfiguredTimezone()).toDate() : null}
                   onRangeChange={({ start, end }) => setResetDraft((prev) => ({
                     ...prev,
-                    startDate: start ? moment(start).tz(IST_ZONE).format('YYYY-MM-DD') : '',
-                    endDate: end ? moment(end).tz(IST_ZONE).format('YYYY-MM-DD') : '',
+                    startDate: start ? moment(start).tz(getConfiguredTimezone()).format('YYYY-MM-DD') : '',
+                    endDate: end ? moment(end).tz(getConfiguredTimezone()).format('YYYY-MM-DD') : '',
                   }))}
                 />
               </div>

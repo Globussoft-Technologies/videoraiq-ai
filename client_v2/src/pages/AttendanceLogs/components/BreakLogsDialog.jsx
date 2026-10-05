@@ -35,22 +35,22 @@ const formatTime = (utcTime, region) => {
   return moment.utc(utcTime).tz(region).format('hh:mm:ss A');
 };
 
-const resolveRowMoment = (log) => {
+const resolveRowMoment = (log, region) => {
   if (!log) return null;
   for (const v of [log.login, log.logout, log.date]) {
-    const m = moment(v);
+    const m = moment.utc(v).tz(region);
     if (m.isValid()) return m;
   }
   return null;
 };
 
-const formatRowDate = (log) => {
-  const m = resolveRowMoment(log);
+const formatRowDate = (log, region) => {
+  const m = resolveRowMoment(log, region);
   return m ? m.format('DD/MM/YYYY') : '';
 };
 
-const resolveRequestDate = (log) => {
-  const m = resolveRowMoment(log);
+const resolveRequestDate = (log, region) => {
+  const m = resolveRowMoment(log, region);
   return m ? m.format('YYYY-MM-DD') : '';
 };
 
@@ -73,7 +73,7 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
 
   useEffect(() => {
     if (!open || !log?.id) return;
-    const date = resolveRequestDate(log) || selectedDate;
+    const date = resolveRequestDate(log, region) || selectedDate;
     if (!date) return;
 
     let cancelled = false;
@@ -123,7 +123,7 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
 
   const buildFileBaseName = () => {
     const empName = sanitizeFilename(log?.name);
-    const dateForFile = sanitizeFilename(formatRowDate(log) || moment().format('DD-MM-YYYY'));
+    const dateForFile = sanitizeFilename(formatRowDate(log, region) || moment().tz(region).format('DD-MM-YYYY'));
     return `break_logs_${empName}_${dateForFile}`;
   };
 
@@ -159,7 +159,7 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.text(`Employee: ${log?.name || '--'}`, 14, 22);
-    doc.text(`Date: ${formatRowDate(log) || '--'}`, 14, 28);
+    doc.text(`Date: ${formatRowDate(log, region) || '--'}`, 14, 28);
     doc.text(`Generated on: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 34);
 
     const headers = ['#', 'Check out', 'Check in', 'Duration'];
@@ -213,7 +213,7 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
             </div>
             <div className="flex flex-col">
               <span className="text-[var(--tx)] text-sm font-medium">{log.name || '--'}</span>
-              <span className="text-[var(--tx2)] text-xs">{formatRowDate(log)}</span>
+              <span className="text-[var(--tx2)] text-xs">{formatRowDate(log, region)}</span>
             </div>
           </div>
         )}

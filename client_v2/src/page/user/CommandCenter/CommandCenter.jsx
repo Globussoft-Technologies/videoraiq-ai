@@ -15,6 +15,7 @@ import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncide
 import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { usePermissions } from '@/context/PermissionContext';
+import { utcToConfiguredTimezone } from '@/utils/timezone';
 
 const DETECTION_SAMPLE_LIMIT = 1000;
 
@@ -129,8 +130,8 @@ function aggregate24hEvents(items) {
   const cutoff = moment().subtract(24, 'hours');
   const hourly = Array(24).fill(0);
   (items || []).forEach((it) => {
-    const t = moment(it.timeOfIncident);
-    if (!t.isValid() || t.isBefore(cutoff)) return;
+    const t = utcToConfiguredTimezone(it.timeOfIncident);
+    if (!t || t.isBefore(cutoff)) return;
     const h = t.hour();
     hourly[h] += 1;
   });

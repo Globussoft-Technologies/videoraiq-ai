@@ -9,6 +9,7 @@ import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const SEV_COLOR = {
   high: '#ef4444', critical: '#ef4444',
@@ -224,7 +225,7 @@ export function ReportModal({ item, onClose, onSuccess }) {
               </div>
               {existing.reportedAt && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>
-                  Submitted on {new Date(existing.reportedAt).toLocaleString()}
+                  Submitted on {formatUtcInConfiguredTimezone(existing.reportedAt, 'DD MMM YYYY, hh:mm A')}
                 </div>
               )}
             </div>

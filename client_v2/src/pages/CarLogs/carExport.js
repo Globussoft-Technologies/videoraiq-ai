@@ -1,5 +1,6 @@
 import axios from 'axios';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -36,7 +37,7 @@ const getColor = (item) => item.color || item.colour || item.carColor || '--';
 const getCompany = (item) => item.company || item.make || item.carCompany || '--';
 
 const formatIncidentTime = (value) =>
-  value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  value ? moment.utc(value).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const fetchAllForExport = async ({
   startDate,

@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useMemo, useReducer, useState } from 're
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { LayoutGrid, List, Loader2, Truck } from 'lucide-react';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 
@@ -454,7 +455,7 @@ const IncidentLogsPage = ({ config }) => {
                 const direction = String(event?.direction || '').toLowerCase();
                 const imageUrl = incidentImageUrl(event?.Image);
                 const eventTime = event?.timeOfIncident
-                  ? moment.utc(event.timeOfIncident).tz(moment.tz.guess())
+                  ? moment.utc(event.timeOfIncident).tz(getConfiguredTimezone())
                   : null;
                 return (
                   <div

@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 export const initialState = {
   // profile / preview
@@ -45,7 +46,7 @@ export const initialState = {
   locationList: [],
 
   // constants
-  region: moment.tz.guess(),
+  region: getConfiguredTimezone(),
   todayISO: moment().format('YYYY-MM-DD'),
   maxDateDefault: moment().endOf('day').toDate(),
 };

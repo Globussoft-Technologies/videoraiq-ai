@@ -10,19 +10,10 @@ import {
   snapMeasuredDimension,
 } from '../stationIntegration';
 import FloButton from './FloButton';
-
-const IST_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
-  timeZone: 'Asia/Kolkata',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-});
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 function formatIstTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : IST_TIME_FORMATTER.format(date);
+  return formatUtcInConfiguredTimezone(value, 'HH:mm:ss', '—');
 }
 
 function firstValue(source, keys, fallback = '') {

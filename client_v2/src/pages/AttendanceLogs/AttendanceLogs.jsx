@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
+import { useTimezone } from '@/context/TimezoneContext';
 
 import { initialState, reducer } from './attendanceState';
 import { buildColumns, renderAttendanceCard } from './attendanceColumns';
@@ -77,6 +78,7 @@ const ABSENT_TAB_LABELS = {
 };
 
 const AttendanceLogs = () => {
+  const { timezone: region } = useTimezone();
   // Arriving from another screen (e.g. Attendance Analytics' "Present" tile)
   // can pre-select a day and status — read once, on mount, as the reducer's
   // initial state rather than reacting to it afterwards.
@@ -123,7 +125,6 @@ const AttendanceLogs = () => {
     showBreakLogs,
     sortOrder,
     sortField,
-    region,
     startDate,
     endDate,
     maxDateDefault,

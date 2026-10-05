@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 export const initialState = {
   // profile / preview
@@ -16,7 +17,7 @@ export const initialState = {
   sortField: '',
 
   // region & date
-  region: moment.tz.guess(),
+  region: getConfiguredTimezone(),
   startDate: '',
   endDate: '',
   minDate: null,

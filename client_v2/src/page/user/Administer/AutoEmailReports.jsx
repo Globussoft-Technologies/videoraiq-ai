@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import {
   Clock3,
   Edit3,
@@ -89,7 +90,7 @@ function departmentLabel(department) {
 }
 
 function scheduleTimezone(timezone) {
-  return timezone && moment.tz.zone(timezone) ? timezone : moment.tz.guess();
+  return timezone && moment.tz.zone(timezone) ? timezone : getConfiguredTimezone();
 }
 
 function formatCustomDate(value, timezone) {

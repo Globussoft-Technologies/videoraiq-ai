@@ -5,6 +5,7 @@ import moment from 'moment-timezone';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { fetchVehicleCheckInOutLogs } from './Api';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 /**
  * Export for the Vehicle Check-In / Check-Out log.
@@ -22,7 +23,7 @@ import { fetchVehicleCheckInOutLogs } from './Api';
 // vehicle's crossings inline. The cap mirrors the other log exports.
 const EXPORT_LIMIT = 10000;
 
-const fmt = (value) => (value ? moment(value).format('DD/MM/YYYY hh:mm A') : '--');
+const fmt = (value) => formatUtcInConfiguredTimezone(value, 'DD/MM/YYYY hh:mm A');
 const firstCheckInTime = (row) => (Number(row?.checkInCount || 0) > 0 ? fmt(row.timeOfIncident) : '--');
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 const cameraOf = (row) => row?.channelData?.customName || row?.channelData?.name || '--';

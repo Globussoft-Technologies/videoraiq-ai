@@ -8,6 +8,7 @@ import {
 import { ChevronLeft, ChevronRight, Zap, Calendar, Clock, Camera, ScanFace } from 'lucide-react';
 import moment from 'moment-timezone';
 import { avatarColor } from './avatarUtils';
+import { useTimezone } from '@/context/TimezoneContext';
 
 /**
  * Image preview + capture details for attendance / access-log rows.
@@ -37,7 +38,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const region = moment.tz.guess();
+  const { timezone: region } = useTimezone();
   const convertToRegionTime = (utcTime) => {
     if (!utcTime || utcTime === '--') return '—';
     return moment.utc(utcTime).tz(region).format('hh:mm:ss A');

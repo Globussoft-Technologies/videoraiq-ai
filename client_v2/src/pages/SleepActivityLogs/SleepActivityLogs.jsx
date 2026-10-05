@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { Filter, RotateCcw, Loader2, List, LayoutGrid } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
@@ -175,7 +176,7 @@ const SleepActivityLogs = () => {
 
       const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
       const fmt = (t) =>
-        t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+        t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
       const mapped = list.map((item) => ({
         id: item._id,

@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -62,10 +63,10 @@ const fetchAllForExport = async (params) => {
     vehicleNumber: item.vehicleNumber || '--',
     taggedUser: taggedUserName(item.taggedUser) || '--',
     createdAt: item.createdAt
-      ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+      ? moment.utc(item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
       : '--',
     timeOfIncident: item.timeOfIncident
-      ? moment.utc(item.timeOfIncident).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+      ? moment.utc(item.timeOfIncident).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
       : '--',
     severity: item.severity || '--',
     incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : '',

@@ -50,7 +50,7 @@ export const ATTENDANCE_STATUS_COLORS = {
 
 const validMoment = (value) => {
   if (!value || value === '--') return null;
-  const parsed = moment(value);
+  const parsed = moment.utc(value);
   return parsed.isValid() ? parsed : null;
 };
 
@@ -189,10 +189,10 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       header: () => <SortHeader label="Date" field="date" {...sortProps} />,
       cell: ({ row }) => (
         <span className="text-[var(--tx2)] text-xs" style={mono}>
-          {moment(row.original.login).isValid()
-            ? moment(row.original.login).format('DD/MM/YYYY')
-            : moment(row.original.logout).isValid()
-              ? moment(row.original.logout).format('DD/MM/YYYY')
+          {moment.utc(row.original.login).isValid()
+            ? moment.utc(row.original.login).tz(region).format('DD/MM/YYYY')
+            : moment.utc(row.original.logout).isValid()
+              ? moment.utc(row.original.logout).tz(region).format('DD/MM/YYYY')
               : row.original.date
                 ? moment(row.original.date).format('DD/MM/YYYY')
                 : '-'}

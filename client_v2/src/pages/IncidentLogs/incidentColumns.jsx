@@ -1,5 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
@@ -27,7 +28,7 @@ const severityBg = (severity) => {
 };
 
 const formatTime = (t) =>
-  t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const formatEvidenceScore = (score) => {
   if (score == null || score === '--') return '--';

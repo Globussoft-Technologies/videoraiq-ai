@@ -1,6 +1,5 @@
 import moment from 'moment-timezone';
-
-const IST_ZONE = 'Asia/Kolkata';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 /**
  * Build the ApexCharts options + series-data for a single person-count record.
@@ -82,7 +81,7 @@ export const buildChart = (record) => {
         rotateAlways: false,
         hideOverlappingLabels: true,
         style: { fontSize: '10px', colors: '#888' },
-        formatter: (val) => moment(val).tz(IST_ZONE).format('HH:mm'),
+        formatter: (val) => moment(val).tz(getConfiguredTimezone()).format('HH:mm'),
         datetimeFormatter: {
           minute: 'HH:mm',
         },
@@ -103,7 +102,7 @@ export const buildChart = (record) => {
     tooltip: {
       x: {
         formatter: (val) =>
-          moment(val).tz(IST_ZONE).format('DD/MM/YYYY HH:mm:ss'),
+          moment(val).tz(getConfiguredTimezone()).format('DD/MM/YYYY HH:mm:ss'),
       },
       y: { formatter: (val) => `${val} persons` },
     },

@@ -150,22 +150,29 @@ const clockStyle = {
   fontSize: 13,
   color: 'var(--tx2)',
   letterSpacing: '.02em',
-  width: 122,
+  width: 'clamp(210px, 20vw, 340px)',
+  minWidth: 0,
   textAlign: 'right',
   whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
   fontVariantNumeric: 'tabular-nums',
-  flex: '0 0 auto',
+  flex: '0 1 auto',
 };
 
 const centeredClockStyle = {
   ...clockStyle,
   width: '100%',
   textAlign: 'center',
+  whiteSpace: 'normal',
+  overflow: 'visible',
+  textOverflow: 'clip',
+  overflowWrap: 'anywhere',
 };
 
 const HeaderClock = memo(function HeaderClock({ compact = false }) {
   const clock = useClock();
-  return <div style={compact ? centeredClockStyle : clockStyle}>{clock}</div>;
+  return <div title={clock} style={compact ? centeredClockStyle : clockStyle}>{clock}</div>;
 });
 
 function networkLabelForCard(network) {
@@ -223,7 +230,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const hideClock = headerW < 900; // clock is the widest widget — drop it first
+  const hideClock = headerW < 1050; // full IANA zone label is the widest widget — drop it first
   const isNarrow = headerW < 620; // collapse search to an icon + compact the site switcher
   // On the tightest widths, drop the theme toggle before the essential controls
   // (site, mute, notifications) so the notification bell is never clipped.
@@ -816,7 +823,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
           {moreOpen && (
             <div
               className="vq-fadeup"
-              style={{ position: 'absolute', top: 44, right: 0, width: 200, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.5)', zIndex: 60, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
+              style={{ position: 'absolute', top: 44, right: 0, width: 280, maxWidth: 'calc(100vw - 24px)', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.5)', zIndex: 60, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
             >
               {hideClock && (
                 <HeaderClock compact />

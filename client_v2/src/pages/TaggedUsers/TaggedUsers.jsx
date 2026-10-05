@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import unknownimg from '@/assets/unknownimg.jpg';
+import { useTimezone } from '@/context/TimezoneContext';
 
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
@@ -38,7 +39,7 @@ const convertToUTC = (date, time, region) => {
 
 const TaggedUsers = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
-  const region = moment.tz.guess();
+  const { timezone: region } = useTimezone();
   const [limit, setLimit] = useState(12);
 
   const [state, dispatch] = useReducer(reducer, {

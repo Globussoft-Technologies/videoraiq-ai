@@ -8,6 +8,7 @@ import moment from 'moment';
 import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
 import { fetchIncidents, fetchIncidentById, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const PAGE_SIZE = 50;
 // Auto-refresh only while the user is looking at just the first page â€” once
@@ -369,7 +370,7 @@ function ReportModal({ item, onClose, onSuccess }) {
               <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{existing.description}</div>
               {existing.reportedAt && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>
-                  Submitted on {new Date(existing.reportedAt).toLocaleString()}
+                  Submitted on {formatUtcInConfiguredTimezone(existing.reportedAt, 'DD MMM YYYY, hh:mm A')}
                 </div>
               )}
             </div>

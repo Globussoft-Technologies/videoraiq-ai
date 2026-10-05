@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { Building2, Calendar, Car, CarFront, Check, ChevronDown, Clock, Filter, Hash, Image, LayoutGrid, List, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import getAccessToken from '@/utils/getAccessToken';
@@ -70,7 +71,7 @@ const getColor = (item) => item.color || item.colour || item.carColor || '--';
 const getCompany = (item) => item.company || item.make || item.carCompany || '--';
 
 const formatIncidentTime = (value) =>
-  value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  value ? moment.utc(value).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const optionKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 

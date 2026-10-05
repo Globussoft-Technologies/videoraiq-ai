@@ -36,6 +36,7 @@ import {
   getVehicleNumbers,
 } from './Api';
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -50,7 +51,7 @@ const getImageUrl = (item) => {
   return `${import.meta.env.VITE_INCIDENT_URL || ''}${path}`;
 };
 
-const fmtTime = (value) => (value ? moment(value).format('DD/MM/YYYY hh:mm A') : '--');
+const fmtTime = (value) => formatUtcInConfiguredTimezone(value, 'DD/MM/YYYY hh:mm A');
 const fmtFirstCheckIn = (row) => (Number(row?.checkInCount || 0) > 0 ? fmtTime(row.timeOfIncident) : '--');
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 

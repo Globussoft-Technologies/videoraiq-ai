@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-color.png';
+import { getConfiguredTimezone } from '@/utils/timezone';
 
 /** Row shape used by both the on-page Attendance Log table and this export —
  * built once from the raw usersLogs entries returned by getDemoAttendanceLogs. */
@@ -36,14 +37,14 @@ export function buildAttendanceRows(usersLogs = []) {
       photo: sessionSnap(sessions[0]) || log.userInfo?.profilePics?.[0] || '',
       name: log.userInfo?.userName || 'Unknown',
       email: log.userInfo?.email || '--',
-      // Event date in IST (Asia/Kolkata), the demo's reporting zone. Shown as
+      // Event date in the configured admin timezone.
       // its own column now that the demo log spans every run, not just today.
-      date: checkIn ? moment.tz(checkIn, 'Asia/Kolkata').format('DD MMM YYYY') : '--',
+      date: checkIn ? moment.tz(checkIn, getConfiguredTimezone()).format('DD MMM YYYY') : '--',
       checkIn: checkIn ? moment(checkIn).format('HH:mm:ss') : '--',
       checkOut: checkOut ? moment(checkOut).format('HH:mm:ss') : '--',
       duration: durationLabel(checkIn ? new Date(checkIn).getTime() : 0, checkOut ? new Date(checkOut).getTime() : 0),
-      // Event time rendered in IST (Asia/Kolkata), the demo's reporting zone.
-      timestamp: checkIn ? moment.tz(checkIn, 'Asia/Kolkata').format('DD MMM YYYY, HH:mm:ss') : '--',
+      // Event time rendered in the configured admin timezone.
+      timestamp: checkIn ? moment.tz(checkIn, getConfiguredTimezone()).format('DD MMM YYYY, HH:mm:ss') : '--',
     };
   });
 }
@@ -68,7 +69,7 @@ export function buildSessionRows(usersLogs = []) {
         photo: sessionSnap(session) || photo,
         name,
         email,
-        date: at ? moment.tz(at, 'Asia/Kolkata').format('DD MMM YYYY') : '--',
+        date: at ? moment.tz(at, getConfiguredTimezone()).format('DD MMM YYYY') : '--',
         checkIn: session?.checkIn && session.checkIn !== session?.timestamp
           ? moment(session.checkIn).format('HH:mm:ss')
           : at ? moment(at).format('HH:mm:ss') : '--',
@@ -77,7 +78,7 @@ export function buildSessionRows(usersLogs = []) {
           session?.checkIn ? new Date(session.checkIn).getTime() : at || 0,
           session?.checkOut ? new Date(session.checkOut).getTime() : 0,
         ),
-        timestamp: at ? moment.tz(at, 'Asia/Kolkata').format('DD MMM YYYY, HH:mm:ss') : '--',
+        timestamp: at ? moment.tz(at, getConfiguredTimezone()).format('DD MMM YYYY, HH:mm:ss') : '--',
       });
     });
   });

@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import unknownimg from '@/assets/unknownimg.jpg';
+import { useTimezone } from '@/context/TimezoneContext';
 
 import { initialState, reducer } from './accessState';
 import { buildColumns, renderAccessCard } from './accessColumns';
@@ -37,6 +38,7 @@ const convertToUTC = (date, time, region) => {
 
 const AccessLogs = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
+  const { timezone: region } = useTimezone();
   const [limit, setLimit] = useState(12);
 
   const [state, dispatch] = useReducer(reducer, {
@@ -89,7 +91,6 @@ const AccessLogs = () => {
     toTime,
     employeeLocations,
     locationList,
-    region,
     maxDateDefault,
   } = state;
 

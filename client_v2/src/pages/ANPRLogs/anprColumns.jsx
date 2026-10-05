@@ -1,5 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import {
   Image,
   Pencil,
@@ -41,7 +42,7 @@ const severityBg = (severity) => {
 };
 
 const formatTime = (t) =>
-  t && t !== '--' ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  t && t !== '--' ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 // Formats a raw plate value into the standard "SS DD LL NNNN" display style
 // (e.g. "ka02mp9657" -> "KA02 MP9657"). Falls back to a plain uppercase of

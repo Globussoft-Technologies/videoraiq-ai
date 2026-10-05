@@ -28,6 +28,7 @@ import { DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detection
 import { ZONE_EXTRA_FIELDS } from '@/page/user/Configure/DetectionZoneMarking/constants';
 import { createAuthorizedUser, isEmailExist } from '../RegisterUser/Api';
 import { mediaUrl } from '@/lib/format';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordVideos, getVideoRecords } from './api/get';
@@ -1186,7 +1187,7 @@ function MatchedAlertsPanel({ alerts }) {
         <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
           {alerts.map((alert) => {
             const photo = alert.images?.face || alert.profilePics?.[0];
-            const time = alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour12: false }) : '--';
+            const time = formatUtcInConfiguredTimezone(alert.timestamp, 'HH:mm:ss');
             // camera / department may arrive as a string or as a populated
             // object ({ name } / { departmentName }); render only real strings.
             const cameraName = alertText(alert.cameraName, ['name', 'cameraName']);
@@ -1241,11 +1242,7 @@ function incidentConfidence(item) {
 
 function incidentTime(item) {
   const value = item?.timeOfIncident || item?.createdAt;
-  if (!value) return '--';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? '--'
-    : parsed.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  return formatUtcInConfiguredTimezone(value, 'DD MMM, HH:mm');
 }
 
 function DemoEventLogPanel({ incidents, detectionName, loading }) {
@@ -2041,7 +2038,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
             const events = report.rows.length;
             const meta = [
               report.generatedAt
-                ? new Date(report.generatedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                ? formatUtcInConfiguredTimezone(report.generatedAt, 'DD MMM YYYY, hh:mm A')
                 : 'This session',
               report.clipName,
               report.minConfidence != null ? `min conf ${report.minConfidence}%` : null,
@@ -2281,7 +2278,7 @@ function DemoHistoryPanel({ history, loading, activeRecordId, filters, onFilters
               const id = recordIdOf(record);
               const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
               const name = detections.find((item) => item.settingType === settingType)?.name || 'Live Demo';
-              const ranAt = record?.createdAt ? new Date(record.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+              const ranAt = record?.createdAt ? formatUtcInConfiguredTimezone(record.createdAt, 'DD MMM YYYY, hh:mm A', '') : '';
               const isActive = id === activeRecordId;
               const thumbSrc = firstVideoOf(record)?.dsVideoUrl ? dsVideoSrc(firstVideoOf(record).dsVideoUrl) : '';
               return (

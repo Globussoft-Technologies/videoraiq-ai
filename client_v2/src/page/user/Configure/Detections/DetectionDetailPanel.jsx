@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import ConfirmationModal from '../../../../components/DeleteConfirmation';
 import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
-import { useTimezones } from '../ZoneScheduleFields';
+import { useTimezone } from '../../../../context/TimezoneContext';
 import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
 import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
@@ -356,6 +356,7 @@ function ScheduleFieldDropdown({
   searchable = false,
   minMenuWidth = 260
 }) {
+  const { timezone } = useTimezone();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, openUp: false });
@@ -986,7 +987,6 @@ export default function DetectionDetailPanel({
   const [actualScheduleMode, setActualScheduleMode] = useState('Loading...');
 
   const channelId = channel?._id || channel?.channelId || channel?.id;
-  const timezones = useTimezones();
   const scheduleDisabled = !canEdit || !settingId || !channelId;
   const scheduleDisabledTitle = !channelId
     ? 'Select a camera to edit schedule'
@@ -1033,8 +1033,8 @@ export default function DetectionDetailPanel({
       // cannot answer once the user has started editing it.
       loadedScheduleRef.current = res?.schedule || null;
       const defaultPayload = res?.schedule
-        ? { mode: res.schedule.mode, timezone: res.schedule.timezone || 'Asia/Kolkata', days: res.schedule.days || {} }
-        : { mode: 'always', timezone: 'Asia/Kolkata', days: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] } };
+        ? { mode: res.schedule.mode, timezone, days: res.schedule.days || {} }
+        : { mode: 'always', timezone, days: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] } };
       setScheduleForm(defaultPayload);
     } catch (e) {
       setScheduleError(e?.response?.data?.message || e?.message || 'Failed to load schedule');
@@ -1185,7 +1185,7 @@ export default function DetectionDetailPanel({
     setScheduleLoading(true);
     setScheduleError('');
     try {
-      const payload = { mode: scheduleForm.mode, timezone: scheduleForm.timezone || 'Asia/Kolkata', days: ensureDays(scheduleForm.days) };
+      const payload = { mode: scheduleForm.mode, timezone, days: ensureDays(scheduleForm.days) };
 
       // Switching an existing Custom schedule to Always: the saved ranges have
       // to go, not just be ignored. Sending them back under mode 'always' left
@@ -1633,13 +1633,11 @@ export default function DetectionDetailPanel({
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <ScheduleFieldDropdown
                       label="Time zone"
-                      value={scheduleForm?.timezone || 'Asia/Kolkata'}
-                      options={timezones}
-                      placeholder={timezones.length ? 'Select time zone' : 'Loading time zonesÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦'}
-                      disabled={scheduleLoading || !timezones.length}
-                      onChange={(tz) => setScheduleForm((s) => ({ ...(s || {}), timezone: tz }))}
+                      value={timezone}
+                      options={[timezone]}
+                      disabled
+                      onChange={() => {}}
                       icon={Globe}
-                      searchable
                     />
 
                     <ScheduleFieldDropdown

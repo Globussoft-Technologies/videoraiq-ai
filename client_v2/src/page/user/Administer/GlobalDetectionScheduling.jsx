@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getNvrs } from '../../../helpers/configure';
-import { useTimezones } from '../Configure/ZoneScheduleFields';
+import { useTimezone } from '../../../context/TimezoneContext';
 import useDetectionScheduleEvents from '../../../hooks/useDetectionScheduleEvents';
 import {
   createGlobalSchedule,
@@ -876,7 +876,7 @@ function ApplyToAllDaysButton({ options, onPick, disabled, title }) {
 }
 
 export default function GlobalDetectionScheduling({ canEdit = true }) {
-  const timezones = useTimezones();
+  const { timezone } = useTimezone();
   // Subscribed panel-wide, not per NVR: transitions for any camera are
   // worth seeing while verifying.
   const { events: scheduleEvents, clear: clearScheduleEvents } = useDetectionScheduleEvents();
@@ -1580,15 +1580,9 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                     <Globe size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
                     Time zone
                   </FieldLabel>
-                  <SearchableSelect
-                    value={form.timezone}
-                    options={timezones}
-                    onChange={(tz) => setForm((current) => ({ ...current, timezone: tz }))}
-                    disabled={!canEdit || form.mode === 'always' || !timezones.length}
-                    placeholder={timezones.length ? 'Select time zone' : 'Loading time zones…'}
-                    searchPlaceholder="Search time zones…"
-                    emptyLabel="No time zones found"
-                  />
+                    <div style={{ minHeight: 40, display: 'flex', alignItems: 'center', padding: '0 11px', border: '1px solid var(--bd)', borderRadius: 8, color: 'var(--tx2)', background: 'var(--bg2)', fontSize: 12 }}>
+                      {timezone}
+                    </div>
                 </div>
                 <div>
                   <FieldLabel>

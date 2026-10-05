@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -50,7 +51,7 @@ const fetchAllForExport = async (config, params) => {
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
       createdAt: item.timeOfIncident || item.createdAt
-        ? moment.utc(item.timeOfIncident || item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+        ? moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
         : '--',
       severity: item.severity || '--',
       incidentImageUrl: resolveIncidentImageUrl(item.Image),
