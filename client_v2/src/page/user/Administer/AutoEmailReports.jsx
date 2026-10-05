@@ -135,6 +135,13 @@ function formatsLabel(formats = []) {
   return formats.map((item) => item.toUpperCase()).join(', ');
 }
 
+function preparesIncidentGridPdf(report = {}) {
+  return report.contentType === 'incidents'
+    && report.pdfLayout === 'grid'
+    && Array.isArray(report.formats)
+    && report.formats.includes('pdf');
+}
+
 function formFromReport(report = {}) {
   const schedule = report.schedule || {};
   const target = report.target || {};
@@ -680,6 +687,9 @@ export default function AutoEmailReports() {
       return;
     }
     setSaving(true);
+    const progressToastId = payload.sendTestMail && preparesIncidentGridPdf(payload)
+      ? toast.loading('Preparing grid PDF...')
+      : null;
     try {
       let result;
       if (editingReport?._id) {
@@ -694,14 +704,17 @@ export default function AutoEmailReports() {
         result = await createAutoEmailReport(payload);
       }
       if (result?.data?.testMailError) {
-        toast.warning(result.message);
+        toast.warning(result.message, progressToastId ? { id: progressToastId } : undefined);
       } else {
-        toast.success(result?.message);
+        toast.success(result?.message, progressToastId ? { id: progressToastId } : undefined);
       }
       setFormOpen(false);
       await reportsApi.refetch();
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to save auto email report.'));
+      toast.error(
+        errorMessage(error, 'Failed to save auto email report.'),
+        progressToastId ? { id: progressToastId } : undefined,
+      );
     } finally {
       setSaving(false);
     }
@@ -741,11 +754,17 @@ export default function AutoEmailReports() {
   const sendNow = async (report) => {
     if (!canEditReports) return;
     setBusyActionId(`send:${report._id}`);
+    const progressToastId = preparesIncidentGridPdf(report)
+      ? toast.loading('Preparing grid PDF...')
+      : null;
     try {
       await sendAutoEmailReportNow(report._id);
-      toast.success('Test mail sent.');
+      toast.success('Test mail sent.', progressToastId ? { id: progressToastId } : undefined);
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to send test mail.'));
+      toast.error(
+        errorMessage(error, 'Failed to send test mail.'),
+        progressToastId ? { id: progressToastId } : undefined,
+      );
     } finally {
       setBusyActionId('');
     }

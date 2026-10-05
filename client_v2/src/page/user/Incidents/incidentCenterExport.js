@@ -23,11 +23,7 @@ const text = (value, fallback = '--') => {
   return String(value);
 };
 
-const hasVehicleNumber = (value) => Boolean(String(value ?? '').replace(/[^A-Za-z0-9]/g, ''));
-
-const vehicleNumberRequired = (item) => (
-  VEHICLE_NUMBER_INCIDENT_TYPES.has(item?.incidentType) || hasVehicleNumber(item?.vehicleNumber)
-);
+const vehicleNumberRequired = (item) => VEHICLE_NUMBER_INCIDENT_TYPES.has(item?.incidentType);
 
 const statusOf = (item) => {
   if (item?.resolved) return 'Resolved';
