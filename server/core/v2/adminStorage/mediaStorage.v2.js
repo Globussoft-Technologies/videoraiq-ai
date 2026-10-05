@@ -18,7 +18,7 @@ import {
   putMedia as putLegacyMedia,
   streamMedia as streamLegacyMedia,
 } from "../../../utils/mediaStorage.js";
-import { parseV2StoragePath, resolveStorageConfig } from "./adminStorage.resolver.js";
+import { parseV2StoragePath, resolveEnvStorage, resolveStorageConfig } from "./adminStorage.resolver.js";
 import config from "config";
 
 const objectClients = new Map();
@@ -83,13 +83,8 @@ function legacyPath(value) {
   return !parseV2StoragePath(value);
 }
 
-export async function putMediaV2({ adminId, buffer, mediaType, folderName, originalName, objectId }) {
-  if (!adminId) return putLegacyMedia({ buffer, mediaType, folderName, originalName, objectId });
-  if (!Buffer.isBuffer(buffer)) throw new Error("Media buffer is required");
-  if (!["image", "video", "report"].includes(mediaType)) throw new Error("Invalid media type");
-
-  const context = await resolveStorageConfig({ adminId });
-  const key = mediaKey(context, mediaType, folderName, originalName, objectId);
+async function putWithContext({ context, adminId, buffer, mediaType, folderName, originalName, objectId }) {
+  const key = mediaKey({ ...context, adminId }, mediaType, folderName, originalName, objectId);
   if (context.provider === "nas") {
     const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${key}`;
     await withSftp(context.config, async (sftp) => {
@@ -110,6 +105,25 @@ export async function putMediaV2({ adminId, buffer, mediaType, folderName, origi
     ContentType: mime.lookup(originalName) || "application/octet-stream",
   }));
   return `/${key}`;
+}
+
+export async function putMediaV2({ adminId, buffer, mediaType, folderName, originalName, objectId, fallbackToEnv = false }) {
+  if (!adminId) return putLegacyMedia({ buffer, mediaType, folderName, originalName, objectId });
+  if (!Buffer.isBuffer(buffer)) throw new Error("Media buffer is required");
+  if (!["image", "video", "report"].includes(mediaType)) throw new Error("Invalid media type");
+
+  const context = await resolveStorageConfig({ adminId });
+  try {
+    return await putWithContext({ context, adminId, buffer, mediaType, folderName, originalName, objectId });
+  } catch (error) {
+    // Some older admin records contain expired cloud credentials. Callers
+    // that explicitly opt in (currently assistant uploads) can fall back to
+    // the environment storage without changing the storage choice for other
+    // application media.
+    if (!fallbackToEnv || context.source !== "admin") throw error;
+    const envContext = { ...resolveEnvStorage(), adminId, versionId: "env" };
+    return putWithContext({ context: envContext, adminId, buffer, mediaType, folderName, originalName, objectId });
+  }
 }
 
 export async function streamMediaV2(mediaPath, res) {
@@ -134,6 +148,26 @@ export async function streamMediaV2(mediaPath, res) {
   if (!res.headersSent && result.ContentType) res.setHeader("Content-Type", result.ContentType);
   if (!res.headersSent && result.ContentLength != null) res.setHeader("Content-Length", String(result.ContentLength));
   await pipeline(result.Body, res);
+}
+
+/** Read a remotely stored media object into memory for an immediate downstream
+ * processing step. This does not create a local file or local cache. */
+export async function readMediaV2(mediaPath) {
+  if (legacyPath(mediaPath)) {
+    throw new Error("Legacy media paths cannot be read through the V2 assistant storage flow");
+  }
+  const context = await resolveStorageConfig({ storagePath: mediaPath });
+  if (context.provider === "nas") {
+    const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${context.parsed.relativeKey}`;
+    return withSftp(context.config, (sftp) => sftp.get(remotePath));
+  }
+  const result = await clientFor(context.provider, context.config).send(new GetObjectCommand({
+    Bucket: context.config.bucket,
+    Key: context.parsed.relativeKey,
+  }));
+  const chunks = [];
+  for await (const chunk of result.Body) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
 
 export async function mediaExistsV2(mediaPath) {

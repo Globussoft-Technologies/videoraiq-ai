@@ -1541,6 +1541,24 @@ class IncidentsService {
         });
       }
 
+      // Use the same authorized match and optional vehicle search stages as
+      // the Incident Center grid. Grouping in Mongo avoids silently counting
+      // only the first page of incidents in an AI breakdown.
+      if (req.body?.groupBy === "incidentType") {
+        const groups = await Incident.aggregate([
+          { $match: { ...matchStage } },
+          ...vehicleStages,
+          { $group: { _id: "$incidentType", count: { $sum: 1 } } },
+          { $sort: { count: -1, _id: 1 } },
+          { $project: { _id: 0, detectionType: "$_id", count: 1 } },
+        ]);
+        return res.status(200).json({
+          message: "Incident breakdown fetched successfully",
+          totalCount: groups.reduce((sum, group) => sum + group.count, 0),
+          groups,
+        });
+      }
+
       // Aggregated paginated data
       const data = await Incident.aggregate([
         // 1ï¸âƒ£ Match early (uses index)

@@ -74,9 +74,12 @@ function joinEndpoint(baseUrl, suffix) {
 }
 
 function toGeminiContents(messages) {
-  return messages.map(({ role, text }) => ({
+  return messages.map(({ role, text, images = [] }) => ({
     role: role === "assistant" ? "model" : "user",
-    parts: [{ text }],
+    parts: [{ text }, ...images.map((dataUrl) => {
+      const [, mimeType, data] = String(dataUrl).match(/^data:(image\/(?:jpeg|png));base64,(.+)$/) || [];
+      return mimeType && data ? { inlineData: { mimeType, data } } : null;
+    }).filter(Boolean)],
   }));
 }
 
@@ -129,7 +132,16 @@ async function callOpenAICompatible(settings, systemInstruction, messages) {
     url,
     {
       model: settings.model,
-      messages: [{ role: "system", content: systemInstruction }, ...messages.map(({ role, text }) => ({ role, content: text }))],
+      messages: [
+        { role: "system", content: systemInstruction },
+        ...messages.map(({ role, text, images = [] }) => ({
+          role,
+          content: [
+            { type: "text", text },
+            ...images.map((dataUrl) => ({ type: "image_url", image_url: { url: dataUrl } })),
+          ],
+        })),
+      ],
       temperature: 0.2,
       max_tokens: 800,
     },
@@ -146,7 +158,18 @@ async function callAnthropic(settings, systemInstruction, messages) {
     {
       model: settings.model,
       system: systemInstruction,
-      messages: messages.map(({ role, text }) => ({ role, content: text })),
+      messages: messages.map(({ role, text, images = [] }) => ({
+        role,
+        content: [
+          { type: "text", text },
+          ...images.map((dataUrl) => {
+            const [, mediaType, data] = String(dataUrl).match(/^data:(image\/(?:jpeg|png));base64,(.+)$/) || [];
+            return mediaType && data
+              ? { type: "image", source: { type: "base64", media_type: mediaType, data } }
+              : null;
+          }).filter(Boolean),
+        ],
+      })),
       temperature: 0.2,
       max_tokens: 800,
     },

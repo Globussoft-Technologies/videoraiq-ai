@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
+import crypto from "node:crypto";
 import AssistantConversation from "./assistantConversation.model.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
-const MODEL_HISTORY_TURNS = 20;
+const MODEL_HISTORY_TURNS = 40;
 
 function httpError(message, statusCode) {
   const error = new Error(message);
@@ -38,10 +39,29 @@ export function serializeConversation(conversation) {
 }
 
 export function serializeMessage(message) {
+  const serializeAttachment = (attachment) => {
+    const storageKey = attachment?.storageKey || attachment?.path;
+    const attachmentId = attachment?.attachmentId || (storageKey
+      ? `legacy_${crypto.createHash("sha256").update(String(storageKey)).digest("hex").slice(0, 32)}`
+      : null);
+    if (!attachmentId) return null;
+    return {
+      attachmentId,
+      type: attachment?.type || "file",
+      ...(attachment?.angle ? { angle: attachment.angle } : {}),
+      ...(attachment?.fileName ? { fileName: attachment.fileName } : {}),
+      ...(attachment?.mimeType ? { mimeType: attachment.mimeType } : {}),
+    };
+  };
+  const attachments = (message.attachments || []).map(serializeAttachment).filter(Boolean);
   return {
     id: String(message._id),
     role: message.role,
     text: message.text,
+    ...(message.ui ? { ui: message.ui } : {}),
+    // Keep this field present even when empty. Clients must use persisted
+    // attachment metadata, never a browser-only File/blob preview.
+    attachments,
     error: Boolean(message.error),
     at: message.createdAt,
   };
@@ -55,7 +75,9 @@ export async function listConversations(req) {
     MAX_PAGE_SIZE,
     Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : DEFAULT_PAGE_SIZE,
   );
+  const search = String(req.query?.search || '').trim().slice(0, 100);
   const filter = ownerFilter(req);
+  if (search) filter.title = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
   const [total, conversations] = await Promise.all([
     AssistantConversation.countDocuments(filter),
     AssistantConversation.find(filter)
@@ -93,6 +115,7 @@ export async function getConversation(req, conversationId) {
   const conversation = await findOwnedConversation(req, conversationId);
   return {
     ...serializeConversation(conversation),
+    workflowState: conversation.workflowState || null,
     messages: conversation.messages.map(serializeMessage),
   };
 }
@@ -105,18 +128,29 @@ export async function createConversation(req, title) {
   });
 }
 
-export async function appendMessage(conversation, role, text, error = false) {
-  conversation.messages.push({ role, text, error });
+export async function appendMessage(conversation, role, text, error = false, ui, attachments = []) {
+  conversation.messages.push({ role, text, error, ...(ui ? { ui } : {}), attachments: Array.isArray(attachments) ? attachments : [] });
   conversation.messageCount = conversation.messages.length;
   await conversation.save();
   const message = conversation.messages.at(-1);
   return message;
 }
 
+export async function setWorkflowState(conversation, workflowState) {
+  conversation.workflowState = workflowState || null;
+  // workflowState is a Mixed field and face uploads mutate nested properties
+  // (faceEnrollment/currentStep/completedSteps). Explicitly mark it dirty so
+  // MongoDB cannot persist the message/UI while silently retaining the older
+  // firstFace state.
+  conversation.markModified("workflowState");
+  await conversation.save();
+  return conversation.workflowState;
+}
+
 export async function modelHistory(conversation) {
   return conversation.messages
     .slice(-MODEL_HISTORY_TURNS)
-    .map(({ role, text }) => ({ role, text }));
+    .map(({ role, text, ui }) => ({ role, text, ...(ui ? { ui } : {}) }));
 }
 
 export async function deleteConversation(req, conversationId) {
@@ -143,4 +177,5 @@ export default {
   renameConversation,
   serializeConversation,
   serializeMessage,
+  setWorkflowState,
 };

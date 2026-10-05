@@ -13,6 +13,7 @@ vi.mock("../../../core/v2/assistant/assistantConversation.service.js", () => ({
     getConversation: vi.fn(),
     listConversations: vi.fn(),
     modelHistory: vi.fn(),
+    setWorkflowState: vi.fn(),
     renameConversation: vi.fn(),
     serializeConversation: vi.fn(),
     serializeMessage: vi.fn(),
@@ -120,6 +121,35 @@ describe("assistantController.chat", () => {
       history: storedHistory,
       req,
     });
+  });
+
+  it("does not rebuild an input card after registration is cancelled", async () => {
+    const { req, res } = makeReqRes();
+    req.body = { message: "cancel", conversationId: String(conversation._id) };
+    const cancelledState = {
+      workflow: "register_new_user",
+      status: "cancelled",
+      currentStep: "cancelled",
+      values: {},
+      faceEnrollment: { front: null, left: null, right: null },
+      completedSteps: [],
+    };
+    assistantService.askAssistant.mockResolvedValueOnce({
+      text: "User registration cancelled. No user was created.",
+      workflowState: cancelledState,
+    });
+
+    await assistantController.chat(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res._body.body.data.ui).toMatchObject({ type: "status", workflow: "register_new_user", status: "cancelled" });
+    expect(conversationService.appendMessage).toHaveBeenLastCalledWith(
+      conversation,
+      "assistant",
+      "User registration cancelled. No user was created.",
+      false,
+      { type: "status", workflow: "register_new_user", status: "cancelled" },
+    );
   });
 
   it("persists a safe error message when the provider fails", async () => {

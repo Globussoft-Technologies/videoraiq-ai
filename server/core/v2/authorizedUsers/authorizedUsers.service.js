@@ -621,7 +621,9 @@ class AuthUsersService {
             await authorizedUsersModel.findByIdAndDelete(newUser._id);
             await Promise.all(uploadedFiles.map(f => deleteMedia(f).catch(() => {})));
             
-            console.error("❌ Failed to register user in Face Auth service:", err.response?.data?.message);
+            const faceError = err.response?.data?.message
+              || (err.code === "ECONNABORTED" ? "Face recognition service timed out." : "Face recognition service is unavailable or rejected the images.");
+            console.error("❌ Failed to register user in Face Auth service:", faceError);
             if(err.response?.data?.message==="User already registered"||err.response?.data?.message==="No valid face detected"){
               //delete duplicated unverified user that was created
               await authorizedUsersModel.findByIdAndDelete(newUser._id);
@@ -630,7 +632,7 @@ class AuthUsersService {
                 .status(409)
                 .json(
                   Response.errorResp(
-                    err.$and?.message || "A user with similar facial data is already registered.",
+                    err.response?.data?.message || "A user with similar facial data is already registered.",
                     "Authorized user creation failed."
                   )
                 );
@@ -646,17 +648,10 @@ class AuthUsersService {
               await authorizedUsersModel.findByIdAndDelete(newUser._id);
               // Drop the images too, or every failed retry orphans 3 more.
               await Promise.all(uploadedFiles.map(f => deleteMedia(f).catch(() => {})));
-            } else {
-              //Update user as unverified
-              await authorizedUsersModel.findByIdAndUpdate(
-                newUser._id,
-                { verified: false },
-                { new: true }
-              );
             }
           return res
           .status(500)
-          .json(Response.errorResp(err.response?.data?.message,"Failed to create authorizedUser."));
+          .json(Response.errorResp(faceError,"Failed to create authorizedUser."));
           }
         } else {
           console.error("❌ User creation failed. Skipping Face Auth registration.");

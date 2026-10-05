@@ -511,7 +511,8 @@ class ChannelService {
         filter.department = { $in: deptIds };
       }
 
-      if (authorizedChannel.length > 0 && memberId) {
+      // A member with no authorized channels must see none, not every camera.
+      if (memberId) {
         if (filter._id) {
           // Convert filter IDs to ObjectId
           const filterIds = filter._id.$in.map(

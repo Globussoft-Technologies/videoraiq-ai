@@ -4,6 +4,8 @@ const assistantMessageSchema = new mongoose.Schema(
   {
     role: { type: String, enum: ["user", "assistant"], required: true },
     text: { type: String, required: true, maxlength: 20_000 },
+    ui: { type: mongoose.Schema.Types.Mixed },
+    attachments: { type: [mongoose.Schema.Types.Mixed], default: [] },
     error: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
   },
@@ -18,6 +20,9 @@ const assistantConversationSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 90 },
     messageCount: { type: Number, default: 0, min: 0 },
     messages: { type: [assistantMessageSchema], default: [] },
+    // Stateful conversational workflows live here instead of relying only on
+    // the model history, which may be truncated or edited by the client.
+    workflowState: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true },
 );
