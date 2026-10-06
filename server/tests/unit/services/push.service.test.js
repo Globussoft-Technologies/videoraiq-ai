@@ -3,15 +3,19 @@ import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { sendEachForMulticast, find, deleteMany } = vi.hoisted(() => ({
+const { sendEachForMulticast, find, deleteMany, findById } = vi.hoisted(() => ({
   sendEachForMulticast: vi.fn(),
   find: vi.fn(),
   deleteMany: vi.fn(),
+  findById: vi.fn(),
 }));
 
 vi.mock("firebase-admin/app", () => ({ initializeApp: vi.fn(() => ({})), cert: vi.fn((x) => x) }));
 vi.mock("firebase-admin/messaging", () => ({ getMessaging: vi.fn(() => ({ sendEachForMulticast })) }));
 vi.mock("../../../core/v2/pushTokens/pushTokens.model.js", () => ({ default: { find, deleteMany } }));
+vi.mock("../../../core/v2/NVR/nvr.model.js", () => ({ default: { findById } }));
+
+const nvrDoc = (doc) => ({ select: () => ({ lean: () => Promise.resolve(doc) }) });
 
 const tokensFor = (...tokens) => ({ select: () => ({ lean: async () => tokens.map((token) => ({ token })) }) });
 
@@ -38,7 +42,10 @@ const incident = {
   timeOfIncident: "2026-09-24T11:17:00.000Z",
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  findById.mockReturnValue(nvrDoc({ nvrName: "Pride Honda", location: "india" }));
+});
 
 describe("buildIncidentMessage", () => {
   it("builds per-platform payloads: sound on Android/iOS, data-only for web", async () => {
@@ -46,13 +53,32 @@ describe("buildIncidentMessage", () => {
     const msg = buildIncidentMessage(incident, "Asia/Kolkata");
 
     expect(msg.data.title).toBe("Loitering Detection");
-    expect(msg.data.body).toMatch(/^F WING PANTRY · 04:47 PM$/i);
+    // No severity/detail/NVR known: camera line, then date + time.
+    expect(msg.data.body).toMatch(/^F WING PANTRY\n24 Sept?, 04:47:00\s?pm$/i);
+    expect(msg.data.image).toBeUndefined(); // no snapshot -> no image key at all
     expect(Object.values(msg.data).every((v) => typeof v === "string")).toBe(true); // FCM requirement
     expect(msg.android.notification).toMatchObject({ channelId: ANDROID_CHANNEL_ID, sound: "default" });
     expect(msg.apns.payload.aps).toMatchObject({ sound: "default", alert: { title: "Loitering Detection" } });
     expect(msg.webpush.headers.Urgency).toBe("high");
     // No top-level notification — otherwise the web SDK would auto-display a second copy.
     expect(msg.notification).toBeUndefined();
+  });
+
+  it("adds severity, the type-specific detail, NVR/site and the snapshot", async () => {
+    const { buildIncidentMessage } = await loadPush(false);
+    const snapshot = "https://media.example.com/crowd.jpg";
+    const crowd = { ...incident, incidentType: "crowdDetection", severity: "moderate", croudCount: 3, zone: "Gate", Image: snapshot };
+    const msg = buildIncidentMessage(crowd, "Asia/Kolkata", { nvrName: "Pride Honda", location: "india" });
+
+    const [summary, where] = msg.data.body.split("\n");
+    expect(summary).toBe("Medium · 3 people · Zone Gate");
+    expect(where).toBe("F WING PANTRY · Pride Honda, india");
+    expect(msg.data.image).toBe(snapshot);
+    expect(msg.android.notification.imageUrl).toBe(snapshot);
+    expect(msg.apns.fcmOptions.imageUrl).toBe(snapshot);
+
+    const vehicle = buildIncidentMessage({ ...incident, vehicleNumber: "TS09FA2298", checkin: false });
+    expect(vehicle.data.body.split("\n")[0]).toBe("Vehicle TS09FA2298 · OUT");
   });
 
   it("prefers the user-configured detection setting name", async () => {
@@ -92,6 +118,8 @@ describe("sendIncidentPush", () => {
 
     expect(find).toHaveBeenCalledWith({ adminId: "a1" });
     expect(sendEachForMulticast.mock.calls[0][0].tokens).toEqual(["good-token", "dead-token", "flaky-token"]);
+    expect(findById).toHaveBeenCalledWith("nvr1");
+    expect(sendEachForMulticast.mock.calls[0][0].data.body).toContain("Pride Honda, india");
     // Only the unregistered token is removed; a transient error keeps the token.
     expect(deleteMany).toHaveBeenCalledWith({ token: { $in: ["dead-token"] } });
   });

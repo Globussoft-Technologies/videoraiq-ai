@@ -4,6 +4,8 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import logger from "../utils/logger.js";
 import PushToken from "../core/v2/pushTokens/pushTokens.model.js";
+import NVR from "../core/v2/NVR/nvr.model.js";
+import { buildIncidentImageUrl } from "../messagingService/message.helper.js";
 
 // Android notification channel incident pushes are posted to. The Android app
 // must create a channel with this id (IMPORTANCE_HIGH for sound + heads-up);
@@ -61,6 +63,21 @@ const prettify = (slug) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 
+const SEVERITY_LABEL = { low: "Low", moderate: "Medium", high: "High" };
+
+// The one type-specific fact that makes the alert actionable without opening
+// it. Generic over field names, since 30+ detection types share a few of them.
+function incidentDetail(incident) {
+  if (incident?.vehicleNumber) {
+    const direction = typeof incident.checkin === "boolean" ? (incident.checkin ? " · IN" : " · OUT") : "";
+    return `Vehicle ${incident.vehicleNumber}${direction}`;
+  }
+  if (incident?.croudCount > 0) return `${incident.croudCount} ${incident.croudCount === 1 ? "person" : "people"}`;
+  if (incident?.totalEntry || incident?.totalExit) return `In ${incident.totalEntry || 0} · Out ${incident.totalExit || 0}`;
+  if (incident?.count > 0) return `Count ${incident.count}`;
+  return "";
+}
+
 /**
  * One message for every platform (the same multicast goes to all of an
  * admin's devices, FCM applies the matching block per token):
@@ -72,15 +89,26 @@ const prettify = (slug) =>
  *    socket-driven desktop notification of an open tab.
  * `data` reaches every platform (FCM requires string values) — mobile apps
  * use it for foreground display and tap navigation (incidentId etc.).
+ *
+ * Body, up to three lines: severity · detail · zone / camera · NVR, site /
+ * date and time. The snapshot rides along as an image URL (shown on web and
+ * Android; iOS needs a notification service extension in the app).
  */
-export function buildIncidentMessage(incident, timezone = "Asia/Kolkata") {
+export function buildIncidentMessage(incident, timezone = "Asia/Kolkata", nvr = {}) {
   const title =
     incident?.detectionSetting?.name ||
     prettify(incident?.incidentType || incident?.incidentName) ||
     "Detection";
   const at = new Date(incident?.timeOfIncident || Date.now());
-  const time = at.toLocaleTimeString("en-IN", { timeZone: timezone, hour: "2-digit", minute: "2-digit" });
-  const body = `${incident?.channelName || "Camera"} · ${time}`;
+  const when = at.toLocaleString("en-IN", {
+    timeZone: timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const summary = [SEVERITY_LABEL[incident?.severity], incidentDetail(incident), incident?.zone && `Zone ${incident.zone}`]
+    .filter(Boolean).join(" · ");
+  const where = [incident?.channelName || "Camera", [nvr?.nvrName, nvr?.location].filter(Boolean).join(", ")]
+    .filter(Boolean).join(" · ");
+  const body = [summary, where, when].filter(Boolean).join("\n");
+  const image = buildIncidentImageUrl(incident);
 
   return {
     data: {
@@ -89,17 +117,20 @@ export function buildIncidentMessage(incident, timezone = "Asia/Kolkata") {
       incidentType: String(incident?.incidentType ?? ""),
       channelId: String(incident?.channelId ?? ""),
       nvrId: String(incident?.nvrId ?? ""),
+      severity: String(incident?.severity ?? ""),
       timeOfIncident: at.toISOString(),
       title,
       body,
+      ...(image ? { image } : {}),
     },
     android: {
       priority: "high",
-      notification: { title, body, channelId: ANDROID_CHANNEL_ID, sound: "default" },
+      notification: { title, body, channelId: ANDROID_CHANNEL_ID, sound: "default", ...(image ? { imageUrl: image } : {}) },
     },
     apns: {
       headers: { "apns-priority": "10" },
-      payload: { aps: { alert: { title, body }, sound: "default" } },
+      payload: { aps: { alert: { title, body }, sound: "default", ...(image ? { "mutable-content": 1 } : {}) } },
+      ...(image ? { fcmOptions: { imageUrl: image } } : {}),
     },
     webpush: { headers: { Urgency: "high" } },
   };
@@ -120,7 +151,11 @@ export async function sendIncidentPush({ admin, incident }) {
     const rows = await PushToken.find({ adminId: String(adminId) }).select("token").lean();
     if (!rows.length) return;
 
-    const message = buildIncidentMessage(incident, admin.timezone || undefined);
+    // NVR name + site for the body; a failed lookup just leaves them out.
+    const nvr = incident?.nvrId
+      ? await NVR.findById(incident.nvrId).select("nvrName location").lean().catch(() => null)
+      : null;
+    const message = buildIncidentMessage(incident, admin.timezone || undefined, nvr || {});
     const stale = [];
     let delivered = 0;
 
