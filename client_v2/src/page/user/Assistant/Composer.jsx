@@ -1,7 +1,9 @@
 import { createPortal, flushSync } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
-import { Paperclip, Plus, Send, Square, X } from 'lucide-react';
+import { Mic, Paperclip, Plus, Send, Square, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { COMPOSER_PLACEHOLDER, COMPOSER_FOOTNOTE, MAX_ASSISTANT_MESSAGE_CHARS } from './assistant.copy';
+import { transcribeAssistantAudio } from '@/helpers/assistant';
 
 const MAX_TEXTAREA_H = 168;
 
@@ -11,7 +13,7 @@ const MAX_TEXTAREA_H = 168;
  *
  * Enter sends, Shift+Enter inserts a newline (the convention every chat UI uses).
  */
-export default function Composer({ value, onChange, onSend, onStop, sending = false, uploading = false, autoFocus = true, registerStep, onRegisterUpload, onRegisterBatchUpload, onFilesPrepared, files = [], clearAttachmentsToken = 0 }) {
+export default function Composer({ value, onChange, onSend, onStop, conversationId, sending = false, uploading = false, autoFocus = true, registerStep, onRegisterUpload, onRegisterBatchUpload, onFilesPrepared, files = [], clearAttachmentsToken = 0 }) {
   const taRef = useRef(null);
   const attachmentMenuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -21,9 +23,227 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
+  const [voiceState, setVoiceState] = useState('idle');
+  const [voiceLevel, setVoiceLevel] = useState(0);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animationRef = useRef(null);
+  const discardRequestedRef = useRef(false);
+  const voiceRequestRef = useRef(0);
+  const voiceAbortRef = useRef(null);
+  const conversationIdRef = useRef(conversationId);
+  const requestConversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
   // Photos are staged data, not a message. Require an explicit prompt before
   // enabling Send so an empty submission cannot upload or trigger a workflow.
   const canSend = value.trim().length > 0 && !sending && !uploading;
+
+  const stopAudioTracks = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    animationRef.current = null;
+    analyserRef.current = null;
+    audioContextRef.current?.close?.().catch(() => {});
+    audioContextRef.current = null;
+    setVoiceLevel(0);
+  };
+
+  const startWaveform = (stream) => {
+    try {
+      if (!window.AudioContext && !window.webkitAudioContext) return;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const context = new AudioContextClass();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 64;
+      context.createMediaStreamSource(stream).connect(analyser);
+      audioContextRef.current = context;
+      analyserRef.current = analyser;
+      const samples = new Uint8Array(analyser.fftSize);
+      const update = () => {
+        if (!analyserRef.current) return;
+        analyser.getByteTimeDomainData(samples);
+        let total = 0;
+        samples.forEach((sample) => { total += Math.abs(sample - 128); });
+        setVoiceLevel(Math.min(1, total / samples.length / 32));
+        animationRef.current = requestAnimationFrame(update);
+      };
+      update();
+    } catch {
+      // The waveform is optional. Some browsers/embedded contexts block the
+      // Web Audio analyser even though microphone recording is permitted.
+      audioContextRef.current = null;
+      analyserRef.current = null;
+    }
+  };
+
+  const showVoiceError = ({ title, detail, action }) => {
+    toast.error(title, {
+      description: detail,
+      ...(action ? { action: { label: action.label, onClick: action.onClick } } : {}),
+    });
+  };
+
+  const startVoice = async () => {
+    if (voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting' || sending || uploading) return;
+    discardRequestedRef.current = false;
+    const requestId = ++voiceRequestRef.current;
+    const requestConversationId = conversationId;
+    setVoiceState('starting');
+    try {
+      if (!window.isSecureContext) throw Object.assign(new Error('insecure'), { code: 'INSECURE_CONTEXT' });
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw Object.assign(new Error('unsupported'), { code: 'UNSUPPORTED' });
+      // getUserMedia opens the browser's native permission dialog when access
+      // has not been decided yet. Keep the UI quiet here so a denied request
+      // results in one clear toast instead of an info toast plus an error toast.
+      let timedOut = false;
+      const mediaRequest = navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRequest.then((lateStream) => {
+        if (timedOut) lateStream.getTracks().forEach((track) => track.stop());
+      }).catch(() => {});
+      let timeoutId;
+      const permissionTimeout = new Promise((_, reject) => { timeoutId = setTimeout(() => {
+        timedOut = true;
+        reject(Object.assign(new Error('permission-timeout'), { code: 'PERMISSION_TIMEOUT' }));
+      }, 12_000); });
+      const stream = await Promise.race([mediaRequest, permissionTimeout]);
+      clearTimeout(timeoutId);
+      timedOut = false;
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((type) => MediaRecorder.isTypeSupported(type)) || '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      streamRef.current = stream;
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunksRef.current.push(event.data); };
+      recorder.onerror = () => {
+        stopAudioTracks();
+        setVoiceState('idle');
+        showVoiceError({ title: 'Recording failed', detail: 'The recording could not be completed. Please try again.' });
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        stopAudioTracks();
+        if (discardRequestedRef.current || requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) {
+          discardRequestedRef.current = false;
+          return;
+        }
+        if (!blob.size) {
+          setVoiceState('idle');
+          showVoiceError({ title: 'No speech detected', detail: 'Speak clearly into your microphone, then try again.' });
+          return;
+        }
+        setVoiceState('processing');
+        const transcribeController = new AbortController();
+        voiceAbortRef.current = transcribeController;
+        try {
+          const result = await transcribeAssistantAudio({
+            audio: new File([blob], `voice-${Date.now()}.webm`, { type: blob.type }),
+            conversationId: requestConversationId,
+            signal: transcribeController.signal,
+          });
+          const text = String(result?.text || '').trim();
+          if (!text) throw Object.assign(new Error('empty'), { code: 'EMPTY_TRANSCRIPT' });
+          if (requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
+          // The transcript is added to the chat optimistically by onSend.
+          // Keep it out of the editable composer while the voice request is
+          // being submitted so it cannot appear in both places at once.
+          onChange('');
+          setVoiceState('submitting');
+          const files = selectedFilesRef.current.map((item) => item.file);
+          const submitted = await onSend(text, files, { voice: true });
+          if (requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
+          if (submitted) {
+            selectedFilesRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+            selectedFilesRef.current = [];
+            setSelectedFiles([]);
+            onFilesPrepared?.([]);
+          }
+          // The shared send pipeline owns the API error UI. If it failed,
+          // restore the transcript in the composer so the user can retry.
+          if (!submitted) onChange(text);
+          setVoiceState('idle');
+        } catch (error) {
+          if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED' || requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
+          setVoiceState('idle');
+          showVoiceError(error?.code === 'EMPTY_TRANSCRIPT' || error?.response?.status === 422
+            ? { title: 'No speech detected', detail: 'Speak clearly into your microphone, then try again.' }
+            : { title: 'Transcription failed', detail: 'I could not understand that recording. Please try again.' });
+        } finally {
+          if (voiceAbortRef.current === transcribeController) voiceAbortRef.current = null;
+        }
+      };
+      recorder.start();
+      setVoiceState('recording');
+      startWaveform(stream);
+    } catch (error) {
+      stopAudioTracks();
+      setVoiceState('idle');
+      if (error?.code === 'PERMISSION_TIMEOUT') {
+        showVoiceError({ title: 'Microphone permission is needed', detail: 'The browser did not finish the microphone request. Allow microphone access for this site, then try again.' });
+      } else if (error?.code === 'INSECURE_CONTEXT') {
+        showVoiceError({ title: 'Secure connection required', detail: 'Voice input requires the assistant to be opened over HTTPS.' });
+      } else if (error?.code === 'UNSUPPORTED') {
+        showVoiceError({ title: 'Voice input unavailable', detail: 'This browser does not support microphone recording.' });
+      } else if (error?.name === 'NotFoundError') {
+        showVoiceError({ title: 'No microphone detected', detail: 'Connect a microphone and check that it is available, then try again.' });
+      } else if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+        showVoiceError({
+          title: 'Microphone permission is needed',
+          detail: 'Allow microphone access in your browser or site settings, then try again.',
+          action: { label: 'Try again', onClick: startVoice },
+        });
+      } else {
+        showVoiceError({
+          title: 'Voice input is unavailable',
+          detail: 'Check your microphone and browser permissions, then try again.',
+          action: { label: 'Try again', onClick: startVoice },
+        });
+      }
+    }
+  };
+
+  const stopVoice = () => {
+    if (recorderRef.current?.state === 'recording') {
+      setVoiceState('processing');
+      recorderRef.current.stop();
+    }
+  };
+
+  const discardVoice = () => {
+    if (voiceState === 'recording') {
+      discardRequestedRef.current = true;
+      stopVoice();
+    }
+    setVoiceState('idle');
+    voiceRequestRef.current += 1;
+    voiceAbortRef.current?.abort();
+    voiceAbortRef.current = null;
+    onChange('');
+  };
+
+  useEffect(() => () => {
+    voiceRequestRef.current += 1;
+    voiceAbortRef.current?.abort();
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    stopAudioTracks();
+  }, []);
+
+  useEffect(() => {
+    // A transcription belongs to the chat in which recording started. Abort
+    // it when the user switches chats so a late result cannot cross boundaries.
+    if (requestConversationIdRef.current === conversationId) return undefined;
+    requestConversationIdRef.current = conversationId;
+    if (voiceState === 'processing' || voiceState === 'submitting') {
+      voiceRequestRef.current += 1;
+      voiceAbortRef.current?.abort();
+      voiceAbortRef.current = null;
+      setVoiceState('idle');
+    }
+    return undefined;
+  }, [conversationId, voiceState]);
 
   useEffect(() => {
     const previous = selectedFilesRef.current;
@@ -213,8 +433,8 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
             rows={1}
             value={value}
             maxLength={MAX_ASSISTANT_MESSAGE_CHARS}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={sending || uploading}
+            onChange={(e) => { if (voiceState === 'transcribed') setVoiceState('editable'); onChange(e.target.value); }}
+            disabled={sending || uploading || voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting'}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
@@ -228,6 +448,7 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
             className="vq-scroll"
             style={{
               flex: 1,
+              display: voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting' ? 'none' : undefined,
               minWidth: 0,
               minHeight: 26,
               maxHeight: MAX_TEXTAREA_H,
@@ -243,7 +464,18 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
             }}
           />
 
-          {sending ? (
+          {(voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting') && <div aria-live="polite" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 8, color: voiceState === 'recording' ? 'var(--crit)' : 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: voiceState === 'recording' ? 'var(--crit)' : 'var(--warn)', boxShadow: voiceState === 'recording' ? '0 0 0 5px rgba(239,68,68,.12)' : 'none' }} />
+            <span>{voiceState === 'starting' ? 'Starting microphone…' : voiceState === 'recording' ? 'Listening…' : voiceState === 'processing' ? 'Processing…' : 'Sending…'}</span>
+            {voiceState === 'recording' && <div aria-label="Audio waveform" style={{ display: 'flex', alignItems: 'center', gap: 2, height: 24, width: 44 }}>
+              {Array.from({ length: 10 }, (_, index) => <span key={index} style={{ width: 3, height: `${Math.max(4, 5 + voiceLevel * (8 + (index % 4) * 3))}px`, borderRadius: 3, background: 'var(--crit)', transition: 'height .08s ease' }} />)}
+            </div>}
+          </div>}
+          {voiceState === 'recording' ? (
+            <button type="button" onClick={stopVoice} title="Stop recording" aria-label="Stop recording" style={{ flex: '0 0 auto', width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: 'var(--crit)' }}><Square size={14} strokeWidth={2.4} /></button>
+          ) : voiceState === 'starting' || voiceState === 'processing' || voiceState === 'submitting' ? (
+            <button type="button" disabled title={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} aria-label={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} style={{ flex: '0 0 auto', width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'wait', background: 'var(--bg3)', border: '1px solid var(--bd2)', color: 'var(--tx2)' }}><Mic size={16} /></button>
+          ) : sending ? (
             <button
               type="button"
               onClick={onStop}
@@ -266,6 +498,8 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
               <Square size={14} strokeWidth={2.4} />
             </button>
           ) : (
+            <>
+            <button type="button" onClick={startVoice} disabled={sending || uploading || voiceState === 'submitting'} title="Use voice input" aria-label="Use voice input" style={{ flex: '0 0 auto', width: 32, height: 32, border: 0, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: sending || uploading || voiceState === 'submitting' ? 'not-allowed' : 'pointer', color: 'var(--tx2)', background: 'transparent' }}><Mic size={18} strokeWidth={1.8} /></button>
             <button
               type="button"
               onClick={submit}
@@ -292,6 +526,7 @@ export default function Composer({ value, onChange, onSend, onStop, sending = fa
             >
               <Send size={16} strokeWidth={1.9} />
             </button>
+            </>
           )}
         </div>
 

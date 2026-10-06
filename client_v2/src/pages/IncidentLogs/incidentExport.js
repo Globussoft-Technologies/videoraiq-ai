@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { fetchIncidentLogs } from './Api';
 import { formatStatus } from './incidentColumns';
+import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
 
 const resolveIncidentImageUrl = (value) => {
   if (!value) return '';
@@ -143,11 +144,15 @@ const exportToPDF = async (config, params) => {
     }
 
     const doc = new jsPDF('landscape');
-    doc.setFont('helvetica');
-    doc.setFontSize(12);
-    doc.text(config.title, 14, 12);
-    doc.setFontSize(9);
-    doc.text(`Generated on: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 18);
+    await drawReportHeader(doc, {
+      title: config.title,
+      subtitle: reportSubtitle({
+        startDate: params.startDate,
+        endDate: params.endDate,
+        allVehicles: params.vehicleNumber ? `Vehicle: ${params.vehicleNumber}` : 'All vehicles',
+        total: allLogs.length,
+      }),
+    });
 
     const cols = buildExportColumns(config);
     const headers = ['#', ...cols.map((c) => c.label), 'Image'];
@@ -155,10 +160,9 @@ const exportToPDF = async (config, params) => {
     const tableRows = allLogs.map((row, i) => [i + 1, ...cols.map((c) => row[c.key]), '']);
 
     autoTable(doc, {
+      ...reportTableOptions,
       head: [headers],
       body: tableRows,
-      startY: 24,
-      styles: { fontSize: 7 },
       columnStyles: { [imageColIndex]: { cellWidth: 40 } },
       didDrawCell: (data) => {
         if (data.column.index === imageColIndex && data.section === 'body') {
@@ -318,39 +322,36 @@ const exportToGridPDF = async (config, params) => {
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;
-    const firstPageStartY = 24;
+    const firstPageStartY = 42;
     const nextPageStartY = 12;
     let x = margin;
     let y = firstPageStartY;
     let col = 0;
 
-    doc.setFillColor(245, 247, 251);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(20, 24, 40);
-    doc.text(config.title, margin, 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(90, 100, 120);
-    doc.text(
-      `Generated on ${moment().format('DD/MM/YYYY hh:mm A')} | Total records: ${allLogs.length}`,
-      margin,
-      18
-    );
+    await drawReportHeader(doc, {
+      title: config.title,
+      subtitle: reportSubtitle({
+        startDate: params.startDate,
+        endDate: params.endDate,
+        allVehicles: params.vehicleNumber ? `Vehicle: ${params.vehicleNumber}` : 'All vehicles',
+        total: allLogs.length,
+      }),
+    });
 
-    const addPageIfNeeded = () => {
+    const addPageIfNeeded = async () => {
       if (y + cardHeight <= pageHeight - 6) return;
       doc.addPage();
-      doc.setFillColor(245, 247, 251);
-      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      await drawReportHeader(doc, {
+        title: config.title,
+        subtitle: reportSubtitle({ total: allLogs.length, allVehicles: 'All vehicles' }),
+      });
       x = margin;
       y = nextPageStartY;
       col = 0;
     };
 
     for (let i = 0; i < allLogs.length; i += 1) {
-      addPageIfNeeded();
+      await addPageIfNeeded();
       const row = allLogs[i];
 
       doc.setDrawColor(224, 228, 236);

@@ -32,6 +32,37 @@ body {
   cursor: pointer !important;
 }
 
+/* Structured list rendering for assistant replies. Keep list replies as
+   ordinary chat content instead of nesting them inside cards. */
+.vq-assistant-text { display: grid; gap: 4px; }
+.vq-assistant-text-line { min-width: 0; }
+.vq-assistant-list {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 3px;
+  padding: 0;
+}
+.vq-assistant-list-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--tx);
+}
+.vq-assistant-list-marker {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+}
+.vq-assistant-list-marker.is-ordered { font-size: 10px; font-variant-numeric: tabular-nums; }
+.vq-assistant-list-value { min-width: 0; overflow-wrap: anywhere; }
 /* Sonner toast close button: right side, vertically centered (default is top-left).
    Sonner's own rule targets [data-sonner-toast][data-styled='true'] [data-close-button]
    and reads position from CSS vars, so match that specificity and override the vars too. */

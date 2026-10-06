@@ -40,6 +40,14 @@ export async function askAssistant({ message, conversationId, resetWorkflow = fa
   };
 }
 
+export async function transcribeAssistantAudio({ audio, conversationId, signal } = {}) {
+  const form = new FormData();
+  form.append('audio', audio, audio?.name || 'voice.webm');
+  if (conversationId) form.append('conversationId', conversationId);
+  const res = await api.post(`${ASSISTANT_ENDPOINT}/transcribe`, form, { signal, headers: { 'Content-Type': undefined } });
+  return unwrap(res);
+}
+
 export async function uploadRegisterUserFace({ conversationId, angle, file, signal } = {}) {
   const form = new FormData();
   form.append('conversationId', conversationId || '');

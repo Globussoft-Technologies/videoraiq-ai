@@ -320,14 +320,19 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen]);
 
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
+
   const handleSend = useCallback(
-    async (text, attachedFiles = []) => {
+    async (text, attachedFiles = [], { voice = false } = {}) => {
       const structuredAction = text && typeof text === 'object'
         ? text
         : (Array.isArray(attachedFiles) ? null : attachedFiles);
       const submittedText = structuredAction ? 'Continue' : text;
-      setDraft('');
-      draftByChatRef.current.set(draftKey, '');
+      if (!voice) {
+        setDraft('');
+        draftByChatRef.current.set(draftKey, '');
+      }
       let messageText = String(submittedText || '').trim();
       if (/^(?:cancel|stop|close|exit)(?:\s+(?:user\s+)?registration)?$/i.test(String(submittedText || '').trim())) {
         setPendingFiles([]);
@@ -389,6 +394,10 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
       // keep the selected photos staged for the user's actual instruction.
       if (files.length && messageText.length < 3) return;
       const result = await send(messageText, { action: structuredAction || undefined, incidentContext: incidentAssistantContext, attachments: files, attachmentCount: files.length });
+      if (voice && result && activeIdRef.current === activeId) {
+        setDraft('');
+        draftByChatRef.current.set(draftKey, '');
+      }
       if (startsRegistration && files.length > 0 && result?.assistantMessage?.ui?.workflow === 'register_new_user') {
         await uploadRegisterFaces({ files, conversationId: result?.conversation?.id || activeId });
         setPendingFiles([]);
@@ -399,6 +408,7 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
         pendingFilesByChatRef.current.set(draftKey, []);
         setClearAttachmentsToken((value) => value + 1);
       }
+      return result;
     },
     [activeId, draftKey, incidentAssistantContext, messages, pendingFiles, send, uploadRegisterFaces]
   );
@@ -551,6 +561,7 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
           onChange={handleDraftChange}
           onSend={handleSend}
           onStop={stop}
+          conversationId={activeId}
           sending={sending}
           uploading={uploading}
           registerStep={activeRegistrationUi}

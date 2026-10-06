@@ -17,9 +17,25 @@ function clock(value) {
 // combined). Keep one copy in the visible transcript without merging distinct
 // responses from separate inputs.
 function displayText(value) {
-  const text = String(value ?? '');
+  const text = sanitizeAssistantText(value);
   const parts = text.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
   return parts.filter((part, index) => parts.indexOf(part) === index).join('\n\n');
+}
+
+// Older conversations may contain a serialized validator/MCP error from
+// before the server-side sanitization fix. Never render those internals in the
+// transcript, even when they are loaded from history.
+function sanitizeAssistantText(value) {
+  const text = typeof value === 'string' ? value : (() => {
+    try { return JSON.stringify(value); } catch { return String(value ?? ''); }
+  })();
+  if (/invalid_value|invalid_type|unrecognized_keys|\"path\"\s*:\s*\[/i.test(text)) {
+    if (/dateRange[\"']?\s*,\s*[\"']?type|dateRange.*type/i.test(text)) {
+      return "I couldn't process that time range. Please try again with a range such as today, yesterday, or last 7 days.";
+    }
+    return "I couldn't process that request. Please try again with a simpler question.";
+  }
+  return text;
 }
 
 function formatAssistantTimestamp(value) {
@@ -55,18 +71,61 @@ function renderInlineMarkdown(value, keyPrefix = '') {
   });
 }
 
+function listItemParts(line) {
+  const match = String(line ?? '').match(/^\s*(?:([*•-])|(\d+)[.)])\s+(.*?)\s*$/);
+  if (!match) return null;
+  return { marker: match[1] || `${match[2]}.`, value: match[3] };
+}
+
+function AssistantListLegacy({ items, ordered, keyPrefix }) {
+  return <div className="vq-assistant-list" role="list">
+    {items.map((item, index) => <div className="vq-assistant-list-item" key={`${keyPrefix}-item-${index}`} role="listitem">
+      <span className={`vq-assistant-list-marker${ordered ? ' is-ordered' : ''}`}>{ordered ? index + 1 : '•'}</span>
+      <span className="vq-assistant-list-value">{renderInlineMarkdown(item.value, `${keyPrefix}-${index}`)}</span>
+    </div>)}
+  </div>;
+}
+
 function AssistantText({ value }) {
   const lines = displayText(value).split('\n');
-  return <div style={{ display: 'grid', gap: 4 }}>
-    {lines.map((line, index) => {
-      const numbered = line.match(/^\s*(\d+)\.\s+(.*)$/);
-      return numbered
-        ? <div key={`line-${index}`} style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', gap: 5, alignItems: 'start' }}>
-          <span style={{ color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{numbered[1]}.</span>
-          <span>{renderInlineMarkdown(numbered[2], `line-${index}`)}</span>
-        </div>
-        : <div key={`line-${index}`} style={{ minHeight: line ? undefined : 5 }}>{renderInlineMarkdown(line, `line-${index}`)}</div>;
-    })}
+  const content = [];
+  let list = [];
+  let ordered = false;
+
+  const flushList = (index) => {
+    if (!list.length) return;
+    content.push(<AssistantList key={`list-${index}`} items={list} ordered={ordered} keyPrefix={`list-${index}`} />);
+    list = [];
+  };
+
+  lines.forEach((line, index) => {
+    const item = listItemParts(line);
+    if (item) {
+      const isOrdered = /^\s*\d+[.)]\s+/.test(line);
+      if (list.length && isOrdered !== ordered) flushList(index);
+      ordered = isOrdered;
+      list.push(item);
+      return;
+    }
+    flushList(index);
+    content.push(<div key={`line-${index}`} className="vq-assistant-text-line" style={{ minHeight: line ? undefined : 5 }}>{renderInlineMarkdown(line, `line-${index}`)}</div>);
+  });
+  flushList(lines.length);
+
+  return <div className="vq-assistant-text">
+    {content}
+  </div>;
+}
+
+// Preserve explicit ordered-list markers from the response. A multi-result
+// reply is separated by a blank line, so numbering each local list from zero
+// would incorrectly render both results as "1".
+function AssistantList({ items, ordered, keyPrefix }) {
+  return <div className="vq-assistant-list" role="list">
+    {items.map((item, index) => <div className="vq-assistant-list-item" key={`${keyPrefix}-item-${index}`} role="listitem">
+      <span className={`vq-assistant-list-marker${ordered ? ' is-ordered' : ''}`}>{ordered ? item.marker : '•'}</span>
+      <span className="vq-assistant-list-value">{renderInlineMarkdown(item.value, `${keyPrefix}-${index}`)}</span>
+    </div>)}
   </div>;
 }
 
@@ -115,13 +174,14 @@ function workflowUiForMessage(msg) {
 }
 
 function ExportCard({ ui }) {
-  const [status, setStatus] = useState('Preparing download…');
+  // Export metadata is persisted with autoDownload disabled. Treat that
+  // rehydrated state as completed so a refresh does not lose the final status.
+  const [status, setStatus] = useState(ui?.autoDownload === false ? 'Downloaded successfully' : 'Preparing download…');
   const started = useRef(false);
 
   useEffect(() => {
-    if (!ui || !['export', 'multi_export'].includes(ui.type) || (ui.type === 'export' && !ui.autoDownload) || started.current) return;
+    if (!ui || !['export', 'multi_export'].includes(ui.type) || !ui.autoDownload || started.current) return;
     started.current = true;
-    let active = true;
     const download = async () => {
       setStatus('Preparing download…');
       try {
@@ -133,16 +193,15 @@ function ExportCard({ ui }) {
             results.push(await runAssistantLogExport(item, format));
           }
         }
-        if (active) setStatus(results.some((result) => result === false) ? 'Download failed' : 'Download started');
+        setStatus(results.some((result) => result === false) ? 'Download failed' : 'Downloaded successfully');
       } catch {
-        if (active) setStatus('Download failed');
+        setStatus('Download failed');
       }
     };
     download();
-    return () => { active = false; };
   }, [ui]);
 
-  if (!ui || !['export', 'multi_export'].includes(ui.type) || (ui.type === 'export' && !ui.autoDownload)) return null;
+  if (!ui || !['export', 'multi_export'].includes(ui.type)) return null;
   return <div style={{ marginTop: 9, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12, fontWeight: 600 }}>
     {status}
   </div>;
@@ -161,30 +220,8 @@ const vehicleField = (record, keys) => {
   return '-';
 };
 
-function formatVehicleTime(value, timezone) {
-  if (!value || value === '-') return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return displayValue(value);
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    }).format(date);
-  } catch {
-    return date.toLocaleString();
-  }
-}
-
-function formatVehicleDate(value) {
-  if (!value) return '';
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
-}
-
 function normalizeVehicleRecord(record, timezone) {
   return {
-    time: formatVehicleTime(vehicleField(record, ['timeOfIncident', 'createdAt', 'created_at', 'timestamp', 'detectedAt']), timezone),
     model: displayValue(vehicleField(record, ['modelName', 'modelname', 'model_name', 'carModelName', 'carModel', 'model'])),
     vehicleNumber: displayValue(vehicleField(record, ['vehicleNumber', 'numberPlate', 'plateNumber', 'carNumber'])),
     color: displayValue(vehicleField(record, ['color', 'colour', 'carColor'])),
@@ -204,9 +241,7 @@ function VehicleLogsResult({ ui }) {
   const [details, setDetails] = useState(null);
   const [exporting, setExporting] = useState('');
   const rows = allRecords.slice((page - 1) * pageSize, page * pageSize).map((record) => normalizeVehicleRecord(record, ui.timezone));
-  const range = ui.dateRange?.resolved || ui.dateRange || {};
   const allRows = allRecords.map((record) => normalizeVehicleRecord(record, ui.timezone));
-  const dateText = range.startDate && range.endDate && range.startDate !== range.endDate ? `${formatVehicleDate(range.startDate)} – ${formatVehicleDate(range.endDate)}` : formatVehicleDate(range.startDate) || range.value || '';
   const filterEntries = Object.entries(ui.filters || {}).filter(([key, value]) => !key.startsWith('_') && value !== undefined && value !== null && value !== '' && value !== false);
   const uniqueCount = (key) => new Set(allRows.map((row) => row[key]).filter((value) => value !== '-')).size;
 
@@ -225,7 +260,7 @@ function VehicleLogsResult({ ui }) {
 
   return <div style={{ width: 'min(920px, calc(100vw - 100px))', maxWidth: '100%', marginTop: 10, padding: 14, boxSizing: 'border-box', borderRadius: 12, border: '1px solid var(--bd)', background: 'var(--bg2)' }}>
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-      <div><div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--tx)', fontSize: 15, fontWeight: 750 }}>🚗 {ui.title || 'Vehicle Logs'}</div><div style={{ marginTop: 4, color: 'var(--tx2)', fontSize: 12 }}>{total} record{total === 1 ? '' : 's'} found{dateText ? ` · ${dateText}` : ''}</div></div>
+      <div><div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--tx)', fontSize: 15, fontWeight: 750 }}>🚗 {ui.title || 'Vehicle Logs'}</div><div style={{ marginTop: 4, color: 'var(--tx2)', fontSize: 12 }}>{total} record{total === 1 ? '' : 's'} found</div></div>
       <div style={{ display: 'flex', gap: 7 }}>
         <button type="button" onClick={() => exportLogs('excel')} disabled={!!exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--bd)', borderRadius: 8, padding: '7px 10px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 11.5, fontWeight: 650 }}><Download size={13} />{exporting === 'excel' ? 'Exporting…' : 'Excel'}</button>
         <button type="button" onClick={() => exportLogs('pdf')} disabled={!!exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--bd)', borderRadius: 8, padding: '7px 10px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 11.5, fontWeight: 650 }}><Download size={13} />{exporting === 'pdf' ? 'Exporting…' : 'PDF'}</button>
@@ -235,7 +270,7 @@ function VehicleLogsResult({ ui }) {
       {[['Total Logs', total], ['Unique Vehicles', uniqueCount('vehicleNumber')], ['Companies', uniqueCount('company')], ['NVRs', uniqueCount('nvr')]].map(([label, value]) => <div key={label} style={{ padding: '9px 10px', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)' }}><div style={{ color: 'var(--tx3)', fontSize: 10.5 }}>{label}</div><div style={{ marginTop: 2, color: 'var(--tx)', fontSize: 16, fontWeight: 750 }}>{value}</div></div>)}
     </div>
     {filterEntries.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 11 }}>{filterEntries.map(([key, value]) => <span key={key} style={{ padding: '4px 8px', borderRadius: 999, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx2)', fontSize: 10.5 }}>{key.replace(/([A-Z])/g, ' $1')}: {String(value)}</span>)}</div>}
-    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 9 }}><table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 11.5 }}><thead><tr>{[['#', 'index'], ['Time', 'time'], ['Model', 'model'], ['Vehicle No.', 'vehicleNumber'], ['Color', 'color'], ['Company', 'company'], ['NVR', 'nvr'], ['Channel', 'channel'], ['', 'details']].map(([label, key]) => <th key={key} style={{ padding: '9px 8px', textAlign: key === 'index' ? 'center' : 'left', whiteSpace: 'nowrap', color: 'var(--tx3)', background: 'var(--bg1)', borderBottom: '1px solid var(--bd)', fontWeight: 700 }}>{label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={`${row.vehicleNumber}-${index}`} style={{ borderBottom: '1px solid var(--bd)' }}><td style={{ padding: '8px', textAlign: 'center', color: 'var(--tx3)' }}>{(page - 1) * pageSize + index + 1}</td><td style={{ padding: '8px', whiteSpace: 'nowrap', color: 'var(--tx2)' }}>{row.time}</td><td style={{ padding: '8px', color: 'var(--tx)' }}>{row.model}</td><td style={{ padding: '8px' }}><code style={{ padding: '3px 6px', borderRadius: 5, background: 'rgba(99,102,241,.1)', color: 'var(--blue)', whiteSpace: 'nowrap' }}>{row.vehicleNumber}</code></td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.color}</td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.company}</td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.nvr}</td><td style={{ padding: '8px', color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{row.channel}</td><td style={{ padding: '8px' }}><button type="button" onClick={() => setDetails(row)} aria-label={`View details for ${row.vehicleNumber}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid var(--bd)', borderRadius: 6, padding: '5px 7px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 10.5 }}><Eye size={12} />Details</button></td></tr>)}</tbody></table></div>
+    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 9 }}><table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', fontSize: 11.5 }}><thead><tr>{[['#', 'index'], ['Model', 'model'], ['Vehicle No.', 'vehicleNumber'], ['Color', 'color'], ['Company', 'company'], ['NVR', 'nvr'], ['Channel', 'channel'], ['', 'details']].map(([label, key]) => <th key={key} style={{ padding: '9px 8px', textAlign: key === 'index' ? 'center' : 'left', whiteSpace: 'nowrap', color: 'var(--tx3)', background: 'var(--bg1)', borderBottom: '1px solid var(--bd)', fontWeight: 700 }}>{label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={`${row.vehicleNumber}-${index}`} style={{ borderBottom: '1px solid var(--bd)' }}><td style={{ padding: '8px', textAlign: 'center', color: 'var(--tx3)' }}>{(page - 1) * pageSize + index + 1}</td><td style={{ padding: '8px', color: 'var(--tx)' }}>{row.model}</td><td style={{ padding: '8px' }}><code style={{ padding: '3px 6px', borderRadius: 5, background: 'rgba(99,102,241,.1)', color: 'var(--blue)', whiteSpace: 'nowrap' }}>{row.vehicleNumber}</code></td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.color}</td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.company}</td><td style={{ padding: '8px', color: 'var(--tx2)' }}>{row.nvr}</td><td style={{ padding: '8px', color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{row.channel}</td><td style={{ padding: '8px' }}><button type="button" onClick={() => setDetails(row)} aria-label={`View details for ${row.vehicleNumber}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid var(--bd)', borderRadius: 6, padding: '5px 7px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 10.5 }}><Eye size={12} />Details</button></td></tr>)}</tbody></table></div>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 10, color: 'var(--tx3)', fontSize: 11.5 }}><span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, allRecords.length)} of {total}</span><div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} style={{ border: '1px solid var(--bd)', borderRadius: 6, padding: '5px 8px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Previous</button><span>{page} / {pageCount}</span><button type="button" onClick={() => setPage((value) => Math.min(pageCount, value + 1))} disabled={page === pageCount} style={{ border: '1px solid var(--bd)', borderRadius: 6, padding: '5px 8px', background: 'var(--bg1)', color: 'var(--tx2)', cursor: page === pageCount ? 'not-allowed' : 'pointer' }}>Next</button></div></div>
     {details && <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: '1px solid var(--bd)', background: 'var(--bg1)' }}><div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--tx)', fontWeight: 700 }}>Vehicle Details <button type="button" onClick={() => setDetails(null)} aria-label="Close vehicle details" style={{ border: 0, background: 'transparent', color: 'var(--tx2)', cursor: 'pointer' }}><X size={14} /></button></div>{Object.entries(details).filter(([key]) => key !== 'raw').map(([key, value]) => <div key={key} style={{ display: 'flex', gap: 12, marginTop: 7, fontSize: 12 }}><span style={{ width: 100, color: 'var(--tx3)' }}>{key}</span><span style={{ color: 'var(--tx)' }}>{value}</span></div>)}</div>}
   </div>;
@@ -716,6 +751,7 @@ function Bubble({ msg, onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBa
   const copyTimerRef = useRef(null);
   const workflowUi = workflowUiForMessage(msg);
   const isVehicleLogs = workflowUi?.type === 'vehicle_logs';
+  const isStructuredResult = isVehicleLogs;
   const isVehicleLogsFallback = !isUser && !workflowUi && /\*\*(?:Time of Incident|Model|Vehicle Number):?\*\*/i.test(String(msg.text || ''));
 
   useEffect(() => () => clearTimeout(copyTimerRef.current), []);
@@ -756,7 +792,7 @@ function Bubble({ msg, onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBa
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
       }}>
-        {!isVehicleLogs && <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+        {!isStructuredResult && <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
           <div style={{ padding: isVehicleLogsFallback ? '14px 16px' : '11px 14px', borderRadius: 14, borderTopRightRadius: isUser ? 5 : 14, borderTopLeftRadius: isUser ? 14 : 5, fontSize: 13.5, lineHeight: 1.65, wordBreak: 'break-word', color: isUser ? '#fff' : 'var(--tx)', background: isUser ? 'linear-gradient(135deg,var(--blue),var(--violet))' : msg.error ? 'rgba(255,77,77,.08)' : 'var(--bg2)', border: isUser ? '1px solid rgba(255,255,255,.16)' : `1px solid ${msg.error ? 'rgba(255,77,77,.35)' : 'var(--bd)'}`, boxShadow: isUser ? '0 6px 18px rgba(99,102,241,.22)' : 'none' }}>
             {workflowUi?.type === 'review' ? 'Please review the records below and confirm when ready.' : isUser ? displayText(msg.text) : <AssistantText value={msg.text} />}
             {isUser && <MessageAttachments attachments={msg.attachments} />}
@@ -813,7 +849,7 @@ export default function MessageThread({ messages = [], sending = false, uploadin
   }, [messages.length, sending]);
 
   return (
-    <div style={{ width: '100%', padding: '22px 22px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ width: '100%', padding: '18px clamp(14px, 3vw, 28px) 10px', display: 'flex', flexDirection: 'column', gap: 11, boxSizing: 'border-box' }}>
       {messages.map((msg, index) => {
         const hasUserResponseAfter = messages.slice(index + 1).some((item) => item.role === 'user');
         return <Bubble key={msg.id || `${msg.at || 'message'}-${index}`} msg={msg} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} activeWorkflow={index === latestWorkflowIndex && !hasUserResponseAfter} />;

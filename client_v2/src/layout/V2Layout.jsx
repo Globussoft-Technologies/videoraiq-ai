@@ -5,6 +5,7 @@ import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AppTour from '../components/Tour/AppTour';
+import AssistantLauncher from '../components/AssistantLauncher';
 import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
@@ -340,6 +341,7 @@ function Shell() {
     
       </main>
       <AppTour />
+      <AssistantLauncher />
     </div>
   );
 }

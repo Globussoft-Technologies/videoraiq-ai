@@ -85,7 +85,12 @@ export function useConversations() {
           return attachment;
         }
       }));
-      return attachments.length ? { ...message, attachments } : message;
+      const persistedUi = message.ui && ['export', 'multi_export'].includes(message.ui.type)
+        ? { ...message.ui, autoDownload: false }
+        : message.ui;
+      return attachments.length || persistedUi !== message.ui
+        ? { ...message, ...(attachments.length ? { attachments } : {}), ...(persistedUi ? { ui: persistedUi } : {}) }
+        : message;
     }));
     return hydrated;
   }, []);
@@ -257,27 +262,6 @@ export function useConversations() {
           attachmentCount,
           signal: controller.signal,
         });
-        const exportUis = result?.ui?.type === 'multi_export'
-          ? result.ui.exports
-          : result?.ui?.type === 'export' ? [result.ui] : [];
-        if (exportUis.length) {
-          import('@/page/user/Assistant/assistantLogExport').then(async ({ runAssistantLogExport }) => {
-            // Run downloads serially. A burst of programmatic downloads can
-            // be collapsed to the first file by the browser download guard.
-            for (const exportUi of exportUis) {
-              const formats = Array.isArray(exportUi.formats) && exportUi.formats.length
-                ? exportUi.formats
-                : [exportUi.format];
-              for (const format of formats.filter(Boolean)) {
-                // Use the same page-level exporters as the manual log pages
-                // and the export buttons rendered in the chatbot result card.
-                // This keeps filtering, filenames, and report layouts aligned.
-                await runAssistantLogExport(exportUi, format);
-                await new Promise((resolve) => setTimeout(resolve, 350));
-              }
-            }
-          }).catch(() => undefined);
-        }
         const persistedId = result?.conversation?.id;
         const stillViewingSource = sourceViewRequest === selectedRequestRef.current;
         if (stillViewingSource) {
@@ -304,9 +288,11 @@ export function useConversations() {
           const messageWithUi = assistantMessage.ui || !result?.ui
             ? assistantMessage
             : { ...assistantMessage, ui: result.ui };
-          // Mark only the live response as an automatic export. Persisted
-          // messages loaded later must not start downloads again.
-          const liveMessageWithUi = messageWithUi;
+          // Only the live response may auto-download. hydrateMessages removes
+          // this transient flag when a conversation is loaded from history.
+          const liveMessageWithUi = messageWithUi.ui?.type === 'export' || messageWithUi.ui?.type === 'multi_export'
+            ? { ...messageWithUi, ui: { ...messageWithUi.ui, autoDownload: true } }
+            : messageWithUi;
           const responseState = result?.workflowState;
           const responseUi = registrationUiFromState(responseState);
           const matchingUi = liveMessageWithUi.ui?.workflow === 'register_new_user' && liveMessageWithUi.ui?.currentStep === responseState?.currentStep;
