@@ -5,6 +5,7 @@ import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import SingleDatePicker from '@/components/SingleDatePicker';
 import { getTrackLogs, getTrackUsers, getVehicleList, getVehicleLogs } from './Api';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const TrackLog = () => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ const TrackLog = () => {
       _id: item._id,
       step: index + 1,
       title: item?.channel?.checkType === 'checkin' ? 'Check-In Detected' : 'Activity Detected',
-      timestamp: new Date(item.timestamp).toISOString().replace('T', ' ').substring(0, 19),
+      timestamp: formatUtcInConfiguredTimezone(item.timestamp, 'YYYY-MM-DD HH:mm:ss', '—'),
       images:
         activeTab === 'user'
           ? {

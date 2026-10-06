@@ -3,6 +3,7 @@ import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import useStreamSlot from '../hooks/useStreamSlot';
 import { streamUrl } from '../lib/stream';
+import { utcToConfiguredTimezone } from '../utils/timezone';
 import FullscreenZoomSurface from './FullscreenZoomSurface';
 
 /* How long a tile may hold the shared start slot before the next camera goes.
@@ -47,15 +48,8 @@ function useClock(enabled = true) {
 }
 
 function fmtTimestamp(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const dd = pad(d.getDate());
-  const mo = pad(d.getMonth() + 1);
-  const yy = d.getFullYear();
-  const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-  const hh = pad(d.getHours());
-  const mm = pad(d.getMinutes());
-  const ss = pad(d.getSeconds());
-  return `${dd}/${mo}/${yy} ${day} ${hh}:${mm}:${ss}`;
+  const zoned = utcToConfiguredTimezone(d);
+  return zoned ? zoned.format('DD/MM/YYYY ddd HH:mm:ss') : '';
 }
 
 /**

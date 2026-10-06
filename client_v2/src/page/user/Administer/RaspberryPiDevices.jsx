@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import DeleteConfirmation from '@/components/DeleteConfirmation';
 import RefreshControl from '@/components/RefreshControl';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import {
   deleteRaspberryPiDevice,
   getRaspberryPiDevices,
@@ -55,7 +56,7 @@ function DeviceCard({ device, busy, onDecision, onDelete }) {
         <Detail label="Pairing code" value={device.code} />
         <Detail label="IP address" value={device.ip} />
         <Detail label="Connection" value={connected ? 'Online' : 'Offline'} />
-        <Detail label="Last seen" value={device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '—'} />
+        <Detail label="Last seen" value={formatUtcInConfiguredTimezone(device.lastSeenAt, 'DD MMM YYYY, hh:mm A', '—')} />
       </div>
       <div style={{ alignItems: 'center', background: 'var(--bg2)', borderTop: '1px solid var(--bd)', display: 'flex', flexWrap: 'wrap', gap: 8, padding: '11px 15px' }}>
         <span style={{ alignItems: 'center', color: connected ? 'var(--ok)' : 'var(--tx3)', display: 'inline-flex', fontSize: 11.5, gap: 6 }}>

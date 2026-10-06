@@ -18,6 +18,7 @@ import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import { timeAgo } from '../lib/format';
 import { shouldHidePlayback } from '../lib/nvrCapabilities';
 import LiveDemo from '../pages/LiveDemo/LiveDemo';
+import { hasLiveDemoPlan } from '../utils/jwt';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
@@ -116,13 +117,21 @@ function Shell() {
   }, [navigate]);
 
   const viewKey = currentViewKey(location.pathname);
+  const canUseLiveDemo = hasLiveDemoPlan();
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
   // Playback and Assistant both manage their own internal scrollers. Keeping
   // the outer shell fixed prevents the chat composer from falling below the
   // viewport and avoids rendering the normal page footer inside the chat UI.
   const fixedViewportPage = viewKey === 'camera' || viewKey === 'assistant';
-  const isLiveDemo = viewKey === 'live-demo';
+  const isLiveDemoRoute = viewKey === 'live-demo';
+  const isLiveDemo = isLiveDemoRoute && canUseLiveDemo;
   const [hasVisitedLiveDemo, setHasVisitedLiveDemo] = useState(isLiveDemo);
+
+  // Hiding navigation alone is not an access boundary: also send users who
+  // paste the Live Demo URL directly back to the normal landing page.
+  useEffect(() => {
+    if (isLiveDemoRoute && !canUseLiveDemo) navigate('/dashboard', { replace: true });
+  }, [isLiveDemoRoute, canUseLiveDemo, navigate]);
 
   useEffect(() => {
     if (isLiveDemo) setHasVisitedLiveDemo(true);
@@ -323,6 +332,7 @@ function Shell() {
           unreadCount={unreadCount}
           onMarkNotificationsRead={markNotificationsRead}
           onMenuClick={isMobile ? openMobileNav : undefined}
+          showLiveDemo={canUseLiveDemo}
         />
         <div
           className={fixedViewportPage ? undefined : 'vq-scroll'}

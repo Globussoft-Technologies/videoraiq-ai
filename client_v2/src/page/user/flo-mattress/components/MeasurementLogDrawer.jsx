@@ -172,14 +172,14 @@ export default function MeasurementLogDrawer({ open, onClose, station, escapeBeh
           <div className="shrink-0 border-b border-[var(--bd)] bg-[var(--bg2)] px-5 py-2">
             <div className="mb-1 flex items-center"><strong className="text-[10px] uppercase">QR scanner diagnostics</strong><button type="button" className="ml-auto text-[10px] text-blue-500" onClick={clearQrScanDiagnostics}>Clear diagnostics</button></div>
             {scanDiagnostics.length === 0 ? <p className="text-[10px] text-[var(--tx3)]">No unreadable scanner frames recorded.</p> : (
-              <div className="flex gap-2 overflow-x-auto">{scanDiagnostics.slice(0, 8).map((entry) => <div key={entry.timestamp} className="flex shrink-0 items-center gap-2 rounded border border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-1.5 font-mono text-[9px]"><span>{formatIstTime(entry.timestamp)} IST</span><span className={`font-bold ${entry.result === 'QR_DECODE_ERROR' ? 'text-red-500' : 'text-amber-500'}`}>{entry.result || 'NO_QR_DETECTED'}</span><span className="text-[var(--tx3)]">{entry.attempts?.length || 0} passes</span></div>)}</div>
+              <div className="flex gap-2 overflow-x-auto">{scanDiagnostics.slice(0, 8).map((entry) => <div key={entry.timestamp} className="flex shrink-0 items-center gap-2 rounded border border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-1.5 font-mono text-[9px]"><span>{formatIstTime(entry.timestamp)}</span><span className={`font-bold ${entry.result === 'QR_DECODE_ERROR' ? 'text-red-500' : 'text-amber-500'}`}>{entry.result || 'NO_QR_DETECTED'}</span><span className="text-[var(--tx3)]">{entry.attempts?.length || 0} passes</span></div>)}</div>
             )}
           </div>
         )}
 
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="min-w-[1300px]">
-            <div className={`sticky top-0 z-10 grid ${grid} gap-3 border-b border-[var(--bd)] bg-[var(--bg2)] px-5 py-2 font-mono text-[8px] font-bold uppercase tracking-[.12em] text-[var(--tx3)]`}><span>Time (IST)</span><span>Order</span><span>QR code · Ref</span><span>SKU · Model</span><span>Printed</span><span>Measured</span><span>Δ L / W / H</span><span>System</span><span>Your call</span></div>
+            <div className={`sticky top-0 z-10 grid ${grid} gap-3 border-b border-[var(--bd)] bg-[var(--bg2)] px-5 py-2 font-mono text-[8px] font-bold uppercase tracking-[.12em] text-[var(--tx3)]`}><span>Time</span><span>Order</span><span>QR code · Ref</span><span>SKU · Model</span><span>Printed</span><span>Measured</span><span>Δ L / W / H</span><span>System</span><span>Your call</span></div>
             {loading && entries.length === 0 ? <div className="px-5 py-12 text-center text-sm text-[var(--tx3)]">Loading Measurement Incidents…</div> : entries.length === 0 ? <div className="px-5 py-12 text-center text-sm text-[var(--tx3)]">No Measurement Incidents found for this station.</div> : entries.map((entry) => {
               const { metadata, printed, measured, deltas, complete, matches } = rowDetails(entry);
               const order = firstValue(metadata, ['sales_order', 'salesOrder', 'order_id', 'orderId'], '—');

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader, Copy, Check, Link as LinkIcon, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateAdminToken, terminateRegistrationLink } from './Api';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const MAX_DAYS = 5;
 const REGISTER_PATH = '/employee-register';
@@ -16,16 +17,7 @@ export const buildRegistrationLink = (token) => {
 /* dd/mm/yy plus the time — en-GB gives day-first ordering regardless of the
    viewer's locale, so the format doesn't change machine to machine. */
 const formatExpiry = (value) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatUtcInConfiguredTimezone(value, 'DD/MM/YY, hh:mm A', '');
 };
 
 /** Modal that mints a time-limited self-registration link employees can open. */

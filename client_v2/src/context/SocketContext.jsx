@@ -25,15 +25,17 @@ export const useSocket = () => useContext(SocketContext);
  */
 function resolveSocketTarget() {
   const raw = import.meta.env.VITE_BACKEND;
-  if (!raw) return { host: null, path: '/socket.io' };
+  if (!raw) return { host: window.location.origin, path: '/socket.io' };
   try {
-    const url = new URL(raw);
+    // Resolve relative on-prem values such as `/api/v2` against the address
+    // used to open the UI. Absolute cloud URLs continue to resolve unchanged.
+    const url = new URL(raw, window.location.origin);
     // Strip a trailing "/api/v<n>" (the REST version segment) to find the proxy
     // prefix the server is actually mounted behind, if any.
     const prefix = url.pathname.replace(/\/api\/v\d+\/?$/i, '').replace(/\/+$/, '');
     return { host: url.origin, path: `${prefix}/socket.io` };
   } catch {
-    return { host: raw, path: '/socket.io' };
+    return { host: window.location.origin, path: '/socket.io' };
   }
 }
 

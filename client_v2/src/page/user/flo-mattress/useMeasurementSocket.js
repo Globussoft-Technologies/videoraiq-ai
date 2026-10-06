@@ -12,6 +12,31 @@ function incidentId(value) {
   return String(value?._id || '').trim();
 }
 
+function mergeRequestPayload(currentPayload, latestPayload) {
+  if (!currentPayload && !latestPayload) return undefined;
+  const currentQrResponse = currentPayload?.qrResponse;
+  const latestQrResponse = latestPayload?.qrResponse;
+  const qrResponse = (currentQrResponse || latestQrResponse) ? {
+    ...(currentQrResponse || {}),
+    ...(latestQrResponse || {}),
+  } : undefined;
+  const currentEstimate = Number(currentQrResponse?.estimated_measurement_seconds);
+
+  // This value is the duration accepted when the one-time measurement job
+  // started, not a live ETA. Keep it across later socket/database snapshots,
+  // including snapshots with an older valid number such as the 30-second
+  // fallback, so an active 45, 44, 43... countdown can never jump to 30.
+  if (Number.isFinite(currentEstimate) && currentEstimate > 0) {
+    qrResponse.estimated_measurement_seconds = currentQrResponse.estimated_measurement_seconds;
+  }
+
+  return {
+    ...(currentPayload || {}),
+    ...(latestPayload || {}),
+    qrResponse,
+  };
+}
+
 export default function useMeasurementSocket(station, initialIncident = null) {
   const [incident, setIncident] = useState(initialIncident);
   const [connected, setConnected] = useState(false);
@@ -38,6 +63,12 @@ export default function useMeasurementSocket(station, initialIncident = null) {
     const next = current ? {
       ...current,
       ...latest,
+      // The measurement-start response is merged into the local incident
+      // before it has necessarily been persisted. A later socket/poll
+      // snapshot may contain an older/partial qrResponse; merge this branch
+      // deeply so it cannot erase the DS-provided countdown estimate and
+      // cause the UI to restart from the 30-second fallback.
+      requestPayload: mergeRequestPayload(current.requestPayload, latest.requestPayload),
       qrMetadata: latest.qrMetadata || current.qrMetadata,
       qrImagePath: latest.qrImagePath || current.qrImagePath,
       qrImage: latest.qrImage || current.qrImage,

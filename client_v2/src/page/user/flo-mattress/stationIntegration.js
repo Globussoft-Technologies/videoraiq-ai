@@ -508,9 +508,11 @@ export function hasCompleteMeasuredData(incident) {
     && completeMeasurementAxis(data, ['height']);
 }
 
+export const DEFAULT_MEASUREMENT_SECONDS = 30;
+
 export function estimatedMeasurementSeconds(qrResponse) {
   const value = Number(qrResponse?.estimated_measurement_seconds);
-  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_MEASUREMENT_SECONDS;
   return Math.min(3600, Math.ceil(value));
 }
 

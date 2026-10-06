@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import ConfirmationModal from '../../../../components/DeleteConfirmation';
 import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
 import { useTimezone } from '../../../../context/TimezoneContext';
+import { nowInConfiguredTimezone, utcToConfiguredTimezone } from '../../../../utils/timezone';
 import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
 import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
@@ -1087,12 +1088,10 @@ export default function DetectionDetailPanel({
   const overrideResumesAt = (() => {
     const raw = model?.overrideUntil;
     if (!raw) return '';
-    const until = new Date(raw);
-    if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) return '';
-    const sameDay = until.toDateString() === new Date().toDateString();
-    return until.toLocaleString([], sameDay
-      ? { hour: '2-digit', minute: '2-digit' }
-      : { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    const until = utcToConfiguredTimezone(raw);
+    if (!until || until.valueOf() <= Date.now()) return '';
+    const sameDay = until.isSame(nowInConfiguredTimezone(), 'day');
+    return until.format(sameDay ? 'hh:mm A' : 'ddd, hh:mm A');
   })();
 
   function validateScheduleForm() {

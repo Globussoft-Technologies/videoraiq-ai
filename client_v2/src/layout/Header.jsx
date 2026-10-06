@@ -12,8 +12,9 @@ import { networkRatingInfo } from '../lib/networkStatus';
 import { timeAgo } from '../lib/format';
 import StartTourMenu from '../components/Tour/StartTourMenu';
 
-// Static index of navigable pages, built once from the sidebar config.
-const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
+// Index of navigable pages. Build it after authentication so plan-gated items
+// reflect the JWT written by SSO/login flows, not module-import time.
+const buildPageIndex = () => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
   g.items.filter(isClientNavItemVisible).flatMap((it) => (
     (it.children?.length ? it.children : [it]).map((entry) => ({
       kind: 'Page',
@@ -185,7 +186,7 @@ function networkLabelForCard(network) {
   }
 }
 
-function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick }) {
+function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick, showLiveDemo = false }) {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
@@ -209,6 +210,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   });
   const { isMuted, audioEnabled, setAudioEnabled } = useAttendanceSocket() || {};
   const unreadNum = unreadCount ?? notifications.length;
+  const pageIndex = useMemo(buildPageIndex, [showLiveDemo]);
 
   // The header drops widgets progressively as IT gets narrow — measured with a
   // ResizeObserver on the header itself, not the window, because the sidebar
@@ -316,7 +318,8 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const out = [];
-    for (const p of PAGE_INDEX) {
+    for (const p of pageIndex) {
+      if (!showLiveDemo && p.to === '/live-demo') continue;
       if (p.label.toLowerCase().includes(q) || p.sub.toLowerCase().includes(q)) out.push(p);
     }
     for (const d of DETECTION_SEARCH_INDEX) {
@@ -345,7 +348,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       });
     });
     return out.slice(0, 12);
-  }, [query, cameras]);
+  }, [query, cameras, pageIndex, showLiveDemo]);
 
   const goResult = (r) => {
     navigate(r.to, r.state ? { state: r.state } : undefined);
@@ -441,7 +444,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       <div style={{ flex: 1, minWidth: 8 }} />
 
     
-      {!isNarrow && (
+      {!isNarrow && showLiveDemo && (
         <button
           type="button"
           onClick={() => navigate('/live-demo')}

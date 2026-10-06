@@ -131,7 +131,7 @@ export const NAV_GROUPS = [
   {
     label: 'EXPERIENCE',
     items: [
-      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW', hideForFloMattress: true },
+      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW', hideForFloMattress: true, requiresLiveDemoPlan: true },
     ],
   }, {
     label: 'MONITOR',

@@ -1,13 +1,12 @@
 import { QrCode } from 'lucide-react';
 import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl } from '../stationIntegration';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const shown = (value, fallback = '—') => value == null || value === '' ? fallback : String(value);
 const dimension = (value) => value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : shown(value);
 
 function readTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour12: false });
+  return formatUtcInConfiguredTimezone(value, 'HH:mm:ss', '—');
 }
 
 export default function QrExtractedPanel({ metadata, response, readAt, image, backendIp }) {

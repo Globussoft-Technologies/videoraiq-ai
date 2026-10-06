@@ -17,6 +17,7 @@ import ConfirmationModal from '@/components/DeleteConfirmation';
 import { useAuth } from '@/context/AuthContext';
 import { getApiErrorMessage } from '@/helpers/client';
 import { getRaspberryPiDevices } from '@/helpers/raspberryPiDevices';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import {
   captureCalibrationFrame,
   getCalibrationFrame,
@@ -779,7 +780,7 @@ export default function MeasurementCalibration() {
                   : 'No depth baseline is recorded. Measurements use the fitted plane and may be noisier near the surface.'}
               </div>
             )}
-            {status?.updated_at && <div style={{ color: 'var(--tx3)', fontSize: 10.5, marginTop: 10 }}>Updated {new Date(status.updated_at).toLocaleString()}</div>}
+            {status?.updated_at && <div style={{ color: 'var(--tx3)', fontSize: 10.5, marginTop: 10 }}>Updated {formatUtcInConfiguredTimezone(status.updated_at, 'DD MMM YYYY, hh:mm A')}</div>}
             <div style={{ alignItems: 'center', color: 'var(--tx3)', display: 'flex', fontSize: 10.5, gap: 6, marginTop: 12 }}>
               <RefreshCw className={BUSY_STATUSES.has(status?.status) ? 'animate-spin' : ''} size={12} />
               Status updates automatically

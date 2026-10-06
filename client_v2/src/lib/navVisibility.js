@@ -1,5 +1,6 @@
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from '@/layout/nav.config';
 import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
+import { hasLiveDemoPlan } from '@/utils/jwt';
 
 export const LOGS_TOUR_KEY = 'logs-records';
 
@@ -7,7 +8,9 @@ export const LOGS_TOUR_KEY = 'logs-records';
 // routable, but Flo Mattress builds do not advertise them in navigation,
 // header search, or the guided tour.
 export function isClientNavItemVisible(item) {
-  return !(IS_FLO_MATTRESS && item?.hideForFloMattress === true);
+  if (IS_FLO_MATTRESS && item?.hideForFloMattress === true) return false;
+  if (item?.requiresLiveDemoPlan === true && !hasLiveDemoPlan()) return false;
+  return true;
 }
 
 export function isClientNavGroupVisible(group) {

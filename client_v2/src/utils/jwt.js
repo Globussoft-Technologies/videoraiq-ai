@@ -22,6 +22,15 @@ export function getAccessTokenPayload() {
   return decodeJwtPayload(getAccessToken());
 }
 
+export const SURVEILLANCE_FREE_TRIAL_PLAN = 'Surveillance Free Trial';
+
+/** Live Demo is an entitlement of the Surveillance Free Trial plan only. */
+export function hasLiveDemoPlan(payload = getAccessTokenPayload()) {
+  const planName = payload?.currentPlan?.name ?? payload?.planName;
+  return String(planName || '').trim().toLowerCase()
+    === SURVEILLANCE_FREE_TRIAL_PLAN.toLowerCase();
+}
+
 /** Runtime deployment mode supplied by the authenticated user's JWT. */
 export function isLocalSetup() {
   const value = getAccessTokenPayload()?.VITE_LOCAL_SETUP;

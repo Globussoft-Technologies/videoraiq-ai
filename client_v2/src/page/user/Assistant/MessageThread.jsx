@@ -3,13 +3,10 @@ import { AlertTriangle, Check, Copy, Download, Eye, Sparkles, X } from 'lucide-r
 import { detectionLabel } from '../../../lib/format';
 import { api, unwrap } from '@/helpers/client';
 import { runAssistantLogExport } from './assistantLogExport';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 function clock(value) {
-  try {
-    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
+  return formatUtcInConfiguredTimezone(value, 'hh:mm A', '');
 }
 
 // Some create-workflow responses can contain the same success paragraph more
@@ -39,16 +36,7 @@ function sanitizeAssistantText(value) {
 }
 
 function formatAssistantTimestamp(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    }).format(date);
-  } catch {
-    return value;
-  }
+  return formatUtcInConfiguredTimezone(value, 'DD MMM YYYY, hh:mm:ss A', value);
 }
 
 function formatTimestampText(value) {

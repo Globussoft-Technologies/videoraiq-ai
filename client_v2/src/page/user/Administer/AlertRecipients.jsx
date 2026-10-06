@@ -17,6 +17,7 @@ import { usePermissions } from '../../../context/PermissionContext';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import MultiSelect from '../../../components/MultiSelect';
 import Pagination from '../../../components/Pagination';
+import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import TelegramAlerts from './TelegramAlerts';
 import { getDetectionTypes } from '../../../helpers/configure';
 import { getTelegramLinkCode, unlinkTelegram } from '../../../helpers/telegram';
@@ -812,17 +813,7 @@ function RecipientMobileCard({ recipient, canEdit, canDelete, onVerify, onEdit, 
 }
 
 function formatTelegramDateTime(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatUtcInConfiguredTimezone(value, 'DD MMM YYYY, hh:mm A', '-');
 }
 
 function TelegramChannelRow({
