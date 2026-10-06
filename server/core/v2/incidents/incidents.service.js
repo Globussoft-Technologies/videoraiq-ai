@@ -5576,14 +5576,19 @@ console.log(result,'result');
         channelId,
         channelIds,
         zoneNames,
+        granularity = "time",
       } = req.body;
+      const timezone = getRequestTimezone(req);
+      const requestedGranularity = ["time", "day", "month"].includes(granularity)
+        ? granularity
+        : "time";
 
       const toArray = (v) =>
         v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
 
-      // Every desk-absence detection is stored as its own document, so the
-      // graph must collect the points across all of a camera's documents
-      // (within the date range) and merge them into a single time-series.
+      // Every desk-absence detection is stored as its own document. The client
+      // requests raw time points, daily totals, or monthly totals depending on
+      // the selected range and current drill-down level.
       const matchStage = {
         userId: data.user_id.toString(),
         incidentType: "deskAbsence",
@@ -5591,8 +5596,8 @@ console.log(result,'result');
 
       if (startDate && endDate) {
         matchStage.timeOfIncident = {
-          $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
-          $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
+          $gte: momentTZ.tz(startDate, timezone).startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, timezone).endOf("day").toDate(),
         };
       }
 
@@ -5627,6 +5632,54 @@ console.log(result,'result');
         pointMatch["point.zoneName"] = { $in: zoneFilter };
       }
 
+      const groupedSeriesStages = requestedGranularity === "time"
+        ? [
+            { $sort: { "point.timestamp": 1 } },
+            {
+              $group: {
+                _id: "$channelId",
+                channelId: { $first: "$channelId" },
+                nvrId: { $first: "$nvrId" },
+                timeSeries: { $push: "$point" },
+              },
+            },
+          ]
+        : [
+            {
+              $set: {
+                period: {
+                  $dateToString: {
+                    date: "$point.timestamp",
+                    format: requestedGranularity === "month" ? "%Y-%m" : "%Y-%m-%d",
+                    timezone,
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: { channelId: "$channelId", period: "$period" },
+                channelId: { $first: "$channelId" },
+                nvrId: { $first: "$nvrId" },
+                totalCount: { $sum: { $ifNull: ["$point.personCount", 0] } },
+              },
+            },
+            { $sort: { "_id.period": 1 } },
+            {
+              $group: {
+                _id: "$channelId",
+                channelId: { $first: "$channelId" },
+                nvrId: { $first: "$nvrId" },
+                timeSeries: {
+                  $push: {
+                    period: "$_id.period",
+                    personCount: "$totalCount",
+                  },
+                },
+              },
+            },
+          ];
+
       const basePipeline = [
         { $match: matchStage },
         // Each document carries its own timeSeries entries; flatten them so
@@ -5649,14 +5702,7 @@ console.log(result,'result');
           },
         },
         ...(Object.keys(pointMatch).length ? [{ $match: pointMatch }] : []),
-        { $sort: { "point.timestamp": 1 } },
-        {
-          $group: {
-            _id: "$channelId",
-            nvrId: { $first: "$nvrId" },
-            timeSeries: { $push: "$point" },
-          },
-        },
+        ...groupedSeriesStages,
         {
           $lookup: {
             from: "nvrs",
@@ -5670,7 +5716,7 @@ console.log(result,'result');
         {
           $lookup: {
             from: "channels",
-            localField: "_id",
+            localField: "channelId",
             foreignField: "_id",
             pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
             as: "channelData",
@@ -5693,6 +5739,7 @@ console.log(result,'result');
         Response.userSuccessResp("deskAbsence logs fetched successfully", {
           totalCount: countResult[0]?.totalCount || 0,
           data: logs,
+          granularity: requestedGranularity,
         }),
       );
     } catch (error) {
