@@ -356,7 +356,6 @@ function ScheduleFieldDropdown({
   searchable = false,
   minMenuWidth = 260
 }) {
-  const { timezone } = useTimezone();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, openUp: false });
@@ -964,6 +963,7 @@ export default function DetectionDetailPanel({
   canEdit = true,
   hideToggle = false,
 }) {
+  const { timezone } = useTimezone();
   const Icon = detectionIconFor(model, category?.icon);
   const color = category?.color || 'var(--blue)';
   const sensitivity = model.sensitivity;
