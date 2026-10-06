@@ -20,6 +20,8 @@ firebase.messaging().onBackgroundMessage((payload) => {
 
   return self.registration.showNotification(data.title || 'Detection', {
     body: data.body || '',
+    // Incident snapshot, as a large image under the text (Chrome/Edge).
+    ...(data.image ? { image: data.image } : {}),
     // Same tag the socket-driven desktop notification uses, so the two can
     // never stack for one incident.
     tag: `incident-${data.incidentId}-${data.timeOfIncident}`,
