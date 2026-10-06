@@ -190,8 +190,10 @@ class RaspberryPiService {
           lastSeenAt: new Date(),
         });
       } else {
-        // Refresh volatile station details only. approvalStatus and token are
-        // deliberately untouched, including during hourly silent refreshes.
+        // Refresh only volatile station details. Current deny requests delete
+        // their pairing, while any legacy rejected record must stay rejected
+        // until it is explicitly removed instead of silently reopening.
+        if (device.approvalStatus === "rejected") device.tokenEncrypted = undefined;
         device.mac ||= payload.mac;
         if (!device.code) device.code = await this.uniqueCode();
         device.ip = payload.ip;
@@ -207,6 +209,45 @@ class RaspberryPiService {
       return res.status(error.status || 500).json({
         status: "error",
         message: error.status ? error.message : "Failed to register Raspberry Pi",
+      });
+    }
+  }
+
+  async denyRegistration(req, res) {
+    try {
+      const payload = this.readDevice(req);
+      const code = String(req.body?.code || "").trim().toUpperCase();
+      const decision = String(req.body?.decision || "").trim().toLowerCase();
+
+      if (!code) {
+        return res.status(400).json({ ok: false, error: "missing_code" });
+      }
+      if (decision !== "denied") {
+        return res.status(400).json({ ok: false, error: "invalid_decision" });
+      }
+      if (!/^[A-Z0-9]{6}$/.test(code)) {
+        return res.status(404).json({ ok: false, error: "unknown_code" });
+      }
+
+      const stationFilter = {
+        code,
+        $or: [{ mac: payload.mac }, { deviceData: payload.mac }],
+      };
+      const rejected = await RaspberryPiDevice.findOneAndDelete(
+        stationFilter,
+      );
+
+      if (rejected) {
+        logger.info(
+          `[RASPBERRY_PI_DENY] Registration rejected and deleted code=${code} station=${payload.mac}`,
+        );
+        return res.status(200).json({ ok: true, code, status: "rejected" });
+      }
+      return res.status(404).json({ ok: false, error: "unknown_code" });
+    } catch (error) {
+      return res.status(error.status || 500).json({
+        status: "error",
+        message: error.status ? error.message : "Failed to deny Raspberry Pi registration",
       });
     }
   }
@@ -255,8 +296,10 @@ class RaspberryPiService {
       }
 
       // Match the streaming demo: newly registered, unclaimed devices appear
-      // automatically. Devices claimed by another administrator stay hidden.
+      // automatically. Devices claimed by another administrator and pairings
+      // rejected by the Pi operator stay out of the active connection list.
       const devices = await RaspberryPiDevice.find({
+        approvalStatus: { $ne: "rejected" },
         $or: [{ admin: null }, { admin: adminId }],
       })
         .sort({ approvalStatus: 1, createdAt: -1 })

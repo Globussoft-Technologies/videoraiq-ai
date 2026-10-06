@@ -255,6 +255,134 @@ describe("Raspberry Pi registration contract", () => {
     expect(res.payload.user_email).toBeUndefined();
   });
 
+  it("lets the originating station reject its pending registration", async () => {
+    mocks.findOneAndDelete.mockResolvedValue({
+      _id: "device-1",
+      code: "FXWSM2",
+      mac: "aa:bb:cc:dd:ee:ff",
+      approvalStatus: "rejected",
+    });
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      ...request(payload),
+      body: { code: "fxwsm2", decision: "denied" },
+    }, res);
+
+    expect(mocks.findOneAndDelete).toHaveBeenCalledWith({
+      code: "FXWSM2",
+      $or: [{ mac: "aa:bb:cc:dd:ee:ff" }, { deviceData: "aa:bb:cc:dd:ee:ff" }],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual({ ok: true, code: "FXWSM2", status: "rejected" });
+  });
+
+  it("returns unknown_code when a deleted registration is denied again", async () => {
+    mocks.findOneAndDelete.mockResolvedValue(null);
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      ...request(payload),
+      body: { code: "FXWSM2", decision: "denied" },
+    }, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.payload).toEqual({ ok: false, error: "unknown_code" });
+  });
+
+  it("lets the station reject and remove a backend-approved connection", async () => {
+    mocks.findOneAndDelete.mockResolvedValue({
+      _id: "device-1",
+      code: "FXWSM2",
+      mac: "aa:bb:cc:dd:ee:ff",
+      approvalStatus: "rejected",
+    });
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      ...request(payload),
+      body: { code: "FXWSM2", decision: "denied" },
+    }, res);
+
+    expect(mocks.findOneAndDelete).toHaveBeenCalledWith({
+      code: "FXWSM2",
+      $or: [{ mac: "aa:bb:cc:dd:ee:ff" }, { deviceData: "aa:bb:cc:dd:ee:ff" }],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual({ ok: true, code: "FXWSM2", status: "rejected" });
+  });
+
+  it("returns unknown_code when the code does not belong to the encrypted station", async () => {
+    mocks.findOneAndDelete.mockResolvedValue(null);
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      ...request(payload),
+      body: { code: "FXWSM2", decision: "denied" },
+    }, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.payload).toEqual({ ok: false, error: "unknown_code" });
+  });
+
+  it("does not reopen a rejected connection when the Pi registers again", async () => {
+    const device = {
+      _id: "device-1",
+      admin: "650000000000000000000001",
+      mac: "aa:bb:cc:dd:ee:ff",
+      deviceData: "aa:bb:cc:dd:ee:ff",
+      code: "FXWSM2",
+      approvalStatus: "rejected",
+      approvalUpdatedAt: new Date("2026-10-05T10:00:00.000Z"),
+      tokenEncrypted: "old-token",
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.findOne.mockResolvedValue(device);
+    const res = responseDouble();
+
+    await service.register(request({ ...payload, ts: Date.now() }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual({ status: "rejected", code: "FXWSM2" });
+    expect(res.payload.token).toBeUndefined();
+    expect(device).toMatchObject({
+      admin: "650000000000000000000001",
+      approvalStatus: "rejected",
+      code: "FXWSM2",
+      tokenEncrypted: undefined,
+    });
+    expect(device.save).toHaveBeenCalled();
+  });
+
+  it("rejects a deny request without a registration code", async () => {
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      ...request(payload),
+      body: { decision: "denied" },
+    }, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.payload).toEqual({ ok: false, error: "missing_code" });
+    expect(mocks.findOneAndDelete).not.toHaveBeenCalled();
+  });
+
+  it("uses the registration header validation for deny requests", async () => {
+    const res = responseDouble();
+
+    await service.denyRegistration({
+      body: { code: "FXWSM2", decision: "denied" },
+      get: () => undefined,
+    }, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.payload).toEqual({
+      status: "error",
+      message: "Missing x-raspberry-pi-data header",
+    });
+    expect(mocks.findOneAndDelete).not.toHaveBeenCalled();
+  });
+
   it("lets an administrator claim and approve a pending pairing code", async () => {
     const approved = {
       _id: "device-1",
@@ -323,6 +451,7 @@ describe("Raspberry Pi registration contract", () => {
     }, res);
 
     expect(mocks.find).toHaveBeenCalledWith({
+      approvalStatus: { $ne: "rejected" },
       $or: [{ admin: null }, { admin: "650000000000000000000001" }],
     });
     expect(sort).toHaveBeenCalledWith({ approvalStatus: 1, createdAt: -1 });

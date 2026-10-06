@@ -53,6 +53,10 @@ describe("v2 AUTHService bypass login", () => {
     expect(res.statusCode).toBe(200);
     expect(res._body.ok).toBe(true);
     expect(res._body.user.login).toBe("onprem-bypass");
+    // No per-admin override is needed: new admins inherit the backend APP_ENV
+    // ("local" in the shared test configuration) in every generated token.
+    expect(res._body.user.appEnv).toBe("local");
+    expect(res._body.user.VITE_LOCAL_SETUP).toBe(true);
     expect(provisioning).toHaveBeenCalledOnce();
   });
 

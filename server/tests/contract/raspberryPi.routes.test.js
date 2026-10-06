@@ -11,6 +11,9 @@ vi.mock("../../middlewares/verifyToken.js", () => ({
 vi.mock("../../core/v2/raspberryPi/raspberryPi.controller.js", () => ({
   default: {
     register: vi.fn((_req, res) => res.status(200).json({ route: "register" })),
+    denyRegistration: vi.fn((req, res) =>
+      res.status(200).json({ route: "deny", code: req.body.code, decision: req.body.decision }),
+    ),
     registrationStatus: vi.fn((req, res) =>
       res.status(200).json({ route: "status", code: req.params.code }),
     ),
@@ -41,6 +44,14 @@ describe("Raspberry Pi routes", () => {
     const response = await request(app).post(`${BASE}/register`);
     expect(response.headers["cross-origin-resource-policy"]).toBe("cross-origin");
     expect(response.body).toEqual({ route: "register" });
+  });
+
+  it("lets a station deny its pending registration", async () => {
+    const response = await request(app)
+      .post(`${BASE}/deny`)
+      .send({ code: "FXWSM2", decision: "denied" });
+    expect(response.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(response.body).toEqual({ route: "deny", code: "FXWSM2", decision: "denied" });
   });
 
   it("polls status by registration code", async () => {

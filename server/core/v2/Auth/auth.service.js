@@ -34,7 +34,9 @@ const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
 const envClaims = (admin) => {
-  const appEnv = admin?.appEnv || null;
+  // appEnv on the admin is an optional per-tenant override. New admins and
+  // admins whose override was cleared inherit the backend deployment mode.
+  const appEnv = admin?.appEnv || APP_ENV;
   return {
     appEnv,
     VITE_LOCAL_SETUP: appEnv === "local" || appEnv === "onprem",

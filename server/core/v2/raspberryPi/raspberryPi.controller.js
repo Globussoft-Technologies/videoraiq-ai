@@ -15,6 +15,19 @@ class RaspberryPiController {
     return await raspberryPiService.register(req, res, next);
   }
 
+  async denyRegistration(req, res, next) {
+    /* #swagger.tags = ['Raspberry Pi']
+       #swagger.description = 'Reject and remove a Raspberry Pi pairing from the station that created it, allowing the Pi to start a fresh registration.'
+       #swagger.parameters['x-raspberry-pi-data'] = {
+         in: 'header', required: true, type: 'string',
+         description: 'Encrypted Raspberry Pi identifier used during registration'
+       }
+       #swagger.responses[200] = { description: 'Registration rejected' }
+       #swagger.responses[400] = { description: 'Missing code, invalid decision, or invalid device header' }
+       #swagger.responses[404] = { description: 'Registration code not found for this station' } */
+    return await raspberryPiService.denyRegistration(req, res, next);
+  }
+
   async heartbeat(req, res, next) {
     /* #swagger.tags = ['Raspberry Pi']
        #swagger.description = 'Update Raspberry Pi connectivity status.'

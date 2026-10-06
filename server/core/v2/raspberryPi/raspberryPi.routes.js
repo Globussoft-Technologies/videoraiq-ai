@@ -5,6 +5,7 @@ import allowCrossOriginResource from "../../../middlewares/allowCrossOriginResou
 const router = express.Router();
 
 router.post("/register", allowCrossOriginResource, controller.register);
+router.post("/deny", allowCrossOriginResource, controller.denyRegistration);
 router.get("/status/:code", allowCrossOriginResource, controller.registrationStatus);
 router.post("/heartbeat", controller.heartbeat);
 router.get("/registrations", verifyToken, controller.adminRegistrations);
