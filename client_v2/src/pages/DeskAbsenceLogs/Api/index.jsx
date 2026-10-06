@@ -22,12 +22,14 @@ export const getDeskAbsenceLogs = async ({
   nvrIds,
   channelIds,
   zoneNames,
+  granularity,
 }) => {
   const body = {
     skip,
     limit,
     ...(startDate && { startDate }),
     ...(endDate && { endDate }),
+    ...(granularity && { granularity }),
     ...(Array.isArray(nvrIds) && nvrIds.length > 0 && { nvrIds: nvrIds.join(',') }),
     ...(Array.isArray(channelIds) &&
       channelIds.length > 0 && { channelIds: channelIds.join(',') }),

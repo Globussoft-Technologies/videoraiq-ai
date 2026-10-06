@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import { useNavigate } from 'react-router-dom';
 import {
   ChartColumnBig,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -47,6 +48,23 @@ const DeskAbsenceLogs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [startDate, setStartDate] = useState(moment().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
+  const [drilldownStack, setDrilldownStack] = useState([]);
+
+  const baseView = useMemo(() => {
+    const rangeDays = Math.max(1, moment(endDate).diff(moment(startDate), 'days') + 1);
+    const granularity = rangeDays === 1 ? 'time' : rangeDays > 90 ? 'month' : 'day';
+    return {
+      granularity,
+      startDate,
+      endDate,
+      label: granularity === 'month'
+        ? 'Monthly overview'
+        : granularity === 'day'
+          ? 'Daily overview'
+          : moment(startDate).format('DD MMMM YYYY'),
+    };
+  }, [startDate, endDate]);
+  const activeView = drilldownStack[drilldownStack.length - 1] || baseView;
 
   // Filters: NVR, Camera (channel), Zone name
   const [nvrList, setNvrList] = useState([]);
@@ -100,8 +118,9 @@ const DeskAbsenceLogs = () => {
       const res = await getDeskAbsenceLogs({
         skip,
         limit: LIMIT,
-        startDate,
-        endDate,
+        startDate: activeView.startDate,
+        endDate: activeView.endDate,
+        granularity: activeView.granularity,
         nvrIds,
         channelIds,
         zoneNames,
@@ -115,7 +134,7 @@ const DeskAbsenceLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [skip, startDate, endDate, nvrIds, channelIds, zoneNames]);
+  }, [skip, activeView.startDate, activeView.endDate, activeView.granularity, nvrIds, channelIds, zoneNames]);
 
   useEffect(() => {
     fetchLogs();
@@ -175,6 +194,7 @@ const DeskAbsenceLogs = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setDrilldownStack([]);
   }, [startDate, endDate, nvrIds, channelIds, zoneNames]);
 
   // Filter dropdown options
@@ -216,7 +236,45 @@ const DeskAbsenceLogs = () => {
     setCurrentPage(page);
   };
 
-  const charts = records.map(buildChart);
+  const handlePointSelect = useCallback((period) => {
+    if (!period || activeView.granularity === 'time') return;
+
+    if (activeView.granularity === 'month') {
+      const monthStart = `${period}-01`;
+      const monthEnd = moment(period, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
+      setDrilldownStack((current) => [
+        ...current,
+        {
+          granularity: 'day',
+          startDate: monthStart < activeView.startDate ? activeView.startDate : monthStart,
+          endDate: monthEnd > activeView.endDate ? activeView.endDate : monthEnd,
+          label: moment(period, 'YYYY-MM').format('MMMM YYYY'),
+        },
+      ]);
+    } else {
+      setDrilldownStack((current) => [
+        ...current,
+        {
+          granularity: 'time',
+          startDate: period,
+          endDate: period,
+          label: moment(period, 'YYYY-MM-DD').format('DD MMMM YYYY'),
+        },
+      ]);
+    }
+    setCurrentPage(1);
+  }, [activeView]);
+
+  const charts = records.map((record) => buildChart(record, {
+    granularity: activeView.granularity,
+    onPointSelect: handlePointSelect,
+    rangeStart: activeView.startDate,
+    rangeEnd: activeView.endDate,
+  }));
+
+  const viewRangeLabel = activeView.startDate === activeView.endDate
+    ? moment(activeView.startDate).format('DD MMMM YYYY')
+    : `${moment(activeView.startDate).format('DD MMM YYYY')} - ${moment(activeView.endDate).format('DD MMM YYYY')}`;
 
   const propStart = startDate ? moment(startDate).startOf('day').toDate() : null;
   const propEnd = endDate ? moment(endDate).startOf('day').toDate() : null;
@@ -359,6 +417,42 @@ const DeskAbsenceLogs = () => {
           </div>
         </div>
 
+        {(baseView.granularity !== 'time' || drilldownStack.length > 0) && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setDrilldownStack([]);
+                setCurrentPage(1);
+              }}
+              className={`font-semibold ${drilldownStack.length > 0 ? 'text-[var(--violet)] hover:underline cursor-pointer' : 'text-[var(--tx)] cursor-default'}`}
+            >
+              {baseView.label}
+            </button>
+            {drilldownStack.map((view, index) => (
+              <React.Fragment key={`${view.granularity}-${view.startDate}`}>
+                <ChevronRight className="w-4 h-4 text-[var(--tx3)]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (index === drilldownStack.length - 1) return;
+                    setDrilldownStack((current) => current.slice(0, index + 1));
+                    setCurrentPage(1);
+                  }}
+                  className={`font-semibold ${index === drilldownStack.length - 1 ? 'text-[var(--tx)] cursor-default' : 'text-[var(--violet)] hover:underline cursor-pointer'}`}
+                >
+                  {view.label}
+                </button>
+              </React.Fragment>
+            ))}
+            {activeView.granularity !== 'time' && (
+              <span className="ml-auto text-xs text-[var(--tx3)]">
+                Click a {activeView.granularity === 'month' ? 'month' : 'date'} point to view more detail.
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Content */}
         {loading ? (
           <div className="flex flex-1 items-center justify-center">
@@ -392,7 +486,7 @@ const DeskAbsenceLogs = () => {
           <div className="space-y-6">
             {charts.map((chart, idx) => (
               <div
-                key={idx}
+                key={`${chart.id || idx}-${activeView.granularity}`}
                 className="bg-[var(--bg2)] rounded-[12px] border border-[var(--bd)] p-4 shadow-sm"
               >
                 {/* NVR + Camera header */}
@@ -409,6 +503,13 @@ const DeskAbsenceLogs = () => {
                       {chart.cameraName}
                     </span>
                   </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--tx2)] bg-[var(--bg1)] border border-[var(--bd)] px-3 py-1 rounded-full">
+                    <CalendarDays className="w-3.5 h-3.5 text-[var(--violet)]" />
+                    {activeView.startDate === activeView.endDate ? 'Date' : 'Range'}:{' '}
+                    <span className="text-[var(--violet)] font-semibold">
+                      {viewRangeLabel}
+                    </span>
+                  </span>
                 </div>
 
                 {chart.seriesData.length === 0 ? (
@@ -419,7 +520,10 @@ const DeskAbsenceLogs = () => {
                 ) : (
                   <ReactApexChart
                     options={chart.options}
-                    series={[{ name: 'Person Count', data: chart.seriesData }]}
+                    series={[{
+                      name: activeView.granularity === 'time' ? 'Person Count' : 'Total Count',
+                      data: chart.seriesData,
+                    }]}
                     type="area"
                     height={280}
                   />
@@ -432,14 +536,7 @@ const DeskAbsenceLogs = () => {
 
       {/* Pagination */}
       {!loading && charts.length > 0 && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
-          <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1.5 font-normal rounded-[8px] w-fit inline-flex items-center gap-2">
-            Total logs -{' '}
-            <span className="text-[var(--violet)] font-semibold bg-[var(--violet)]/10 px-2.5 py-1 rounded-md">
-              {totalCount}
-            </span>
-          </div>
-
+        <div className="mt-4 flex items-center justify-center">
           <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
@@ -488,8 +585,6 @@ const DeskAbsenceLogs = () => {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-
-          <div />
         </div>
       )}
     </div>
