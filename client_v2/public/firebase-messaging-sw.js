@@ -26,17 +26,23 @@ firebase.messaging().onBackgroundMessage((payload) => {
     // never stack for one incident.
     tag: `incident-${data.incidentId}-${data.timeOfIncident}`,
     silent: false, // browsers play the OS notification sound; web can't choose a custom one
-    data: { url: '/incidents' },
+    // Opens this incident in the Incident Center viewer (?incidentId=).
+    data: { url: data.incidentId ? `/incidents?incidentId=${encodeURIComponent(data.incidentId)}` : '/incidents' },
   });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  const path = event.notification.data?.url || '/incidents';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
       const open = windows.find((w) => w.url.startsWith(self.location.origin));
-      return open ? open.focus() : clients.openWindow(url);
+      if (!open) return clients.openWindow(new URL(path, self.location.origin).href);
+      // This worker doesn't control app pages (its own scope), so it can't
+      // navigate the tab — ask the app to (layout/V2Layout.jsx listens).
+      await open.focus();
+      open.postMessage({ type: 'open-incident', url: path });
+      return undefined;
     }),
   );
 });

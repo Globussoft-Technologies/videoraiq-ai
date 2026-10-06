@@ -100,6 +100,21 @@ function Shell() {
   const { needsSidebar } = useTour();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Clicking a push notification while the app is already open: the service
+  // worker (public/firebase-messaging-sw.js) focuses this tab and asks it to
+  // open the incident — it can't navigate a page it doesn't control.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return undefined;
+    const onMessage = (event) => {
+      const url = event.data?.type === 'open-incident' ? event.data.url : '';
+      if (typeof url === 'string' && url.startsWith('/')) navigate(url);
+    };
+    sw.addEventListener('message', onMessage);
+    return () => sw.removeEventListener('message', onMessage);
+  }, [navigate]);
+
   const viewKey = currentViewKey(location.pathname);
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
   // Playback and Assistant both manage their own internal scrollers. Keeping

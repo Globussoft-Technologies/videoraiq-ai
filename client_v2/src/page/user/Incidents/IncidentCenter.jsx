@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,7 +24,7 @@ import RefreshControl from '../../../components/RefreshControl';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { num, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes, deleteIncidents, bulkResolveIncidents } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentById, fetchIncidentStats, fetchDetectionTypes, deleteIncidents, bulkResolveIncidents } from '../../../helpers/incidents';
 import { getLocations, getChannels } from '../../../helpers/monitoring';
 import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
@@ -1390,6 +1390,29 @@ export default function IncidentCenter() {
   // param on the URL turns on bulk-selection/delete mode.
   const isDeleteMode = useMemo(() => new URLSearchParams(location.search).has('delete-incidents'), [location.search]);
 
+  // ?incidentId=<id> (a push notification click) opens that one incident in
+  // the viewer. Fetched by id: it may not be on the loaded page, or may be
+  // hidden by the current filters.
+  const navigate = useNavigate();
+  const linkedIncidentId = useMemo(() => new URLSearchParams(location.search).get('incidentId'), [location.search]);
+  const [linkedIncident, setLinkedIncident] = useState(null);
+  useEffect(() => {
+    if (!linkedIncidentId) { setLinkedIncident(null); return undefined; }
+    let cancelled = false;
+    fetchIncidentById(linkedIncidentId)
+      .then((incident) => {
+        if (cancelled) return;
+        if (incident) setLinkedIncident(incident);
+        else toast.error('That incident is no longer available');
+      })
+      .catch(() => { if (!cancelled) toast.error('Could not load that incident'); });
+    return () => { cancelled = true; };
+  }, [linkedIncidentId]);
+  const closeLinkedIncident = () => {
+    setLinkedIncident(null);
+    navigate('/incidents', { replace: true }); // drop ?incidentId so a reload doesn't reopen it
+  };
+
   const pageRef = useRef(null);
   const [isPageFS, setIsPageFS] = useState(false);
   function togglePageFullscreen() {
@@ -2646,6 +2669,23 @@ export default function IncidentCenter() {
           onNavigateGlobal={handleNavigateGlobal}
           navLoading={navLoading}
           navFailedAt={navFailedAt}
+        />
+      )}
+
+      {/* One incident opened from a notification: no prev/next across the list. */}
+      {linkedIncident && (
+        <IncidentLightbox
+          items={[linkedIncident]}
+          index={0}
+          onIndexChange={() => {}}
+          onClose={closeLinkedIncident}
+          onRefresh={refreshIncidentData}
+          onResolvedChange={handleResolvedChange}
+          onTagUser={setTagIncident}
+          onUntagUser={setUntagIncident}
+          onViewUser={setViewUser}
+          tagOpen={!!tagIncident || !!untagIncident || !!viewUser}
+          totalCount={1}
         />
       )}
 
