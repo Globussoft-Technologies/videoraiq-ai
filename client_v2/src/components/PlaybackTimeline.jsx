@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import {
   getPlaybackUrl,
   getPlaybackTimeline,
+  getPlaybackThumbnail,
   normalizeRecordingSegments,
   getPlaybackSessionId,
   isFutureSeek,
@@ -27,6 +28,8 @@ const MANIFEST_RETRY_LIMIT = 20;
 const SECURUS_MANIFEST_RETRY_LIMIT = 4;
 const SECURUS_RECOVERY_DELAY_MS = 500;
 const SECURUS_RECOVERY_LIMIT = 3;
+const PLAYBACK_PREVIEW_CACHE_LIMIT = 100;
+const PLAYBACK_PREVIEW_WINDOW_MS = 5 * 1000;
 const HONEYWELL_MUTEX_RETRY_MS = 5000;
 const HONEYWELL_MUTEX_RETRY_LIMIT = 18; // ~90s, past the NVR's ~60s session timeout
 
@@ -78,6 +81,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   // Timeline time-scale zoom level (0 = 24h, ..., 8 = 5m)
   const [timelineZoomLevel, setTimelineZoomLevel] = useState(0);
   const [thumbnailCache, setThumbnailCache] = useState(new Map());
+  const hoverThumbnailCacheRef = useRef(new Map());
+  const generatedThumbnailUrlsRef = useRef(new Set());
 
   const [cursorMs, setCursorMs] = useState(0); // ms since midnight
   const [playing, setPlaying] = useState(false);
@@ -145,10 +150,18 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     setVideoUrl('');
     setVideoState('idle');
     setTimelineZoomLevel(0);
+    generatedThumbnailUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    generatedThumbnailUrlsRef.current.clear();
+    hoverThumbnailCacheRef.current.clear();
     setThumbnailCache(new Map());
     loadedRangeMsRef.current = null;
     securusRecoveriesRef.current = 0;
   }, [channelId, +day]);
+
+  useEffect(() => () => {
+    generatedThumbnailUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    generatedThumbnailUrlsRef.current.clear();
+  }, []);
 
   // Fetch event markers + recording-segment availability for the day
   useEffect(() => {
@@ -204,6 +217,40 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       duration: 3500,
     });
   }, []);
+
+  const requestHoverPreview = useCallback(async (ms, { signal } = {}) => {
+    if (!channelId) return null;
+    const bucketMs = Math.floor(Math.max(0, ms) / PLAYBACK_PREVIEW_WINDOW_MS) * PLAYBACK_PREVIEW_WINDOW_MS;
+    const cached = hoverThumbnailCacheRef.current.get(bucketMs);
+    if (cached) return { url: cached, timeMs: bucketMs };
+
+    const blob = await getPlaybackThumbnail({
+      channelId,
+      time: new Date(day.getTime() + bucketMs),
+      playbackUrl: videoUrl,
+      playbackStartTime: new Date(day.getTime() + streamStartMsRef.current),
+      signal,
+    });
+    if (signal?.aborted || !blob) return null;
+    const url = URL.createObjectURL(blob);
+    generatedThumbnailUrlsRef.current.add(url);
+    hoverThumbnailCacheRef.current.set(bucketMs, url);
+    let evictedKey = null;
+    while (hoverThumbnailCacheRef.current.size > PLAYBACK_PREVIEW_CACHE_LIMIT) {
+      evictedKey = hoverThumbnailCacheRef.current.keys().next().value;
+      const evictedUrl = hoverThumbnailCacheRef.current.get(evictedKey);
+      hoverThumbnailCacheRef.current.delete(evictedKey);
+      generatedThumbnailUrlsRef.current.delete(evictedUrl);
+      URL.revokeObjectURL(evictedUrl);
+    }
+    setThumbnailCache((previous) => {
+      const next = new Map(previous);
+      if (evictedKey !== null) next.delete(evictedKey);
+      next.set(bucketMs, url);
+      return next;
+    });
+    return { url, timeMs: bucketMs };
+  }, [channelId, day, videoUrl]);
 
   // Resolve + load a playable segment for the current cursor (debounced)
   const loadAt = useCallback((ms, mutexRetries = 0, incidentStart = false) => {
@@ -865,6 +912,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         timelineZoomLevel={timelineZoomLevel}
         onChangeZoomLevel={setTimelineZoomLevel}
         onFutureSeekAttempt={triggerFutureAlert}
+        onPreviewRequest={requestHoverPreview}
       />
     </div>
   );

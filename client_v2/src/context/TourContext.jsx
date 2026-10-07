@@ -10,6 +10,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { visibleNavItems } from '@/lib/navVisibility';
 import { SHELL_TOUR, resolveSteps, tourForItem } from '@/lib/tour/steps';
@@ -96,6 +97,7 @@ export function TourProvider({ children }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const { logs: logsConfig } = useLogsConfig();
+  const { modules: moduleConfig } = useModuleConfig();
 
   const checkpointKey = useMemo(() => {
     const memberId = user?.memberId;
@@ -124,8 +126,8 @@ export function TourProvider({ children }) {
   const advancingRef = useRef(false);
 
   const modules = useMemo(
-    () => visibleNavItems(permissions, logsConfig),
-    [permissions, logsConfig]
+    () => visibleNavItems(permissions, logsConfig, moduleConfig),
+    [permissions, logsConfig, moduleConfig]
   );
 
   // enterModule runs inside an async loop that outlives several renders. Reading

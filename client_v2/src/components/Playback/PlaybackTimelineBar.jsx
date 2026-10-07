@@ -6,6 +6,7 @@ import { detectionLabel, mediaUrl } from '../../lib/format';
 import { fetchIncidentById } from '../../helpers/incidents';
 import { incidentPreviewImageUrls } from './incidentPreviewImages';
 import { isFutureSeek } from './playbackTimeGuard';
+import BufferingIndicator from '../BufferingIndicator';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -193,6 +194,7 @@ export default function PlaybackTimelineBar({
   timelineZoomLevel = 0,
   onChangeZoomLevel,
   onFutureSeekAttempt,
+  onPreviewRequest,
 }) {
   const themeContext = useTheme();
   const isDark = themeContext?.isDark ?? (typeof document !== 'undefined' && (
@@ -208,11 +210,15 @@ export default function PlaybackTimelineBar({
   const [containerWidth, setContainerWidth] = useState(1000);
   const [hoverMs, setHoverMs] = useState(null);
   const [hoverX, setHoverX] = useState(0);
+  const [hoverAnchor, setHoverAnchor] = useState(null);
+  const [framePreview, setFramePreview] = useState(null);
   const [isHovering, setIsHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
   const justDraggedRef = useRef(false);
   const previewRef = useRef(null);
   const previewCloseTimerRef = useRef(null);
+  const framePreviewTimerRef = useRef(null);
+  const framePreviewAbortRef = useRef(null);
   const incidentDetailsRef = useRef(new Map());
   const [incidentPreview, setIncidentPreview] = useState(null);
   const [previewPosition, setPreviewPosition] = useState({ left: 8, bottom: 8, maxHeight: 'calc(100vh - 16px)', width: 300 });
@@ -509,6 +515,7 @@ export default function PlaybackTimelineBar({
     const ms = (x / rect.width) * DAY_MS;
     setHoverX(x);
     setHoverMs(ms);
+    setHoverAnchor({ x: e.clientX, y: rect.top });
   };
 
   const isRecorded = useCallback(
@@ -523,6 +530,104 @@ export default function PlaybackTimelineBar({
     },
     [segments, dayStart]
   );
+
+  // Fetch only after the pointer rests. Each response is a five-second
+  // animated WebP. At second two, preload the following window so the preview
+  // and its clock can continue without touching the main playback session.
+  useEffect(() => {
+    clearTimeout(framePreviewTimerRef.current);
+    framePreviewAbortRef.current?.abort();
+    framePreviewAbortRef.current = null;
+
+    const eligible = onPreviewRequest && isHovering && !dragging &&
+      hoverMs !== null && !isFutureSeek(dayStart, hoverMs) && isRecorded(hoverMs);
+    if (!eligible) {
+      setFramePreview(null);
+      return undefined;
+    }
+
+    const requestedMs = hoverMs;
+    const controller = new AbortController();
+    framePreviewAbortRef.current = controller;
+    setFramePreview({ timeMs: requestedMs, url: '', loading: true, unavailable: false });
+    framePreviewTimerRef.current = setTimeout(async () => {
+      const wait = (milliseconds) => new Promise((resolve) => {
+        framePreviewTimerRef.current = setTimeout(resolve, milliseconds);
+      });
+      const normalizePreview = (result, fallbackTimeMs) => {
+        if (!result) return null;
+        if (typeof result === 'string') return { url: result, timeMs: fallbackTimeMs };
+        return result.url ? { url: result.url, timeMs: result.timeMs ?? fallbackTimeMs } : null;
+      };
+      try {
+        let clip = normalizePreview(
+          await onPreviewRequest(requestedMs, { signal: controller.signal }),
+          requestedMs,
+        );
+        while (!controller.signal.aborted && clip) {
+          setFramePreview({
+            timeMs: clip.timeMs,
+            url: clip.url,
+            loading: false,
+            unavailable: false,
+          });
+
+          let nextRequest = null;
+          for (let elapsed = 1; elapsed <= 5; elapsed += 1) {
+            await wait(1000);
+            if (controller.signal.aborted) return;
+            if (elapsed < 5) {
+              setFramePreview((current) => current && ({
+                ...current,
+                timeMs: clip.timeMs + elapsed * 1000,
+              }));
+            }
+            if (elapsed === 2) {
+              nextRequest = onPreviewRequest(clip.timeMs + 5000, {
+                signal: controller.signal,
+              });
+            }
+          }
+
+          setFramePreview((current) => current && ({ ...current, loading: true }));
+          const next = normalizePreview(
+            await (nextRequest || onPreviewRequest(clip.timeMs + 5000, {
+              signal: controller.signal,
+            })),
+            clip.timeMs + 5000,
+          );
+          if (!next) {
+            setFramePreview((current) => current && ({
+              ...current,
+              loading: false,
+              unavailable: true,
+            }));
+            return;
+          }
+          clip = next;
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && error?.name !== 'CanceledError' && error?.code !== 'ERR_CANCELED') {
+          setFramePreview((current) => ({
+            timeMs: current?.timeMs ?? requestedMs,
+            url: current?.url || '',
+            loading: false,
+            unavailable: true,
+          }));
+        }
+      }
+    }, 350);
+
+    return () => {
+      clearTimeout(framePreviewTimerRef.current);
+      controller.abort();
+    };
+  }, [hoverMs, isHovering, dragging, dayStart, isRecorded, onPreviewRequest]);
+
+  useEffect(() => () => {
+    clearTimeout(framePreviewTimerRef.current);
+    framePreviewAbortRef.current?.abort();
+  }, []);
 
   const futureStartMs = Math.max(0, Math.min(DAY_MS, Date.now() - dayStart));
   const recordingRanges = useMemo(() => {
@@ -646,7 +751,7 @@ export default function PlaybackTimelineBar({
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="vq-pbtl-scroll relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
+      <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); setHoverAnchor(null); }} onPointerMove={handlePointerMove} className="vq-pbtl-scroll relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
         {isHovering && hoverMs !== null && (
           <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-40 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
@@ -788,6 +893,41 @@ export default function PlaybackTimelineBar({
             </div>
           )}
           <button type="button" className="w-full mt-2 shrink-0 rounded-md py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400" style={{ backgroundColor: '#7c3aed', color: '#ffffff', minHeight: 36, cursor: 'pointer' }} onClick={(e) => seekToIncident(previewIncident, e)}>Jump to {formatClock(previewIncident.timeMs)}</button>
+        </div>,
+        document.fullscreenElement || document.body
+      )}
+      {framePreview && hoverAnchor && !incidentPreview && createPortal(
+        <div
+          aria-live="polite"
+          className="fixed overflow-hidden rounded-lg border shadow-2xl pointer-events-none"
+          style={{
+            zIndex: 9999,
+            width: 208,
+            left: Math.max(8, Math.min(window.innerWidth - 216, hoverAnchor.x - 104)),
+            top: Math.max(8, hoverAnchor.y - 142),
+            backgroundColor: isDark ? '#111827' : '#ffffff',
+            borderColor: isDark ? '#475569' : '#cbd5e1',
+            color: isDark ? '#f8fafc' : '#0f172a',
+          }}
+        >
+          <div className="relative flex h-[108px] items-center justify-center bg-black">
+            {framePreview.url && (
+              <img src={framePreview.url} alt="Playback frame preview" className="h-full w-full object-contain" />
+            )}
+            {framePreview.loading && (
+              <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950/90 via-slate-900/90 to-violet-950/80">
+                <BufferingIndicator title="Loading preview..." size={38} compact />
+              </div>
+            )}
+            {framePreview.unavailable && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/75 text-xs text-white/60">
+                Preview unavailable
+              </span>
+            )}
+          </div>
+          <div className="px-2 py-1.5 text-center font-mono text-[11px] font-semibold">
+            {formatClock(framePreview.timeMs, true)}
+          </div>
         </div>,
         document.fullscreenElement || document.body
       )}

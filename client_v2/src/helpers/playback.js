@@ -100,6 +100,35 @@ export const getPlaybackTimeline = async ({ nvrId, cameraId, channel, startTime,
   return body?.timeline || null;
 };
 
+/** Fetch one five-second animated recording preview for a timeline hover. */
+export const getPlaybackThumbnail = async ({
+  channelId,
+  time,
+  playbackUrl,
+  playbackStartTime,
+  signal,
+}) => {
+  const token = getAccessToken();
+  const res = await axios.post(
+    `${Api_url}/channel/playback-thumbnail`,
+    {
+      channelId,
+      time: toCompactLocalTime(time),
+      playbackUrl: playbackUrl || undefined,
+      playbackStartTime: playbackStartTime
+        ? toCompactLocalTime(playbackStartTime)
+        : undefined,
+    },
+    {
+      headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+      responseType: 'blob',
+      signal,
+      timeout: 20000,
+    }
+  );
+  return res.data;
+};
+
 /** Normalize the Hikvision CMSearchResult XML (parsed via xml2js, explicitArray:false) into [{start,end}]. */
 export function normalizeRecordingSegments(timeline) {
   if (Array.isArray(timeline?.segments)) {

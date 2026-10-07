@@ -43,6 +43,16 @@ export const updateCameraDetection = async (adminId, cameraId, { settingType, en
   return response.data
 }
 
+export const updateModuleConfig = async (adminId, moduleKey, permissions) => {
+  const token = await waitForToken()
+  const response = await axios.put(
+    `${apiUrl}/api/v1/client-config/${adminId}/modules/${moduleKey}`,
+    { permissions },
+    authHeaders(token)
+  )
+  return response.data
+}
+
 /**
  * Refresh the platform detection list. Re-reads the shared catalog the client
  * backend publishes from its DETECTION_TYPES constants, so a detection added

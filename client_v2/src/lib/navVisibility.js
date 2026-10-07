@@ -4,6 +4,15 @@ import { hasLiveDemoPlan } from '@/utils/jwt';
 
 export const LOGS_TOUR_KEY = 'logs-records';
 
+export function isModuleAllowed(item, modules) {
+  if (!item?.moduleKey) return true;
+  if (!modules) return false;
+  const grants = modules[item.moduleKey] || {};
+  return item.modulePageKey
+    ? grants[item.modulePageKey] === true
+    : Object.values(grants).some((allowed) => allowed === true);
+}
+
 // Client-profile visibility is separate from permissions: these pages remain
 // routable, but Flo Mattress builds do not advertise them in navigation,
 // header search, or the guided tour.
@@ -71,17 +80,26 @@ export function isItemLogEnabled(item, logsConfig) {
  * onboarding tour reads better in the shipped, curated order — Command Center
  * before the logs that feed it.
  */
-export function visibleNavItems(permissions, logsConfig) {
+export function visibleNavItems(permissions, logsConfig, modules) {
   return NAV_GROUPS
     .filter((group) => !group.hidden && isClientNavGroupVisible(group))
     .flatMap((group) => {
-    const items = group.items
-      .filter((item) => (
-        isClientNavItemVisible(item)
-        && isItemVisible(item, permissions)
-        && isItemLogEnabled(item, logsConfig)
-      ))
-      .map((item) => ({ ...item, group: group.label }));
+    const items = group.items.flatMap((item) => {
+      if (!isClientNavItemVisible(item)
+        || !isModuleAllowed(item, modules)
+        || !isItemVisible(item, permissions)
+        || !isItemLogEnabled(item, logsConfig)) return [];
+
+      if (!item.children?.length) return [{ ...item, group: group.label }];
+      const children = item.children.filter((child) => (
+        isClientNavItemVisible(child)
+        && isModuleAllowed(child, modules)
+        && isItemVisible(child, permissions)
+        && isItemLogEnabled(child, logsConfig)
+      ));
+      if (!children.length) return [];
+      return [{ ...item, path: children[0].path, children, group: group.label }];
+    });
 
     if (group.label !== LOGS_GROUP_LABEL) return items;
     if (!items.length) return [];

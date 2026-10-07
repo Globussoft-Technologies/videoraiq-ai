@@ -152,7 +152,18 @@ export const NAV_GROUPS = [
   {
     label: 'DIMENSIONAL QC',
     items: [
-      { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d, permissionKey: 'logs', permissionSubKey: 'measurementLogs', logsConfigKey: 'measurementLogs' },
+      {
+        key: 'mattress-measurement',
+        moduleKey: 'mattressMeasurement',
+        label: 'Mattress Measurement',
+        path: 'logs/measurement',
+        icon: Move3d,
+        children: [
+          { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementLogs', permissionKey: 'logs', permissionSubKey: 'measurementLogs', logsConfigKey: 'measurementLogs' },
+          { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, moduleKey: 'mattressMeasurement', modulePageKey: 'raspberryPiDevices', permissionKey: 'settings' },
+          { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementCalibration', permissionKey: 'settings' },
+        ],
+      },
     ],
   },
   {
@@ -191,7 +202,6 @@ export const NAV_GROUPS = [
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
       { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2, permissionKey: 'detectionSettings', hideForFloMattress: true },
-      { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, permissionKey: 'settings' },
     ],
   },
   {
@@ -200,7 +210,6 @@ export const NAV_GROUPS = [
       { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
       { key: 'settings', label: 'Settings', path: 'settings', icon: Settings, permissionKey: 'settings' },
       ...(ADMIN_STORAGE_UI_ENABLED ? [{ key: 'storage-settings', label: 'Storage Settings', path: 'storage-settings', icon: HardDrive, permissionKey: 'storageSettings' }] : []),
-      { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, permissionKey: 'settings' },
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },

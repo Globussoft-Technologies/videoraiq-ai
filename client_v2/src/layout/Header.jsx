@@ -9,7 +9,8 @@ import { usePermissions } from '../context/PermissionContext';
 import { useLogsConfig } from '../context/LogsConfigContext';
 import { useLicense } from '../context/LicenseContext';
 import { NAV_GROUPS } from './nav.config';
-import { isClientNavGroupVisible, isClientNavItemVisible, isItemVisible, isItemLogEnabled } from '../lib/navVisibility';
+import { isClientNavGroupVisible, isClientNavItemVisible, isModuleAllowed, isItemLogEnabled, isItemVisible } from '../lib/navVisibility';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 import { getChannels } from '../helpers/monitoring';
 import { IS_LICENSING_ENABLED } from '../helpers/license';
 import { networkRatingInfo } from '../lib/networkStatus';
@@ -21,17 +22,18 @@ const SEARCH_DETECTION_NAV_ITEM = NAV_GROUPS.flatMap((g) => g.items).find((item)
 
 // Search follows the sidebar's grants and log configuration, but protected
 // results wait until permissions have actually loaded.
-const isSearchNavItemVisible = (item, permissions, logsConfig, logsLoading) => Boolean(item)
+const isSearchNavItemVisible = (item, permissions, logsConfig, logsLoading, modules) => Boolean(item)
   && Boolean(permissions && Object.keys(permissions).length)
   && isClientNavItemVisible(item)
+  && isModuleAllowed(item, modules)
   && isItemVisible(item, permissions)
   && (!item.logsConfigKey || (!logsLoading && (!IS_LICENSING_ENABLED || Boolean(logsConfig))))
   && isItemLogEnabled(item, logsConfig);
 
-const buildPageIndex = (permissions, logsConfig, logsLoading) => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
-  g.items.filter((item) => isSearchNavItemVisible(item, permissions, logsConfig, logsLoading)).flatMap((it) => (
+const buildPageIndex = (permissions, logsConfig, logsLoading, modules) => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
+  g.items.filter((item) => isSearchNavItemVisible(item, permissions, logsConfig, logsLoading, modules)).flatMap((it) => (
     (it.children?.length ? it.children : [it])
-      .filter((entry) => isSearchNavItemVisible({ ...it, ...entry }, permissions, logsConfig, logsLoading))
+      .filter((entry) => isSearchNavItemVisible({ ...it, ...entry }, permissions, logsConfig, logsLoading, modules))
       .map((entry) => ({
         kind: 'Page',
         kindColor: 'var(--blue)',
@@ -212,6 +214,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const { theme, setTheme } = useTheme();
   const { permissions, loading: permissionsLoading, error: permissionsError } = usePermissions();
   const { logs: logsConfig, loading: logsLoading } = useLogsConfig();
+  const { modules } = useModuleConfig();
   const { license, allowedDetections, loading: licenseLoading } = useLicense();
   const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
@@ -237,8 +240,8 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const unreadNum = unreadCount ?? notifications.length;
   const permissionsReady = !permissionsLoading && !permissionsError && Boolean(permissions && Object.keys(permissions).length);
   const pageIndex = useMemo(
-    () => permissionsReady ? buildPageIndex(permissions, logsConfig, logsLoading) : [],
-    [permissionsReady, permissions, logsConfig, logsLoading, showLiveDemo]
+    () => permissionsReady ? buildPageIndex(permissions, logsConfig, logsLoading, modules) : [],
+    [permissionsReady, permissions, logsConfig, logsLoading, modules, showLiveDemo]
   );
   const canSearchCameras = permissionsReady && isSearchNavItemVisible(SEARCH_CAMERA_NAV_ITEM, permissions, logsConfig, logsLoading);
   const canSearchDetections = permissionsReady && isSearchNavItemVisible(SEARCH_DETECTION_NAV_ITEM, permissions, logsConfig, logsLoading);

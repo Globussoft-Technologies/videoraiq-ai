@@ -10,7 +10,9 @@ import {
   isClientNavItemVisible,
   isItemVisible,
   isItemLogEnabled,
+  isModuleAllowed,
 } from '@/lib/navVisibility';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
@@ -66,6 +68,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const { active: tourActive } = useTour();
   const { permissions } = usePermissions();
   const { logs: logsConfig } = useLogsConfig();
+  const { modules } = useModuleConfig();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -329,14 +332,30 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
           .filter((g) => !g.hidden && isClientNavGroupVisible(g))
           .map((group) => ({
             ...group,
-            items: group.items.filter(
-              (item) => (
+            items: group.items.flatMap((item) => {
+              const parentVisible = (
                 !(hidePlayback && item.key === 'camera')
                 && isClientNavItemVisible(item)
+                && isModuleAllowed(item, modules)
                 && isItemVisible(item, permissions)
                 && isItemLogEnabled(item, logsConfig)
-              ),
-            ),
+              );
+              if (!parentVisible) return [];
+              if (!item.children?.length) return [item];
+
+              const children = item.children.filter((child) => (
+                isClientNavItemVisible(child)
+                && isModuleAllowed(child, modules)
+                && isItemVisible(child, permissions)
+                && isItemLogEnabled(child, logsConfig)
+              ));
+              if (!children.length) return [];
+
+              // In collapsed-sidebar mode the parent itself is the link, so
+              // point it at the first child this user is actually allowed to
+              // open instead of assuming the first configured child is visible.
+              return [{ ...item, path: children[0].path, children }];
+            }),
           }))
           // After the permission filter, so a hidden log never leaves a gap.
           .map((group) => (group.label === LOGS_GROUP_LABEL

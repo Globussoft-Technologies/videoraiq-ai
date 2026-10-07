@@ -7,6 +7,7 @@ import { PermissionProvider } from '@/context/PermissionContext';
 import { LicenseProvider } from '@/context/LicenseContext';
 import { SocketProvider } from '@/context/SocketContext';
 import { LogsConfigProvider } from '@/context/LogsConfigContext';
+import { ModuleConfigProvider } from '@/context/ModuleConfigContext';
 import { AttendanceSocketProvider } from '@/context/AttendanceSocketContext';
 import { DetectionNotificationProvider } from '@/context/DetectionNotificationContext';
 import { TimezoneProvider } from '@/context/TimezoneContext';
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <TimezoneProvider>
         <PermissionProvider>
+        <ModuleConfigProvider>
         <SocketProvider>
           {/* LicenseProvider sits inside SocketProvider: the superadmin pushes
               detection-licence changes over `detectionLicense_<adminId>`, so it
@@ -34,6 +36,7 @@ createRoot(document.getElementById('root')).render(
             </LogsConfigProvider>
           </LicenseProvider>
         </SocketProvider>
+        </ModuleConfigProvider>
         </PermissionProvider>
       </TimezoneProvider>
     </AuthProvider>

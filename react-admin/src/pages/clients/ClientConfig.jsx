@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
+  Boxes,
   Loader2,
   RefreshCw,
   Search,
@@ -18,12 +19,14 @@ import CameraLicenseCard from './components/config/CameraLicenseCard'
 import SubscriptionCard from './components/config/SubscriptionCard'
 import DetectionRow from './components/config/DetectionRow'
 import CamerasPanel from './components/config/CamerasPanel'
+import ModuleManagement from './components/config/ModuleManagement'
 import LoadingState from '../../components/UI/LoadingState'
 import { getClientConfig, getClientCameras } from './apis/get/clientConfig'
 import {
   updatePurchasedCameras,
   updateDetection,
   updateCameraDetection,
+  updateModuleConfig,
   syncDetectionCatalog,
 } from './apis/put'
 import { getApiMessage, notifyApiError, notifyApiSuccess } from '../../utils/apiError'
@@ -50,6 +53,8 @@ const ClientConfig = () => {
   const [stats, setStats] = useState(null)
   const [detections, setDetections] = useState([])
   const [totalCameras, setTotalCameras] = useState(0)
+  const [modulePermissions, setModulePermissions] = useState({ measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false })
+  const [savingModule, setSavingModule] = useState(false)
 
   // Baseline snapshot to diff against, so Save only PUTs what changed.
   const [baseline, setBaseline] = useState({ totalCameras: 0, detections: [] })
@@ -66,7 +71,7 @@ const ClientConfig = () => {
   // user changed anything while it was running.
   const latestRef = useRef({ totalCameras: 0, detections: [] })
 
-  // Tabs: 'license' (default) | 'cameras'. Cameras load lazily on first open.
+  // Cameras load lazily on first open.
   const [tab, setTab] = useState('license')
   const [cameras, setCameras] = useState([])
   const [camerasLoaded, setCamerasLoaded] = useState(false)
@@ -108,6 +113,7 @@ const ClientConfig = () => {
     const data = res?.body?.data ?? res?.data ?? {}
     const dets = Array.isArray(data.detections) ? data.detections : []
     setStats(data.stats || null)
+    setModulePermissions(data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false })
     setDetections(dets)
     setTotalCameras(data.stats?.totalCameras ?? 0)
     setBaseline({
@@ -214,6 +220,21 @@ const ClientConfig = () => {
   }, [cameras, camerasBaseline])
 
   const camerasTabDirty = dirtyCameraToggles.length > 0
+
+  const handleModuleChange = async (next) => {
+    if (savingModule) return
+    const previous = modulePermissions
+    setModulePermissions(next)
+    setSavingModule(true)
+    try {
+      await updateModuleConfig(adminId, 'mattressMeasurement', next)
+    } catch (err) {
+      setModulePermissions(previous)
+      notifyApiError(err, 'Failed to save module permissions')
+    } finally {
+      setSavingModule(false)
+    }
+  }
 
   const handleSaveCameras = async () => {
     if (!camerasTabDirty || savingCamerasRef.current) return
@@ -562,6 +583,18 @@ const ClientConfig = () => {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('modules')}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              tab === 'modules'
+                ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
+                : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+            }`}
+          >
+            <Boxes size={16} strokeWidth={2} />
+            Module Management
+          </button>
         </div>
 
         {error ? (
@@ -578,6 +611,8 @@ const ClientConfig = () => {
           </div>
         ) : loading ? (
           <LoadingState message="Loading configuration…" />
+        ) : tab === 'modules' ? (
+          <ModuleManagement permissions={modulePermissions} saving={savingModule} onChange={handleModuleChange} />
         ) : tab === 'cameras' ? (
           camerasLoading ? (
             <LoadingState message="Loading cameras…" />

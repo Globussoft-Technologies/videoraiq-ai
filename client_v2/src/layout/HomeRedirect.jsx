@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { NAV_GROUPS } from './nav.config';
 import { usePermissions } from '@/context/PermissionContext';
 import PageLoader from '@/components/PageLoader';
-import { isClientNavGroupVisible, isClientNavItemVisible } from '@/lib/navVisibility';
+import { isClientNavGroupVisible, isClientNavItemVisible, isModuleAllowed } from '@/lib/navVisibility';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 
 // Mirrors Sidebar.jsx's isItemVisible — an item with no permissionKey is
 // always visible; one with permissionSubKey reads a nested logs.* module.
@@ -32,15 +33,20 @@ function isItemVisible(item, permissions) {
 // falling back to /dashboard only if nothing else is permitted either.
 export default function HomeRedirect() {
   const { permissions, loading } = usePermissions();
+  const { modules, loading: modulesLoading } = useModuleConfig();
 
-  if (loading) return <PageLoader />;
+  if (loading || modulesLoading) return <PageLoader />;
 
   for (const group of NAV_GROUPS) {
     if (group.hidden || !isClientNavGroupVisible(group)) continue;
     for (const item of group.items) {
-      if (!isClientNavItemVisible(item)) continue;
+      if (!isClientNavItemVisible(item) || !isModuleAllowed(item, modules)) continue;
       if (isItemVisible(item, permissions)) {
-        return <Navigate to={item.path} replace />;
+        const child = item.children?.find((entry) => (
+          isClientNavItemVisible(entry) && isModuleAllowed(entry, modules) && isItemVisible(entry, permissions)
+        ));
+        const path = item.children?.length ? child?.path : item.path;
+        if (path) return <Navigate to={path} replace />;
       }
     }
   }

@@ -3,14 +3,21 @@ import { usePermissions } from '@/context/PermissionContext';
 import { NAV_GROUPS } from './nav.config';
 import PageLoader from '@/components/PageLoader';
 import { ErrorState } from '@/components/States';
-import { isClientNavGroupVisible, isClientNavItemVisible, isItemVisible } from '@/lib/navVisibility';
+import { isClientNavGroupVisible, isClientNavItemVisible, isItemVisible, isModuleAllowed } from '@/lib/navVisibility';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 
-function firstVisiblePath(permissions) {
+// Redirects follow the same role and client module grants as the sidebar.
+function firstVisiblePath(permissions, modules) {
   for (const group of NAV_GROUPS) {
     if (group.hidden || !isClientNavGroupVisible(group)) continue;
     for (const item of group.items) {
-      if (!isClientNavItemVisible(item)) continue;
-      if (isItemVisible(item, permissions)) return item.path;
+      if (!isClientNavItemVisible(item) || !isModuleAllowed(item, modules)) continue;
+      if (!isItemVisible(item, permissions)) continue;
+      const child = item.children?.find((entry) => (
+        isClientNavItemVisible(entry) && isModuleAllowed(entry, modules) && isItemVisible(entry, permissions)
+      ));
+      const path = item.children?.length ? child?.path : item.path;
+      if (path) return path;
     }
   }
   return null;
@@ -23,19 +30,20 @@ function firstVisiblePath(permissions) {
 // this so navigating straight to e.g. /dashboard with dashboard.view === false
 // bounces to the first page the role actually has, instead of rendering it
 // anyway.
-export default function RequirePermission({ permissionKey, permissionSubKey, children }) {
+export default function RequirePermission({ permissionKey, permissionSubKey, modulePageKey, children }) {
   const { permissions, loading, error, refresh } = usePermissions();
+  const { modules, loading: modulesLoading } = useModuleConfig();
 
-  if (loading) return <PageLoader />;
+  if (loading || modulesLoading) return <PageLoader />;
   if (error) return <ErrorState error={error} onRetry={refresh} minH={360} />;
   if (!permissions || Object.keys(permissions).length === 0) {
     return <ErrorState error={new Error('No page permissions are available for your account.')} onRetry={refresh} minH={360} />;
   }
 
   const item = { permissionKey, permissionSubKey };
-  if (isItemVisible(item, permissions)) return children;
+  if (isItemVisible(item, permissions) && (!modulePageKey || isModuleAllowed({ moduleKey: 'mattressMeasurement', modulePageKey }, modules))) return children;
 
-  const fallback = firstVisiblePath(permissions);
+  const fallback = firstVisiblePath(permissions, modules);
   return fallback
     ? <Navigate to={`/${fallback}`} replace />
     : <ErrorState error={new Error("You don't have permission to access this page.")} minH={360} />;

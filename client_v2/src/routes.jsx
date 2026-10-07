@@ -122,7 +122,7 @@ export const v2Routes = (
     <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
     <Route path="logs/sleep-activity" element={guard('logs', 'sleepActivityLogs', <SleepActivityLogs />)} />
     {/* Dimensional QC — Mattress Measurement Logs. */}
-    <Route path="logs/measurement" element={guard('logs', 'measurementLogs', <MeasurementLogs />)} />
+    <Route path="logs/measurement" element={<RequirePermission permissionKey="logs" permissionSubKey="measurementLogs" modulePageKey="measurementLogs"><MeasurementLogs /></RequirePermission>} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}
@@ -158,7 +158,7 @@ export const v2Routes = (
         `detections` permission module exists server-side. */}
     <Route path="detection-settings" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
-    <Route path="measurement-calibration" element={guard('settings', undefined, <MeasurementCalibration />)} />
+    <Route path="measurement-calibration" element={<RequirePermission permissionKey="settings" modulePageKey="measurementCalibration"><MeasurementCalibration /></RequirePermission>} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     <Route path="auto-email-reports" element={guard('autoEmailReports', undefined, <AutoEmailReports />)} />
@@ -166,7 +166,7 @@ export const v2Routes = (
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
-    <Route path="raspberry-pi-devices" element={guard('settings', undefined, <RaspberryPiDevices />)} />
+    <Route path="raspberry-pi-devices" element={<RequirePermission permissionKey="settings" modulePageKey="raspberryPiDevices"><RaspberryPiDevices /></RequirePermission>} />
     {ADMIN_STORAGE_UI_ENABLED && <Route path="storage-settings" element={guard('storageSettings', undefined, <StorageSettings />)} />}
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
