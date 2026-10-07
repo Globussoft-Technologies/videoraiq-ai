@@ -219,4 +219,13 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
+// Without these, a stop (pm2 stop/restart, systemd) exits silently and the
+// log can't tell it apart from a hard kill (SIGKILL, which can't be caught).
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    logger.warn(`Received ${sig}, shutting down (pid ${process.pid})`);
+    setTimeout(() => process.exit(0), 500); // let the log line flush; PM2 waits 1.6s before SIGKILL
+  });
+}
+
 startServer();
