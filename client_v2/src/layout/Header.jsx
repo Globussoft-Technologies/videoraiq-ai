@@ -5,24 +5,40 @@ import { useTheme } from '../theme/ThemeContext';
 import { useClock } from '../hooks/useClock';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
+import { usePermissions } from '../context/PermissionContext';
+import { useLogsConfig } from '../context/LogsConfigContext';
+import { useLicense } from '../context/LicenseContext';
 import { NAV_GROUPS } from './nav.config';
-import { isClientNavGroupVisible, isClientNavItemVisible } from '../lib/navVisibility';
+import { isClientNavGroupVisible, isClientNavItemVisible, isItemVisible, isItemLogEnabled } from '../lib/navVisibility';
 import { getChannels } from '../helpers/monitoring';
+import { IS_LICENSING_ENABLED } from '../helpers/license';
 import { networkRatingInfo } from '../lib/networkStatus';
 import { timeAgo } from '../lib/format';
 import StartTourMenu from '../components/Tour/StartTourMenu';
 
-// Index of navigable pages. Build it after authentication so plan-gated items
-// reflect the JWT written by SSO/login flows, not module-import time.
-const buildPageIndex = () => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
-  g.items.filter(isClientNavItemVisible).flatMap((it) => (
-    (it.children?.length ? it.children : [it]).map((entry) => ({
-      kind: 'Page',
-      kindColor: 'var(--blue)',
-      label: entry.label === 'Logs' ? it.label : `${it.label} - ${entry.label}`,
-      sub: g.label,
-      to: `/${entry.path}`,
-    }))
+const SEARCH_CAMERA_NAV_ITEM = NAV_GROUPS.flatMap((g) => g.items).find((item) => item.path === 'live');
+const SEARCH_DETECTION_NAV_ITEM = NAV_GROUPS.flatMap((g) => g.items).find((item) => item.path === 'detection-settings');
+
+// Search follows the sidebar's grants and log configuration, but protected
+// results wait until permissions have actually loaded.
+const isSearchNavItemVisible = (item, permissions, logsConfig, logsLoading) => Boolean(item)
+  && Boolean(permissions && Object.keys(permissions).length)
+  && isClientNavItemVisible(item)
+  && isItemVisible(item, permissions)
+  && (!item.logsConfigKey || (!logsLoading && (!IS_LICENSING_ENABLED || Boolean(logsConfig))))
+  && isItemLogEnabled(item, logsConfig);
+
+const buildPageIndex = (permissions, logsConfig, logsLoading) => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
+  g.items.filter((item) => isSearchNavItemVisible(item, permissions, logsConfig, logsLoading)).flatMap((it) => (
+    (it.children?.length ? it.children : [it])
+      .filter((entry) => isSearchNavItemVisible({ ...it, ...entry }, permissions, logsConfig, logsLoading))
+      .map((entry) => ({
+        kind: 'Page',
+        kindColor: 'var(--blue)',
+        label: entry.label === 'Logs' ? it.label : `${it.label} - ${entry.label}`,
+        sub: g.label,
+        to: `/${entry.path}`,
+      }))
   ))
 );
 
@@ -105,7 +121,7 @@ const DETECTION_SEARCH_INDEX = [
     label: 'Intrusion Detection',
     sub: 'Perimeter & Security • Zone intrusion monitoring',
     keywords: 'intrusion perimeter zone security',
-    to: '/detection-settings?detection=zoneIntrusionSettings',
+    to: '/detection-settings?detection=unauthorizedAccessSettings',
   },
   {
     kind: 'Detection',
@@ -132,6 +148,12 @@ const DETECTION_SEARCH_INDEX = [
     to: '/detection-settings?detection=vehicleDetectionSettings',
   },
 ];
+
+const detectionMatchesQuery = (detection, query) => detection.label.toLowerCase().includes(query)
+  || detection.sub.toLowerCase().includes(query)
+  || detection.keywords.toLowerCase().includes(query);
+
+const detectionSettingType = (detection) => new URLSearchParams(detection.to.split('?')[1] || '').get('detection');
 
 const iconBtn = {
   width: 36,
@@ -188,6 +210,9 @@ function networkLabelForCard(network) {
 
 function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick, showLiveDemo = false }) {
   const { theme, setTheme } = useTheme();
+  const { permissions, loading: permissionsLoading, error: permissionsError } = usePermissions();
+  const { logs: logsConfig, loading: logsLoading } = useLogsConfig();
+  const { license, allowedDetections, loading: licenseLoading } = useLicense();
   const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
@@ -210,7 +235,38 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   });
   const { isMuted, audioEnabled, setAudioEnabled } = useAttendanceSocket() || {};
   const unreadNum = unreadCount ?? notifications.length;
-  const pageIndex = useMemo(buildPageIndex, [showLiveDemo]);
+  const permissionsReady = !permissionsLoading && !permissionsError && Boolean(permissions && Object.keys(permissions).length);
+  const pageIndex = useMemo(
+    () => permissionsReady ? buildPageIndex(permissions, logsConfig, logsLoading) : [],
+    [permissionsReady, permissions, logsConfig, logsLoading, showLiveDemo]
+  );
+  const canSearchCameras = permissionsReady && isSearchNavItemVisible(SEARCH_CAMERA_NAV_ITEM, permissions, logsConfig, logsLoading);
+  const canSearchDetections = permissionsReady && isSearchNavItemVisible(SEARCH_DETECTION_NAV_ITEM, permissions, logsConfig, logsLoading);
+  const detectionAssignmentsReady = !IS_LICENSING_ENABLED
+    || (!licenseLoading && Array.isArray(license?.allowedDetections));
+  const assignedDetectionIndex = useMemo(
+    () => {
+      if (!canSearchDetections || !detectionAssignmentsReady) return [];
+      if (!IS_LICENSING_ENABLED) return DETECTION_SEARCH_INDEX;
+      const assigned = DETECTION_SEARCH_INDEX.filter((detection) => allowedDetections.has(detectionSettingType(detection)));
+      const indexedTypes = new Set(assigned.map(detectionSettingType));
+      // The licence includes names for assigned types outside the shortcut list.
+      for (const detection of license?.detections || []) {
+        if (!allowedDetections.has(detection.settingType) || indexedTypes.has(detection.settingType)) continue;
+        assigned.push({
+          kind: 'Detection',
+          kindColor: 'var(--violet)',
+          label: detection.name || detection.settingType,
+          sub: 'Assigned detection',
+          keywords: detection.settingType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase(),
+          to: `/detection-settings?detection=${encodeURIComponent(detection.settingType)}`,
+        });
+        indexedTypes.add(detection.settingType);
+      }
+      return assigned;
+    },
+    [canSearchDetections, detectionAssignmentsReady, allowedDetections, license]
+  );
 
   // The header drops widgets progressively as IT gets narrow — measured with a
   // ResizeObserver on the header itself, not the window, because the sidebar
@@ -287,13 +343,17 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   }, []);
 
   // Lazily load the camera list the first time the search is focused.
-  const loadCameras = () => {
-    if (camLoaded.current) return;
+  const loadCameras = useCallback(() => {
+    if (!canSearchCameras || camLoaded.current) return;
     camLoaded.current = true;
     getChannels({ limit: 200 })
       .then((chs) => setCameras(Array.isArray(chs) ? chs : []))
-      .catch(() => {});
-  };
+      .catch(() => { camLoaded.current = false; });
+  }, [canSearchCameras]);
+
+  useEffect(() => {
+    if (searchOpen) loadCameras();
+  }, [searchOpen, loadCameras]);
 
   const onSearchFocus = () => {
     setSearchOpen(true);
@@ -313,7 +373,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Build ranked results across pages, sites and cameras for the current query.
+  // Build results across permitted pages, detections and cameras.
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -322,16 +382,12 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       if (!showLiveDemo && p.to === '/live-demo') continue;
       if (p.label.toLowerCase().includes(q) || p.sub.toLowerCase().includes(q)) out.push(p);
     }
-    for (const d of DETECTION_SEARCH_INDEX) {
-      if (
-        d.label.toLowerCase().includes(q) ||
-        d.sub.toLowerCase().includes(q) ||
-        d.keywords.toLowerCase().includes(q)
-      ) {
+    for (const d of assignedDetectionIndex) {
+      if (detectionMatchesQuery(d, q)) {
         out.push(d);
       }
     }
-    cameras.forEach((c, idx) => {
+    (canSearchCameras ? cameras : []).forEach((c, idx) => {
       // Positional CAM-00x label — same scheme the Live Wall grid uses (CameraGrid.jsx).
       const camLabel = `CAM-${String(idx + 1).padStart(3, '0')}`;
       const name = c.customName || c.name || c.channelName || c.aliasName || (c.channelId != null ? String(c.channelId) : '');
@@ -348,9 +404,16 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       });
     });
     return out.slice(0, 12);
-  }, [query, cameras, pageIndex, showLiveDemo]);
+  }, [query, cameras, pageIndex, showLiveDemo, canSearchCameras, assignedDetectionIndex]);
 
   const goResult = (r) => {
+    // Recheck the current grants before following a previously rendered result.
+    const allowed = permissionsReady && (
+      (r.kind === 'Page' && pageIndex.some((page) => page.to === r.to))
+      || (r.kind === 'Camera' && canSearchCameras)
+      || (r.kind === 'Detection' && assignedDetectionIndex.some((detection) => detection.to === r.to))
+    );
+    if (!allowed) return;
     navigate(r.to, r.state ? { state: r.state } : undefined);
     setSearchOpen(false);
     setQuery('');
@@ -389,7 +452,13 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       )}
       {showNoResults && (
         <div style={{ padding: '22px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
-          No matches for “{trimmed}”
+          {permissionsLoading || logsLoading || (canSearchDetections && IS_LICENSING_ENABLED && licenseLoading)
+            ? 'Loading search results…'
+            : !permissionsReady
+              ? 'Search is unavailable until your permissions are loaded.'
+              : canSearchDetections && !detectionAssignmentsReady
+                ? 'Detection availability could not be loaded. Please refresh.'
+                : `No matches for “${trimmed}”`}
         </div>
       )}
     </>

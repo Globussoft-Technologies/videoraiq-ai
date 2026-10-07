@@ -314,6 +314,13 @@ export default function CameraGrid() {
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
+  // The incident preview can still be loading after the camera list is ready.
+  // Keep the loader layout and camera details tied to the same pending request.
+  const playbackLoading = deepLinkIncidentId
+    ? !incidentPreview.error && (incidentPreview.loading || incidentTarget?.incidentId !== deepLinkIncidentId)
+    : !incidentTarget && channels.loading;
+  const playbackError = deepLinkIncidentId ? incidentPreview.error : incidentTarget ? null : channels.error;
+
   return (
     <div
       ref={pageRef}
@@ -444,12 +451,10 @@ export default function CameraGrid() {
           ActiveDetectionsPanel sits alongside it — live detection events for
           this camera, its enabled engines, and a link into zone config. ── */}
       <div className="vq-playback-content" style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', padding: 16, display: 'flex', gap: 16, alignItems: 'stretch' }}>
-        <div className="vq-playback-main" style={{ flex: '1 1 auto', minWidth: 0, minHeight: 440, display: 'flex', justifyContent: channels.loading ? 'center' : undefined }}>
+        <div className="vq-playback-main" style={{ flex: '1 1 auto', minWidth: 0, minHeight: 440, display: 'flex', justifyContent: playbackLoading || playbackError ? 'center' : undefined }}>
           <AsyncBoundary
-            loading={deepLinkIncidentId
-              ? !incidentPreview.error && (incidentPreview.loading || incidentTarget?.incidentId !== deepLinkIncidentId)
-              : !incidentTarget && channels.loading}
-            error={deepLinkIncidentId ? incidentPreview.error : incidentTarget ? null : channels.error}
+            loading={playbackLoading}
+            error={playbackError}
             isEmpty={false}
             onRetry={deepLinkIncidentId ? incidentPreview.refetch : channels.refetch}
             minH={360}
@@ -472,7 +477,7 @@ export default function CameraGrid() {
           </AsyncBoundary>
         </div>
 
-        {!isPageFS && visible[0] && (
+        {!isPageFS && !playbackLoading && !playbackError && visible[0] && (
           <div className="vq-playback-aside" style={{ flex: '0 0 280px', width: 280, minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
             <ActiveDetectionsPanel channel={visible[0]} showActiveDetections={false} />
           </div>

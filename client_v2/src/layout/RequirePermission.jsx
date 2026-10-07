@@ -2,28 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { usePermissions } from '@/context/PermissionContext';
 import { NAV_GROUPS } from './nav.config';
 import PageLoader from '@/components/PageLoader';
-import { isClientNavGroupVisible, isClientNavItemVisible } from '@/lib/navVisibility';
-
-// Mirrors Sidebar.jsx's isItemVisible — kept in sync there and in
-// HomeRedirect.jsx since all three read the same permissionKey/permissionSubKey
-// shape off nav.config.js. The empty-permissions passthrough matters here too:
-// PermissionContext's `loading` can go false a render before a fresh fetch
-// (triggered by a just-changed `user`) actually lands — e.g. right after
-// login, while the previous/empty permissions object is still in state — so
-// without this, a real page briefly reads as denied and redirects away for a
-// state that was never true once permissions actually loaded.
-function isItemVisible(item, permissions) {
-  if (!item.permissionKey) return true;
-  if (!permissions || Object.keys(permissions).length === 0) return true;
-  if (item.permissionSubKey) {
-    const module = permissions?.[item.permissionKey];
-    if (module?.[item.permissionSubKey]?.view === true) return true;
-    if (module?.global?.view === true) return true;
-    if (module?.view === true) return true;
-    return false;
-  }
-  return permissions?.[item.permissionKey]?.view === true;
-}
+import { ErrorState } from '@/components/States';
+import { isClientNavGroupVisible, isClientNavItemVisible, isItemVisible } from '@/lib/navVisibility';
 
 function firstVisiblePath(permissions) {
   for (const group of NAV_GROUPS) {
@@ -33,7 +13,7 @@ function firstVisiblePath(permissions) {
       if (isItemVisible(item, permissions)) return item.path;
     }
   }
-  return 'dashboard';
+  return null;
 }
 
 // Route-level counterpart to Sidebar.jsx's link hiding: the sidebar only
@@ -44,12 +24,19 @@ function firstVisiblePath(permissions) {
 // bounces to the first page the role actually has, instead of rendering it
 // anyway.
 export default function RequirePermission({ permissionKey, permissionSubKey, children }) {
-  const { permissions, loading } = usePermissions();
+  const { permissions, loading, error, refresh } = usePermissions();
 
   if (loading) return <PageLoader />;
+  if (error) return <ErrorState error={error} onRetry={refresh} minH={360} />;
+  if (!permissions || Object.keys(permissions).length === 0) {
+    return <ErrorState error={new Error('No page permissions are available for your account.')} onRetry={refresh} minH={360} />;
+  }
 
   const item = { permissionKey, permissionSubKey };
   if (isItemVisible(item, permissions)) return children;
 
-  return <Navigate to={firstVisiblePath(permissions)} replace />;
+  const fallback = firstVisiblePath(permissions);
+  return fallback
+    ? <Navigate to={`/${fallback}`} replace />
+    : <ErrorState error={new Error("You don't have permission to access this page.")} minH={360} />;
 }

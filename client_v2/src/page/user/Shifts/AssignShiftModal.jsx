@@ -181,7 +181,6 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
         if (cancelled) return;
         const list = shiftRes?.data?.body?.data?.shifts || [];
         setShiftOptions(list);
-        setSelectedShiftId((current) => current || list[0]?._id || '');
       } catch {
         if (!cancelled) toast.error('Failed to load shifts');
       }

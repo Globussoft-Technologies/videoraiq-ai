@@ -56,6 +56,8 @@ const getAllUserPermissions = async () => {
 export const PermissionProvider = ({ children }) => {
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [resolvedForUser, setResolvedForUser] = useState(null);
   const { user, setUser } = useAuth();
   // Guards against out-of-order responses: a fetch kicked off for a previous
   // `user` (e.g. still in flight right as logout->login swaps the user, or
@@ -69,16 +71,29 @@ export const PermissionProvider = ({ children }) => {
   const fetchPermissions = async () => {
     const requestId = ++requestIdRef.current;
     if (!user) {
-      if (requestId === requestIdRef.current) setPermissions({});
+      if (requestId === requestIdRef.current) {
+        setPermissions({});
+        setError(null);
+        setResolvedForUser(user);
+        setLoading(false);
+      }
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
       const response = await getAllUserPermissions();
       if (requestId !== requestIdRef.current) return;
-      if (response?.data?.body?.status === "success") {
-        const roleData = response.data.body.data[0];
+      const body = response?.data?.body;
+      if (body?.status !== "success") {
+        throw new Error(body?.message || "Could not load your permissions. Please retry.");
+      }
+      if (!body?.data?.[0]?.permissionConfig) {
+        throw new Error("Could not load your permissions. Please retry.");
+      }
+      if (body.status === "success") {
+        const roleData = body.data[0];
         setPermissions(normalizePermissionConfig(roleData));
         // /auth/by-login-token only decodes the JWT payload from login time —
         // it never re-checks the DB, so user.roleId in AuthContext goes stale
@@ -102,8 +117,12 @@ export const PermissionProvider = ({ children }) => {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch permissions:", error);
       setPermissions({});
+      setError(error);
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setResolvedForUser(user);
+        setLoading(false);
+      }
     }
   };
 
@@ -112,7 +131,14 @@ export const PermissionProvider = ({ children }) => {
   }, [user]);
 
   return (
-    <PermissionContext.Provider value={{ permissions, loading }}>
+    <PermissionContext.Provider value={{
+      permissions,
+      // A user change must stop consumers using the previous user's grants
+      // before the effect starts fetching permissions for the new user.
+      loading: loading || resolvedForUser !== user,
+      error,
+      refresh: fetchPermissions,
+    }}>
       {children}
     </PermissionContext.Provider>
   );
