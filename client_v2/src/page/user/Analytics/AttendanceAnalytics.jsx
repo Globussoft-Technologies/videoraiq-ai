@@ -417,7 +417,12 @@ function DailyActivity({ series = [], employees = 0 }) {
   const [hover, setHover] = useState(null);
 
   const rows = Array.isArray(series) ? series : [];
-  const roster = Math.max(Number(employees) || 0, ...rows.map((row) => Number(row.attended || 0)), 0);
+  // Scale against the complete stack, including absentees, even while the
+  // separate presence request is loading or refers to a different day.
+  const roster = rows.reduce(
+    (max, row) => Math.max(max, Number(row?.employees) || 0, dayBuckets(row).total),
+    Math.max(Number(employees) || 0, 0),
+  );
   const hasAttendanceData = rows.some((row) => {
     const present = Number(row?.present || 0);
     const halfDay = Number(row?.halfDay || 0);
@@ -457,7 +462,7 @@ function DailyActivity({ series = [], employees = 0 }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }} onMouseLeave={() => setHover(null)}>
+    <div ref={wrapRef} style={{ position: 'relative', minWidth: 0 }} onMouseLeave={() => setHover(null)}>
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 8 }}>
         {/* Left axis â€” employees */}
         <div style={{ position: 'relative', height: PLOT_H }}>
@@ -484,6 +489,7 @@ function DailyActivity({ series = [], employees = 0 }) {
           style={{
             position: 'relative',
             height: PLOT_H,
+            minWidth: 0,
             borderLeft: '1px solid var(--bd2)',
             borderBottom: '1px solid var(--bd2)',
           }}
@@ -519,7 +525,7 @@ function DailyActivity({ series = [], employees = 0 }) {
           )}
 
           {/* Attendance bars â€” left axis */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
             {rows.map((row) => {
               const buckets = dayBuckets(row);
               const share = (value) => (buckets.total > 0 ? (Number(value || 0) / buckets.total) * 100 : 0);
@@ -534,7 +540,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                       width: '58%',
                       minWidth: 4,
                       maxWidth: 18,
-                      height: `${buckets.total > 0 ? (buckets.total / left.max) * 100 : 0}%`,
+                      height: `${Math.min(100, Math.max(0, (buckets.total / left.max) * 100))}%`,
                       display: 'flex',
                       flexDirection: 'column-reverse',
                       borderRadius: 3,
@@ -821,10 +827,10 @@ export default function AttendanceAnalytics({ timezone }) {
                 </button>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, maxWidth: '100%' }}>
                 <span style={{ fontFamily: 'var(--ui)', fontSize: 11.5, color: 'var(--tx3)' }}>Location</span>
-                <div style={{ width: 230 }}>
+                <div style={{ width: 230, minWidth: 0, maxWidth: '100%' }}>
                   <SearchableSelect
                     value={selectedLocation || ALL_LOCATIONS}
                     options={locationOptions}
@@ -980,7 +986,7 @@ export default function AttendanceAnalytics({ timezone }) {
               bars in a 1.35fr column were the most cramped thing on the page. */}
           <div style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: 12, background: 'var(--bg2)', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>Daily Activity</span>
                 <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{activeRangeLabel || 'Selected range'}</span>
               </div>

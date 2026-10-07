@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
@@ -29,6 +30,16 @@ const severityBg = (severity) => {
 
 const formatTime = (t) =>
   t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
+
+export const StockPlaybackLink = ({ incidentId }) => incidentId ? (
+  <Link
+    to={`/playback?incidentId=${encodeURIComponent(incidentId)}`}
+    onClick={(event) => event.stopPropagation()}
+    className="whitespace-nowrap text-xs font-semibold text-[var(--blue)] underline underline-offset-2 hover:opacity-80"
+  >
+    Click for preview
+  </Link>
+) : <span className={styles.text}>--</span>;
 
 const formatEvidenceScore = (score) => {
   if (score == null || score === '--') return '--';
@@ -291,6 +302,23 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
     }
   );
+
+  if (config.showStockCountingFields) {
+    cols.push({
+      id: 'preview',
+      header: 'Preview',
+      cell: ({ row }) => {
+        const item = row.original;
+        const events = Array.isArray(item.events) ? item.events : [];
+        // The group image can belong to an older event on a different camera.
+        const imageEvent = events.find((event) => item.Image && event.Image === item.Image);
+        const incidentId = item.incidentImageUrl
+          ? (events.length ? imageEvent?._id : item._id)
+          : null;
+        return <StockPlaybackLink incidentId={incidentId} />;
+      },
+    });
+  }
 
   return cols;
 };

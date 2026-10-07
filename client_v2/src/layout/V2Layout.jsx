@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import useDetectionScheduleEvents from '../hooks/useDetectionScheduleEvents';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -117,6 +117,15 @@ function Shell() {
   }, [navigate]);
 
   const viewKey = currentViewKey(location.pathname);
+  const pageScrollRef = useRef(null);
+
+  // Start Analytics at the top on entry without resetting scroll on refresh.
+  useLayoutEffect(() => {
+    if (viewKey === 'analytics' && pageScrollRef.current) {
+      pageScrollRef.current.scrollTop = 0;
+    }
+  }, [location.pathname, viewKey]);
+
   const canUseLiveDemo = hasLiveDemoPlan();
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
   // Playback and Assistant both manage their own internal scrollers. Keeping
@@ -335,6 +344,7 @@ function Shell() {
           showLiveDemo={canUseLiveDemo}
         />
         <div
+          ref={pageScrollRef}
           className={fixedViewportPage ? undefined : 'vq-scroll'}
           style={{ flex: 1, minHeight: 0, overflowY: fixedViewportPage ? 'hidden' : 'auto', overflowX: 'hidden' }}
         >

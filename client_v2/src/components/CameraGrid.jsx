@@ -8,6 +8,7 @@ import SingleDatePicker from './SingleDatePicker';
 import ActiveDetectionsPanel from './ActiveDetectionsPanel';
 import { useApi } from '../hooks/useApi';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { fetchIncidentById } from '../helpers/incidents';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -133,6 +134,24 @@ export default function CameraGrid() {
   const ctxLoc   = ctx.location || '';
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkCamId = searchParams.get('cam');
+  const deepLinkIncidentId = searchParams.get('incidentId');
+  const [incidentTarget, setIncidentTarget] = useState(null);
+  const incidentPreview = useApi(async () => {
+    const incident = await fetchIncidentById(deepLinkIncidentId);
+    const cameraId = incident?.channelData?._id || incident?.channelId;
+    const at = incident?.timeOfIncident ? new Date(incident.timeOfIncident) : null;
+    if (!cameraId || !at || Number.isNaN(at.getTime())) {
+      throw new Error('Playback details are unavailable for this detection.');
+    }
+    // Fetch the specific authorized camera, even outside the first 200 results.
+    const cameras = await getChannels({ camera: cameraId, limit: 1 });
+    const channel = cameras.find((camera) => camera._id === cameraId);
+    if (!channel) throw new Error('The detection camera is unavailable for playback.');
+    if (String(incident?.nvrData?.connectionMode || '').toLowerCase() === 'direct') {
+      throw new Error('Recorded playback is unavailable for this camera.');
+    }
+    return { incidentId: deepLinkIncidentId, channel, at: at.toISOString() };
+  }, [deepLinkIncidentId], { enabled: Boolean(deepLinkIncidentId) });
 
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
@@ -209,34 +228,41 @@ export default function CameraGrid() {
     [deptApi.data]
   );
   const cameraOptions = useMemo(
-    () => (Array.isArray(channels.data) ? channels.data : []).map((c) => ({
-      id: c._id || c.channelId,
-      label: c.customName || c.name || c.channelId,
-    })),
-    [channels.data]
+    () => {
+      const cameras = Array.isArray(channels.data) ? [...channels.data] : [];
+      if (incidentTarget && !cameras.some((camera) => camera._id === incidentTarget.channel._id)) {
+        cameras.push(incidentTarget.channel);
+      }
+      return cameras.map((c) => ({
+        id: c._id || c.channelId,
+        label: c.customName || c.name || c.channelId,
+      }));
+    },
+    [channels.data, incidentTarget]
   );
 
   /* wrap setters so any filter change resets pagination to the first page */
-  const onFilter = (setter) => (v) => { setter(v); setPage(0); };
+  const onFilter = (setter) => (v) => { setIncidentTarget(null); setter(v); setPage(0); };
 
   /* Clear-all: reset every filter (and search) in one click */
   const hasActiveFilters =
     selLoc.length || selNvr.length || selCam.length || selDept.length || selType.length ||
     search.trim() || dateStr !== todayStr;
   const clearFilters = () => {
+    setIncidentTarget(null);
     setSelLoc([]); setSelNvr([]); setSelCam([]); setSelDept([]); setSelType([]);
     setSearch(''); setPage(0); setDateStr(todayStr);
   };
 
   const list = useMemo(() => {
-    let arr = Array.isArray(channels.data) ? channels.data : [];
+    let arr = incidentTarget ? [incidentTarget.channel] : (Array.isArray(channels.data) ? channels.data : []);
     if (search.trim()) {
       const q = search.toLowerCase();
       arr = arr.filter(c => `${c.customName || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase().includes(q));
     }
     if (selCam.length) arr = arr.filter(c => selCam.includes(c._id || c.channelId));
     return arr;
-  }, [channels.data, search, selCam]);
+  }, [channels.data, search, selCam, incidentTarget]);
 
   const pages    = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const safePage = Math.min(page, pages - 1);
@@ -254,7 +280,7 @@ export default function CameraGrid() {
   /* Deep-link: ?cam=<id> selects that camera into the (single) playback
      view once channels load — no separate modal, same screen as always. */
   useEffect(() => {
-    if (!deepLinkCamId || !Array.isArray(channels.data)) return;
+    if (deepLinkIncidentId || !deepLinkCamId || !Array.isArray(channels.data)) return;
     const match = channels.data.find((c) => (c._id || c.channelId) === deepLinkCamId);
     if (match) {
       setSelCam([match._id || match.channelId]);
@@ -265,7 +291,23 @@ export default function CameraGrid() {
       next.delete('cam');
       return next;
     }, { replace: true });
-  }, [deepLinkCamId, channels.data, setSearchParams]);
+  }, [deepLinkIncidentId, deepLinkCamId, channels.data, setSearchParams]);
+
+  useEffect(() => {
+    const target = incidentPreview.data;
+    if (!deepLinkIncidentId || target?.incidentId !== deepLinkIncidentId) return;
+    setIncidentTarget(target);
+    setDateStr(toDateInputValue(new Date(target.at)));
+    setSelCam([target.channel._id]);
+    setSearch('');
+    setPage(0);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('incidentId');
+      next.delete('cam');
+      return next;
+    }, { replace: true });
+  }, [deepLinkIncidentId, incidentPreview.data, setSearchParams]);
   useEffect(() => {
     const h = () => setIsPageFS(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', h);
@@ -295,7 +337,7 @@ export default function CameraGrid() {
           <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
           <input
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            onChange={e => { setIncidentTarget(null); setSearch(e.target.value); setPage(0); }}
             placeholder="Search cameras…"
             className="vq-ph-hl"
             style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
@@ -404,10 +446,12 @@ export default function CameraGrid() {
       <div className="vq-playback-content" style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', padding: 16, display: 'flex', gap: 16, alignItems: 'stretch' }}>
         <div className="vq-playback-main" style={{ flex: '1 1 auto', minWidth: 0, minHeight: 440, display: 'flex', justifyContent: channels.loading ? 'center' : undefined }}>
           <AsyncBoundary
-            loading={channels.loading}
-            error={channels.error}
+            loading={deepLinkIncidentId
+              ? !incidentPreview.error && (incidentPreview.loading || incidentTarget?.incidentId !== deepLinkIncidentId)
+              : !incidentTarget && channels.loading}
+            error={deepLinkIncidentId ? incidentPreview.error : incidentTarget ? null : channels.error}
             isEmpty={false}
-            onRetry={channels.refetch}
+            onRetry={deepLinkIncidentId ? incidentPreview.refetch : channels.refetch}
             minH={360}
           >
             {() => (
@@ -415,6 +459,7 @@ export default function CameraGrid() {
                 <PlaybackTimeline
                   channel={visible[0]}
                   date={playbackDate}
+                  initialAt={incidentTarget?.at}
                   onPrev={pages > 1 ? () => setPage(p => (p - 1 + pages) % pages) : null}
                   onNext={pages > 1 ? () => setPage(p => (p + 1) % pages) : null}
                   onExpand={togglePageFullscreen}

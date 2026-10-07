@@ -147,13 +147,23 @@ function statusOf(item) {
 }
 
 export async function apiMarkResolved(id, incidentType, resolved) {
+  if (!id) throw new Error('Incident ID is missing');
   const token = getAccessToken();
   const res = await axios.put(
     `${import.meta.env.VITE_BACKEND}/incidents/${id}`,
     { resolved, incidentType },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
-  return res?.data?.body;
+  const body = res?.data?.body;
+  const incident = body?.data?.Incident;
+  if (body?.status !== 'success') {
+    throw new Error(body?.message || res?.data?.message || 'Could not save the incident');
+  }
+  if (String(incident?._id || incident?.id || '') !== String(id)
+    || incident?.resolved !== resolved) {
+    throw new Error('Could not confirm the incident update');
+  }
+  return incident;
 }
 
 async function apiReport(incidentId, description) {
@@ -363,15 +373,15 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
     setResolving(true);
     try {
       const next = !localResolved;
-      await apiMarkResolved(item._id || item.id, item.incidentType, next);
-      setLocalResolved(next);
-      onResolvedChange?.(item._id || item.id, next);
+      const savedIncident = await apiMarkResolved(item._id || item.id, item.incidentType, next);
+      setLocalResolved(savedIncident.resolved);
+      onResolvedChange?.(item._id || item.id, savedIncident.resolved, savedIncident);
       setSaveFlash({ text: next ? 'Resolved' : 'Mark as resolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch (err) {
       // Previously failed silently, leaving the user to assume it worked;
       // surface the real reason (e.g. a permission error) as a toast.
-      toast.error(err?.response?.data?.body?.message || 'Failed — retry');
+      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || err?.message || 'Failed — retry');
     } finally {
       setResolving(false);
     }

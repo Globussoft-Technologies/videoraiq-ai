@@ -22,6 +22,8 @@ function Tile({ label, value, sub, subColor = 'var(--tx3)', color = 'var(--tx)',
         border: '1px solid var(--bd)',
         borderRadius: 13,
         padding: 15,
+        minWidth: 0,
+        overflowWrap: 'anywhere',
         cursor: interactive ? 'pointer' : 'default',
       }}
     >
@@ -70,7 +72,7 @@ export default function OverviewKpiRow({ params }) {
       <AnalyticsBlurb style={{ marginBottom: 10 }}>
         High-level incident KPIs for the selected range: total detections, share resolved, cameras with AI enabled, and the site generating the most events.
       </AnalyticsBlurb>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }} className="vq-analytics-kpis">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }} className="vq-analytics-kpis">
         <Tile
           label={label ? `Total Detections · ${label}` : 'Total Detections'}
           value={num(total)}

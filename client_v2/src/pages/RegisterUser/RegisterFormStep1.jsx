@@ -1,6 +1,7 @@
 import { Field, ErrorMessage, useFormikContext } from 'formik';
 import { Input } from '@/components/ui/input';
 import SelectField from './SelectField';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 const errorClass = 'text-[var(--crit)] text-[11px] mt-1';
 
@@ -11,7 +12,7 @@ function FieldLabel({ children }) {
 const locationLabel = (loc) => (loc.toLowerCase() === 'banglore' ? 'Bangalore' : loc);
 
 const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
-  const { values, setFieldValue } = useFormikContext();
+  const { values, setFieldValue, handleChange, setFieldError, setFieldTouched } = useFormikContext();
 
   // Combine fetched locations with the current value so it prepopulates on edit.
   const locationOptions = Array.from(new Set([values.location, ...locations]))
@@ -58,6 +59,14 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
           as={Input}
           name="email"
           type="email"
+          onChange={(event) => {
+            if (hasEmailEmoji(event.target.value)) {
+              setFieldTouched('email', true, false);
+              setFieldError('email', EMAIL_EMOJI_ERROR);
+              return;
+            }
+            handleChange(event);
+          }}
           placeholder="name@company.com"
           className="bg-[var(--bg3)] border-[var(--bd)] text-[var(--tx)] shadow-none rounded-[10px]"
         />

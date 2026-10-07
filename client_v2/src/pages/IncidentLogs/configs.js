@@ -267,6 +267,8 @@ export const STOCK_COUNTING_CONFIG = {
   }),
   showIndustrialFields: false,
   showStockCountingFields: true,
+  showSeverity: false,
+  showSeverityFilter: false,
   showVehicleNumberFilter: true,
   vehicleNumbersEndpoint: '/incidents/logs/loading-unloading-stock-counting-detection/numbers',
   showBoxTypeFilter: true,

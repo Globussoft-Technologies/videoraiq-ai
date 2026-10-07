@@ -368,6 +368,23 @@
   .vq-att-event-grid { grid-template-columns: 1fr !important; }
 }
 
+/* ---- Responsive layout for Analytics ---- */
+.vq-analytics-page > *,
+.vq-analytics-page .vq-analytics-row > *,
+.vq-analytics-page .vq-att-kpi-grid > * { min-width: 0; }
+@media (max-width: 1280px) {
+  .vq-analytics-page .vq-att-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 1100px) {
+  .vq-analytics-page .vq-analytics-row { grid-template-columns: minmax(0, 1fr) !important; }
+  .vq-analytics-page .vq-analytics-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 640px) {
+  .vq-analytics-page { padding: 14px !important; }
+  .vq-analytics-page .vq-analytics-kpis,
+  .vq-analytics-page .vq-att-kpi-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
 /* ---- Responsive layout for Live Wall / Camera grid ---- */
 @media (max-width: 900px) {
   .vq-wall-grid[data-cols="3"],

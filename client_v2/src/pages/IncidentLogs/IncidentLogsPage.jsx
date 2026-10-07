@@ -13,7 +13,7 @@ import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 import { initialState, reducer } from './incidentState';
-import { buildColumns, renderIncidentCard } from './incidentColumns';
+import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
@@ -252,7 +252,7 @@ const IncidentLogsPage = ({ config }) => {
         sortOrder,
         nvrIds,
         channelIds,
-        severity,
+        severity: config.showStockCountingFields ? undefined : severity,
         status: config.showStatus ? status : undefined,
         search: searchInput,
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
@@ -345,7 +345,7 @@ const IncidentLogsPage = ({ config }) => {
       dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, vehicleNumber, boxType, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -460,7 +460,7 @@ const IncidentLogsPage = ({ config }) => {
                 return (
                   <div
                     key={event?._id || event?.eventId || `${row?.aggregationKey || row?._id}-${index}`}
-                    className="grid min-h-[78px] grid-cols-[20px_82px_60px_125px_minmax(320px,1fr)] items-center gap-x-3 px-4 py-2.5 transition-colors hover:bg-[var(--bg2)] sm:grid-cols-[24px_92px_68px_145px_minmax(360px,1fr)]"
+                    className="grid min-h-[78px] grid-cols-[20px_82px_60px_125px_minmax(320px,1fr)_110px] items-center gap-x-3 px-4 py-2.5 transition-colors hover:bg-[var(--bg2)] sm:grid-cols-[24px_92px_68px_145px_minmax(360px,1fr)_110px]"
                   >
                     <div className="relative flex h-full min-h-[64px] items-center justify-center">
                       <span className="relative z-20 h-2 w-2 rounded-full bg-[var(--blue)]" />
@@ -532,6 +532,10 @@ const IncidentLogsPage = ({ config }) => {
                         </span>
                         )}
                     </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tx3)]">Preview</div>
+                      <StockPlaybackLink incidentId={imageUrl ? event?._id : null} />
+                    </div>
                   </div>
                 );
               })}
@@ -598,13 +602,13 @@ const IncidentLogsPage = ({ config }) => {
       sortOrder,
       nvrIds,
       channelIds,
-      severity,
+      severity: config.showStockCountingFields ? undefined : severity,
       status: config.showStatus ? status : undefined,
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
     }),
-    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, searchInput]
+    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -644,6 +648,7 @@ const IncidentLogsPage = ({ config }) => {
       <ImagePreviewModal
         previewImage={previewImage}
         imageKey={previewRows[previewIndex]?.previewKey}
+        zoomControlsPosition={config.showStockCountingFields ? 'left' : 'right'}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
         hasPrevious={previewNavigationEnabled && previewIndex > 0}

@@ -51,7 +51,7 @@ function startOfDay(date) {
  * Shows the recording for whichever camera/time is selected.
  * Enhanced with 24-hour down to 5-minute time-scale zoom and actual video frame thumbnails.
  */
-export default function PlaybackTimeline({ channel, date = new Date(), onPrev, onNext, onExpand, isExpanded }) {
+export default function PlaybackTimeline({ channel, date = new Date(), initialAt, onPrev, onNext, onExpand, isExpanded }) {
   const themeContext = useTheme();
   const isDark = themeContext?.isDark ?? (typeof document !== 'undefined' && (
     document.documentElement.classList.contains('dark') ||
@@ -64,6 +64,13 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const camSite = channel?.location || channel?.locationName || channel?.site || '';
   const nvrId = channel?.nvrId?._id || channel?.nvrId;
   const day = useMemo(() => startOfDay(date), [date]);
+  const initialOffsetMs = useMemo(() => {
+    if (!initialAt) return null;
+    const offset = new Date(initialAt).getTime() - day.getTime();
+    return Number.isFinite(offset) && offset >= 0 && offset < DAY_MS
+      ? Math.floor(offset / 1000) * 1000
+      : null;
+  }, [initialAt, day]);
 
   // Video playback speed (1x, 4x, 16x) — decoupled from timeline zoom
   const [speedIdx, setSpeedIdx] = useState(0);
@@ -280,14 +287,17 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const loadAtRef = useRef(loadAt);
   loadAtRef.current = loadAt;
 
-  // Auto-load start of day on channel/date change
+  // Incident links start at their recorded timestamp; normal entry starts at midnight.
   useEffect(() => {
-    if (channelId) loadAt(0);
+    if (channelId) {
+      if (initialOffsetMs !== null) setCursorMs(initialOffsetMs);
+      loadAt(initialOffsetMs ?? 0, 0, initialOffsetMs !== null);
+    }
     return () => {
       if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
       seekTokenRef.current += 1;
     };
-  }, [channelId, +day, loadAt]);
+  }, [channelId, +day, loadAt, initialOffsetMs]);
 
   // HLS/DASH attach
   useEffect(() => {

@@ -18,6 +18,7 @@ import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import MultiSelect from '../../../components/MultiSelect';
 import Pagination from '../../../components/Pagination';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 import TelegramAlerts from './TelegramAlerts';
 import { getDetectionTypes } from '../../../helpers/configure';
 import { getTelegramLinkCode, unlinkTelegram } from '../../../helpers/telegram';
@@ -37,6 +38,7 @@ function toIncidentKey(detectionKey) {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NAME_RE = /^\p{L}[\p{L}\p{M} ]*$/u;
 
 const STATUS_FILTERS = [
   { key: 'All', label: 'All' },
@@ -78,6 +80,7 @@ function Avatar({ name }) {
 function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [incidentIds, setIncidentIds] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -93,6 +96,15 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   async function submit() {
     if (!fullName.trim()) {
       toast.error('Full name is required');
+      return;
+    }
+    if (!NAME_RE.test(fullName.trim())) {
+      toast.error('Full name must contain only letters and spaces');
+      return;
+    }
+    if (hasEmailEmoji(email)) {
+      setEmailError(EMAIL_EMOJI_ERROR);
+      toast.error(EMAIL_EMOJI_ERROR);
       return;
     }
     if (!EMAIL_RE.test(email.trim())) {
@@ -231,7 +243,15 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
             <input
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={!!emailError || undefined}
+              onChange={(event) => {
+                if (hasEmailEmoji(event.target.value)) {
+                  setEmailError(EMAIL_EMOJI_ERROR);
+                  return;
+                }
+                setEmail(event.target.value);
+                setEmailError('');
+              }}
               placeholder="e.g. michael@company.com"
               style={{
                 width: '100%',
@@ -247,6 +267,8 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
               }}
             />
           </div>
+
+          {emailError && <div role="alert" style={{ fontSize: 11, color: 'var(--crit)', marginTop: -8 }}>{emailError}</div>}
 
           <div>
             <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
@@ -335,6 +357,10 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
   async function submit() {
     if (!fullName.trim()) {
       toast.error('Full name is required');
+      return;
+    }
+    if (!NAME_RE.test(fullName.trim())) {
+      toast.error('Full name must contain only letters and spaces');
       return;
     }
     setSaving(true);

@@ -1151,7 +1151,12 @@ export default function SystemSettings() {
             .vq-retention-slider::-webkit-slider-runnable-track {
               height: 8px;
               border-radius: 999px;
-              background: var(--retention-color);
+              background-image:
+                linear-gradient(var(--retention-color), var(--retention-color)),
+                linear-gradient(var(--retention-color), var(--retention-color));
+              background-size: var(--retention-progress) 8px, 100% 3px;
+              background-position: left center;
+              background-repeat: no-repeat;
               border: 0;
             }
             .vq-retention-slider::-webkit-slider-thumb {
@@ -1166,7 +1171,7 @@ export default function SystemSettings() {
               box-shadow: 0 3px 10px rgba(15,23,42,.22);
             }
             .vq-retention-slider::-moz-range-track {
-              height: 8px;
+              height: 3px;
               border-radius: 999px;
               background: var(--retention-color);
               border: 0;
@@ -1211,6 +1216,7 @@ export default function SystemSettings() {
               const Icon = item.icon;
               const currentMonths = retentionMonths[item.key] ?? RETENTION_DEFAULT_MONTHS;
               const currentIndex = Math.max(0, RETENTION_OPTIONS.findIndex((option) => option.months === currentMonths));
+              const progress = `${(currentIndex / Math.max(1, RETENTION_OPTIONS.length - 1)) * 100}%`;
               const activeColor = item.color;
               const disabled = !retentionEnabled || retentionSaving || !canAdjustRetention;
               return (
@@ -1239,7 +1245,7 @@ export default function SystemSettings() {
                         RETENTION_OPTIONS[Number(e.target.value)]?.months ?? RETENTION_DEFAULT_MONTHS
                       )}
                       className="vq-retention-slider"
-                      style={{ '--retention-color': activeColor, cursor: !disabled ? 'pointer' : 'default', opacity: !disabled ? 1 : 0.55 }}
+                      style={{ '--retention-color': activeColor, '--retention-progress': progress, cursor: !disabled ? 'pointer' : 'default', opacity: !disabled ? 1 : 0.55 }}
                     />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 5 }}>

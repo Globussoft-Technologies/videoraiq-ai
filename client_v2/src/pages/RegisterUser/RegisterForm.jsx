@@ -4,6 +4,7 @@ import * as Yup from 'yup';
 import { ArrowLeft, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { COMPACT_TOAST } from './toastOptions';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import {
@@ -40,6 +41,7 @@ const validationSchemaStep1 = Yup.object().shape({
     .max(30, 'Last name cannot exceed 30 characters')
     .min(1, 'Last name must be at least 1 character'),
   email: Yup.string()
+    .test('no-email-emoji', EMAIL_EMOJI_ERROR, (value) => !hasEmailEmoji(value))
     .email('Invalid email')
     .matches(/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/, 'Invalid email format'),
   vehicleNumber: Yup.string(),
@@ -242,6 +244,12 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
   };
 
   const handleSubmit = async (values, { resetForm }) => {
+    // Step two uses its own schema; recheck email before either save request.
+    if (hasEmailEmoji(values.email)) {
+      toast.error(EMAIL_EMOJI_ERROR, COMPACT_TOAST);
+      setStep(1);
+      return;
+    }
     const uploadedCount = uploadedImagePaths.filter(
       (img) => (typeof img === 'string' && img.trim() !== '') || img instanceof File
     ).length;

@@ -24,11 +24,11 @@ const EMPTY = {
 
 const errorMessage = (error) => error?.response?.data?.message || error?.message || 'Request failed';
 
-function Field({ label, value, onChange, type = 'text', placeholder = '', required = false }) {
+function Field({ name, label, value, onChange, type = 'text', placeholder = '', required = false }) {
   return (
-    <label className="storage-field">
+    <label className="storage-field" htmlFor={name}>
       <span>{label}{required ? ' *' : ''}</span>
-      <input type={type} value={value ?? ''} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <input id={name} name={name} autoComplete={type === 'password' ? 'new-password' : 'off'} type={type} value={value ?? ''} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -184,24 +184,24 @@ export default function StorageSettings() {
           </div>
 
           <div className="storage-form">
-            <Field label="Configuration name" value={form.label} onChange={set('label')} placeholder="Primary storage" />
+            <Field name={`storage-${form.provider}-configuration-name`} label="Configuration name" value={form.label} onChange={set('label')} placeholder="Primary storage" />
             {form.provider === 'nas' ? <>
-              <Field label="Host" value={form.host} onChange={set('host')} required />
-              <Field label="Port" value={form.port} onChange={set('port')} type="number" required />
-              <Field label="Username" value={form.username} onChange={set('username')} required />
-              <Field label="Password" value={form.password} onChange={set('password')} type="password" placeholder={status?.configured ? 'Leave blank to keep current password' : ''} required={!status?.configured} />
-              <Field label="Base path" value={form.basePath} onChange={set('basePath')} placeholder="/media/videoraiq" required />
+              <Field name="storage-nas-host" label="Host" value={form.host} onChange={set('host')} required />
+              <Field name="storage-nas-port" label="Port" value={form.port} onChange={set('port')} type="number" required />
+              <Field name="storage-nas-username" label="Username" value={form.username} onChange={set('username')} required />
+              <Field name="storage-nas-password" label="Password" value={form.password} onChange={set('password')} type="password" placeholder={status?.configured ? 'Leave blank to keep current password' : ''} required={!status?.configured} />
+              <Field name="storage-nas-base-path" label="Base path" value={form.basePath} onChange={set('basePath')} placeholder="/media/videoraiq" required />
             </> : <>
-              <Field label="Region" value={form.region} onChange={set('region')} required />
-              <Field label="Bucket" value={form.bucket} onChange={set('bucket')} required />
-              <Field label="Access key ID" value={form.accessKeyId} onChange={set('accessKeyId')} placeholder={status?.effective?.hasAccessKey ? 'Leave blank to keep current key' : ''} required={!status?.configured} />
-              <Field label="Secret access key" value={form.secretAccessKey} onChange={set('secretAccessKey')} type="password" placeholder={status?.effective?.hasSecret ? 'Leave blank to keep current secret' : ''} required={!status?.configured} />
-              <Field label="Endpoint (optional)" value={form.endpoint} onChange={set('endpoint')} placeholder="https://…" />
-              {form.provider === 'oracle' && <Field label="Namespace" value={form.namespace} onChange={set('namespace')} />}
-              {form.provider === 'aws' && <Field label="Session token (optional)" value={form.sessionToken} onChange={set('sessionToken')} type="password" />}
+              <Field name={`storage-${form.provider}-region`} label="Region" value={form.region} onChange={set('region')} required />
+              <Field name={`storage-${form.provider}-bucket`} label="Bucket" value={form.bucket} onChange={set('bucket')} required />
+              <Field name={`storage-${form.provider}-access-key-id`} label="Access key ID" value={form.accessKeyId} onChange={set('accessKeyId')} placeholder={status?.effective?.hasAccessKey ? 'Leave blank to keep current key' : ''} required={!status?.configured} />
+              <Field name={`storage-${form.provider}-secret-access-key`} label="Secret access key" value={form.secretAccessKey} onChange={set('secretAccessKey')} type="password" placeholder={status?.effective?.hasSecret ? 'Leave blank to keep current secret' : ''} required={!status?.configured} />
+              <Field name={`storage-${form.provider}-endpoint`} label="Endpoint (optional)" value={form.endpoint} onChange={set('endpoint')} placeholder="https://…" />
+              {form.provider === 'oracle' && <Field name="storage-oracle-namespace" label="Namespace" value={form.namespace} onChange={set('namespace')} />}
+              {form.provider === 'aws' && <Field name="storage-aws-session-token" label="Session token (optional)" value={form.sessionToken} onChange={set('sessionToken')} type="password" />}
             </>}
           </div>
-          {form.provider === 'aws' && <label className="storage-check"><input type="checkbox" checked={form.forcePathStyle} onChange={(event) => set('forcePathStyle')(event.target.checked)} /> Force path-style URLs</label>}
+          {form.provider === 'aws' && <label className="storage-check"><input id="storage-aws-force-path-style" name="storage-aws-force-path-style" autoComplete="off" type="checkbox" checked={form.forcePathStyle} onChange={(event) => set('forcePathStyle')(event.target.checked)} /> Force path-style URLs</label>}
           <div className="storage-note">Test Connection uploads the VideoraIQ logo, fetches and byte-verifies it, then removes the test object. Credentials are encrypted when you save.</div>
           <div className="storage-actions">
             {status?.configured && <button type="button" onClick={() => setSupportOpen(true)} disabled={!!busy}><Headphones size={15} /> Switch to VideoraIQ Cloud</button>}

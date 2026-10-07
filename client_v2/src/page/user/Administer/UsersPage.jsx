@@ -15,6 +15,7 @@ import {
   getEmployeeLocations, getNvrsForUserAccess, getChannelsForUserAccess, getDepartmentsForUserAccess,
 } from '../../../api/administer';
 import { getLocations } from '../../../helpers/monitoring';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -65,6 +66,7 @@ function hexA(hex, a) {
 // set of addresses. The input's type="email" only self-validates on native form
 // submit — this modal saves via an onClick handler, so nothing was checking it.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NAME_RE = /^\p{L}[\p{L}\p{M} ]*$/u;
 
 function userName(u) {
   const n = `${u.firstName || ''} ${u.lastName || ''}`.trim();
@@ -370,6 +372,10 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [errors, setErrors] = useState({});
   // Clears this field's message as soon as the user starts correcting it.
   const bind = (setter, key) => (e) => {
+    if (key === 'email' && hasEmailEmoji(e.target.value)) {
+      setErrors(prev => ({ ...prev, email: EMAIL_EMOJI_ERROR }));
+      return;
+    }
     setter(e.target.value);
     setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev));
   };
@@ -467,12 +473,15 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     const e = {};
     if (!username.trim())  e.username  = 'Admin user name is required';
     if (!firstName.trim()) e.firstName = 'First name is required';
+    else if (!NAME_RE.test(firstName.trim())) e.firstName = 'First name must contain only letters and spaces';
     // Marked required by its label, but neither this form nor the backend
     // enforced it — a blank surname saved silently and the user then rendered
     // with only a first name everywhere userName() is used.
     if (!lastName.trim())  e.lastName  = 'Last name is required';
+    else if (!NAME_RE.test(lastName.trim())) e.lastName = 'Last name must contain only letters and spaces';
 
     if (!email.trim())                     e.email = 'Email is required';
+    else if (hasEmailEmoji(email))         e.email = EMAIL_EMOJI_ERROR;
     else if (!EMAIL_RE.test(email.trim())) e.email = 'Enter a valid email address';
 
     if (!roleId) e.roleId = 'Select a role for this user';

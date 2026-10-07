@@ -164,7 +164,7 @@ function FullscreenCameraView({
         immediate
         isFullscreen
         enableFullscreenZoom
-        zoomToolbarStyle={{ right: 62 }}
+        zoomToolbarStyle={{ top: 'auto', bottom: 14, right: 62 }}
       />
       <LiveCameraLogsOverlay channel={channel} />
 

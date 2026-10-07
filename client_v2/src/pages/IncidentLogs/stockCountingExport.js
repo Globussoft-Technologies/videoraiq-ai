@@ -38,6 +38,19 @@ const imageUrlOf = (item) => {
   return `${import.meta.env.VITE_INCIDENT_URL || ''}${path}`;
 };
 
+const previewUrlOf = (item) => {
+  const image = imageUrlOf(item);
+  if (!image) return '';
+  const events = Array.isArray(item?.events) ? item.events : [];
+  // Match the group image to its own incident, which may use another camera.
+  const incidentId = events.length
+    ? events.find((event) => imageUrlOf(event) === image)?._id
+    : item?._id;
+  return incidentId
+    ? new URL(`/playback?incidentId=${encodeURIComponent(incidentId)}`, window.location.origin).href
+    : '';
+};
+
 const fetchAllForExport = async (config, filters = {}) => {
   const response = await fetchIncidentLogs({
     endpoint: config.endpoint,
@@ -50,7 +63,6 @@ const fetchAllForExport = async (config, filters = {}) => {
     sortOrder: filters.sortOrder,
     nvrIds: filters.nvrIds,
     channelIds: filters.channelIds,
-    severity: filters.severity,
     status: filters.status,
     search: filters.searchInput,
     vehicleNumber: filters.vehicleNumber,
@@ -76,7 +88,6 @@ const PARENT_HEADERS = [
   'Incident Name',
   'NVR Name',
   'Camera Name',
-  'Severity',
   'Vehicle Number',
   'Movement',
   'Box Type',
@@ -84,6 +95,7 @@ const PARENT_HEADERS = [
   'Unloaded',
   'Total Boxes',
   'Time of Incident',
+  'Preview',
 ];
 
 const parentRow = (row, serial) => [
@@ -92,7 +104,6 @@ const parentRow = (row, serial) => [
   dash(row?.incidentName),
   nvrNameOf(row),
   cameraNameOf(row),
-  dash(row?.severity),
   vehicleNumberOf(row),
   movementOf(row),
   boxTypesOf(row),
@@ -100,6 +111,7 @@ const parentRow = (row, serial) => [
   row?.unloadedBoxCount ?? 0,
   row?.boxCount ?? row?.count ?? 0,
   formatTime(row?.timeOfIncident || row?.createdAt),
+  previewUrlOf(row) ? 'Click for preview' : '--',
 ];
 
 const eventDirection = (event) => String(event?.direction || '').toLowerCase();
@@ -113,13 +125,13 @@ const childRow = (event) => {
     dash(event?.nvrName),
     dash(event?.channelName),
     '',
-    '',
     direction || '--',
     dash(event?.boxType),
     direction === 'loading' ? count : 0,
     direction === 'unloading' ? count : 0,
     count,
     formatTime(event?.timeOfIncident),
+    previewUrlOf(event) ? 'Click for preview' : '--',
   ];
 };
 
@@ -134,6 +146,7 @@ const MOVEMENT_HEADERS = [
   'Description',
   'Time',
   'Image',
+  'Preview',
 ];
 
 const movementRow = (vehicle, event, serial) => [
@@ -147,6 +160,7 @@ const movementRow = (vehicle, event, serial) => [
   dash(event?.description),
   formatTime(event?.timeOfIncident),
   imageUrlOf(event) ? 'View Image' : '--',
+  previewUrlOf(event) ? 'Click for preview' : '--',
 ];
 
 const imageToDataUrl = async (url) => {
@@ -214,6 +228,16 @@ const linkImageCell = (sheet, rowIndex, columnIndex, url) => {
   };
 };
 
+const linkPreviewCell = (sheet, rowIndex, columnIndex, url) => {
+  if (!url) return;
+  const ref = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+  sheet[ref] = {
+    t: 's',
+    v: 'Click for preview',
+    l: { Target: url, Tooltip: 'Open playback for this detection' },
+  };
+};
+
 const exportToExcel = async (config, filters) => {
   try {
     const vehicles = await fetchAllForExport(config, filters);
@@ -228,9 +252,9 @@ const exportToExcel = async (config, filters) => {
     const groupedLines = [];
 
     vehicles.forEach((vehicle, index) => {
-      groupedLines.push({ cells: parentRow(vehicle, index + 1), image: imageUrlOf(vehicle) });
+      groupedLines.push({ cells: parentRow(vehicle, index + 1), image: imageUrlOf(vehicle), preview: previewUrlOf(vehicle) });
       (vehicle.events || []).forEach((event) => {
-        groupedLines.push({ cells: childRow(event), image: imageUrlOf(event) });
+        groupedLines.push({ cells: childRow(event), image: imageUrlOf(event), preview: previewUrlOf(event) });
       });
     });
 
@@ -243,6 +267,7 @@ const exportToExcel = async (config, filters) => {
     vehiclesSheet['!cols'] = PARENT_HEADERS.map((header) => ({ wch: Math.max(14, header.length + 3) }));
     groupedLines.forEach((line, index) => {
       linkImageCell(vehiclesSheet, dataStart + index, imageColumn, line.image);
+      linkPreviewCell(vehiclesSheet, dataStart + index, PARENT_HEADERS.indexOf('Preview'), line.preview);
     });
     XLSX.utils.book_append_sheet(workbook, vehiclesSheet, 'Vehicles');
 
@@ -260,7 +285,8 @@ const exportToExcel = async (config, filters) => {
     movementsSheet['!merges'] = excelMerges(MOVEMENT_HEADERS.length);
     movementsSheet['!cols'] = MOVEMENT_HEADERS.map((header) => ({ wch: Math.max(14, header.length + 3) }));
     movementLines.forEach(({ event }, index) => {
-      linkImageCell(movementsSheet, dataStart + index, MOVEMENT_HEADERS.length - 1, imageUrlOf(event));
+      linkImageCell(movementsSheet, dataStart + index, MOVEMENT_HEADERS.indexOf('Image'), imageUrlOf(event));
+      linkPreviewCell(movementsSheet, dataStart + index, MOVEMENT_HEADERS.indexOf('Preview'), previewUrlOf(event));
     });
     XLSX.utils.book_append_sheet(workbook, movementsSheet, 'Movements');
 
@@ -289,9 +315,9 @@ const exportToPDF = async (config, filters) => {
 
     const body = [];
     vehicles.forEach((vehicle, index) => {
-      body.push({ child: false, image: imageUrlOf(vehicle), cells: parentRow(vehicle, index + 1) });
+      body.push({ child: false, image: imageUrlOf(vehicle), preview: previewUrlOf(vehicle), cells: parentRow(vehicle, index + 1) });
       (vehicle.events || []).forEach((event) => {
-        body.push({ child: true, image: imageUrlOf(event), cells: childRow(event) });
+        body.push({ child: true, image: imageUrlOf(event), preview: previewUrlOf(event), cells: childRow(event) });
       });
     });
 
@@ -320,13 +346,17 @@ const exportToPDF = async (config, filters) => {
           data.cell.styles.textColor = [90, 98, 116];
           data.cell.styles.fontSize = 5.8;
         }
-        if (data.column.index === 1 && line?.image) {
+        if ((data.column.index === 1 && line?.image)
+          || (data.column.index === PARENT_HEADERS.indexOf('Preview') && line?.preview)) {
           data.cell.styles.textColor = [37, 99, 235];
         }
       },
       didDrawCell: (data) => {
-        if (data.section !== 'body' || data.column.index !== 1) return;
-        const url = body[data.row.index]?.image;
+        if (data.section !== 'body') return;
+        const line = body[data.row.index];
+        const url = data.column.index === 1
+          ? line?.image
+          : data.column.index === PARENT_HEADERS.indexOf('Preview') ? line?.preview : null;
         if (url) doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
       },
     });

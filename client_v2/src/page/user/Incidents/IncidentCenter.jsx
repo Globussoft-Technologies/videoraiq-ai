@@ -689,22 +689,30 @@ function CarModelDetails({ item }) {
   );
 }
 
-function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onResolvedChange, onTagUser, onUntagUser, onViewUser, tagOpen = false, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
-  const item = items[index];
+function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onIndexChange, onClose, onRefresh, onResolvedChange, onTagUser, onUntagUser, onViewUser, tagOpen = false, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
+  const item = selectedItem || items[index];
   // Navigation spans the whole filtered result set, not just the loaded page:
   // hitting either end of `items` fetches the neighbouring page via
   // onNavigateGlobal, so prev/next only stop at the true first/last incident.
   const globalIndex = pageOffset + index;
   const total       = totalCount || items.length;
   const hasPrev = globalIndex > 0;
-  const hasNext = globalIndex < total - 1;
+  const hasNext = itemRemoved ? globalIndex < total : globalIndex < total - 1;
 
   // Overlay panel state (ported from client's VideoModal): the panel collapses
   // behind the blue tab, and resolve/report act on the currently-shown incident.
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [reportOpen, setReportOpen]   = useState(false);
-  const [resolved, setResolved]       = useState(false);
+  const [resolved, setResolved]       = useState(() => !!item?.resolved);
   const [resolving, setResolving]     = useState(false);
+  const resolvingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const activeIncidentIdRef = useRef(null);
+  activeIncidentIdRef.current = item?._id || item?.id;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [zoom, setZoom]               = useState(1);
   const [pan, setPan]                 = useState({ x: 0, y: 0 });
   const [dragging, setDragging]       = useState(false);
@@ -776,38 +784,46 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   // where navLoading has cleared but the new item's effect hasn't run yet —
   // that window rendered an undecoded image with no overlay at all.
   const goPrev = useCallback(() => {
-    if (!hasPrev || navLoading) return;
+    if (!hasPrev || navLoading || resolvingRef.current) return;
     setImgLoading(true);
     if (index > 0) onIndexChange(index - 1);
     else { setNavDir('prev'); onNavigateGlobal?.(globalIndex - 1); }
   }, [hasPrev, navLoading, index, onIndexChange, onNavigateGlobal, globalIndex]);
 
   const goNext = useCallback(() => {
-    if (!hasNext || navLoading) return;
+    if (!hasNext || navLoading || resolvingRef.current) return;
     setImgLoading(true);
-    if (index < items.length - 1) onIndexChange(index + 1);
-    else { setNavDir('next'); onNavigateGlobal?.(globalIndex + 1); }
-  }, [hasNext, navLoading, index, items.length, onIndexChange, onNavigateGlobal, globalIndex]);
+    // Once the selected incident leaves the filtered list, its successor now
+    // occupies the same index. Advance only when the user asks to navigate.
+    const nextIndex = itemRemoved ? index : index + 1;
+    if (nextIndex < items.length) onIndexChange(nextIndex);
+    else { setNavDir('next'); onNavigateGlobal?.(pageOffset + nextIndex); }
+  }, [hasNext, navLoading, index, itemRemoved, items.length, onIndexChange, onNavigateGlobal, pageOffset]);
 
   async function handleMarkResolved() {
-    if (resolving || !item) return;
+    if (resolvingRef.current || navLoading || !item) return;
+    const incidentId = item._id || item.id;
+    resolvingRef.current = true;
     clearTimeout(flashTimerRef.current);
     setSaveFlash(null);
     setResolving(true);
     try {
       const next = !resolved;
-      await apiMarkResolved(item._id || item.id, item.incidentType, next);
-      setResolved(next);
-      onResolvedChange?.(item._id || item.id, next);
-      setSaveFlash({ text: next ? 'Marked as resolved' : 'Mark as resolved', ok: true });
-      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
+      const savedIncident = await apiMarkResolved(incidentId, item.incidentType, next);
+      onResolvedChange?.(incidentId, savedIncident.resolved, savedIncident);
+      if (mountedRef.current && activeIncidentIdRef.current === incidentId) {
+        setResolved(savedIncident.resolved);
+        setSaveFlash({ text: savedIncident.resolved ? 'Marked as resolved' : 'Mark as resolved', ok: true });
+        flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
+      }
     } catch (e) {
       // Leave the checkbox unchanged so the user sees it didn't take; surface
       // the real reason (e.g. a permission error) as a toast rather than the
       // generic inline flash, which previously hid the actual server message.
-      toast.error(e?.response?.data?.body?.message || 'Could not save — try again');
+      toast.error(e?.response?.data?.body?.message || e?.response?.data?.message || e?.message || 'Could not save — try again');
     } finally {
-      setResolving(false);
+      resolvingRef.current = false;
+      if (mountedRef.current) setResolving(false);
     }
   }
 
@@ -907,7 +923,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
             onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
             title="Previous incident"
-            disabled={navLoading}
+            disabled={navLoading || resolving}
           >
             {/* Only the arrow that was clicked spins; the centre overlay is the
                 other spinner, and navDir keeps them from doubling up. */}
@@ -1081,7 +1097,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
                   {item.description || [cam, site].filter(Boolean).join(' · ')}
                 </p>
                 <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 2 }}>
-                  {shortDateTime(item.timeOfIncident)} · {index + 1} / {items.length}
+                  {shortDateTime(item.timeOfIncident)}{!itemRemoved && ` · ${index + 1} / ${items.length}`}
                 </span>
                 <CarModelDetails item={item} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
@@ -1101,14 +1117,18 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
               {/* Mark as resolved */}
               {/* Three states: idle checkbox → spinner while the request is in
                   flight → a ~2.5s confirmation flash, then back to idle. */}
-              <div
+              <button
+                type="button"
+                disabled={resolving || navLoading}
+                aria-pressed={resolved}
                 onClick={(e) => { e.stopPropagation(); handleMarkResolved(); }}
                 style={{
                   position: carModel ? 'absolute' : undefined,
                   top: carModel ? 26 : undefined,
                   right: carModel ? 250 : undefined,
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '8px 20px', cursor: resolving ? 'wait' : 'pointer',
+                  padding: '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
+                  fontFamily: 'inherit',
                   border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
                   background: saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)') : 'rgba(255,255,255,.05)',
                   color: saveFlash ? (saveFlash.ok ? '#34d399' : '#f87171') : '#fff',
@@ -1134,7 +1154,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
                 <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>
                   {resolving ? 'Saving…' : saveFlash ? saveFlash.text : resolved ? 'Resolved' : 'Mark As Resolved'}
                 </span>
-              </div>
+              </button>
 
               {/* Report incident */}
               <button
@@ -1184,7 +1204,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
             onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
             title="Next incident"
-            disabled={navLoading}
+            disabled={navLoading || resolving}
           >
             {navLoading && navDir === 'next' ? <Spinner size={18} /> : <ChevronRight size={22} />}
           </button>
@@ -1285,11 +1305,11 @@ function IncidentListRow({
     setResolving(true);
     try {
       const next = !item.resolved;
-      await apiMarkResolved(id, item.incidentType, next);
-      onResolvedChange?.(id, next);
+      const savedIncident = await apiMarkResolved(id, item.incidentType, next);
+      onResolvedChange?.(id, savedIncident.resolved, savedIncident);
       toast.success(next ? 'Incident resolved' : 'Incident reopened');
     } catch (err) {
-      toast.error(err?.response?.data?.body?.message || 'Failed to update incident');
+      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || err?.message || 'Failed to update incident');
     } finally {
       setResolving(false);
     }
@@ -1433,6 +1453,7 @@ export default function IncidentCenter() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('incident_center_view') === 'list' ? 'list' : 'grid');
   const [exportingFormat, setExportingFormat] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [lightboxIncident, setLightboxIncident] = useState(null);
   // Incident whose plate the Tag User dialog is currently linking to a user.
   const [tagIncident, setTagIncident] = useState(null);
   // Incident whose existing tag the Untag dialog is about to remove.
@@ -1580,6 +1601,29 @@ export default function IncidentCenter() {
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
+  // Preserve the selected incident's identity when resolving removes it from
+  // the active feed. The grid still refreshes normally behind the viewer.
+  const lightboxItemIndex = lightboxIncident
+    ? items.findIndex((item) => (item._id || item.id) === (lightboxIncident._id || lightboxIncident.id))
+    : -1;
+  const lightboxItem = lightboxItemIndex >= 0 ? items[lightboxItemIndex] : lightboxIncident;
+  const lightboxNavigationIndex = lightboxItemIndex >= 0
+    ? lightboxItemIndex
+    : Math.min(lightboxIndex ?? 0, items.length);
+  const selectLightboxIncident = (index) => {
+    if (!items[index]) return;
+    setLightboxIndex(index);
+    setLightboxIncident(items[index]);
+  };
+  const closeLightbox = () => {
+    setLightboxIndex(null);
+    setLightboxIncident(null);
+  };
+  useEffect(() => {
+    if (lightboxIndex == null || lightboxItemIndex < 0) return;
+    setLightboxIncident(items[lightboxItemIndex]);
+    setLightboxIndex(lightboxItemIndex);
+  }, [items, lightboxItemIndex, lightboxIndex]);
 
   useEffect(() => {
     localStorage.setItem('incident_center_view', viewMode);
@@ -1603,25 +1647,31 @@ export default function IncidentCenter() {
     }
   }, [exportingFormat, grid.data?.totalCount, serverFilter, viewMode]);
 
-  const handleResolvedChange = useCallback((incidentId, resolved) => {
+  const handleResolvedChange = useCallback((incidentId, resolved, savedIncident) => {
+    const updateIncident = (item) => {
+      if (!item || (item._id || item.id) !== incidentId) return item;
+      // Merge the server document while keeping joined camera/NVR details.
+      return { ...item, ...savedIncident, resolved };
+    };
+    setLinkedIncident(updateIncident);
+    setLightboxIncident(updateIncident);
     grid.setData((prev) => {
       if (!prev?.items) return prev;
-      let changed = false;
+      const previousIncident = prev.items.find((item) => (item._id || item.id) === incidentId);
+      const updatedIncident = updateIncident(previousIncident);
+      const statusOf = (item) => item?.resolved ? 'resolved' : item?.report?.status === true ? 'reported' : 'new';
+      const previousStatus = statusOf(previousIncident);
+      const nextStatus = statusOf(updatedIncident);
       return {
         ...prev,
-        items: prev.items.map((item) => {
-          const id = item._id || item.id;
-          if (id !== incidentId) return item;
-          changed = item.resolved !== resolved;
-          return { ...item, resolved };
-        }),
-        counts: changed && prev.counts?.status
+        items: prev.items.map(updateIncident),
+        counts: previousIncident && previousStatus !== nextStatus && prev.counts?.status
           ? {
               ...prev.counts,
               status: {
                 ...prev.counts.status,
-                new: Math.max(0, Number(prev.counts.status.new || 0) + (resolved ? -1 : 1)),
-                resolved: Math.max(0, Number(prev.counts.status.resolved || 0) + (resolved ? 1 : -1)),
+                [previousStatus]: Math.max(0, Number(prev.counts.status[previousStatus] || 0) - 1),
+                [nextStatus]: Number(prev.counts.status[nextStatus] || 0) + 1,
               },
             }
           : prev.counts,
@@ -1637,7 +1687,7 @@ export default function IncidentCenter() {
       };
     });
     stats.refetch({ silent: true });
-    if (resolved) grid.refetch({ silent: true });
+    grid.refetch({ silent: true });
   }, [grid, stats]);
 
   const totalCount = grid.data?.totalCount ?? 0;
@@ -1910,11 +1960,17 @@ export default function IncidentCenter() {
     if (globalIdx < 0 || globalIdx >= totalCount) return;
     const targetPage   = Math.floor(globalIdx / pageSize);
     const targetOffset = globalIdx % pageSize;
-    if (targetPage === page) { setLightboxIndex(targetOffset); return; }
+    if (targetPage === page) {
+      if (items[targetOffset]) {
+        setLightboxIndex(targetOffset);
+        setLightboxIncident(items[targetOffset]);
+      }
+      return;
+    }
     setNavLoading(true);
     pendingNavRef.current = { page: targetPage, offset: targetOffset };
     setPage(targetPage);
-  }, [totalCount, pageSize, page]);
+  }, [totalCount, pageSize, page, items]);
 
   useEffect(() => {
     const pending = pendingNavRef.current;
@@ -1938,7 +1994,13 @@ export default function IncidentCenter() {
 
     pendingNavRef.current = null;
     setNavLoading(false);
-    if (items.length) setLightboxIndex(Math.min(pending.offset, items.length - 1));
+    if (items.length) {
+      const nextIndex = Math.min(pending.offset, items.length - 1);
+      setLightboxIndex(nextIndex);
+      setLightboxIncident(items[nextIndex]);
+    } else {
+      setNavFailedAt(n => n + 1);
+    }
   }, [grid.loading, grid.error, items]);
 
   const toggleSet = (setter) => (key) =>
@@ -2530,7 +2592,7 @@ export default function IncidentCenter() {
                   item={item}
                   onRefresh={refreshIncidentData}
                   onResolvedChange={handleResolvedChange}
-                  onOpenLightbox={() => setLightboxIndex(i)}
+                  onOpenLightbox={() => selectLightboxIncident(i)}
                   onTagUser={setTagIncident}
                   onUntagUser={setUntagIncident}
                   onViewUser={setViewUser}
@@ -2565,7 +2627,7 @@ export default function IncidentCenter() {
                   item={item}
                   onRefresh={refreshIncidentData}
                   onResolvedChange={handleResolvedChange}
-                  onOpenLightbox={() => setLightboxIndex(i)}
+                  onOpenLightbox={() => selectLightboxIncident(i)}
                   onTagUser={setTagIncident}
                   onUntagUser={setUntagIncident}
                   onViewUser={setViewUser}
@@ -2652,12 +2714,14 @@ export default function IncidentCenter() {
         </div>
       )}
 
-      {lightboxIndex != null && (
+      {lightboxIndex != null && lightboxItem && (
         <IncidentLightbox
           items={items}
-          index={Math.min(lightboxIndex, items.length - 1)}
-          onIndexChange={setLightboxIndex}
-          onClose={() => setLightboxIndex(null)}
+          index={lightboxNavigationIndex}
+          selectedItem={lightboxItem}
+          itemRemoved={lightboxItemIndex < 0}
+          onIndexChange={selectLightboxIncident}
+          onClose={closeLightbox}
           onRefresh={refreshIncidentData}
           onResolvedChange={handleResolvedChange}
           onTagUser={setTagIncident}

@@ -17,6 +17,7 @@ import SelectField from './SelectField';
 import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import { COMPACT_TOAST } from './toastOptions';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -192,7 +193,8 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     else if (firstName.trim().length > 30) errs.firstName = 'First name must be at most 30 characters';
     if (!lastName.trim()) errs.lastName = 'Last name is required';
     else if (lastName.trim().length > 30) errs.lastName = 'Last name must be at most 30 characters';
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
+    if (hasEmailEmoji(email)) errs.email = EMAIL_EMOJI_ERROR;
+    else if (email.trim() && !/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
       errs.email = 'Invalid email format';
     if (!designation.trim()) errs.designation = 'Designation is required';
     if (!departmentId) errs.department = 'Department is required';
@@ -228,6 +230,11 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
   /* ---- submit ---- */
   const handleRegister = async () => {
+    if (hasEmailEmoji(email)) {
+      setErrors((prev) => ({ ...prev, email: EMAIL_EMOJI_ERROR }));
+      toast.error(EMAIL_EMOJI_ERROR, COMPACT_TOAST);
+      return;
+    }
     if (uploadedCount < requiredImageCount) {
       toast.error(`Please add ${requiredImageCount} enrollment image${requiredImageCount > 1 ? 's' : ''}`, COMPACT_TOAST);
       return;
@@ -334,7 +341,15 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                 className={fieldInput}
                 placeholder="name@org.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={!!errors.email || undefined}
+                onChange={(e) => {
+                  if (hasEmailEmoji(e.target.value)) {
+                    setErrors((prev) => ({ ...prev, email: EMAIL_EMOJI_ERROR }));
+                    return;
+                  }
+                  setEmail(e.target.value);
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
               />
               {errors.email && <p className="text-xs text-[var(--crit)] mt-1">{errors.email}</p>}
             </div>

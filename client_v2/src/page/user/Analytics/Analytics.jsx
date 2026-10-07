@@ -84,7 +84,7 @@ export default function Analytics() {
 
   return (
     <AnalyticsRefreshProvider>
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="vq-analytics-page" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
       <div data-tour="analytics-toolbar">
         <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} />
       </div>
@@ -96,25 +96,25 @@ export default function Analytics() {
       <AttendanceAnalytics timezone={timezone} />
 
       {/* Detection Volume | Share by Engine */}
-      <div data-tour="analytics-charts" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div data-tour="analytics-charts" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 18 }} className="vq-analytics-row">
         <DetectionVolumeCard params={params} />
         <EngineShareCard params={params} />
       </div>
 
       {/* Activity Heatmap | Top Cameras by Events */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 18 }} className="vq-analytics-row">
         <ActivityHeatmapCard params={params} />
         <TopCamerasCard params={params} limit={5} />
       </div>
 
       {/* Peak Activity | Detections by Hour */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }} className="vq-analytics-row">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)', gap: 18 }} className="vq-analytics-row">
         <PeakActivityCard params={params} />
         <DetectionsByHourCard timezone={timezone} />
       </div>
 
       {/* Site Performance | Response Funnel */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 18 }} className="vq-analytics-row">
         <SitePerformanceCard params={params} />
         <ResponseFunnelCard params={params} />
       </div>
