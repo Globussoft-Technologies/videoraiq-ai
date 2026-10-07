@@ -19,9 +19,18 @@ const RAIL_KEY = 'vq_assistant_rail_open';
  */
 const NARROW_PX = 820;
 const NEW_CHAT_DRAFT_KEY = '__new_chat__';
+const PANEL_POSITION_KEY = 'vq_assistant_panel_position';
+
+function clampPanelPosition(position, element) {
+  const bounds = element.getBoundingClientRect();
+  return {
+    right: Math.min(Math.max(8, window.innerWidth - bounds.width - 8), Math.max(8, position.right)),
+    bottom: Math.min(Math.max(8, window.innerHeight - bounds.height - 8), Math.max(8, position.bottom)),
+  };
+}
 
 /** Slim actions row above the thread — no title, the shell header already has it. */
-function ActionsRow({ railOpen, onToggleRail, onNewChat, onClose, isNarrow, mode, onModeChange }) {
+function ActionsRow({ railOpen, onToggleRail, onNewChat, onClose, isNarrow, mode, onModeChange, panelDragHandlers, panelDragging }) {
   const [toggleHover, setToggleHover] = useState(false);
   const [newHover, setNewHover] = useState(false);
   const [closeHover, setCloseHover] = useState(false);
@@ -30,9 +39,12 @@ function ActionsRow({ railOpen, onToggleRail, onNewChat, onClose, isNarrow, mode
   if (mode === 'compact') {
     return (
       <div
+        {...panelDragHandlers}
+        title="Drag to move AI Assistant"
         style={{
           flex: '0 0 auto', height: 52, display: 'flex', alignItems: 'center', gap: 9,
           padding: '0 13px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)',
+          cursor: panelDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none',
         }}
       >
         <Sparkles size={16} style={{ color: 'var(--violet)' }} />
@@ -251,6 +263,56 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
 
   // Measure the page, not the window — see NARROW_PX.
   const rootRef = useRef(null);
+  const panelDragRef = useRef(null);
+  const [panelDragging, setPanelDragging] = useState(false);
+  const [panelPosition, setPanelPosition] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PANEL_POSITION_KEY));
+      if (Number.isFinite(saved?.right) && Number.isFinite(saved?.bottom)) return saved;
+    } catch { /* Use the default position when storage is unavailable. */ }
+    return { right: 24, bottom: 88 };
+  });
+
+  useEffect(() => {
+    if (displayMode !== 'compact') return undefined;
+    const keepVisible = () => {
+      if (rootRef.current) setPanelPosition((position) => clampPanelPosition(position, rootRef.current));
+    };
+    keepVisible();
+    window.addEventListener('resize', keepVisible);
+    return () => window.removeEventListener('resize', keepVisible);
+  }, [displayMode]);
+
+  const finishPanelDrag = (event) => {
+    const drag = panelDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    panelDragRef.current = null;
+    setPanelDragging(false);
+    try { localStorage.setItem(PANEL_POSITION_KEY, JSON.stringify(drag.position)); } catch { /* Storage is optional. */ }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const panelDragHandlers = {
+    onPointerDown: (event) => {
+      if (event.button !== 0 || !event.isPrimary || event.target.closest('button')) return;
+      event.preventDefault();
+      const position = clampPanelPosition(panelPosition, rootRef.current);
+      panelDragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: position, position };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setPanelDragging(true);
+    },
+    onPointerMove: (event) => {
+      const drag = panelDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.position = clampPanelPosition({
+        right: drag.start.right - (event.clientX - drag.x),
+        bottom: drag.start.bottom - (event.clientY - drag.y),
+      }, rootRef.current);
+      setPanelPosition(drag.position);
+    },
+    onPointerUp: finishPanelDrag,
+    onPointerCancel: finishPanelDrag,
+    onLostPointerCapture: finishPanelDrag,
+  };
   const [width, setWidth] = useState(9999);
   useEffect(() => {
     const el = rootRef.current;
@@ -482,8 +544,8 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
         height: displayMode === 'compact' ? 'min(650px, calc(100vh - 100px))' : '100%',
         width: displayMode === 'compact' ? 'min(420px, calc(100vw - 24px))' : undefined,
         position: displayMode === 'compact' ? 'fixed' : 'relative',
-        right: displayMode === 'compact' ? 24 : undefined,
-        bottom: displayMode === 'compact' ? 88 : undefined,
+        right: displayMode === 'compact' ? panelPosition.right : undefined,
+        bottom: displayMode === 'compact' ? panelPosition.bottom : undefined,
         zIndex: displayMode === 'compact' ? 1100 : 1100,
         background: 'var(--bg1solid)',
         border: displayMode === 'compact' ? '1px solid var(--bd2)' : undefined,
@@ -524,6 +586,8 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
           isNarrow={isNarrow}
           mode={displayMode}
           onModeChange={handleModeChange}
+          panelDragHandlers={panelDragHandlers}
+          panelDragging={panelDragging}
         />
 
         <div

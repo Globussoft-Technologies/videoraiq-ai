@@ -13,8 +13,12 @@ function clock(value) {
 // than once (for example when the execution result and generated response are
 // combined). Keep one copy in the visible transcript without merging distinct
 // responses from separate inputs.
-function displayText(value) {
-  const text = sanitizeAssistantText(value);
+function displayText(value, showIp = false) {
+  const sanitized = sanitizeAssistantText(value, showIp)
+    .replace(/((?:IP(?: address)?|public\s*IP|host(?:name)?)\s*:\s*)[a-f\d]{32,}\b/gi, '$1Unavailable');
+  const text = showIp ? sanitized : sanitized
+    .replace(/\s*[·—–]\s*(?:IP(?: address)?|public\s*IP|host(?:name)?)\s*:\s*[^\n·]+/gi, '')
+    .replace(/^\s*(?:[-*]|\d+[.)])?\s*(?:IP(?: address)?|public\s*IP|host(?:name)?)\s*:[^\n]*\n?/gim, '');
   const parts = text.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
   return parts.filter((part, index) => parts.indexOf(part) === index).join('\n\n');
 }
@@ -22,17 +26,173 @@ function displayText(value) {
 // Older conversations may contain a serialized validator/MCP error from
 // before the server-side sanitization fix. Never render those internals in the
 // transcript, even when they are loaded from history.
-function sanitizeAssistantText(value) {
+function sanitizeAssistantText(value, showIp = false) {
   const text = typeof value === 'string' ? value : (() => {
     try { return JSON.stringify(value); } catch { return String(value ?? ''); }
   })();
+  // Apply this before rendering saved replies as well as new replies.
+  if (/VideoraIQ API error|<!doctype\s+html|<html\b|Cannot (?:GET|POST) \/api\//i.test(text)) {
+    return "I couldn't fetch this information. Please try again later.";
+  }
+  // Older analytics replies persisted the verified envelope instead of the
+  // generated summary. Turn that envelope into stable, readable chat text at
+  // the presentation boundary so existing conversations are repaired too.
+  const overview = text.match(/^\s*Verified overview result from VideoraIQ:\s*([\s\S]+?)\s*$/i);
+  if (overview) {
+    try {
+      const parsed = JSON.parse(overview[1]);
+      const site = parsed?.busiestSite?.site || parsed?.busiestSite?.name;
+      const lines = ['Analytics overview'];
+      if (parsed.days != null) lines.push(`Period: ${parsed.days} days`);
+      if (parsed.totalDetections != null) lines.push(`Total detections: ${Number(parsed.totalDetections).toLocaleString()}`);
+      if (parsed.activeCameras != null) lines.push(`Active cameras: ${parsed.activeCameras}`);
+      if (parsed.resolvedRate != null) lines.push(`Resolved rate: ${parsed.resolvedRate}%`);
+      if (site) lines.push(`Busiest site: ${site}${parsed.busiestSite.events != null ? ` (${Number(parsed.busiestSite.events).toLocaleString()} events)` : ''}`);
+      const types = Array.isArray(parsed.byType) ? parsed.byType : [];
+      if (types.length) {
+        lines.push('', 'Top detections:');
+        types.slice(0, 8).forEach((item) => {
+          const label = detectionLabel(item?.type || 'Detection');
+          const count = item?.count == null ? '' : ` — ${Number(item.count).toLocaleString()} detections`;
+          const alerts = item?.inAlerts == null ? '' : `, ${Number(item.inAlerts).toLocaleString()} alerts`;
+          lines.push(`- ${label}${count}${alerts}`);
+        });
+        if (types.length > 8) lines.push(`Showing 8 of ${types.length} detection types.`);
+      }
+      if (parsed.alertsVisible != null) lines.push('', `Visible alerts: ${Number(parsed.alertsVisible).toLocaleString()}`);
+      return lines.join('\n');
+    } catch { /* leave non-JSON legacy text to the normal sanitizer */ }
+  }
+  // Conversations saved before the MCP formatter was added may still contain
+  // a raw verified NVR envelope. Reformat that legacy text at the presentation
+  // boundary and deliberately omit credentials from the visible transcript.
+  const legacyNvr = text.match(/^Verified VideoraIQ result:\s*([\s\S]+)$/i);
+  if (legacyNvr) {
+    try {
+      const parsed = JSON.parse(legacyNvr[1].trim());
+      const candidates = Array.isArray(parsed) ? parsed : [parsed];
+      const payload = candidates.find((item) => item?.source === 'videoraiq:nvrs')
+        || candidates.find((item) => item?.data?.source === 'videoraiq:nvrs');
+      const envelope = payload?.data?.source === 'videoraiq:nvrs' ? payload.data : payload;
+      const records = envelope?.records || envelope?.value?.records || [];
+      if (envelope?.source === 'videoraiq:nvrs' && Array.isArray(records)) {
+        const pick = (record, keys) => keys.map((key) => record?.[key]).find((item) => item !== undefined && item !== null && String(item).trim() !== '');
+        if (!records.length) return 'No NVRs are currently configured.';
+        const lines = records.slice(0, 25).map((record, index) => {
+          const name = pick(record, ['nvrName', 'name', 'deviceName', 'model']) || 'Unnamed NVR';
+          const brand = pick(record, ['brand', 'manufacturer']) || 'Unknown brand';
+          const location = typeof record?.location === 'object' ? pick(record.location, ['locationName', 'name']) : pick(record, ['locationName', 'location', 'siteName']);
+          const ip = showIp ? pick(record, ['ip', 'publicIp', 'host', 'hostname']) : null;
+          return `${index + 1}. **${name}** — Brand: ${brand}${location ? ` · Location: ${location}` : ''}${ip ? ` · IP: ${/^[a-f\d]{32,}$/i.test(String(ip)) ? 'Unavailable' : ip}` : ''}`;
+        });
+        const total = Number(envelope.total ?? records.length);
+        return `Configured NVRs (${total}):\n${lines.join('\n')}${total > lines.length ? `\n\nShowing ${lines.length} of ${total} NVRs.` : ''}`;
+      }
+    } catch { /* handled by the safe fallback below */ }
+    return "I couldn't prepare a readable summary of this result. Please ask the question again.";
+  }
   if (/invalid_value|invalid_type|unrecognized_keys|\"path\"\s*:\s*\[/i.test(text)) {
     if (/dateRange[\"']?\s*,\s*[\"']?type|dateRange.*type/i.test(text)) {
       return "I couldn't process that time range. Please try again with a range such as today, yesterday, or last 7 days.";
     }
     return "I couldn't process that request. Please try again with a simpler question.";
   }
-  return text;
+  // The registered-employee page is plural in the client router. Repair the
+  // singular path in older assistant replies at render time as well, so saved
+  // conversations are corrected without requiring a database migration.
+  return text.replace(/(^|[\s(])\/register-user(?!s)(?=[\s).,!?]|$)/gi, '$1/register-users');
+}
+
+function CameraStatusText({ line }) {
+  const match = String(line).match(/^Currently online cameras:\s*(\d+)\s+of\s+(\d+)\.\s+Online:\s*(.*?)\.\s+Offline:\s*(.*?)\.\s+Checked at\s+(.+)\.$/i);
+  if (!match) return null;
+  const names = (text) => /^none$/i.test(text) ? [] : text.split(/,\s*/).map((item) => item.trim()).filter(Boolean);
+  const online = names(match[3]);
+  const offline = names(match[4]);
+  const group = (label, items, color) => {
+    const heading = <span style={{ fontWeight: 700, color }}>{label} <span style={{ fontWeight: 500, color: 'var(--tx2)' }}>({items.length})</span></span>;
+    const list = items.length ? <AssistantList items={items.map((value, index) => ({ marker: `${index + 1}.`, value }))} ordered keyPrefix={label} /> : <div className="vq-camera-empty">None</div>;
+    return <section className="vq-camera-group" aria-label={`${label} cameras`}>
+      {heading}{list}
+    </section>;
+  };
+  return <div className="vq-camera-status">
+    <div className="vq-response-heading">Camera status ({match[2]} total)</div>
+    <div className="vq-response-note">{match[1]} online · {Number(match[2]) - Number(match[1])} offline</div>
+    {group('Online', online, 'var(--ok, #15803d)')}
+    {group('Offline', offline, 'var(--tx2)')}
+    <div className="vq-response-note">Checked at {formatTimestampText(match[5])}</div>
+  </div>;
+}
+
+function DetectionConfigurationText({ line }) {
+  // Keep the natural-language lead-in out of the bubble body and present the
+  // fields as compact, wrapping chips. The assistant has used a few equivalent
+  // phrasings over time, including the current "Configurable fields include".
+  const match = String(line ?? '').match(/^(?:Configurable\s+fields(?:\s+for\s+this\s+detection)?\s+include:?|This detection can be configured with parameters including:?|This detection can be configured using fields such as|This detection can be configured with parameters such as)\s*([\s\S]+?)\.?$/i);
+  if (!match) return null;
+  const fields = [...match[1].matchAll(/`([^`]+)`/g)].map((item) => item[1]).filter(Boolean);
+  if (!fields.length) return null;
+  return (
+    <section className="vq-detection-config" aria-label="Detection configuration parameters">
+      <div className="vq-detection-config-intro">Configurable parameters</div>
+      <div className="vq-detection-config-fields">
+        {fields.map((field) => <code key={field} className="vq-detection-config-field">{field}</code>)}
+      </div>
+    </section>
+  );
+}
+
+function detectionAssignmentParts(line) {
+  const match = String(line ?? '').match(/^\s*(?:\d+[.)]\s*)?(.*?)\s*(?::\s*(enabled|disabled))?\s+(?:[\u2014\u2013]|â€”|â€“)\s+cameras?:\s*(.*?)(?:;\s*(.*?))?\.?$/i);
+  if (!match) return null;
+  const cameras = match[3].split(/,\s*/).map((camera) => camera.trim()).filter(Boolean).map((camera) => {
+    const status = camera.match(/^(.*?)(?:\s*\((enabled|disabled)\))$/i);
+    return status ? { name: status[1].trim(), enabled: status[2].toLowerCase() === 'enabled' } : { name: camera, enabled: true };
+  });
+  if (!cameras.length) return null;
+  const settings = (match[4] || '').split(/;\s*/).map((item) => item.trim()).filter(Boolean);
+  return { name: match[1].trim(), cameras, settings, enabled: match[2]?.toLowerCase() !== 'disabled' };
+}
+
+function DetectionAssignmentsText({ lines }) {
+  const heading = String(lines[0] || '').match(/^(Detections attached to cameras|Enabled detections applied to cameras)(?:\s*\((\d+)\s+types?\))?:?$/i);
+  const start = heading ? 1 : 0;
+  const items = lines.slice(start).map(detectionAssignmentParts).filter(Boolean);
+  if (!items.length || (!heading && items.length !== lines.length)) return null;
+  return (
+    <section className="vq-detection-assignments" aria-label="Detection assignments">
+      <div className="vq-detection-assignments-header">
+        <div>
+          <div className="vq-response-heading">{heading?.[1] || 'Detection assignments'}</div>
+          <div className="vq-response-note">{heading?.[2] ? `${heading[2]} detection types` : `${items.length} detection${items.length === 1 ? '' : 's'}`}</div>
+        </div>
+        <span className="vq-detection-assignments-count">{items.length}</span>
+      </div>
+      <div className="vq-detection-assignment-list">
+        {items.map((item, index) => (
+          <article className="vq-detection-assignment" key={`${item.name}-${index}`}>
+            <div className="vq-detection-assignment-title-row">
+              <strong>{item.name}</strong>
+              <span className="vq-detection-assignment-camera-count">{item.cameras.length} camera{item.cameras.length === 1 ? '' : 's'}</span>
+            </div>
+            <div className="vq-detection-assignment-cameras">
+              {item.cameras.map((camera, cameraIndex) => (
+                <span className={`vq-detection-camera-chip${camera.enabled ? '' : ' is-disabled'}`} key={`${camera.name}-${cameraIndex}`}>
+                  <span className="vq-detection-camera-dot" />{camera.name}{!camera.enabled && ' · disabled'}
+                </span>
+              ))}
+            </div>
+            {item.settings.length > 0 && (
+              <div className="vq-detection-assignment-settings">
+                {item.settings.map((setting, settingIndex) => <span key={`${setting}-${settingIndex}`}>{setting}</span>)}
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function formatAssistantTimestamp(value) {
@@ -65,18 +225,11 @@ function listItemParts(line) {
   return { marker: match[1] || `${match[2]}.`, value: match[3] };
 }
 
-function AssistantListLegacy({ items, ordered, keyPrefix }) {
-  return <div className="vq-assistant-list" role="list">
-    {items.map((item, index) => <div className="vq-assistant-list-item" key={`${keyPrefix}-item-${index}`} role="listitem">
-      <span className={`vq-assistant-list-marker${ordered ? ' is-ordered' : ''}`}>{ordered ? index + 1 : '•'}</span>
-      <span className="vq-assistant-list-value">{renderInlineMarkdown(item.value, `${keyPrefix}-${index}`)}</span>
-    </div>)}
-  </div>;
-}
-
-function AssistantText({ value }) {
-  const lines = displayText(value).split('\n');
+function AssistantText({ value, showIp = false }) {
+  const lines = displayText(value, showIp).split('\n');
   const content = [];
+  const assignments = DetectionAssignmentsText({ lines });
+  if (assignments) return assignments;
   let list = [];
   let ordered = false;
 
@@ -96,7 +249,18 @@ function AssistantText({ value }) {
       return;
     }
     flushList(index);
-    content.push(<div key={`line-${index}`} className="vq-assistant-text-line" style={{ minHeight: line ? undefined : 5 }}>{renderInlineMarkdown(line, `line-${index}`)}</div>);
+    const detectionConfiguration = DetectionConfigurationText({ line });
+    if (detectionConfiguration) {
+      content.push(<div key={`detection-config-${index}`}>{detectionConfiguration}</div>);
+      return;
+    }
+    const cameraStatus = CameraStatusText({ line });
+    if (cameraStatus) {
+      content.push(<div key={`camera-status-${index}`}>{cameraStatus}</div>);
+      return;
+    }
+    const heading = /^(?:#{1,3}\s+|.*:\s*$)/.test(line.trim());
+    content.push(<div key={`line-${index}`} className={`vq-assistant-text-line${heading ? ' vq-response-heading' : ''}`} style={{ minHeight: line ? undefined : 5 }}>{renderInlineMarkdown(line.replace(/^#{1,3}\s+/, ''), `line-${index}`)}</div>);
   });
   flushList(lines.length);
 
@@ -112,9 +276,19 @@ function AssistantList({ items, ordered, keyPrefix }) {
   return <div className="vq-assistant-list" role="list">
     {items.map((item, index) => <div className="vq-assistant-list-item" key={`${keyPrefix}-item-${index}`} role="listitem">
       <span className={`vq-assistant-list-marker${ordered ? ' is-ordered' : ''}`}>{ordered ? item.marker : '•'}</span>
-      <span className="vq-assistant-list-value">{renderInlineMarkdown(item.value, `${keyPrefix}-${index}`)}</span>
+      <div className="vq-assistant-list-value"><AssistantListValue value={item.value} keyPrefix={`${keyPrefix}-${index}`} /></div>
     </div>)}
   </div>;
+}
+
+function AssistantListValue({ value, keyPrefix }) {
+  // Use the same name + secondary detail layout for all record types.
+  const record = value.match(/^(.*?)\s+[—–]\s+(.+)$/);
+  if (!record) return renderInlineMarkdown(value, keyPrefix);
+  return <>
+    <span className="vq-record-name">{renderInlineMarkdown(record[1], keyPrefix)}</span>
+    <span className="vq-record-details">{renderInlineMarkdown(record[2], `${keyPrefix}-details`)}</span>
+  </>;
 }
 
 function fieldLabel(key) {
@@ -733,8 +907,10 @@ function MessageAttachments({ attachments = [] }) {
   </div>;
 }
 
-function Bubble({ msg, onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBatchUpload, uploading, activeWorkflow }) {
+function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBatchUpload, uploading, activeWorkflow }) {
   const isUser = msg.role === 'user';
+  const showIp = /\b(?:ip(?:\s+address(?:es)?)?|hostnames?)\b/i.test(userQuestion)
+    && !/\b(?:without|hide|omit|exclude|don['’]?t|do not|no)\b.*\b(?:ip|hostname)\b/i.test(userQuestion);
   const [copyState, setCopyState] = useState('idle');
   const copyTimerRef = useRef(null);
   const workflowUi = workflowUiForMessage(msg);
@@ -775,14 +951,15 @@ function Bubble({ msg, onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBa
       {!isUser && <AssistantAvatar error={msg.error} />}
       <div style={{
         width: !isUser && (isVehicleLogs || isVehicleLogsFallback) ? 'min(920px, calc(100vw - 100px))' : !isUser && workflowUi ? 'min(360px, calc(100vw - 100px))' : undefined,
-        maxWidth: !isUser && (workflowUi || isVehicleLogsFallback) ? 'calc(100% - 39px)' : 'min(76%, 720px)',
+        maxWidth: !isUser ? 'calc(100% - 42px)' : 'min(85%, 640px)',
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
       }}>
-        {!isStructuredResult && <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-          <div style={{ padding: isVehicleLogsFallback ? '14px 16px' : '11px 14px', borderRadius: 14, borderTopRightRadius: isUser ? 5 : 14, borderTopLeftRadius: isUser ? 14 : 5, fontSize: 13.5, lineHeight: 1.65, wordBreak: 'break-word', color: isUser ? '#fff' : 'var(--tx)', background: isUser ? 'linear-gradient(135deg,var(--blue),var(--violet))' : msg.error ? 'rgba(255,77,77,.08)' : 'var(--bg2)', border: isUser ? '1px solid rgba(255,255,255,.16)' : `1px solid ${msg.error ? 'rgba(255,77,77,.35)' : 'var(--bd)'}`, boxShadow: isUser ? '0 6px 18px rgba(99,102,241,.22)' : 'none' }}>
-            {workflowUi?.type === 'review' ? 'Please review the records below and confirm when ready.' : isUser ? displayText(msg.text) : <AssistantText value={msg.text} />}
+        {!isStructuredResult && <div style={{ display: 'flex', minWidth: 0, maxWidth: '100%', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+          <div style={{ maxWidth: '100%', boxSizing: 'border-box', padding: '14px 18px', borderRadius: 14, borderTopRightRadius: isUser ? 5 : 14, borderTopLeftRadius: isUser ? 14 : 5, fontSize: 14, lineHeight: 1.6, whiteSpace: isUser ? 'pre-wrap' : undefined, overflowWrap: 'anywhere', color: isUser ? '#fff' : 'var(--tx)', background: isUser ? 'linear-gradient(135deg,var(--blue),var(--violet))' : msg.error ? 'rgba(255,77,77,.08)' : 'var(--bg2)', border: isUser ? '1px solid rgba(255,255,255,.16)' : `1px solid ${msg.error ? 'rgba(255,77,77,.35)' : 'var(--bd)'}`, boxShadow: isUser ? '0 3px 10px rgba(99,102,241,.14)' : 'none' }}>
+            {workflowUi?.type === 'review' ? 'Please review the records below and confirm when ready.' : isUser ? String(msg.text || '') : <AssistantText value={msg.text} showIp={showIp} />}
             {isUser && <MessageAttachments attachments={msg.attachments} />}
           </div>
           {isUser && <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, marginRight: 4 }}>
@@ -837,10 +1014,11 @@ export default function MessageThread({ messages = [], sending = false, uploadin
   }, [messages.length, sending]);
 
   return (
-    <div style={{ width: '100%', padding: '18px clamp(14px, 3vw, 28px) 10px', display: 'flex', flexDirection: 'column', gap: 11, boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', maxWidth: 1040, margin: '0 auto', padding: '24px clamp(12px, 3vw, 28px) 18px', display: 'flex', flexDirection: 'column', gap: 20, boxSizing: 'border-box' }}>
       {messages.map((msg, index) => {
         const hasUserResponseAfter = messages.slice(index + 1).some((item) => item.role === 'user');
-        return <Bubble key={msg.id || `${msg.at || 'message'}-${index}`} msg={msg} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} activeWorkflow={index === latestWorkflowIndex && !hasUserResponseAfter} />;
+        const userQuestion = messages.slice(0, index).findLast((item) => item.role === 'user')?.text || '';
+        return <Bubble key={msg.id || `${msg.at || 'message'}-${index}`} msg={msg} userQuestion={userQuestion} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} activeWorkflow={index === latestWorkflowIndex && !hasUserResponseAfter} />;
       })}
       {sending && <TypingBubble />}
       <div ref={endRef} />

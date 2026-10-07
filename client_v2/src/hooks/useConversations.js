@@ -302,12 +302,15 @@ export function useConversations() {
           const hydratedUserMessage = persistedId
             ? (await hydrateMessages([userMessage], persistedId, undefined, { reset: false }))[0]
             : userMessage;
-          setMessages((current) => freshWorkflow
+          // Hydration awaits remote attachments. Recheck the selected chat
+          // after that await so a late response cannot enter another thread.
+          if (sourceViewRequest === selectedRequestRef.current) setMessages((current) => freshWorkflow
             ? [hydratedUserMessage, normalizedAssistantMessage]
             : [...current.filter((message) => message.id !== optimisticMessage.id), hydratedUserMessage, normalizedAssistantMessage]);
         } else if (persistedId && activeIdRef.current === persistedId) {
           const conversation = await getAssistantConversation(persistedId);
-          setMessages(await hydrateMessages(conversation?.messages || [], persistedId));
+          const recovered = await hydrateMessages(conversation?.messages || [], persistedId);
+          if (activeIdRef.current === persistedId) setMessages(recovered);
         }
 
         if (historyPage !== 1) setHistoryPage(1);
@@ -323,7 +326,7 @@ export function useConversations() {
             try {
               const conversation = await getAssistantConversation(persistedId);
               const recoveredMessages = await hydrateMessages(conversation?.messages || [], persistedId);
-              if (stillViewingSource || activeIdRef.current === persistedId) {
+              if (sourceViewRequest === selectedRequestRef.current || activeIdRef.current === persistedId) {
                 activeIdRef.current = persistedId;
                 setActiveId(persistedId);
                 // A storage/provider failure can return a conversation shell

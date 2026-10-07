@@ -147,24 +147,12 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
           const text = String(result?.text || '').trim();
           if (!text) throw Object.assign(new Error('empty'), { code: 'EMPTY_TRANSCRIPT' });
           if (requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
-          // The transcript is added to the chat optimistically by onSend.
-          // Keep it out of the editable composer while the voice request is
-          // being submitted so it cannot appear in both places at once.
-          onChange('');
-          setVoiceState('submitting');
-          const files = selectedFilesRef.current.map((item) => item.file);
-          const submitted = await onSend(text, files, { voice: true });
+          // Voice input only fills the composer. Do not submit here: the user
+          // must explicitly click Send or press Enter so they can review and
+          // edit the transcript first.
+          onChange(text);
+          setVoiceState('transcribed');
           if (requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
-          if (submitted) {
-            selectedFilesRef.current.forEach((item) => URL.revokeObjectURL(item.url));
-            selectedFilesRef.current = [];
-            setSelectedFiles([]);
-            onFilesPrepared?.([]);
-          }
-          // The shared send pipeline owns the API error UI. If it failed,
-          // restore the transcript in the composer so the user can retry.
-          if (!submitted) onChange(text);
-          setVoiceState('idle');
         } catch (error) {
           if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED' || requestId !== voiceRequestRef.current || requestConversationId !== conversationIdRef.current) return;
           setVoiceState('idle');
