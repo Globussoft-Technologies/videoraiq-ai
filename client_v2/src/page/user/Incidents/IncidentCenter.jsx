@@ -2151,6 +2151,7 @@ export default function IncidentCenter() {
         {/* Date range */}
         <div className="vq-inc-date-control">
           <PresetDateRangePicker
+          portalContainer={isPageFS ? pageRef.current : undefined}
           startDate={dateFrom || null}
           endDate={dateTo || null}
           maxDate={new Date()}

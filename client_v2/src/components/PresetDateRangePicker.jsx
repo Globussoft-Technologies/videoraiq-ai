@@ -41,8 +41,9 @@ const getPresetKey = (start, end, min, max) => {
  *   startDate, endDate  - current range; Date | ISO string | null
  *   minDate, maxDate    - selectable bounds (optional)
  *   onRangeChange       - ({ start: Date|null, end: Date|null }) => void
+ *   portalContainer     - optional popup host; defaults to document.body
  */
-const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }) => {
+const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange, portalContainer }) => {
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [sel, setSel] = useState({ start: null, end: null });
@@ -130,7 +131,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, customOpen]);
+  }, [open, customOpen, portalContainer]);
 
   const label =
     startDate && endDate
@@ -322,7 +323,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
         </span>
         <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-[var(--tx3)] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && createPortal(panel, document.body)}
+      {open && createPortal(panel, portalContainer || document.body)}
     </div>
   );
 };
