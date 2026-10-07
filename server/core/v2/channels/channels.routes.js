@@ -17,6 +17,7 @@ router.put("/updateConfiguration",editAccessCheck,ChannelControllerontroller.upd
 
 router.post("/playback-url",viewAccessCheck, ChannelControllerontroller.getPlaybackUrl);
 router.post("/playback-timeline",viewAccessCheck, ChannelControllerontroller.getPlaybackTimeline);
+router.post("/playback-thumbnail",viewAccessCheck, ChannelControllerontroller.getPlaybackPreview);
 router.post("/playBackFilters",viewAccessCheck, ChannelControllerontroller.getPlaybackWithFilters);
 router.get("/all-channels",viewAccessCheck, ChannelControllerontroller.getFilterAllChannels);
 // Honeywell DASH playback proxy — a <video>/dash.js player fetches these

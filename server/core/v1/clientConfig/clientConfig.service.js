@@ -170,7 +170,17 @@ class ClientConfigService {
       };
 
       return res.send(
-        Response.SuccessResp("Client config fetched", { stats, detections })
+        Response.SuccessResp("Client config fetched", {
+          stats,
+          detections,
+          modules: {
+            mattressMeasurement: {
+              measurementLogs: admin.moduleConfig?.mattressMeasurement?.measurementLogs === true,
+              raspberryPiDevices: admin.moduleConfig?.mattressMeasurement?.raspberryPiDevices === true,
+              measurementCalibration: admin.moduleConfig?.mattressMeasurement?.measurementCalibration === true,
+            },
+          },
+        })
       );
     } catch (err) {
       logger.error(`clientConfig getConfig: ${err.message}`);

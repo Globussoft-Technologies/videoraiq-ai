@@ -10,6 +10,24 @@ import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
 import { redis } from "../../../utils/database.js";
 
+const MODULE_KEYS = {
+  mattressMeasurement: [
+    "measurementLogs",
+    "raspberryPiDevices",
+    "measurementCalibration",
+  ],
+};
+
+const normalizeModuleConfig = (moduleConfig = {}) => Object.fromEntries(
+  Object.entries(MODULE_KEYS).map(([moduleKey, pageKeys]) => [
+    moduleKey,
+    Object.fromEntries(pageKeys.map((pageKey) => [
+      pageKey,
+      moduleConfig?.[moduleKey]?.[pageKey] === true,
+    ])),
+  ]),
+);
+
 class ClientConfigService {
   // GET /client/config/:adminId
   // Returns the Client Configuration screen: stat cards + Detection Assignment table.
@@ -87,7 +105,11 @@ class ClientConfigService {
       };
 
       return res.send(
-        Response.SuccessResp("Client config fetched", { stats, detections })
+        Response.SuccessResp("Client config fetched", {
+          stats,
+          detections,
+          modules: normalizeModuleConfig(admin.moduleConfig),
+        })
       );
     } catch (err) {
       logger.error(`clientConfig getConfig: ${err.message}`);
@@ -305,6 +327,60 @@ class ClientConfigService {
     } catch (err) {
       logger.error(`clientConfig updateDetectionAllocation: ${err.message}`);
       return res.send(Response.userFailResp("Failed to update detection allocation", err.message));
+    }
+  }
+
+  // PUT /client/config/:adminId/modules/:moduleKey
+  // Body contains the complete boolean leaf map for that module. Requiring the
+  // complete map prevents an old/stale UI from accidentally leaving hidden
+  // grants behind when the parent switch is turned off.
+  async updateModuleConfig(req, res) {
+    try {
+      const { adminId, moduleKey } = req.params;
+      if (!mongoose.isValidObjectId(adminId)) {
+        return res.status(400).send(Response.userFailResp("Invalid adminId"));
+      }
+      const pageKeys = MODULE_KEYS[moduleKey];
+      if (!pageKeys) {
+        return res.status(400).send(Response.userFailResp(`Unknown module: ${moduleKey}`));
+      }
+
+      const supplied = req.body?.permissions;
+      if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
+        return res.status(400).send(Response.userFailResp("permissions must be an object"));
+      }
+      const unknown = Object.keys(supplied).filter((key) => !pageKeys.includes(key));
+      if (unknown.length) {
+        return res.status(400).send(Response.userFailResp(`Unknown module permission: ${unknown[0]}`));
+      }
+      if (pageKeys.some((key) => typeof supplied[key] !== "boolean")) {
+        return res.status(400).send(Response.userFailResp("Every module permission must be a boolean"));
+      }
+
+      const permissions = Object.fromEntries(pageKeys.map((key) => [key, supplied[key]]));
+      const admin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { [`moduleConfig.${moduleKey}`]: permissions } },
+        { new: true },
+      ).lean();
+      if (!admin) {
+        return res.status(404).send(Response.notFoundResp("Client not found"));
+      }
+
+      redis
+        .publish(
+          "moduleConfig:update",
+          JSON.stringify({ adminId, userId: admin.user_id, moduleKey, permissions }),
+        )
+        .catch((error) => logger.error(`moduleConfig publish failed: ${error.message}`));
+
+      return res.send(Response.SuccessResp("Module configuration updated", {
+        moduleKey,
+        permissions,
+      }));
+    } catch (err) {
+      logger.error(`clientConfig updateModuleConfig: ${err.message}`);
+      return res.send(Response.userFailResp("Failed to update module configuration", err.message));
     }
   }
 }

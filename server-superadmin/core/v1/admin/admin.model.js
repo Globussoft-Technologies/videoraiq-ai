@@ -66,6 +66,15 @@ const adminSchema = new mongoose.Schema({
   // purchasedCameras: 0, so without this flag a deliberate 0 would be
   // silently overwritten by that default grant on the client's next login.
   planCamerasGranted: { type: Boolean, default: false },
+  // Product modules granted by the super admin. Each leaf controls one page in
+  // the client UI; the parent module is visible when at least one leaf is true.
+  moduleConfig: {
+    mattressMeasurement: {
+      measurementLogs: { type: Boolean, default: false },
+      raspberryPiDevices: { type: Boolean, default: false },
+      measurementCalibration: { type: Boolean, default: false },
+    },
+  },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token

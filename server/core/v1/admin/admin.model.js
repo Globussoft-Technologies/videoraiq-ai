@@ -3,7 +3,7 @@
 import mongoose from 'mongoose';
 
 const adminSchema = new mongoose.Schema({
-  emp_id : {type:String, default: null},
+  emp_id: { type: String, default: null },
   orgId: { type: String, default: null },
   user_id: {
     type: String,
@@ -83,6 +83,13 @@ const adminSchema = new mongoose.Schema({
   // trial client to 0 would have the grant handed straight back on their next
   // login — the flag makes the grant a one-time starting value, not a floor.
   planCamerasGranted: { type: Boolean, default: false },
+  moduleConfig: {
+    mattressMeasurement: {
+      measurementLogs: { type: Boolean, default: false },
+      raspberryPiDevices: { type: Boolean, default: false },
+      measurementCalibration: { type: Boolean, default: false },
+    },
+  },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token

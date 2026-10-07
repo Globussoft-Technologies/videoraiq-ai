@@ -24,6 +24,12 @@ class ClientConfigController {
     /* #swagger.parameters['body'] = { in: 'body', schema: { cameraAllocation: 42, enabled: true } } */
     return await clientConfigService.updateDetectionAllocation(req, res, next);
   }
+
+  async updateModuleConfig(req, res, next) {
+    /* #swagger.tags = ['Client Config'] */
+    /* #swagger.description = 'Set the page-level grants for one client product module. Super-admin token required.' */
+    return await clientConfigService.updateModuleConfig(req, res, next);
+  }
 }
 
 export default new ClientConfigController();

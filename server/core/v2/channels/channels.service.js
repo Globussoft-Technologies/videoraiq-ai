@@ -31,9 +31,16 @@ import {
   toDeviceLocalIso,
 } from "../NVR/securusDvrip.js";
 import {
+  getSecurusPlaybackThumbnail,
+  securusPreviewWindow,
   serveSecurusPlaybackFile,
   startSecurusPlaybackSession,
 } from "../NVR/securusPlayback.js";
+import {
+  buildNvrPreviewSource,
+  getAnimatedPlaybackPreview,
+  PREVIEW_DURATION_SECONDS,
+} from "../NVR/playbackPreview.js";
 import { isapiPrefix } from "../NVR/isapiPrefix.js";
 import { redis } from "../../../utils/database.js";
 
@@ -1301,6 +1308,120 @@ class ChannelService {
     } catch (error) {
       logger.error("Securus playback proxy error:", error);
       return res.status(500).send("Failed to serve Securus playback");
+    }
+  }
+
+  async getPlaybackPreview(req, res, _next) {
+    try {
+      const { channelId, time, playbackUrl, playbackStartTime } = req.body || {};
+      if (!channelId || !time) {
+        return res.status(400).json(Response.userFailResp("Missing channelId or preview time"));
+      }
+      if (!mongoose.Types.ObjectId.isValid(channelId)) {
+        return res.status(400).json(Response.userFailResp("Invalid channel ID"));
+      }
+
+      const channel = await Channel.findById(channelId);
+      if (!channel?.nvrId) {
+        return res.status(404).json(Response.notFoundResp("Channel or NVR not found"));
+      }
+      const nvr = await NVR.findById(channel.nvrId);
+      if (!nvr) return res.status(404).json(Response.notFoundResp("NVR not found"));
+      const brand = String(nvr.brand || "").toLowerCase();
+
+      // Five-second buckets match the moving preview duration and coalesce
+      // nearby pointer positions into one device request.
+      const requestedTime = parseCompactDeviceTime(time);
+      const previewTime = new Date(
+        Math.floor(requestedTime.getTime() / (PREVIEW_DURATION_SECONDS * 1000)) *
+          PREVIEW_DURATION_SECONDS * 1000,
+      );
+      const previewEnd = new Date(previewTime.getTime() + PREVIEW_DURATION_SECONDS * 1000);
+      let preview;
+
+      if (brand === "securus") {
+        const recordings = await searchSecurusRecordings({
+          ip: decrypt(nvr.ip),
+          username: nvr.username || "admin",
+          password: decrypt(nvr.password),
+          channelId: channel.channelId,
+          start: new Date(previewTime.getTime() - 5 * 60 * 1000),
+          end: new Date(previewTime.getTime() + 5 * 60 * 1000),
+        });
+        const recordingIndex = recordings.findIndex((item) =>
+          item.start <= previewTime && item.end > previewTime,
+        );
+        if (recordingIndex < 0) {
+          return res.status(404).json(Response.notFoundResp("No recording found for this preview time"));
+        }
+
+        const recording = recordings[recordingIndex];
+        const previewWindow = securusPreviewWindow(recording, previewTime);
+        const previewRecordings = recordings
+          .slice(recordingIndex)
+          .filter((item) => item.start < previewEnd && item.end > previewWindow.start)
+          .map((item, index) => ({
+            path: item.path,
+            start_time: toCompactDeviceTime(index === 0 ? previewWindow.start : item.start),
+            end_time: toCompactDeviceTime(new Date(Math.min(item.end.getTime(), previewEnd.getTime()))),
+          }));
+        preview = await getSecurusPlaybackThumbnail({
+          cacheKey: `${channel._id}:${previewTime.getTime()}`,
+          ip: decrypt(nvr.ip),
+          username: nvr.username || "admin",
+          password: decrypt(nvr.password),
+          recordings: previewRecordings,
+          offsetSeconds: previewWindow.offsetSeconds,
+        });
+      } else if (brand === "honeywell") {
+        // Honeywell permits one playback session device-wide. Reuse the DASH
+        // session already displayed by the browser; opening another one here
+        // would lock or interrupt normal playback.
+        if (!playbackUrl || !playbackStartTime) {
+          return res.status(409).json(Response.userFailResp("Start playback before requesting a Honeywell preview"));
+        }
+        const requestOrigin = `${req.protocol}://${req.get("host")}`;
+        const parsed = new URL(playbackUrl, requestOrigin);
+        const expectedPrefix = `${req.baseUrl}/honeywell-playback/${channel._id}-`;
+        if (parsed.origin !== requestOrigin || !parsed.pathname.startsWith(expectedPrefix) || !parsed.pathname.endsWith("/stream.mpd")) {
+          return res.status(400).json(Response.userFailResp("Invalid Honeywell playback preview source"));
+        }
+        const sourceStart = parseCompactDeviceTime(playbackStartTime);
+        const offsetSeconds = Math.max(0, (previewTime.getTime() - sourceStart.getTime()) / 1000);
+        parsed.search = `?token=${encodeURIComponent(req.header("x-access-token") || "")}`;
+        preview = await getAnimatedPlaybackPreview({
+          cacheKey: `${channel._id}:${previewTime.getTime()}`,
+          inputUrl: parsed.toString(),
+          offsetSeconds,
+        });
+      } else {
+        const inputUrl = buildNvrPreviewSource({
+          nvr,
+          channel,
+          start: previewTime,
+          end: previewEnd,
+          ip: decrypt(nvr.ip),
+          password: decrypt(nvr.password),
+        });
+        if (!inputUrl) {
+          return res.status(422).json(Response.userFailResp(`Playback preview is not available for ${brand || "this device"}`));
+        }
+        preview = await getAnimatedPlaybackPreview({
+          cacheKey: `${channel._id}:${previewTime.getTime()}`,
+          inputUrl,
+        });
+      }
+
+      res.set({
+        "Content-Type": "image/webp",
+        "Cache-Control": "private, max-age=300",
+      });
+      return res.status(200).send(preview);
+    } catch (error) {
+      logger.error("Playback preview error:", error);
+      return res.status(500).json(
+        Response.errorResp("Failed to generate playback preview", error.message),
+      );
     }
   }
 

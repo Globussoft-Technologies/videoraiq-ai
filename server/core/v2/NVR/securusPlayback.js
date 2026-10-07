@@ -8,8 +8,14 @@ import { openSecurusPlaybackSource } from "./securusDvrip.js";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 const PLAYLIST_WAIT_MS = 12000;
+const THUMBNAIL_TIMEOUT_MS = 15000;
+const THUMBNAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const THUMBNAIL_CACHE_LIMIT = 200;
+const THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024;
 const sessions = new Map();
 const sessionsByKey = new Map();
+const thumbnailCache = new Map();
+const thumbnailRequests = new Map();
 const sessionRoot = path.join(os.tmpdir(), "videoraiq-securus-playback");
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -72,6 +78,161 @@ function ffmpegArguments(codec, directory) {
     "-hls_segment_filename", segmentPattern,
     playlist,
   ];
+}
+
+export function securusThumbnailArguments(codec, offsetSeconds = 0) {
+  return [
+    "-hide_banner",
+    "-loglevel", "warning",
+    "-fflags", "+genpts+discardcorrupt",
+    "-r", "15",
+    "-f", codec,
+    "-i", "pipe:0",
+    "-ss", Math.max(0, Number(offsetSeconds) || 0).toFixed(3),
+    "-t", "5",
+    "-an",
+    "-vf", "fps=2,scale=480:-2:flags=lanczos",
+    "-c:v", "libwebp_anim",
+    "-quality", "58",
+    "-loop", "0",
+    "-f", "webp",
+    "pipe:1",
+  ];
+}
+
+export function securusPreviewWindow(recording, previewTime) {
+  const physicalStart = recording?.start;
+  const physicalEnd = recording?.end;
+  if (!(physicalStart instanceof Date) || Number.isNaN(physicalStart.getTime()) ||
+      !(physicalEnd instanceof Date) || Number.isNaN(physicalEnd.getTime()) ||
+      !(previewTime instanceof Date) || Number.isNaN(previewTime.getTime())) {
+    throw new Error("Invalid Securus preview window");
+  }
+  // DVRIP starts on encoded-frame boundaries. Beginning exactly at the hover
+  // second can return only inter-frames (or no frames at all), so read two
+  // hidden seconds of keyframe context and let FFmpeg discard that lead-in.
+  // The emitted animated preview still contains exactly five visible seconds.
+  const start = new Date(Math.max(
+    physicalStart.getTime(),
+    previewTime.getTime() - 2 * 1000,
+  ));
+  const end = new Date(Math.min(
+    physicalEnd.getTime(),
+    previewTime.getTime() + 5 * 1000,
+  ));
+  return {
+    start,
+    end,
+    offsetSeconds: Math.max(0, (previewTime.getTime() - start.getTime()) / 1000),
+  };
+}
+
+async function captureSecurusPlaybackPreview({
+  ip,
+  port,
+  username,
+  password,
+  recording,
+  recordings,
+  offsetSeconds = 0,
+}) {
+  const source = await openSecurusPlaybackSource({
+    ip,
+    port,
+    username,
+    password,
+    recordings: recordings?.length ? recordings : [recording],
+  });
+  let ffmpeg;
+  try {
+    const codec = await Promise.race([
+      source.codec,
+      delay(10000).then(() => {
+        throw new Error("Timed out waiting for Securus thumbnail video");
+      }),
+    ]);
+
+    ffmpeg = spawn(
+      process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg",
+      securusThumbnailArguments(codec, offsetSeconds),
+      { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+    );
+
+    return await new Promise((resolve, reject) => {
+      const chunks = [];
+      let bytes = 0;
+      let stderr = "";
+      let settled = false;
+      const finish = (error, image) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(image);
+      };
+      const timer = setTimeout(() => {
+        ffmpeg.kill("SIGTERM");
+        finish(new Error("Timed out generating Securus playback preview"));
+      }, THUMBNAIL_TIMEOUT_MS);
+
+      ffmpeg.stdout.on("data", (chunk) => {
+        bytes += chunk.length;
+        if (bytes > THUMBNAIL_MAX_BYTES) {
+          ffmpeg.kill("SIGTERM");
+          finish(new Error("Securus playback preview exceeded the size limit"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      ffmpeg.stderr.on("data", (chunk) => {
+        stderr = `${stderr}${chunk.toString()}`.slice(-4096);
+      });
+      ffmpeg.once("error", (error) => finish(
+        new Error(`Unable to start FFmpeg for Securus preview: ${error.message}`),
+      ));
+      ffmpeg.once("close", (code, signal) => {
+        const image = Buffer.concat(chunks);
+        if (code === 0 && image.length > 0) finish(null, image);
+        else finish(new Error(
+          `Securus preview conversion stopped (${signal || code}): ${stderr.trim() || "no frame produced"}`,
+        ));
+      });
+      source.stream.once("error", (error) => finish(error));
+      // FFmpeg closes stdin after the five-second preview. That should only
+      // stop this preview's DVRIP source, not fail the request.
+      ffmpeg.stdin.on("error", () => source.stop());
+      source.stream.pipe(ffmpeg.stdin);
+    });
+  } finally {
+    source.stop();
+    if (ffmpeg && ffmpeg.exitCode === null && ffmpeg.signalCode === null) {
+      ffmpeg.kill("SIGTERM");
+    }
+  }
+}
+
+/** Generate or reuse one animated preview without affecting normal playback. */
+export async function getSecurusPlaybackThumbnail({ cacheKey, ...options }) {
+  const now = Date.now();
+  const cached = thumbnailCache.get(cacheKey);
+  if (cached?.expiresAt > now) return cached.image;
+  if (cached) thumbnailCache.delete(cacheKey);
+  if (thumbnailRequests.has(cacheKey)) return thumbnailRequests.get(cacheKey);
+
+  const request = captureSecurusPlaybackPreview(options)
+    .then((image) => {
+      thumbnailCache.set(cacheKey, {
+        image,
+        expiresAt: Date.now() + THUMBNAIL_CACHE_TTL_MS,
+      });
+      while (thumbnailCache.size > THUMBNAIL_CACHE_LIMIT) {
+        thumbnailCache.delete(thumbnailCache.keys().next().value);
+      }
+      return image;
+    })
+    .finally(() => thumbnailRequests.delete(cacheKey));
+  thumbnailRequests.set(cacheKey, request);
+  return request;
 }
 
 async function waitForPlaylist(session) {

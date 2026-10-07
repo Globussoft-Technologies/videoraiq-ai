@@ -24,6 +24,7 @@ async function buildFeatureCatalog(req) {
   const role = Array.isArray(attachedPermissions) ? attachedPermissions[0] : attachedPermissions;
   const permissions = role?.permissionConfig || {};
   const { adminId, user_id: userId } = req?.verified?.userData || {};
+  const admin = adminId ? await adminModel.findById(adminId).select('moduleConfig').lean() : null;
 
   // Match the navigation/tour fail-open behaviour: a temporary logs-config
   // lookup failure must not make legitimate features disappear from answers.
@@ -36,6 +37,7 @@ async function buildFeatureCatalog(req) {
 
   const modules = TOUR_MODULES
     .filter((module) => !module.tourOnly)
+    .filter((module) => !module.modulePageKey || admin?.moduleConfig?.mattressMeasurement?.[module.modulePageKey] === true)
     .filter((module) => isModuleVisible(module, permissions) && isModuleLogEnabled(module, logs))
     .map(({ key, label, path, group, description }) => ({
       key,

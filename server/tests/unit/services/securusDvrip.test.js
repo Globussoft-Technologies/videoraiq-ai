@@ -10,7 +10,15 @@ import {
   sofiaPasswordHash,
   toDeviceLocalIso,
 } from "../../../core/v2/NVR/securusDvrip.js";
-import { rewriteSecurusPlaylist } from "../../../core/v2/NVR/securusPlayback.js";
+import {
+  rewriteSecurusPlaylist,
+  securusPreviewWindow,
+  securusThumbnailArguments,
+} from "../../../core/v2/NVR/securusPlayback.js";
+import {
+  animatedPreviewArguments,
+  buildNvrPreviewSource,
+} from "../../../core/v2/NVR/playbackPreview.js";
 
 function writeDeviceTime(buffer, offset, date) {
   [
@@ -239,5 +247,73 @@ describe("Securus HLS proxy", () => {
     expect(rewriteSecurusPlaylist(source, "a+b/c=")).toContain(
       "segment_000001.ts?token=a%2Bb%2Fc%3D",
     );
+  });
+
+  it("builds a five-second animated WebP command at the requested recording offset", () => {
+    const args = securusThumbnailArguments("h264", 2);
+    expect(args).toContain("h264");
+    expect(args.slice(args.indexOf("-ss"), args.indexOf("-ss") + 2)).toEqual(["-ss", "2.000"]);
+    expect(args.slice(args.indexOf("-t"), args.indexOf("-t") + 2)).toEqual(["-t", "5"]);
+    expect(args).toContain("libwebp_anim");
+    expect(args.at(-1)).toBe("pipe:1");
+  });
+
+  it("adds two seconds of keyframe context while emitting five seconds from the hover time", () => {
+    const recording = {
+      start: new Date(2026, 9, 7, 6, 0, 0),
+      end: new Date(2026, 9, 7, 7, 0, 0),
+    };
+    const target = new Date(2026, 9, 7, 6, 30, 0);
+    const window = securusPreviewWindow(recording, target);
+    expect(window.end.getTime() - window.start.getTime()).toBe(7000);
+    expect(window.start.getTime()).toBe(target.getTime() - 2000);
+    expect(window.offsetSeconds).toBe(2);
+  });
+});
+
+describe("Cross-brand playback preview", () => {
+  const start = new Date(2026, 9, 7, 2, 39, 0);
+  const end = new Date(2026, 9, 7, 2, 39, 5);
+
+  it("builds a Hikvision archive source without using the stream server", () => {
+    const source = buildNvrPreviewSource({
+      nvr: { brand: "hikvision", username: "admin", rtspPort: 554 },
+      channel: { channelId: "1", rtspChannels: [{ id: "101" }] },
+      start,
+      end,
+      ip: "192.0.2.10",
+      password: "p@ss",
+    });
+    expect(source).toContain("/Streaming/tracks/101?");
+    expect(source).toContain("starttime=20261007T023900Z");
+    expect(source).toContain("admin:p%40ss@");
+  });
+
+  it.each([
+    ["prama", "/Streaming/tracks/101?", "starttime=20261007T023900Z"],
+    ["cpplus", "/cam/playback?", "starttime=2026_10_07_02_39_00"],
+    ["dahua", "/cam/playback?", "starttime=2026_10_07_02_39_00"],
+    ["tiandy", "/1/1?", "starttime=20261007T023900Z"],
+  ])("builds a direct %s archive source", (brand, path, time) => {
+    const source = buildNvrPreviewSource({
+      nvr: { brand, username: "admin", rtspPort: 554 },
+      channel: { channelId: "1", rtspChannels: [{ id: "101" }] },
+      start,
+      end,
+      ip: "192.0.2.10",
+      password: "password",
+    });
+    expect(source).toContain(path);
+    expect(source).toContain(time);
+  });
+
+  it("builds a five-second animated preview command", () => {
+    const args = animatedPreviewArguments({ inputUrl: "rtsp://example.test/archive" });
+    expect(args).toContain("tcp");
+    expect(args).toContain("-timeout");
+    expect(args).not.toContain("-rw_timeout");
+    expect(args.slice(args.indexOf("-t"), args.indexOf("-t") + 2)).toEqual(["-t", "5"]);
+    expect(args).toContain("libwebp_anim");
+    expect(args.at(-1)).toBe("pipe:1");
   });
 });

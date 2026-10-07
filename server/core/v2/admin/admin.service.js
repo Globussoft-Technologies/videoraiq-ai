@@ -928,8 +928,10 @@ class AdminService {
         logger.error("[TOUR_MODULES] logs config resolve failed:", err?.message);
       }
 
+      const tenant = adminId ? await adminModel.findById(adminId).select('moduleConfig').lean() : null;
       const modules = compactTourModules(TOUR_MODULES.filter(
         (module) =>
+          (!module.modulePageKey || tenant?.moduleConfig?.mattressMeasurement?.[module.modulePageKey] === true) &&
           isModuleVisible(module, permissions) &&
           isModuleLogEnabled(module, logs)
       )).filter((module) => matchesSearch(module, search))
