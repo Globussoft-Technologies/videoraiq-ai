@@ -23,6 +23,8 @@ const assistantConversationSchema = new mongoose.Schema(
     // Stateful conversational workflows live here instead of relying only on
     // the model history, which may be truncated or edited by the client.
     workflowState: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Compact read context shares the existing owned chat lifecycle/storage.
+    conversationContext: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true },
 );

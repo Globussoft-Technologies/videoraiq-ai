@@ -34,12 +34,15 @@ const conversation = {
   title: "Hello",
   messageCount: 0,
   messages: [],
+  markModified: vi.fn(),
+  save: vi.fn().mockResolvedValue(undefined),
 };
 const userMessage = { _id: "66f123456789012345678902", role: "user", text: "Hello" };
 const assistantMessage = { _id: "66f123456789012345678903", role: "assistant", text: "Hi" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  conversation.conversationContext = null;
   conversationService.createConversation.mockResolvedValue(conversation);
   conversationService.findOwnedConversation.mockResolvedValue(conversation);
   conversationService.modelHistory.mockResolvedValue([]);
@@ -62,6 +65,30 @@ beforeEach(() => {
 });
 
 describe("assistantController.chat", () => {
+  it("loads owned context, ignores client context/history, and persists only the MCP context", async () => {
+    const stored = { version: 1, conversationId: String(conversation._id), subjects: [{ resource: "nvrs", resultIds: ["owned-nvr"] }] };
+    const next = { ...stored, subjects: [{ resource: "nvrs", resultIds: ["owned-nvr", "next-owned-nvr"] }] };
+    conversation.conversationContext = stored;
+    const { req, res } = makeReqRes();
+    req.body = { message: "Can you name them?", conversationId: String(conversation._id), history: [{ role: "user", text: "foreign data" }], conversationContext: { subjects: [{ resource: "nvrs", resultIds: ["foreign-nvr"] }] } };
+    assistantService.askAssistant.mockResolvedValueOnce({ text: "The NVR names.", conversationContext: next });
+    await assistantController.chat(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(conversationService.findOwnedConversation).toHaveBeenCalledWith(req, String(conversation._id));
+    expect(assistantService.askAssistant).toHaveBeenCalledWith(expect.objectContaining({ conversationContext: stored, conversationId: String(conversation._id), history: [] }));
+    expect(conversation.conversationContext).toEqual(next);
+    expect(conversation.markModified).toHaveBeenCalledWith("conversationContext");
+    expect(conversation.markModified.mock.invocationCallOrder[0]).toBeLessThan(conversationService.appendMessage.mock.invocationCallOrder[1]);
+  });
+
+  it("does not invoke MCP when the conversation is not owned", async () => {
+    const { req, res } = makeReqRes();
+    req.body = { message: "Show their details", conversationId: "66f123456789012345678999" };
+    conversationService.findOwnedConversation.mockRejectedValueOnce(Object.assign(new Error("not owned"), { statusCode: 404 }));
+    await assistantController.chat(req, res);
+    expect(res.statusCode).toBe(404);
+    expect(assistantService.askAssistant).not.toHaveBeenCalled();
+  });
   it("rejects an empty message", async () => {
     const { req, res } = makeReqRes();
     req.body = { message: "   " };
@@ -96,7 +123,7 @@ describe("assistantController.chat", () => {
     expect(res.statusCode).toBe(200);
     expect(conversationService.createConversation).toHaveBeenCalledWith(req, "Hello");
     expect(conversationService.appendMessage).toHaveBeenNthCalledWith(1, conversation, "user", "Hello");
-    expect(conversationService.appendMessage).toHaveBeenNthCalledWith(2, conversation, "assistant", "Hi");
+    expect(conversationService.appendMessage).toHaveBeenNthCalledWith(2, conversation, "assistant", "Hi", false, undefined);
     expect(res._body.body.data).toMatchObject({
       reply: "Hi",
       conversation: { id: String(conversation._id) },
@@ -116,11 +143,13 @@ describe("assistantController.chat", () => {
 
     expect(res.statusCode).toBe(200);
     expect(conversationService.findOwnedConversation).toHaveBeenCalledWith(req, String(conversation._id));
-    expect(assistantService.askAssistant).toHaveBeenCalledWith({
+    expect(assistantService.askAssistant).toHaveBeenCalledWith(expect.objectContaining({
       message: "Continue",
       history: storedHistory,
       req,
-    });
+      conversationId: String(conversation._id),
+      conversationContext: null,
+    }));
   });
 
   it("does not rebuild an input card after registration is cancelled", async () => {

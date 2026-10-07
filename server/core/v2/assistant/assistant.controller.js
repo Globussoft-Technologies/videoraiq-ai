@@ -90,6 +90,12 @@ function isFreshRegisterRequest(message) {
   return /^(?:(?:i\s+(?:want|would like)\s+to|please|start|begin)\s+)?(?:register|create|add)\s+(?:(?:an?\s+|your\s+|the\s+)?(?:new\s+)?(?:user|users|employee|employees))\b/i.test(String(message || "").trim());
 }
 
+function isRegistrationHowTo(message) {
+  const text = String(message || '').trim();
+  return /\b(?:steps?|guide|instructions?|how\s+(?:can|do|to)|what\s+(?:do\s+i\s+need|is\s+required)|requirements?|explain)\b/i.test(text)
+    && !/^\s*(?:register|create|add|enroll)\b/i.test(text);
+}
+
 function isFreshAlertRecipientRequest(message) {
   const value = String(message || "").trim();
   return /\b(?:alert|notification)\s+recipients?\b/i.test(value)
@@ -372,7 +378,7 @@ class AssistantController {
         && ["cancelled", "completed"].includes(conversation.workflowState.status)
         ? undefined
         : conversation.workflowState;
-      const result = await assistantService.askAssistant({ message, history: storedHistory, req, workflowState: assistantWorkflowState, action, incidentContext, attachmentCount, imageAttachments });
+      const result = await assistantService.askAssistant({ message, history: storedHistory, req, workflowState: assistantWorkflowState, action, incidentContext, attachmentCount, imageAttachments, conversationContext: conversation.conversationContext || null, conversationId: String(conversation._id) });
       // Do not let an empty/malformed MCP response reach Mongoose. The message
       // schema requires text, and that validation error used to surface as an
       // unrelated HTTP 500 instead of identifying the provider failure.
@@ -380,6 +386,13 @@ class AssistantController {
         const providerError = new Error("The assistant provider returned an empty response.");
         providerError.statusCode = 502;
         throw providerError;
+      }
+      // A documentation request is an independent turn. Do not return or
+      // persist a stale registration state, otherwise the client rebuilds the
+      // old Last Name card even when MCP correctly returned documentation.
+      if (isRegistrationHowTo(message) && ["register_new_user", "create_user"].includes(conversation.workflowState?.workflow)) {
+        conversation.workflowState = null;
+        await conversationService.setWorkflowState(conversation, null);
       }
       // Only rebuild the UI from state produced by this request. Falling back
       // to conversation.workflowState here made a stale firstName card reappear
@@ -431,6 +444,12 @@ class AssistantController {
         result.workflowState = preserveStoredRegistrationFaces(conversation.workflowState, result.workflowState);
         await conversationService.setWorkflowState(conversation, result.workflowState);
       }
+      if (Object.hasOwn(result, "conversationContext")) {
+        conversation.conversationContext = result.conversationContext || null;
+        conversation.markModified("conversationContext");
+      }
+      // appendMessage saves the reply and its read context in the same document
+      // write, so a successful reply cannot leave the prior context behind.
       const assistantMessage = await conversationService.appendMessage(conversation, "assistant", result.text, false, result.ui);
       if (completedRegistrationState) {
         await conversationService.setWorkflowState(conversation, null);

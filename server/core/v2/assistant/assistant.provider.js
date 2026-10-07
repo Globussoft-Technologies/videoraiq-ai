@@ -36,7 +36,9 @@ export function resolveProviderSettings() {
 
   const provider = configuredProvider || "gemini";
 
-  const genericKey = usableSecret(process.env.LLM_API_KEY || configValue(["Assistant.apiKey", "LLM_API_KEY"]));
+  const genericKey = usableSecret(
+    process.env.LLM_API_KEY || configValue(["Assistant.apiKey", "LLM_API_KEY"]),
+  );
 
   const configuredModel = clean(
     process.env.LLM_MODEL || configValue(["Assistant.model", "LLM_MODEL"]),
@@ -83,7 +85,7 @@ function toGeminiContents(messages) {
   }));
 }
 
-async function callGemini(settings, systemInstruction, messages) {
+async function callGemini(settings, systemInstruction, messages, generationOptions = {}) {
   const ai = new GoogleGenAI({
     apiKey: settings.apiKey,
     ...(settings.baseUrl
@@ -104,7 +106,11 @@ async function callGemini(settings, systemInstruction, messages) {
         const response = await ai.models.generateContent({
           model,
           contents: toGeminiContents(messages),
-          config: { systemInstruction, temperature: 0.2, maxOutputTokens: 800 },
+          config: {
+            systemInstruction, temperature: 0.2, maxOutputTokens: generationOptions.maxOutputTokens ?? 800,
+            ...(/^gemini-2\.5-flash(?:-|$)/i.test(model) && generationOptions.thinkingBudget !== undefined
+              ? { thinkingConfig: { thinkingBudget: generationOptions.thinkingBudget } } : {}),
+          },
         });
         return clean(response?.text);
       } catch (error) {
@@ -185,13 +191,13 @@ async function callAnthropic(settings, systemInstruction, messages) {
   return clean(data?.content?.find((part) => part?.type === "text")?.text);
 }
 
-export async function generateAssistantText({ systemInstruction, messages }) {
+export async function generateAssistantText({ systemInstruction, messages, generationOptions }) {
   const settings = resolveProviderSettings();
   requireSettings(settings);
 
   let text;
   if (settings.provider === "gemini") {
-    text = await callGemini(settings, systemInstruction, messages);
+    text = await callGemini(settings, systemInstruction, messages, generationOptions);
   } else if (settings.provider === "anthropic") {
     text = await callAnthropic(settings, systemInstruction, messages);
   } else {

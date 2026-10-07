@@ -73,7 +73,68 @@ beforeEach(async () => {
   await clearCollections();
 });
 
+describe("detection history uses authorized events rather than the snapshot feed", () => {
+  it("includes snapshot-free count and crossing events while the default feed excludes them", async () => {
+    await seed("2026-10-06T08:00:00Z", { incidentType: "countPersons", Image: null });
+    await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null });
+    await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null, userId: "foreign-account" });
+    const history = centerCtx({ eventSource: "detection_history", incidentTypeFilter: ["countPersons", "lineCrossing"] });
+    await IncidentsServiceV2.getAllIncidents(history.req, history.res, history.next);
+    expect(history.res.statusCode).toBe(200);
+    expect(payload(history.res).totalCount).toBe(2);
+    const feed = centerCtx();
+    await IncidentsServiceV2.getAllIncidents(feed.req, feed.res, feed.next);
+    expect(payload(feed.res).totalCount).toBe(0);
+  });
+
+  it("camera rankings retain the member's authorized camera restriction", async () => {
+    const allowed = new mongoose.Types.ObjectId();
+    await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null, channelId: allowed });
+    await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null });
+    const context = serviceCtx({ user_id: USER_ID, adminId: ADMIN_ID, memberId: "member-a", authorizedChannel: { channels: [allowed] }, query: { skip: 0, limit: 50 }, body: { eventSource: "detection_history", groupBy: "channelId", incidentTypeFilter: ["lineCrossing"], statusFilter: ["new", "reported", "resolved"] } });
+    await IncidentsServiceV2.getAllIncidents(context.req, context.res, context.next);
+    expect(payload(context.res).totalCount).toBe(1);
+    expect(payload(context.res).groups).toHaveLength(1);
+    expect(String(payload(context.res).groups[0].channelId)).toBe(String(allowed));
+  });
+
+  it("location rankings aggregate the complete authorized event set", async () => {
+    const { default: NVR } = await import("../../../core/v2/NVR/nvr.model.js");
+    const nvrId = new mongoose.Types.ObjectId();
+    await NVR.collection.insertOne({ _id: nvrId, userId: USER_ID, location: "Warehouse" });
+    await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null, nvrId });
+    await seed("2026-10-06T09:00:00Z", { incidentType: "lineCrossing", Image: null, nvrId });
+    const context = centerCtx({ eventSource: "detection_history", groupBy: "location", incidentTypeFilter: ["lineCrossing"] });
+    await IncidentsServiceV2.getAllIncidents(context.req, context.res, context.next);
+    expect(payload(context.res).groups).toEqual([{ location: "Warehouse", count: 2 }]);
+  });
+});
+
 describe("IncidentsService (v2) getAllIncidents — fromTime/toTime", () => {
+  it("applies a continuous half-open instant window and preserves account ownership", async () => {
+    await seed("2026-10-05T11:12:12.999Z");
+    await seed("2026-10-05T11:12:13.000Z");
+    await seed("2026-10-06T11:12:12.999Z");
+    await seed("2026-10-06T11:12:13.000Z");
+    await seed("2026-10-06T08:00:00.000Z", { userId: "another-account" });
+    const { req, res, next } = centerCtx({
+      startDate: "2026-10-05", endDate: "2026-10-06",
+      startInclusive: "2026-10-05T11:12:13.000Z",
+      endExclusive: "2026-10-06T11:12:13.000Z",
+    });
+    await IncidentsServiceV2.getAllIncidents(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).totalCount).toBe(2);
+  });
+
+  it("rejects malformed continuous windows instead of returning an unfiltered count", async () => {
+    await seed("2026-10-06T08:00:00.000Z");
+    const { req, res, next } = centerCtx({ startInclusive: "invalid", endExclusive: "2026-10-06T11:12:13.000Z" });
+    await IncidentsServiceV2.getAllIncidents(req, res, next);
+    expect(res._body).toBeUndefined();
+    expect(next.calls).toHaveLength(1);
+    expect(next.calls[0].statusCode).toBe(500);
+  });
   it("keeps only incidents whose UTC time-of-day falls within [fromTime, toTime]", async () => {
     await seed("2026-08-01T08:00:00.000Z"); // before window
     await seed("2026-08-01T12:00:00.000Z"); // inside window
