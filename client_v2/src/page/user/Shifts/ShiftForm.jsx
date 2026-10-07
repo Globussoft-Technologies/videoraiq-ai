@@ -24,6 +24,8 @@ import {
   windowMinutes,
 } from './shiftDays';
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
+
 const fieldClass =
   'border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]';
 const labelClass = 'text-xs text-[var(--tx2)] mb-1 ml-1 block';
@@ -153,6 +155,10 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
     validateOnChange: false,
     enableReinitialize: true,
     onSubmit: async (values, helpers) => {
+      if (isKhanbas && mode === 'create') {
+        helpers.setSubmitting(false);
+        return;
+      }
       const payload = {
         name: values.name.trim(),
         startTime: values.startTime,
@@ -401,8 +407,8 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
             </Button>
             <Button
               type="submit"
-              disabled={formik.isSubmitting}
-              className="bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20"
+              disabled={formik.isSubmitting || (isKhanbas && mode === 'create')}
+              className={`inline-flex items-center gap-1.5 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas && mode === 'create' ? 'khanbas-disabled-action' : ''}`}
             >
               {mode === 'edit' ? 'Save Changes' : 'Create Shift'}
             </Button>

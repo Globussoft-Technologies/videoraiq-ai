@@ -86,6 +86,7 @@ const ENROLL_STYLES = `
  * Maps to the existing authorizedUsers/create endpoint; onCreated refreshes the list.
  */
 const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
+  const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
   const [step, setStep] = useState(1);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -230,6 +231,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
   /* ---- submit ---- */
   const handleRegister = async () => {
+    if (isKhanbas) return;
     if (hasEmailEmoji(email)) {
       setErrors((prev) => ({ ...prev, email: EMAIL_EMOJI_ERROR }));
       toast.error(EMAIL_EMOJI_ERROR, COMPACT_TOAST);
@@ -574,8 +576,8 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
           <button
             type="button"
             onClick={handleRegister}
-            disabled={isSubmitting}
-            className="w-full h-12 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-70"
+            disabled={isKhanbas || isSubmitting}
+            className={`w-full h-12 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas ? 'khanbas-disabled-action' : ''}`}
             style={{ background: GRADIENT }}
           >
             {isSubmitting && <Loader className="w-4 h-4 animate-spin" />}

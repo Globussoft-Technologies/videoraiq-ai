@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { createDepartment, updateDepartment } from "./Api";
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
+
 const DepartmentForm = ({
   trigger,
   initialValues = null,
@@ -43,6 +45,10 @@ const DepartmentForm = ({
     validateOnBlur: false,
     validateOnChange: false,
     onSubmit: async (values, helpers) => {
+      if (isKhanbas && mode === "create") {
+        helpers.setSubmitting(false);
+        return;
+      }
       try {
         const payload = {
             ...values,
@@ -207,8 +213,8 @@ const DepartmentForm = ({
               </Button>
               <Button
                 type="submit"
-                disabled={formik.isSubmitting}
-                className="bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20"
+                disabled={formik.isSubmitting || (isKhanbas && mode === "create")}
+                className={`inline-flex items-center gap-1.5 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas && mode === "create" ? 'khanbas-disabled-action' : ''}`}
               >
                 {mode === "edit" ? "Update Department" : "Add Department"}
               </Button>

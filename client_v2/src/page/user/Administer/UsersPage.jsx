@@ -17,6 +17,8 @@ import {
 import { getLocations } from '../../../helpers/monitoring';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b',
@@ -495,6 +497,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   };
 
   const handleSave = async () => {
+    if (isKhanbas && !isEdit) return;
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length) return;
@@ -845,12 +848,15 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || (isKhanbas && !isEdit)}
+            className={isKhanbas && !isEdit ? 'khanbas-disabled-action' : undefined}
             style={{
               flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              border: 'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
-              boxShadow: saving ? 'none' : '0 4px 16px rgba(99,102,241,.32)',
+              border: 'none', cursor: saving || (isKhanbas && !isEdit) ? 'not-allowed' : 'pointer',
+              opacity: saving || (isKhanbas && !isEdit) ? 0.5 : 1,
+              boxShadow: saving || (isKhanbas && !isEdit) ? 'none' : '0 4px 16px rgba(99,102,241,.32)',
             }}
           >
             {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Add User')}

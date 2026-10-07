@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { userLoginSchema } from "./Schema/UserLoginSchema";
 import { userLoginByPass } from "./api/post/Index";
 import logo from "@/assets/logo.svg";
+import KhanbasLogo from "@/components/KhanbasLogo";
 import AuthLoader from "./AuthLoader";
 import AuthHero from "./AuthHero";
 import RegisterForm from "./RegisterForm";
@@ -16,6 +17,7 @@ import { setSessionId } from "@/utils/sessionIdentity";
 import "./login.css";
 
 const url = import.meta.env.VITE_ENV;
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
 /* cookie name matches getAccessToken() / the V1 login flow */
 const accessCookieName = () =>
@@ -206,7 +208,10 @@ const LoginForm = () => {
         <div style={{ position: "relative", width: "100%", maxWidth: 392, animation: "vqfade .7s ease both .1s" }}>
           {/* logo + heading */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 26 }}>
-            <div
+            {isKhanbas ? (
+              <div style={{ marginBottom: 16 }}><KhanbasLogo /></div>
+            ) : (
+              <div
               style={{
                 position: "relative",
                 width: 66,
@@ -246,7 +251,8 @@ const LoginForm = () => {
                   style={{ width: 42, height: 42, objectFit: "contain", filter: "grayscale(1)" }}
                 />
               </div>
-            </div>
+              </div>
+            )}
             <h2
               style={{
                 fontFamily: "'Space Grotesk',sans-serif",
@@ -471,7 +477,7 @@ const LoginForm = () => {
                   animation: "vqspin .8s linear infinite",
                 }}
               />
-              <div
+              {!isKhanbas && <div
                 style={{
                   position: "absolute",
                   inset: 6,
@@ -488,7 +494,7 @@ const LoginForm = () => {
                   alt=""
                   style={{ width: 28, height: 28, objectFit: "contain", filter: "grayscale(1) drop-shadow(0 0 8px rgba(59,130,246,.5))" }}
                 />
-              </div>
+              </div>}
             </div>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "#cbd4ea", letterSpacing: ".02em" }}>
               Authenticating…

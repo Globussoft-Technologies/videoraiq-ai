@@ -18,7 +18,10 @@ import { useTheme } from '@/theme/ThemeContext';
 import { ENGINE_PALETTE } from '@/lib/engineMeta';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
+import khanbasLogo from '@/assets/khanbas-logo.png';
 import { useTour } from '@/context/TourContext';
+
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
 
 const navItemStyle = (active, collapsed) => ({
   display: 'flex',
@@ -248,16 +251,26 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
       >
         {!collapsed && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
-            <img
-              src={theme === 'dark' ? videoraiqLogoWhite : videoraiqLogoColor}
-              alt="VideoraIQ"
-              style={{
-                maxWidth: '100%',
-                height: 34,
-                objectFit: 'contain',
-                objectPosition: 'left center',
-              }}
-            />
+            {isKhanbas ? (
+              <div style={{ width: 102, height: 84, overflow: 'hidden' }}>
+                <img
+                  src={khanbasLogo}
+                  alt="Khanbas"
+                  style={{ width: 150, maxWidth: 'none', transform: 'translateX(-34px)' }}
+                />
+              </div>
+            ) : (
+              <img
+                src={theme === 'dark' ? videoraiqLogoWhite : videoraiqLogoColor}
+                alt="VideoraIQ"
+                style={{
+                  maxWidth: '100%',
+                  height: 34,
+                  objectFit: 'contain',
+                  objectPosition: 'left center',
+                }}
+              />
+            )}
             <span
               style={{
                 marginTop: 7,

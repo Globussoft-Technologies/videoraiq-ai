@@ -46,6 +46,10 @@ export function zonesFor(setting, cameraId, settingType) {
       const raw = configs[i]?.count_mode ?? setting?.settings?.count_mode;
       return raw === 'all' ? 'both' : (raw || 'entry');
     })(),
+    activityMode: (() => {
+      const mode = configs[i]?.activity_mode ?? configs[i]?.mode ?? setting?.settings?.mode;
+      return ['loading', 'unloading'].includes(mode) ? mode : 'all';
+    })(),
     schedule: scheduleFromConfig(configs[i]),
     telegramChatIds: Array.isArray(configs[i]?.telegramChatIds)
       ? configs[i].telegramChatIds.map(id => String(id || '').trim()).filter(Boolean)

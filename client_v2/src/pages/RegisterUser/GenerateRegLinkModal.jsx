@@ -6,6 +6,7 @@ import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const MAX_DAYS = 5;
 const REGISTER_PATH = '/employee-register';
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
 
 export const buildRegistrationLink = (token) => {
   if (!token) return '';
@@ -48,6 +49,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
   };
 
   const handleGenerate = async () => {
+    if (isKhanbas) return;
     const n = Number(days);
     if (!days || !Number.isInteger(n) || n < 1 || n > MAX_DAYS) {
       toast.error(`Enter a number between 1 and ${MAX_DAYS}`);
@@ -139,10 +141,11 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={loading || !days}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--blue)] hover:opacity-95 text-white rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            disabled={isKhanbas || loading || !days}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--blue)] hover:opacity-95 text-white rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all ${isKhanbas ? 'khanbas-disabled-action' : ''}`}
           >
-            {loading ? <Loader className="w-4 h-4 animate-spin" /> : link ? 'Regenerate Link' : 'Generate Link'}
+            {loading && <Loader className="w-4 h-4 animate-spin" />}
+            {link ? 'Regenerate Link' : 'Generate Link'}
           </button>
 
           {link && (

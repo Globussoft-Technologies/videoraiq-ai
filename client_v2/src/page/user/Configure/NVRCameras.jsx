@@ -27,6 +27,8 @@ import { usePermissions } from '@/context/PermissionContext';
 import { isLocalSetup } from '@/utils/jwt';
 import * as XLSX from 'xlsx';
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 // Track a narrow (phone) viewport so inline-styled layouts can adapt.
 function useIsMobile(maxWidth = 640) {
@@ -1093,6 +1095,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
   const isLocalEdit = isLocalSetup() && isEdit;
   const [directMode, setDirectMode] = useState(editingNvr?.connectionMode === 'direct');
+  const khanbasActionDisabled = isKhanbas && (directMode || !isLocalEdit);
   const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
@@ -1288,6 +1291,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   };
 
   async function handleCreateLocation() {
+    if (isKhanbas) return;
     const name = locationQuery.trim();
     if (!name) return;
     setCreatingLocation(true);
@@ -1311,6 +1315,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   }
 
   async function handleConnect() {
+    if (khanbasActionDisabled) return;
     if (directMode) {
       const found = {};
       if (!form.brand.trim()) found.brand = 'NVR brand is required.';
@@ -1717,12 +1722,12 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                         setErrors((prev) => (prev.location ? { ...prev, location: undefined } : prev));
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && canCreateLocation && !filteredLocationOptions.length) {
+                        if (e.key === 'Enter' && !isKhanbas && canCreateLocation && !filteredLocationOptions.length) {
                           e.preventDefault();
                           handleCreateLocation();
                         }
                       }}
-                      placeholder="Search or create a location..."
+                      placeholder={isKhanbas ? 'Search locations...' : 'Search or create a location...'}
                       style={{
                         flex: 1, minWidth: 0, height: '100%', border: 0, background: 'transparent',
                         fontSize: 12.5, color: 'var(--tx)', outline: 'none', padding: 0,
@@ -1786,16 +1791,17 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                         <button
                           type="button"
                           onClick={handleCreateLocation}
-                          disabled={creatingLocation}
+                          disabled={isKhanbas || creatingLocation}
+                          className={isKhanbas ? 'khanbas-disabled-action' : undefined}
                           style={{
                             width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
                             background: 'transparent', color: 'var(--blue)',
-                            fontSize: 12.5, fontWeight: 600, cursor: creatingLocation ? 'default' : 'pointer',
+                            fontSize: 12.5, fontWeight: 600, cursor: isKhanbas || creatingLocation ? 'not-allowed' : 'pointer',
                             textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
-                            opacity: creatingLocation ? 0.6 : 1,
+                            opacity: isKhanbas || creatingLocation ? 0.5 : 1,
                           }}
                         >
-                          <Plus size={13} />
+                          {!isKhanbas && <Plus size={13} />}
                           {creatingLocation ? 'Creating…' : `Create "${locationQuery.trim()}"`}
                         </button>
                       )}
@@ -1939,13 +1945,14 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
             {step === 1 ? (
               <button
                 onClick={handleConnect}
-                disabled={connecting}
+                disabled={connecting || khanbasActionDisabled}
+                className={khanbasActionDisabled ? 'khanbas-disabled-action' : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   fontSize: 12.5, fontWeight: 600, color: '#fff',
                   background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                  borderRadius: 9, padding: '9px 16px', cursor: connecting ? 'wait' : 'pointer', border: 'none',
-                  opacity: connecting ? 0.7 : 1,
+                  borderRadius: 9, padding: '9px 16px', cursor: khanbasActionDisabled ? 'not-allowed' : connecting ? 'wait' : 'pointer', border: 'none',
+                  opacity: connecting || khanbasActionDisabled ? 0.5 : 1,
                 }}
               >
                 {connecting && <Loader2 size={13} className="animate-spin" />}

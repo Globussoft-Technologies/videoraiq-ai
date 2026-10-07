@@ -23,6 +23,7 @@ export default function ZoneSettingsPanel({
   extraFields,
   isLineCrossing = false,
   isCheckInOut = false,
+  isStockCounting = false,
   laneName = '',
   onLaneNameChange,
   laneNameError = '',
@@ -160,6 +161,23 @@ export default function ZoneSettingsPanel({
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
                     )}
                   </div>
+                  {isStockCounting && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
+                      <select
+                        value={z.activityMode || 'all'}
+                        onChange={e => onUpdateField(i, 'activityMode', e.target.value)}
+                        style={{
+                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        <option value="loading">Loading</option>
+                        <option value="unloading">Unloading</option>
+                        <option value="all">All</option>
+                      </select>
+                    </div>
+                  )}
                   {showZoneExtras && (
                   <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>

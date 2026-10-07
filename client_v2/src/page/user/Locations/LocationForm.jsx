@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { createLocation, updateLocation } from "./Api";
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
+
 const EMP_LOCATION_ID_PATTERN = /^[A-Z0-9_-]{3,20}$/;
 
 const LocationForm = ({
@@ -44,6 +46,10 @@ const LocationForm = ({
     },
     validationSchema: schema,
     onSubmit: async (values, helpers) => {
+      if (isKhanbas && mode === "create") {
+        helpers.setSubmitting(false);
+        return;
+      }
       try {
         if (mode === "create") {
           const response = await createLocation(values);
@@ -145,8 +151,8 @@ const LocationForm = ({
               </Button>
               <Button
                 type="submit"
-                disabled={formik.isSubmitting}
-                className="bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20"
+                disabled={formik.isSubmitting || (isKhanbas && mode === "create")}
+                className={`inline-flex items-center gap-1.5 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas && mode === "create" ? 'khanbas-disabled-action' : ''}`}
               >
                 {mode === "edit" ? "Update Location" : "Add Location"}
               </Button>

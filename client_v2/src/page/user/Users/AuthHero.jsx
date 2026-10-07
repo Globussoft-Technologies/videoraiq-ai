@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import logo from "@/assets/logo.svg";
+import KhanbasLogo from "@/components/KhanbasLogo";
 import camShot1 from "@/assets/1.jpg";
 import camShot3 from "@/assets/3.jpg";
 import camShot7 from "@/assets/7.jpg";
@@ -23,6 +24,8 @@ const CAM_SHOTS = [
   camShot26,
   camShot28,
 ];
+
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
 /* ------- left hero: animated CCTV-style montage ------- */
 const CAM_TINTS = [
@@ -255,7 +258,7 @@ export default function AuthHero() {
           animation: "vqfade .7s ease both",
         }}
       >
-        <img src={logo} alt="VideoraIQ" style={{ height: 40, width: "auto", display: "block" }} />
+        {isKhanbas ? <KhanbasLogo /> : <img src={logo} alt="VideoraIQ" style={{ height: 40, width: "auto", display: "block" }} />}
       </div>
 
       {/* headline */}

@@ -10,6 +10,8 @@ import PageLoader from '../../../components/PageLoader';
 import HScrollHint from '../../../components/HScrollHint';
 import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig, syncDefaultRoles } from '../../../api/administer';
 
+const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
+
 // Per-module permission matrix module keys, ported 1:1 from V1's
 // server/core/v1/permission/permissions.config.js. `logs` is a nested
 // sub-map of its own {view,create,edit,delete} rows.
@@ -172,6 +174,7 @@ function RoleNameModal({ mode, initialName, onClose, onSubmit }) {
   const isEdit = mode === 'edit';
 
   const handleSubmit = async () => {
+    if (isKhanbas && !isEdit) return;
     const trimmedName = name.trim();
     if (!trimmedName) return toast.error('Role name is required');
     if (trimmedName.length > ROLE_NAME_MAX_LENGTH) {
@@ -224,11 +227,14 @@ function RoleNameModal({ mode, initialName, onClose, onSubmit }) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || (isKhanbas && !isEdit)}
+            className={isKhanbas && !isEdit ? 'khanbas-disabled-action' : undefined}
             style={{
               flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none',
-              cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
+              cursor: saving || (isKhanbas && !isEdit) ? 'not-allowed' : 'pointer',
+              opacity: saving || (isKhanbas && !isEdit) ? 0.5 : 1,
             }}
           >
             {saving ? 'Saving…' : (isEdit ? 'Save' : 'Add Role')}

@@ -29,6 +29,7 @@ export default function SaveDetectionAreaModal({
   extraFields,
   isLineCrossing = false,
   isCheckInOut = false,
+  isStockCounting = false,
   saving,
   onCancel,
   onSubmit,
@@ -278,6 +279,23 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isStockCounting && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
+                  <select
+                    value={z.activityMode || 'all'}
+                    onChange={e => updateZoneField(i, 'activityMode', e.target.value)}
+                    style={{
+                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="loading">Loading</option>
+                    <option value="unloading">Unloading</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+              )}
               {showZoneExtras && (
               <div>
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>

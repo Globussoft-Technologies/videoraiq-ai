@@ -103,7 +103,7 @@ export default function DetectionZoneMarking({
   // line sub-tool. So it keeps the full polygon toolbar and adds "Draw Line".
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
   const isStockCounting = isStockCountingType(activeType?.settingType);
-  const hasAuxiliaryLine = isCheckInOut || isStockCounting;
+  const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // A line only needs its 2 endpoints (+ inside reference point) to be savable;
   // every other type still needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
@@ -150,7 +150,7 @@ export default function DetectionZoneMarking({
     setLineDrawing(false);
     setLinePoints([]);
     setLineZone(
-      (isVehicleCheckInOutType(activeType?.settingType) || isStockCountingType(activeType?.settingType))
+      isVehicleCheckInOutType(activeType?.settingType)
         ? lineFor(activeType?.setting)
         : { points: [], insideReferencePoint: null },
     );
@@ -321,6 +321,7 @@ export default function DetectionZoneMarking({
     telegramChatIds: [],
     telegramChatId: '',
     countMode: (isLineCrossing || isCheckInOut) ? savedDetectionMode : '',
+    activityMode: 'all',
     schedule: emptySchedule(),
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
     points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
@@ -532,9 +533,6 @@ export default function DetectionZoneMarking({
                 zone_name: laneName || activeType.setting?.settings?.zone_name || detectionName || undefined,
               }
             : {}),
-          ...(isStockCounting
-            ? { trigger_notification: activeType.setting?.settings?.trigger_notification ?? true }
-            : {}),
         }
       : null;
     const zoneConfigs = nextZones.map(z => ({
@@ -546,6 +544,7 @@ export default function DetectionZoneMarking({
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
         : z.telegramChatId || undefined,
       ...(usesLineMode ? { count_mode: toApiMode(z.countMode) } : {}),
+      ...(isStockCounting ? { activity_mode: z.activityMode || 'all' } : {}),
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
       ...(fields.includes('company') && String(z.company ?? '').trim() !== '' ? { company: z.company } : {}),
@@ -557,7 +556,11 @@ export default function DetectionZoneMarking({
     if (activeType.settingId) {
       const setting = activeType.setting;
       const storedSettings = { ...(setting.settings || {}) };
-      if (isStockCounting) delete storedSettings.mode;
+      if (isStockCounting) {
+        delete storedSettings.mode;
+        delete storedSettings.line_coordinates;
+        delete storedSettings.inside_reference_point;
+      }
       const fallbackTelegramChatId =
         nextZones.find(zone => Array.isArray(zone?.telegramChatIds) && zone.telegramChatIds.length)?.telegramChatIds?.[0] ||
         nextZones.find(zone => String(zone?.telegramChatId || '').trim())?.telegramChatId ||
@@ -589,6 +592,7 @@ export default function DetectionZoneMarking({
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           ...(auxiliaryLineExtras || {}),
+          ...(isStockCounting ? { trigger_notification: setting.settings?.trigger_notification ?? true } : {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -622,6 +626,7 @@ export default function DetectionZoneMarking({
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           ...(auxiliaryLineExtras || {}),
+          ...(isStockCounting ? { trigger_notification: true } : {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -779,7 +784,7 @@ export default function DetectionZoneMarking({
     const nextZones = zones.filter((_, i) => i !== index);
     if (!activeType?.settingId) {
       setZones(nextZones); // never saved â€” just drop it locally
-      if (hasAuxiliaryLine && nextZones.length === 0) {
+      if (isCheckInOut && nextZones.length === 0) {
         setLineZone({ points: [], insideReferencePoint: null });
         if (isCheckInOut) setLaneNameDraft('');
       }
@@ -791,7 +796,7 @@ export default function DetectionZoneMarking({
       // Check-In / Check-Out needs at least one zone to mean anything â€” deleting
       // the last one resets this camera's detection link (line included)
       // instead of leaving an orphaned line with zero zones behind it.
-      if (hasAuxiliaryLine && nextZones.length === 0) {
+      if ((isCheckInOut || isStockCounting) && nextZones.length === 0) {
         await deleteZoneDetectionSetting(activeType.settingId, camera._id);
         setZones([]);
         setLineZone({ points: [], insideReferencePoint: null });
@@ -1349,7 +1354,7 @@ export default function DetectionZoneMarking({
                   borderRadius: 20, padding: '6px 14px',
                 }}>
                   {hasAuxiliaryLine
-                    ? `click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the ${isStockCounting ? 'stock' : 'gate'} zones`
+                    ? 'click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the gate zones'
                     : isLineCrossing
                     ? 'click "Draw Line", then click two line endpoints and one inside reference point'
                     : 'click "Start Drawing", then click to place zone points'}
@@ -1421,6 +1426,7 @@ export default function DetectionZoneMarking({
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
+                isStockCounting={isStockCounting}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1550,6 +1556,7 @@ export default function DetectionZoneMarking({
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
+                isStockCounting={isStockCounting}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1579,6 +1586,7 @@ export default function DetectionZoneMarking({
           extraFields={extraFieldsFor(activeType.settingType)}
           isLineCrossing={isLineCrossing}
           isCheckInOut={isCheckInOut}
+          isStockCounting={isStockCounting}
           saving={saving}
       onCancel={() => setShowSaveModal(false)}
       onSubmit={handleSubmitSave}

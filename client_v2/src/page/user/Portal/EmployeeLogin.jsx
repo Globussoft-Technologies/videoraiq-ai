@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { Mail, Lock, ShieldCheck, ArrowUpRight, ArrowLeft, CheckCircle2 } from "lucide-react";
 import logo from "@/assets/logo.svg";
+import KhanbasLogo from "@/components/KhanbasLogo";
 import heroShot from "@/assets/21.jpg";
 import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
@@ -13,6 +14,7 @@ import { isLocalSetup } from "@/utils/jwt";
 import "./portal.css";
 
 const url = import.meta.env.VITE_ENV;
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
 /* cookie name matches getAccessToken() / the V1 login flow */
 const accessCookieName = () =>
@@ -201,7 +203,7 @@ export default function EmployeeLogin() {
 
         {/* top bar */}
         <div className="relative z-[2] flex items-center justify-between">
-          <img src={logo} alt="VideoraIQ" className="h-[38px] w-auto block" />
+          {isKhanbas ? <KhanbasLogo /> : <img src={logo} alt="VideoraIQ" className="h-[38px] w-auto block" />}
           <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-[rgba(120,160,230,0.24)] rounded-full bg-[rgba(9,13,24,0.5)] backdrop-blur-[6px]">
             <span className="relative w-[7px] h-[7px]">
               <span className="absolute inset-0 rounded-full bg-[#22c55e]" />
@@ -339,14 +341,18 @@ export default function EmployeeLogin() {
             <>
               {/* logo + heading */}
               <div className="flex flex-col items-center text-center mb-6">
-                <div className="relative w-[66px] h-[66px] flex items-center justify-center mb-4 rounded-full">
-                  <div className="absolute -inset-1.5 rounded-full bg-[radial-gradient(circle,rgba(43,111,219,0.24),transparent_72%)] animate-[vqpglow_2.4s_ease-in-out_infinite]" />
-                  <img
-                    src={logo}
-                    alt="VideoraIQ"
-                    className="relative w-[66px] h-[66px] object-contain animate-[vqfloatY_3.4s_ease-in-out_infinite]"
-                  />
-                </div>
+                {isKhanbas ? (
+                  <div className="mb-4"><KhanbasLogo /></div>
+                ) : (
+                  <div className="relative w-[66px] h-[66px] flex items-center justify-center mb-4 rounded-full">
+                    <div className="absolute -inset-1.5 rounded-full bg-[radial-gradient(circle,rgba(43,111,219,0.24),transparent_72%)] animate-[vqpglow_2.4s_ease-in-out_infinite]" />
+                    <img
+                      src={logo}
+                      alt="VideoraIQ"
+                      className="relative w-[66px] h-[66px] object-contain animate-[vqfloatY_3.4s_ease-in-out_infinite]"
+                    />
+                  </div>
+                )}
                 <span className="font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.14em] text-[#2a6fdb] border border-[#cfe0fb] bg-[#eef5ff] rounded-full px-3 py-1 mb-[14px]">
                   USER PORTAL
                 </span>

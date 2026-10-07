@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import logo from "@/assets/logo.svg";
 import logoWhite from "@/assets/videoraiq-logo-white.png";
 import logoColor from "@/assets/videoraiq-logo-color.png";
+import KhanbasLogo from "@/components/KhanbasLogo";
 import "./authLoader.css";
+
+const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
 // Matches the HTML prototype's boot sequence exactly (VideoraIQ Command.dc.html,
 // this._boot) — message rotates on its own 520ms clock, independent of the
@@ -101,15 +104,15 @@ export default function AuthLoader({ onComplete }) {
         <div className="vqauth-core-wrap">
           <div className="vqauth-core-glow" />
           <div className="vqauth-core-float">
-            <div className="vqauth-core">
-              <img src={logo} alt="VideoraIQ" />
+            <div className="vqauth-core" style={isKhanbas ? { background: '#090c10', borderRadius: 16 } : undefined}>
+              {isKhanbas ? <KhanbasLogo /> : <img src={logo} alt="VideoraIQ" />}
             </div>
           </div>
         </div>
       </div>
 
       <div className="vqauth-brand">
-        <img src={isLight ? logoColor : logoWhite} alt="VideoraIQ" className="vqauth-brand-logo" />
+        {isKhanbas ? <KhanbasLogo /> : <img src={isLight ? logoColor : logoWhite} alt="VideoraIQ" className="vqauth-brand-logo" />}
       </div>
 
       <div className="vqauth-progress">
