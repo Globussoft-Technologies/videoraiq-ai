@@ -200,7 +200,11 @@ class AttendanceService {
           description: `${employeeName || "A person"} detected at ${
             channel?.name || "camera"
           } (${cameraType}).`,
-          Image: Array.isArray(images) ? images[0] : images,
+          // Attendance events carry images as { face, person, frame }; the
+          // mail template needs one path string (it calls Image.startsWith).
+          Image: Array.isArray(images)
+            ? images[0]
+            : typeof images === "string" ? images : images?.frame || images?.person || images?.face,
           count: 1,
         };
 
