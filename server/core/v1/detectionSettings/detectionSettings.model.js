@@ -14,6 +14,10 @@ const zoneConfigsField = {
       name: { type: String },
       capacity: { type: Number },
       threshold_sec: { type: Number },
+      activity_mode: {
+        type: String,
+        enum: ["loading", "unloading", "all"],
+      },
       mode: {
         type: String,
         enum: ["loading", "unloading", "both"],

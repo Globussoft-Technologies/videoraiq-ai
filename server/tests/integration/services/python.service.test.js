@@ -276,13 +276,13 @@ describe("PythonService.startNewDetection", () => {
         zones: [[1, 2]],
         zone_configs: [{ name: "Loading Bay" }],
         ...(mode === "loadingUnloadingStockCountingSettings"
-          ? { trigger_notification: true }
+          ? { activity_mode: "all", trigger_notification: true }
           : { severity: "high" }),
       }],
     });
   });
 
-  it("omits legacy stock movement modes from the DS payload", async () => {
+  it("sends each stock zone with its own activity mode", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 
     await PythonService.startNewDetection({
@@ -296,24 +296,31 @@ describe("PythonService.startNewDetection", () => {
         [[20, 20], [30, 20], [30, 30]],
       ],
       zone_configs: [
-        { name: "Loading Bay", mode: "loading" },
-        { name: "Unloading Bay", mode: "unloading" },
+        { name: "Loading Bay", activity_mode: "loading" },
+        { name: "Unloading Bay", activity_mode: "unloading" },
       ],
       confidence_thresholds: { mode: "both" },
     });
 
-    expect(axios.post.mock.calls[0][1].detectors).toEqual([{
-      name: "loadingUnloadingStockCountingSettings",
-      zones: [
-        [[0, 0], [10, 0], [10, 10]],
-        [[20, 20], [30, 20], [30, 30]],
-      ],
-      zone_configs: [{ name: "Loading Bay" }, { name: "Unloading Bay" }],
-      trigger_notification: true,
-    }]);
+    expect(axios.post.mock.calls[0][1].detectors).toEqual([
+      {
+        name: "loadingUnloadingStockCountingSettings",
+        activity_mode: "loading",
+        zones: [[[0, 0], [10, 0], [10, 10]]],
+        zone_configs: [{ name: "Loading Bay" }],
+        trigger_notification: true,
+      },
+      {
+        name: "loadingUnloadingStockCountingSettings",
+        activity_mode: "unloading",
+        zones: [[[20, 20], [30, 20], [30, 30]]],
+        zone_configs: [{ name: "Unloading Bay" }],
+        trigger_notification: true,
+      },
+    ]);
   });
 
-  it("includes the stock crossing line, inside reference point and notification flag", async () => {
+  it("sends the stock activity mode without line fields", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 
     await PythonService.startNewDetection({
@@ -323,7 +330,7 @@ describe("PythonService.startNewDetection", () => {
       stream_url: "rtsp://stock.test/stream",
       detection_modes: ["loadingUnloadingStockCountingSettings"],
       zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
-      zone_configs: [{ name: "Loading/Unloading Bay" }],
+      zone_configs: [{ name: "Loading/Unloading Bay", activity_mode: "unloading" }],
       confidence_thresholds: {
         line_coordinates: [[400, 70], [400, 575]],
         inside_reference_point: [600, 320],
@@ -333,10 +340,9 @@ describe("PythonService.startNewDetection", () => {
 
     expect(axios.post.mock.calls[0][1].detectors[0]).toEqual({
       name: "loadingUnloadingStockCountingSettings",
+      activity_mode: "unloading",
       zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
       zone_configs: [{ name: "Loading/Unloading Bay" }],
-      line_coordinates: [[400, 70], [400, 575]],
-      inside_reference_point: [600, 320],
       trigger_notification: false,
     });
   });

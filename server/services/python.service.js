@@ -29,7 +29,9 @@ const appendIndustrialDetectors = (
     if (INDUSTRIAL_DETECTORS.has(name)) {
       if (name === "loadingUnloadingStockCountingSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
-        const detectorZoneConfigs = configs.map((config) => {
+        const stockZones = Array.isArray(zones) ? zones : [];
+        stockZones.forEach((zone, index) => {
+          const config = configs[index];
           const plainConfig = typeof config?.toObject === "function"
             ? config.toObject({
               depopulate: true,
@@ -39,23 +41,17 @@ const appendIndustrialDetectors = (
             : config?._doc && typeof config._doc === "object"
               ? config._doc
               : config;
-
-          return { name: plainConfig?.name };
-        });
-        const stockDetectorExtras = {
-          ...(Array.isArray(stockSettings.line_coordinates)
-            ? { line_coordinates: stockSettings.line_coordinates }
-            : {}),
-          ...(Array.isArray(stockSettings.inside_reference_point)
-            ? { inside_reference_point: stockSettings.inside_reference_point }
-            : {}),
-          trigger_notification: stockSettings.trigger_notification ?? true,
-        };
-        detectors.push({
-          name,
-          zones: Array.isArray(zones) ? zones : [],
-          zone_configs: detectorZoneConfigs,
-          ...stockDetectorExtras,
+          const activityMode = plainConfig?.activity_mode ?? plainConfig?.mode
+            ?? stockSettings.activity_mode ?? stockSettings.mode;
+          detectors.push({
+            name,
+            activity_mode: ["loading", "unloading", "all"].includes(activityMode)
+              ? activityMode
+              : "all",
+            zones: [zone],
+            zone_configs: [{ name: plainConfig?.name }],
+            trigger_notification: stockSettings.trigger_notification ?? true,
+          });
         });
         continue;
       }
