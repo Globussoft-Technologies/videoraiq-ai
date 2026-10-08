@@ -95,6 +95,8 @@ const DETECTION_LABELS = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetection: 'Blurred Camera Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
+  deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
 };
 
 function prettifySlug(value) {

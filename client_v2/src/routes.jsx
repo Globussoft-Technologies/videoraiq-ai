@@ -56,6 +56,7 @@ import MessyAreaLogs from './pages/MessyAreaLogs/MessyAreaLogs';
 import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
 import StockCountingAnalytics from './pages/StockCountingAnalytics/StockCountingAnalytics';
 import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
+import SolderLine from './pages/SolderLine/SolderLine';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -150,6 +151,10 @@ export const v2Routes = (
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
+
+    {/* Solar Line QC — Desk Solar Shoulder detection. One route so the
+        Overview / Alert Logs / Reports tabs share a single mounted shell. */}
+    <Route path="solder-line/*" element={guard('logs', 'deskSolarShoulderLogs', <SolderLine />)} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

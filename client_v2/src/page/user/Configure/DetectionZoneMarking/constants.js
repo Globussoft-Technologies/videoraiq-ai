@@ -16,6 +16,7 @@ export const DETECTION_FIELD_KEYS = [
   'gunnyBagsMaterialsWrongLocationDetectionSettings', 'sandDustWasteScrapDisposalDetectionSettings',
   'unauthorizedAnimalEntryDetectionSettings', 'spillsDirtyMessyAreasDetectionSettings',
   'loadingUnloadingStockCountingSettings',
+  'deskSolarShoulderDetectionSettings',
 ];
 
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
@@ -81,6 +82,7 @@ export const ZONE_EXTRA_FIELDS = {
   loiteringWithAuthSettings: ['threshold'],
   tableOccupancyDetectionSettings: ['threshold'],
   deskAbsenceSettings: ['threshold', 'capacity'],
+  deskSolarShoulderDetectionSettings: ['threshold', 'capacity'],
   crowdDetectionSettings: ['capacity'],
   carModelDetectionSettings: ['company'],
   personFallSickDetectionSettings: ['threshold'],

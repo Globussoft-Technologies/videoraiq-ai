@@ -38,6 +38,9 @@ const INDUSTRIAL_DETECTION_TYPES = new Set([
   'loadingUnloadingStockCountingDetection',
 ]);
 
+// "2m 14s": how long a solder-line desk stayed empty.
+const absenceDuration = (sec) => `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
+
 // These two incident types show their detected count, but not the threshold
 // value in the Incident Center card.
 const HIDE_ALERT_THRESHOLD_TYPES = new Set([
@@ -657,6 +660,17 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                         ({Number(item.evidenceScore) <= 1 ? Math.round(Number(item.evidenceScore) * 100) + '%' : item.evidenceScore + '%'})
                       </span>
                     )}
+                  </span>
+                )}
+                {/* Absence stays open until DS reports the operator back (returnedAt). */}
+                {item.incidentType === 'deskSolarShoulderDetection' && (
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: item.eventType !== 'missedSolder' && item.returnedAt ? 'var(--ok)' : 'var(--crit)' }}>
+                    {item.zone && <span style={{ color: 'var(--tx3)', fontWeight: 500, marginRight: 5 }}>{item.zone}</span>}
+                    {item.eventType === 'missedSolder'
+                      ? `Missed P${item.point ?? '?'}${item.panelId ? ` · ${item.panelId}` : ''}`
+                      : item.returnedAt
+                        ? `Returned${item.durationSec != null ? ` · ${absenceDuration(item.durationSec)}` : ''}`
+                        : 'Desk empty'}
                   </span>
                 )}
                 {INDUSTRIAL_DETECTION_TYPES.has(item.incidentType) && (item.count != null || item.alertThreshold != null) && (

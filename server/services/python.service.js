@@ -20,6 +20,18 @@ const APP_ENV = config.get("APP_ENV");
 
 const INDUSTRIAL_DETECTORS = new Set(INDUSTRIAL_SETTING_TYPES);
 
+// zone_configs come from Mongoose as subdocuments; read them as plain objects.
+const plainZoneConfig = (config) =>
+  typeof config?.toObject === "function"
+    ? config.toObject({
+      depopulate: true,
+      getters: false,
+      virtuals: false,
+    })
+    : config?._doc && typeof config._doc === "object"
+      ? config._doc
+      : config;
+
 const appendIndustrialDetectors = (
   detectors,
   modes,
@@ -27,20 +39,26 @@ const appendIndustrialDetectors = (
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === "deskSolarShoulderDetectionSettings") {
+        // DS takes only name/capacity/threshold_sec per zone; the stored
+        // Telegram and alert-window fields stay on our side.
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        detectors.push({
+          name,
+          zones: Array.isArray(zones) ? zones : [],
+          zone_configs: configs.map((config) => {
+            const { name: zoneName, capacity, threshold_sec } = plainZoneConfig(config) || {};
+            return { name: zoneName, capacity, threshold_sec };
+          }),
+        });
+        continue;
+      }
       if (name === "loadingUnloadingStockCountingSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const stockZones = Array.isArray(zones) ? zones : [];
         stockZones.forEach((zone, index) => {
           const config = configs[index];
-          const plainConfig = typeof config?.toObject === "function"
-            ? config.toObject({
-              depopulate: true,
-              getters: false,
-              virtuals: false,
-            })
-            : config?._doc && typeof config._doc === "object"
-              ? config._doc
-              : config;
+          const plainConfig = plainZoneConfig(config);
           const activityMode = plainConfig?.activity_mode ?? plainConfig?.mode
             ?? stockSettings.activity_mode ?? stockSettings.mode;
           detectors.push({

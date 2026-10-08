@@ -78,6 +78,7 @@ const DETECTION_ICONS = {
   spillsDirtyMessyAreasDetectionSettings: Sparkles,
   loadingUnloadingStockCountingSettings: PackageSearch,
   blurredCameraDetectionSettings: ScanEye,
+  deskSolarShoulderDetectionSettings: Armchair,
   'Attendance-detection': UserCheck,
 };
 

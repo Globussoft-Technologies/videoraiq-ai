@@ -1221,6 +1221,35 @@ const BlurredCameraDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: BlurredCameraDetectionSchema }),
 );
 
+// Solder-line desk absence: one zone per workstation, each with its own
+// capacity and threshold_sec in zone_configs.
+const DeskSolarShoulderDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  trigger_notification: { type: Boolean, default: true },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
+  "deskSolarShoulderDetectionSettings",
+  new mongoose.Schema({ settings: DeskSolarShoulderDetectionSchema }),
+);
+
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
@@ -1627,4 +1656,5 @@ export {
   SpillsDirtyMessyAreasDetectionSetting,
   LoadingUnloadingStockCountingSetting,
   BlurredCameraDetectionSetting,
+  DeskSolarShoulderDetectionSetting,
 };

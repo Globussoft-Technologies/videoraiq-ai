@@ -82,6 +82,8 @@ const CUSTOM_DETECTION_LABELS = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetection: 'Blurred Camera Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
+  deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
 };
 
 /** Human display name for an incident/detection type. */

@@ -53,6 +53,7 @@ const detectionFields = {
   vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,
   blurredCameraDetectionSettings: detectionSettingSchema,
+  deskSolarShoulderDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

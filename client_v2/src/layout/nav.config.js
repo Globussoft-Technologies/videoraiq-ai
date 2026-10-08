@@ -52,6 +52,8 @@ import {
   Trash2,
   PawPrint,
   BrushCleaning,
+  Grid3x3,
+  FileChartColumn,
 } from 'lucide-react';
 
 import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
@@ -164,6 +166,15 @@ export const NAV_GROUPS = [
           { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementCalibration', permissionKey: 'settings' },
         ],
       },
+    ],
+  },
+  {
+    // Desk Solar Shoulder detection: one page with three tabs (SolderLine.jsx).
+    label: 'SOLAR LINE QC',
+    items: [
+      { key: 'solder-line', label: 'JB Solder Line', path: 'solder-line', end: true, icon: Grid3x3, permissionKey: 'logs', permissionSubKey: 'deskSolarShoulderLogs', logsConfigKey: 'deskSolarShoulderLogs' },
+      { key: 'solder-line-logs', label: 'Solder Alert Logs', path: 'solder-line/logs', icon: TriangleAlert, permissionKey: 'logs', permissionSubKey: 'deskSolarShoulderLogs', logsConfigKey: 'deskSolarShoulderLogs' },
+      { key: 'solder-line-reports', label: 'Operator Reports', path: 'solder-line/reports', icon: FileChartColumn, permissionKey: 'logs', permissionSubKey: 'deskSolarShoulderLogs', logsConfigKey: 'deskSolarShoulderLogs' },
     ],
   },
   {
@@ -283,6 +294,7 @@ export const VIEW_META = {
   'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
+  'solder-line': { title: 'JB Solder Line', sub: 'Desk presence, solder coverage and operator reports' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

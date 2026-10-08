@@ -232,6 +232,10 @@ export const DETECTION_META = {
     Icon: ScanEye,
     tint: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
   },
+  deskSolarShoulderDetectionSettings: {
+    Icon: LampDesk,
+    tint: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
+  },
   carModelDetectionSettings: {
     Icon: Car,
     tint: 'bg-gray-100 text-gray-500 dark:bg-white/8 dark:text-gray-400',

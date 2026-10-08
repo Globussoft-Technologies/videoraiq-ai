@@ -45,6 +45,7 @@ export const DETECTION_TYPES = {
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
+  deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
 }
 export const DETECTION_TYPES2 = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -85,6 +86,7 @@ export const DETECTION_TYPES2 = {
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
+  deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
 }
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
@@ -121,6 +123,7 @@ export const DETECTION_DESCRIPTIONS = {
   vehicleFuelOilLeakageDetectionSettings: "Fuel or oil leakage from vehicles",
   loadingUnloadingStockCountingSettings: "Track stock quantities during loading and unloading",
   blurredCameraDetectionSettings: "Detect sustained loss of camera image clarity",
+  deskSolarShoulderDetectionSettings: "Alert when a solder-line workstation is left empty",
 };
 
 export const TYPE_MAP = {
@@ -156,6 +159,7 @@ export const TYPE_MAP = {
   vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetection",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
   blurredCameraDetectionSettings: "blurredCameraDetection",
+  deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -185,6 +189,7 @@ export const DETECTION_MODES_MAP = {
   vehicleFuelOilLeakageDetectionSettings: ["vehicleFuelOilLeakageDetectionSettings"],
   loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
+  deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -225,6 +230,7 @@ export const toPopulateDetections = [
   { path: "detections.mobilePhoneDetectionSettings.id" },
   { path: "detections.loadingUnloadingStockCountingSettings.id" },
   { path: "detections.blurredCameraDetectionSettings.id" },
+  { path: "detections.deskSolarShoulderDetectionSettings.id" },
 ];
 
 // sample payloads

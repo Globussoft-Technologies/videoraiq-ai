@@ -44,6 +44,7 @@ const LOG_SUBMODULES = [
   'workingAtHeightLogs', 'oilLeakageLogs', 'wrongLocationLogs',
   'stockCountingLogs',
   'blurredCameraLogs',
+  'deskSolarShoulderLogs',
   'equipmentOilLeakageLogs', 'vehicleFuelOilLeakageLogs',
   'wasteDisposalLogs', 'animalEntryLogs', 'messyAreaLogs',
 ];
@@ -75,6 +76,7 @@ const MODULE_LABELS = {
   workingAtHeightLogs: 'Working at Height Logs',
   stockCountingLogs: 'Loading/Unloading Stock Logs',
   blurredCameraLogs: 'Blurred Camera Logs',
+  deskSolarShoulderLogs: 'Solder Line (Solar Line QC)',
   oilLeakageLogs: 'Oil Leakage Logs',
   equipmentOilLeakageLogs: 'Equipment Oil Leakage Logs',
   vehicleFuelOilLeakageLogs: 'Vehicle Fuel/Oil Leakage Logs',

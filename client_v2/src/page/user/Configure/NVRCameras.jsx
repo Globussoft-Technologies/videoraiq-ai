@@ -127,6 +127,7 @@ const ENGINE_LABELS = {
   spillsDirtyMessyAreasDetectionSettings: 'MESSY',
   loadingUnloadingStockCountingSettings: 'STOCK',
   blurredCameraDetectionSettings: 'BLUR',
+  deskSolarShoulderDetectionSettings: 'DESK',
 };
 
 const ENGINE_NAMES = {
@@ -162,6 +163,7 @@ const ENGINE_NAMES = {
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {

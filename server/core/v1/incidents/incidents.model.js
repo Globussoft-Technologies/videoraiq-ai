@@ -625,6 +625,29 @@ const BlurredCameraDetectionIncident = Incident.discriminator(
   BlurredCameraDetectionSchema,
 );
 
+// Solder-line alerts. The zone name (e.g. "Workstation 1") is the base `zone`
+// field (the operator's desk).
+// - absence: DS opens the incident when the desk has been empty for
+//   threshold_sec, then posts again with the same eventId when the operator
+//   returns, which fills returnedAt/durationSec. returnedAt null = still absent.
+// - missedSolder: one incident per solder point (1-6) a panel left without.
+const DeskSolarShoulderDetectionSchema = new Schema({
+  eventType: { type: String, enum: ["absence", "missedSolder"], default: "absence" },
+  eventId: { type: String, default: null, index: true },
+  point: { type: Number, default: null, min: 1 },
+  panelId: { type: String, default: null },
+  personCount: { type: Number, default: null, min: 0 },
+  capacity: { type: Number, default: null, min: 0 },
+  thresholdSec: { type: Number, default: null, min: 0 },
+  durationSec: { type: Number, default: null, min: 0 },
+  returnedAt: { type: Date, default: null },
+  triggerNotification: { type: Boolean, default: true },
+});
+const DeskSolarShoulderDetectionIncident = Incident.discriminator(
+  "deskSolarShoulderDetection",
+  DeskSolarShoulderDetectionSchema,
+);
+
 // Cylinder Stack Height Detection
 const loiteringDetectionSchema = new Schema({
   count: {type:Number,default:0},
@@ -798,4 +821,5 @@ export  {
   SpillsDirtyMessyAreasDetectionIncident,
   LoadingUnloadingStockCountingIncident,
   BlurredCameraDetectionIncident,
+  DeskSolarShoulderDetectionIncident,
 };

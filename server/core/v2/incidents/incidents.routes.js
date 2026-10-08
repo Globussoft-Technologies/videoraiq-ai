@@ -7,11 +7,16 @@ import {
   deleteAccessCheck,
 } from "../../../middlewares/permissionMiddleware.js";
 import multer from "multer";
+import solderLineService from "./solderLine.service.js";
 const upload = multer();
 
 const router = express.Router();
 
 router.post("/create", createAccessCheck, incidentsController.createIncidents);
+// Solder Line (deskSolarShoulderDetection): DS posts one sample per panel;
+// the Solder Line pages read alerts + hourly throughput in one call.
+router.post("/solder-line/panels", createAccessCheck, (req, res, next) => solderLineService.recordPanel(req, res, next));
+router.get("/solder-line", viewAccessCheck, (req, res, next) => solderLineService.getSolderLine(req, res, next));
 router.post("/", viewAccessCheck, incidentsController.getAllIncidents);
 router.get(
   "/getIncident",

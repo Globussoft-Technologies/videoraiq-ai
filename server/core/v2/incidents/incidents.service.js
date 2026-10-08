@@ -71,6 +71,7 @@ import {
   SpillsDirtyMessyAreasDetectionIncident,
   LoadingUnloadingStockCountingIncident,
   BlurredCameraDetectionIncident,
+  DeskSolarShoulderDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -115,6 +116,7 @@ const modelMap = {
   spillsDirtyMessyAreasDetection: SpillsDirtyMessyAreasDetectionIncident,
   loadingUnloadingStockCountingDetection: LoadingUnloadingStockCountingIncident,
   blurredCameraDetection: BlurredCameraDetectionIncident,
+  deskSolarShoulderDetection: DeskSolarShoulderDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -405,6 +407,30 @@ class IncidentsService {
         if (existingIncident) {
           return res.status(200).json(
             Response.userSuccessResp("Incident already processed", {
+              Incident: existingIncident.toObject(),
+              duplicate: true,
+            }),
+          );
+        }
+      }
+
+      // A desk absence is one incident from "desk empty" to "operator back".
+      // DS re-posts the same eventId when the operator returns; that closes
+      // the open incident instead of raising a second alert.
+      if (incidentType === "deskSolarShoulderDetection" && req.body.eventId) {
+        const filter = {
+          userId: userId?.toString(),
+          eventId: String(req.body.eventId).trim(),
+        };
+        const closing = {};
+        if (req.body.returnedAt) closing.returnedAt = req.body.returnedAt;
+        if (req.body.durationSec != null) closing.durationSec = req.body.durationSec;
+        const existingIncident = Object.keys(closing).length
+          ? await Model.findOneAndUpdate(filter, { $set: closing }, { new: true, runValidators: true })
+          : await Model.findOne(filter);
+        if (existingIncident) {
+          return res.status(200).json(
+            Response.userSuccessResp("Incident updated", {
               Incident: existingIncident.toObject(),
               duplicate: true,
             }),
@@ -748,6 +774,11 @@ class IncidentsService {
         newIncident.count = req?.body?.count ?? 1;
         newIncident.alertThreshold = req?.body?.alertThreshold ?? 80;
         newIncident.triggerNotification = req?.body?.triggerNotification;
+      } else if (incidentType === "deskSolarShoulderDetection") {
+        // eventId, personCount, capacity, thresholdSec, durationSec and
+        // returnedAt arrive under their own names via ...req.body above.
+        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
+        newIncident.zone = firstFilled(req.body.zone, req.body.zoneName, req.body.zone_name);
       } else if (industrialIncidentTypes.has(incidentType)) {
         newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;

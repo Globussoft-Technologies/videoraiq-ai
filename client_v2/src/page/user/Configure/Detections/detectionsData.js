@@ -39,6 +39,7 @@ const DETECTION_LABEL_OVERRIDES = {
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   unauthorizedParkingDetectionSettings: 'Unauthorized Parking Detection',
 };
 
@@ -100,6 +101,7 @@ export const DETECTION_THRESHOLDS = {
   spillsDirtyMessyAreasDetectionSettings: [],
   loadingUnloadingStockCountingSettings: [],
   blurredCameraDetectionSettings: [],
+  deskSolarShoulderDetectionSettings: [],
 };
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */

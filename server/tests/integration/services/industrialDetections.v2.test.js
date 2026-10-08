@@ -377,3 +377,94 @@ describe("v2 industrial detection incidents and logs", () => {
     },
   );
 });
+
+describe("desk solar shoulder absence incidents", () => {
+  it("opens one incident per absence and closes it when DS reposts the eventId", async () => {
+    const nvr = await NVR.create({
+      userId: admin.user_id,
+      nvrName: "Solder NVR",
+      brand: "hikvision",
+      domain: "http://solder-nvr.test",
+      location: "solder line",
+      localNvrId: "desk-solar-nvr",
+    });
+    const channel = await Channel.create({
+      userId: admin.user_id,
+      nvrId: nvr._id,
+      localChannelId: "1",
+      name: "Overhead Camera",
+      streamingPath: "/Streaming/Channels/101",
+      isAdded: true,
+    });
+    await DetectionAllocation.create({
+      adminId: admin._id,
+      settingType: "deskSolarShoulderDetectionSettings",
+      enabled: true,
+      cameraAllocation: 10,
+    });
+    const settingsContext = serviceCtx({
+      user_id: admin.user_id,
+      adminId: admin._id,
+      body: {
+        name: "Solder line desks",
+        settingType: "deskSolarShoulderDetectionSettings",
+        enabled: true,
+        alerts: [],
+        NVRId: nvr._id.toString(),
+        channelId: [channel._id.toString()],
+        settings: {
+          levelOfImportance: "moderate",
+          zone_configs: [{ name: "Workstation 1", capacity: 1, threshold_sec: 20 }],
+        },
+      },
+    });
+    await DetectionSettingsService.createDetectionSettings(
+      settingsContext.req,
+      settingsContext.res,
+      settingsContext.next,
+    );
+    expect(settingsContext.res.statusCode).toBe(201);
+
+    const post = async (body) => {
+      const ctx = serviceCtx({
+        user_id: admin.user_id,
+        adminId: admin._id,
+        body: {
+          incidentType: "deskSolarShoulderDetection",
+          incidentName: "Desk Empty",
+          cameraId: channel._id.toString(),
+          nvrId: nvr._id.toString(),
+          channelId: channel._id.toString(),
+          severity: "moderate",
+          adminId: admin._id.toString(),
+          eventId: "absence-1",
+          ...body,
+        },
+      });
+      await IncidentsService.createIncidents(ctx.req, ctx.res, ctx.next);
+      return ctx.res;
+    };
+
+    // Opening event: desk empty past threshold_sec.
+    const opened = await post({
+      timeOfIncident: "2026-10-07T06:10:00Z",
+      zoneName: "Workstation 1",
+      personCount: 0,
+      capacity: 1,
+      thresholdSec: 20,
+      durationSec: 20,
+      Image: "https://nas.example.com/incidents/desk.jpg",
+    });
+    expect(payload(opened)).toMatchObject({ status: "success" });
+    const open = await incidentModels.DeskSolarShoulderDetectionIncident.findOne({ eventId: "absence-1" });
+    expect(open).toMatchObject({ zone: "Workstation 1", capacity: 1, thresholdSec: 20, returnedAt: null });
+
+    // Operator back: same eventId closes it instead of adding a second alert.
+    const closed = await post({ returnedAt: "2026-10-07T06:12:14Z", durationSec: 134 });
+    expect(payload(closed).data.duplicate).toBe(true);
+    const docs = await incidentModels.DeskSolarShoulderDetectionIncident.find({ eventId: "absence-1" });
+    expect(docs).toHaveLength(1);
+    expect(docs[0].returnedAt.toISOString()).toBe("2026-10-07T06:12:14.000Z");
+    expect(docs[0].durationSec).toBe(134);
+  });
+});

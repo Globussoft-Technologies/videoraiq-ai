@@ -347,6 +347,44 @@ describe("PythonService.startNewDetection", () => {
     });
   });
 
+  it("builds the exact desk-solar-shoulder payload DS expects", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    const zones = [
+      [[40, 60], [300, 60], [300, 320], [40, 320]],
+      [[330, 60], [600, 60], [600, 320], [330, 320]],
+    ];
+    await PythonService.startNewDetection({
+      camera_id: "507f1f77bcf86cd799439011",
+      nvr_id: "507f1f77bcf86cd799439012",
+      admin_id: "507f1f77bcf86cd799439013",
+      stream_url: "rtsp://camera-host:554/stream",
+      detection_modes: ["deskSolarShoulderDetectionSettings"],
+      zones,
+      // Stored configs carry our own alert fields; DS must not receive them.
+      zone_configs: [
+        { _id: "z1", name: "Workstation 1", capacity: 1, threshold_sec: 20, startTime: "09:00 AM", telegramChatIds: ["1"] },
+        { _id: "z2", name: "Workstation 2", capacity: 2, threshold_sec: 30, endTime: null },
+      ],
+      severity: "moderate",
+    });
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "507f1f77bcf86cd799439011",
+      nvr_id: "507f1f77bcf86cd799439012",
+      admin_id: "507f1f77bcf86cd799439013",
+      stream_url: "rtsp://camera-host:554/stream",
+      detectors: [{
+        name: "deskSolarShoulderDetectionSettings",
+        zones,
+        zone_configs: [
+          { name: "Workstation 1", capacity: 1, threshold_sec: 20 },
+          { name: "Workstation 2", capacity: 2, threshold_sec: 30 },
+        ],
+      }],
+    });
+  });
+
   it("builds the exact blurred-camera detector payload", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 

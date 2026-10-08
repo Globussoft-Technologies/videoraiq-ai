@@ -61,6 +61,7 @@ export const ENGINE_LABEL_MAP = {
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
 };
 
 /* ── Extract enabled engines from channel.detections object ─────────────── */

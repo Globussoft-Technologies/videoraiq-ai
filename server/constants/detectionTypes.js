@@ -57,6 +57,7 @@ export const DETECTION_TYPES = {
   spillsDirtyMessyAreasDetectionSettings: "Spills, Dirty or Messy Areas Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
+  deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
@@ -69,6 +70,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "unauthorizedAnimalEntryDetectionSettings",
   "spillsDirtyMessyAreasDetectionSettings",
   "loadingUnloadingStockCountingSettings",
+  "deskSolarShoulderDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -81,6 +83,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "unauthorizedAnimalEntryDetection",
   "spillsDirtyMessyAreasDetection",
   "loadingUnloadingStockCountingDetection",
+  "deskSolarShoulderDetection",
 ]);
 
 /**
@@ -123,6 +126,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
   loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
   blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
+  deskSolarShoulderDetectionSettings: { permissionKey: "deskSolarShoulderLogs", logsConfigKey: "deskSolarShoulderLogs" },
 });
 
 export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
@@ -185,6 +189,7 @@ export const TYPE_MAP = {
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetection",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
   blurredCameraDetectionSettings: "blurredCameraDetection",
+  deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -227,6 +232,7 @@ export const DETECTION_MODES_MAP = {
   spillsDirtyMessyAreasDetectionSettings: ["spillsDirtyMessyAreasDetectionSettings"],
   loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
+  deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
 };
 
 /**
@@ -290,6 +296,7 @@ export const DS_DETECTOR_BY_MODE = {
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
+  deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
 };
 
 /**
@@ -366,6 +373,7 @@ export const DS_LOGIC_BY_MODE = {
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
+  deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -422,6 +430,7 @@ export const toPopulateDetections = [
   { path: "detections.spillsDirtyMessyAreasDetectionSettings.id" },
   { path: "detections.loadingUnloadingStockCountingSettings.id" },
   { path: "detections.blurredCameraDetectionSettings.id" },
+  { path: "detections.deskSolarShoulderDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1629,5 +1638,21 @@ export const blurredCameraDetectionSettings = {
     alertThreshold: 80,
     trigger_notification: true,
     metricType: "gauge",
+  },
+};
+export const deskSolarShoulderDetectionSettings = {
+  ...industrialDetectionExample(
+    "deskSolarShoulderDetectionSettings",
+    "Desk Solar Shoulder Detection",
+  ),
+  settings: {
+    ...industrialDetectionExample(
+      "deskSolarShoulderDetectionSettings",
+      "Desk Solar Shoulder Detection",
+    ).settings,
+    zone_configs: [
+      { name: "Workstation 1", capacity: 1, threshold_sec: 20 },
+      { name: "Workstation 2", capacity: 2, threshold_sec: 30 },
+    ],
   },
 };

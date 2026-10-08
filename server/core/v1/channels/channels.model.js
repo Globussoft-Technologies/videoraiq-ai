@@ -120,6 +120,7 @@ const detectionFields = {
   spillsDirtyMessyAreasDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,
   blurredCameraDetectionSettings: detectionSettingSchema,
+  deskSolarShoulderDetectionSettings: detectionSettingSchema,
 };
 
 // ! old
