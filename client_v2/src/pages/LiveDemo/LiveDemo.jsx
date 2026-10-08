@@ -2310,6 +2310,7 @@ function DemoHistoryPanel({ history, loading, activeRecordId, filters, onFilters
 
 export default function LiveDemo({ active = true }) {
   const [selectedDetection, setSelectedDetection] = useState('Face Recognition');
+  const [detectionSelected, setDetectionSelected] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
   const [showList, setShowList] = useState(true);
   const [search, setSearch] = useState('');
@@ -2604,6 +2605,7 @@ export default function LiveDemo({ active = true }) {
       || 'Face Recognition';
 
     setSelectedDetection(restoredDetection);
+    setDetectionSelected(true);
     processingSettingTypeRef.current = saved.settingType || '';
     setClipFile({ name: saved.clipName || 'Demo clip', size: saved.clipSize || 0 });
     setUploadedVideoPath(saved.uploadedVideoPath);
@@ -2659,6 +2661,7 @@ export default function LiveDemo({ active = true }) {
       const restoredDetection = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
       const detectionName = detections.find((item) => item.settingType === restoredDetection)?.name || 'Face Recognition';
       setSelectedDetection(detectionName);
+      setDetectionSelected(true);
       if (restoredDetection) {
         setDemoHistoryFilters((current) => ({ ...current, detectionType: restoredDetection }));
       }
@@ -2673,6 +2676,7 @@ export default function LiveDemo({ active = true }) {
   // past run for this detection (processed or not) stays reachable from
   // Recent Demos — it's no longer auto-opened just from selecting the tile.
   const handleSelectDetection = async (item) => {
+    setDetectionSelected(true);
     if (item.name === selectedDetection) return;
     try {
       await resetClipState();
@@ -2693,6 +2697,7 @@ export default function LiveDemo({ active = true }) {
     setDemoHistoryFilters(next);
     if (next.detectionType && next.detectionType !== demoHistoryFilters.detectionType) {
       const match = detections.find((item) => item.settingType === next.detectionType);
+      if (match) setDetectionSelected(true);
       if (match && match.name !== selectedDetection) {
         resetClipState().catch((error) => console.error('Failed to reset clip state for detection change', error));
         setSelectedDetection(match.name);
@@ -3433,6 +3438,10 @@ export default function LiveDemo({ active = true }) {
 
   const handleClipFile = async (file) => {
     if (!file) return;
+    if (!detectionSelected) {
+      toast.error('Select a detection before uploading a clip', COMPACT_TOAST);
+      return;
+    }
     if (!selected.settingType) {
       toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
       return;
@@ -3637,8 +3646,13 @@ export default function LiveDemo({ active = true }) {
           <div data-tour="demo-steps" className="flex items-center gap-4">
             {steps.map(([number, label], index) => {
               const reviewComplete = recordVideos.some((video) => video?.dsVideoUrl);
-              const active = index <= 1 || (index === 2 && (configurationComplete || reviewComplete)) || (index === 3 && reviewComplete);
-              const completed = (index === 2 && (configurationComplete || reviewComplete)) || (index === 3 && reviewComplete);
+              const uploadComplete = Boolean(uploadedVideoPath && recordIdOf(videoRecord));
+              const completed = detectionSelected && (
+                index === 0 || (index === 1 && uploadComplete)
+                || (index === 2 && (configurationComplete || reviewComplete))
+                || (index === 3 && reviewComplete)
+              );
+              const active = completed;
               return (
                 <div key={label} className="flex items-center gap-2 text-xs font-semibold text-[var(--tx3)]">
                   <span
@@ -3698,7 +3712,7 @@ export default function LiveDemo({ active = true }) {
             <>
               <div data-tour="demo-categories" className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--tx3)]">
-                  {filteredDetections.length} {filteredDetections.length === 1 ? 'Model' : 'Models'}
+                  {filteredDetections.length} {filteredDetections.length === 1 ? 'Detection' : 'Detections'}
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {categories.map((category) => (
@@ -3720,7 +3734,7 @@ export default function LiveDemo({ active = true }) {
 
               <div ref={detectionListRef} data-tour="demo-models" className="grid max-h-[258px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredDetections.map((item) => {
-                  const selectedCard = selectedDetection === item.name;
+                  const selectedCard = detectionSelected && selectedDetection === item.name;
                   return (
                     <button
                       key={item.name}
