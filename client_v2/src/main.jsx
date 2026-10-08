@@ -20,8 +20,8 @@ createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <TimezoneProvider>
         <PermissionProvider>
-        <ModuleConfigProvider>
         <SocketProvider>
+        <ModuleConfigProvider>
           {/* LicenseProvider sits inside SocketProvider: the superadmin pushes
               detection-licence changes over `detectionLicense_<adminId>`, so it
               needs the socket to stay live without a reload. */}
@@ -35,8 +35,8 @@ createRoot(document.getElementById('root')).render(
               </AttendanceSocketProvider>
             </LogsConfigProvider>
           </LicenseProvider>
-        </SocketProvider>
         </ModuleConfigProvider>
+        </SocketProvider>
         </PermissionProvider>
       </TimezoneProvider>
     </AuthProvider>

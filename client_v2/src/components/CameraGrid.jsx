@@ -75,6 +75,7 @@ export function getEnabledEngines(channel) {
 
 /* Camera View pages one camera at a time — no grid layout. */
 const PER_PAGE = 1;
+const INCIDENT_PREVIEW_PREROLL_MS = 10 * 1000;
 
 /** Local YYYY-MM-DD for a Date — matches an <input type="date"> value, not UTC-shifted. */
 function toDateInputValue(date) {
@@ -140,10 +141,19 @@ export default function CameraGrid() {
   const incidentPreview = useApi(async () => {
     const incident = await fetchIncidentById(deepLinkIncidentId);
     const cameraId = incident?.channelData?._id || incident?.channelId;
-    const at = incident?.timeOfIncident ? new Date(incident.timeOfIncident) : null;
-    if (!cameraId || !at || Number.isNaN(at.getTime())) {
+    const incidentAt = incident?.timeOfIncident ? new Date(incident.timeOfIncident) : null;
+    if (!cameraId || !incidentAt || Number.isNaN(incidentAt.getTime())) {
       throw new Error('Playback details are unavailable for this detection.');
     }
+    // Give incident previews enough lead-in to show what caused the event.
+    // Keep playback on the incident's selected day when an event occurs during
+    // its first ten seconds instead of rolling the timeline into yesterday.
+    const incidentDayStart = new Date(incidentAt);
+    incidentDayStart.setHours(0, 0, 0, 0);
+    const previewAt = new Date(Math.max(
+      incidentDayStart.getTime(),
+      incidentAt.getTime() - INCIDENT_PREVIEW_PREROLL_MS,
+    ));
     // Fetch the specific authorized camera, even outside the first 200 results.
     const cameras = await getChannels({ camera: cameraId, limit: 1 });
     const channel = cameras.find((camera) => camera._id === cameraId);
@@ -151,7 +161,7 @@ export default function CameraGrid() {
     if (String(incident?.nvrData?.connectionMode || '').toLowerCase() === 'direct') {
       throw new Error('Recorded playback is unavailable for this camera.');
     }
-    return { incidentId: deepLinkIncidentId, channel, at: at.toISOString() };
+    return { incidentId: deepLinkIncidentId, channel, at: previewAt.toISOString() };
   }, [deepLinkIncidentId], { enabled: Boolean(deepLinkIncidentId) });
 
   const [page,       setPage]       = useState(0);

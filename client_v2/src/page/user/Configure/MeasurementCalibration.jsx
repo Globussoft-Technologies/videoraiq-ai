@@ -32,7 +32,31 @@ const BUSY_STATUSES = new Set(['capturing', 'calibrating']);
 const CALIBRATION_DRAFT_KEY = 'videoraiq:measurement-calibration:drafts:v1';
 const RECTANGLE_MIN_MM = 300;
 const RECTANGLE_MAX_MM = 6000;
+const MM_PER_INCH = 25.4;
+const RECTANGLE_MIN_INCHES = RECTANGLE_MIN_MM / MM_PER_INCH;
+const RECTANGLE_MAX_INCHES = RECTANGLE_MAX_MM / MM_PER_INCH;
 const RECTANGLE_LABELS = ['P0 far-left', 'P1 far-right', 'P2 near-right', 'P3 near-left'];
+
+function millimetersToInches(value, fractionDigits = 2) {
+  if (value === null || value === undefined || value === '') return '';
+  const millimeters = Number(value);
+  if (!Number.isFinite(millimeters)) return '';
+  return Number((millimeters / MM_PER_INCH).toFixed(fractionDigits));
+}
+
+function inchesToMillimeters(value) {
+  const inches = Number(value);
+  if (!Number.isFinite(inches)) return NaN;
+  // Physical zone dimensions are stored and sent to DS in whole millimetres.
+  // Rounding also makes normal two-decimal inch input (for example 78.74 in)
+  // resolve cleanly to its intended 2000 mm value.
+  return Math.round(inches * MM_PER_INCH);
+}
+
+function displayInchesFromMillimeters(value) {
+  const inches = millimetersToInches(value);
+  return inches === '' ? '-' : `${inches} in`;
+}
 
 function readCalibrationDrafts() {
   try {
@@ -43,7 +67,7 @@ function readCalibrationDrafts() {
   }
 }
 
-function validDraftPoints(points, zoneType = 'polygon') {
+function validDraftPoints(points, zoneType = 'rectangle') {
   if (!Array.isArray(points)) return [];
   return points.slice(0, zoneType === 'rectangle' ? 4 : 32).filter((point) => (
     Number.isFinite(point?.x)
@@ -60,12 +84,14 @@ function storedDraft(deviceId) {
   if (!draft || typeof draft !== 'object') return null;
   const savedFlatness = Number(draft.flatness);
   const savedTolerance = Number(draft.tolerance);
-  const zoneType = draft.zoneType === 'rectangle' ? 'rectangle' : 'polygon';
+  const zoneType = draft.zoneType === 'polygon' ? 'polygon' : 'rectangle';
   return {
     zoneType,
     points: validDraftPoints(draft.points, zoneType),
-    zoneLengthMm: draft.zoneLengthMm ?? '',
-    zoneBreadthMm: draft.zoneBreadthMm ?? '',
+    // Prefer new inch-based drafts, but migrate drafts saved by the previous
+    // millimetre UI so 2000 mm can never be interpreted as 2000 inches.
+    zoneLengthInches: draft.zoneLengthInches ?? millimetersToInches(draft.zoneLengthMm),
+    zoneBreadthInches: draft.zoneBreadthInches ?? millimetersToInches(draft.zoneBreadthMm),
     flatness: savedFlatness >= 10 && savedFlatness <= 100 ? savedFlatness : 85,
     tolerance: savedTolerance >= 1 && savedTolerance <= 100 ? savedTolerance : 20,
   };
@@ -75,7 +101,7 @@ function cross(a, b, c) {
   return ((b.x - a.x) * (c.y - b.y)) - ((b.y - a.y) * (c.x - b.x));
 }
 
-function rectangleValidity(points, length, breadth) {
+function rectangleValidity(points, lengthInches, breadthInches) {
   const errors = [];
   const warnings = [];
   if (points.length !== 4) errors.push('Click exactly four corners in P0, P1, P2, P3 order.');
@@ -106,11 +132,15 @@ function rectangleValidity(points, length, breadth) {
     }
   }
 
-  const validDimension = (value) => Number.isFinite(Number(value))
-    && Number(value) >= RECTANGLE_MIN_MM
-    && Number(value) <= RECTANGLE_MAX_MM;
-  if (!validDimension(breadth)) errors.push(`Breadth must be ${RECTANGLE_MIN_MM}–${RECTANGLE_MAX_MM} mm.`);
-  if (!validDimension(length)) errors.push(`Length must be ${RECTANGLE_MIN_MM}–${RECTANGLE_MAX_MM} mm.`);
+  const validDimension = (value) => {
+    const millimeters = inchesToMillimeters(value);
+    return Number.isFinite(millimeters)
+      && millimeters >= RECTANGLE_MIN_MM
+      && millimeters <= RECTANGLE_MAX_MM;
+  };
+  const range = `${RECTANGLE_MIN_INCHES.toFixed(2)}–${RECTANGLE_MAX_INCHES.toFixed(2)} in`;
+  if (!validDimension(breadthInches)) errors.push(`Breadth must be ${range}.`);
+  if (!validDimension(lengthInches)) errors.push(`Length must be ${range}.`);
   return { errors: [...new Set(errors)], warnings };
 }
 
@@ -252,9 +282,9 @@ export default function MeasurementCalibration() {
   const [pageError, setPageError] = useState('');
   const [operation, setOperation] = useState('');
   const [confirmCalibration, setConfirmCalibration] = useState(false);
-  const [zoneType, setZoneType] = useState('polygon');
-  const [zoneLengthMm, setZoneLengthMm] = useState('');
-  const [zoneBreadthMm, setZoneBreadthMm] = useState('');
+  const [zoneType, setZoneType] = useState('rectangle');
+  const [zoneLengthInches, setZoneLengthInches] = useState('');
+  const [zoneBreadthInches, setZoneBreadthInches] = useState('');
   const [flatness, setFlatness] = useState(85);
   const [tolerance, setTolerance] = useState(20);
   const [draftReady, setDraftReady] = useState(false);
@@ -280,12 +310,12 @@ export default function MeasurementCalibration() {
     && toleranceValue >= 1
     && toleranceValue <= 100;
   const zoneValidity = useMemo(() => {
-    if (zoneType === 'rectangle') return rectangleValidity(points, zoneLengthMm, zoneBreadthMm);
+    if (zoneType === 'rectangle') return rectangleValidity(points, zoneLengthInches, zoneBreadthInches);
     return {
       errors: points.length >= 3 ? [] : ['Click at least three points around the usable surface.'],
       warnings: [],
     };
-  }, [points, zoneBreadthMm, zoneLengthMm, zoneType]);
+  }, [points, zoneBreadthInches, zoneLengthInches, zoneType]);
   const maxPoints = zoneType === 'rectangle' ? 4 : 32;
   const canCalibrate = !zoneValidity.errors.length && !busy && Boolean(deviceId) && settingsValid;
 
@@ -363,10 +393,10 @@ export default function MeasurementCalibration() {
     calibrationStartedHereRef.current = false;
     setDraftReady(false);
     setStatus(null);
-    setZoneType(draft?.zoneType || 'polygon');
+    setZoneType(draft?.zoneType || 'rectangle');
     setPoints(draft?.points || []);
-    setZoneLengthMm(draft?.zoneLengthMm ?? '');
-    setZoneBreadthMm(draft?.zoneBreadthMm ?? '');
+    setZoneLengthInches(draft?.zoneLengthInches ?? '');
+    setZoneBreadthInches(draft?.zoneBreadthInches ?? '');
     setFlatness(draft?.flatness ?? 85);
     setTolerance(draft?.tolerance ?? 20);
     setFrameError('');
@@ -382,19 +412,19 @@ export default function MeasurementCalibration() {
     getSavedCalibrationZone(deviceId)
       .then((saved) => {
         if (cancelled || activeDeviceRef.current !== deviceId || !saved) return;
-        const savedZoneType = saved.zone_type === 'rectangle' ? 'rectangle' : 'polygon';
+        const savedZoneType = saved.zone_type === 'polygon' ? 'polygon' : 'rectangle';
         const savedPoints = validDraftPoints(saved.points, savedZoneType);
         setZoneType(savedZoneType);
         setPoints(savedPoints);
-        setZoneLengthMm(saved.zone_length_mm ?? '');
-        setZoneBreadthMm(saved.zone_breadth_mm ?? '');
+        setZoneLengthInches(millimetersToInches(saved.zone_length_mm));
+        setZoneBreadthInches(millimetersToInches(saved.zone_breadth_mm));
         setFlatness(Math.round(Number(saved.min_zone_flat_ratio) * 100));
         setTolerance(Number(saved.inlier_tolerance_mm));
         saveCalibrationDraft(deviceId, {
           zoneType: savedZoneType,
           points: savedPoints,
-          zoneLengthMm: saved.zone_length_mm ?? '',
-          zoneBreadthMm: saved.zone_breadth_mm ?? '',
+          zoneLengthInches: millimetersToInches(saved.zone_length_mm),
+          zoneBreadthInches: millimetersToInches(saved.zone_breadth_mm),
           flatness: Math.round(Number(saved.min_zone_flat_ratio) * 100),
           tolerance: Number(saved.inlier_tolerance_mm),
         });
@@ -423,8 +453,8 @@ export default function MeasurementCalibration() {
     const draft = {
       zoneType,
       points: validDraftPoints(points, zoneType),
-      zoneLengthMm,
-      zoneBreadthMm,
+      zoneLengthInches,
+      zoneBreadthInches,
       flatness: Number(flatness),
       tolerance: Number(tolerance),
     };
@@ -437,10 +467,10 @@ export default function MeasurementCalibration() {
         inlier_tolerance_mm: draft.tolerance,
       };
       if (zoneType === 'rectangle') {
-        const length = Number(zoneLengthMm);
-        const breadth = Number(zoneBreadthMm);
-        if (length >= RECTANGLE_MIN_MM && length <= RECTANGLE_MAX_MM) serverDraft.zone_length_mm = length;
-        if (breadth >= RECTANGLE_MIN_MM && breadth <= RECTANGLE_MAX_MM) serverDraft.zone_breadth_mm = breadth;
+        const lengthMm = inchesToMillimeters(zoneLengthInches);
+        const breadthMm = inchesToMillimeters(zoneBreadthInches);
+        if (lengthMm >= RECTANGLE_MIN_MM && lengthMm <= RECTANGLE_MAX_MM) serverDraft.zone_length_mm = lengthMm;
+        if (breadthMm >= RECTANGLE_MIN_MM && breadthMm <= RECTANGLE_MAX_MM) serverDraft.zone_breadth_mm = breadthMm;
       }
       saveCalibrationZone(deviceId, serverDraft)
         .then(() => {
@@ -453,7 +483,7 @@ export default function MeasurementCalibration() {
         });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [deviceId, draftReady, flatness, points, tolerance, zoneBreadthMm, zoneLengthMm, zoneType]);
+  }, [deviceId, draftReady, flatness, points, tolerance, zoneBreadthInches, zoneLengthInches, zoneType]);
 
   useEffect(() => {
     if (!deviceId) return undefined;
@@ -510,8 +540,8 @@ export default function MeasurementCalibration() {
         min_zone_flat_ratio: flatnessValue / 100,
         inlier_tolerance_mm: toleranceValue,
         ...(zoneType === 'rectangle' ? {
-          zone_length_mm: Number(zoneLengthMm),
-          zone_breadth_mm: Number(zoneBreadthMm),
+          zone_length_mm: inchesToMillimeters(zoneLengthInches),
+          zone_breadth_mm: inchesToMillimeters(zoneBreadthInches),
         } : {}),
       });
       setStatus(nextStatus);
@@ -560,10 +590,10 @@ export default function MeasurementCalibration() {
   const polygon = points.map((point) => `${point.x * 1000},${point.y * 1000}`).join(' ');
   const rectangleEdges = zoneType === 'rectangle' && points.length === 4
     ? [
-      { from: points[0], to: points[1], label: `${zoneBreadthMm || '?'} mm breadth` },
-      { from: points[1], to: points[2], label: `${zoneLengthMm || '?'} mm length` },
-      { from: points[2], to: points[3], label: `${zoneBreadthMm || '?'} mm breadth` },
-      { from: points[3], to: points[0], label: `${zoneLengthMm || '?'} mm length` },
+      { from: points[0], to: points[1], label: `${zoneBreadthInches || '?'} in breadth` },
+      { from: points[1], to: points[2], label: `${zoneLengthInches || '?'} in length` },
+      { from: points[2], to: points[3], label: `${zoneBreadthInches || '?'} in breadth` },
+      { from: points[3], to: points[0], label: `${zoneLengthInches || '?'} in length` },
     ]
     : [];
   const visibleZoneMessage = zoneValidity.errors[0]
@@ -719,15 +749,21 @@ export default function MeasurementCalibration() {
             {zoneType === 'rectangle' && (
               <div style={{ display: 'grid', gap: 11, gridTemplateColumns: '1fr 1fr', marginBottom: 16 }}>
                 <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
-                  Length (P0-P3)
-                  <input disabled={busy} max={RECTANGLE_MAX_MM} min={RECTANGLE_MIN_MM} onChange={(event) => setZoneLengthMm(event.target.value)} placeholder="e.g. 2000" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', marginTop: 6, padding: '8px', width: '100%' }} type="number" value={zoneLengthMm} />
+                  Length (P0-P3) · inches
+                  <div style={{ alignItems: 'center', display: 'flex', gap: 7, marginTop: 6 }}>
+                    <input disabled={busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneLengthInches(event.target.value)} placeholder="e.g. 78.74" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneLengthInches} />
+                    <span style={{ color: 'var(--tx2)', fontWeight: 750 }}>in</span>
+                  </div>
                 </label>
                 <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
-                  Breadth (P0-P1)
-                  <input disabled={busy} max={RECTANGLE_MAX_MM} min={RECTANGLE_MIN_MM} onChange={(event) => setZoneBreadthMm(event.target.value)} placeholder="e.g. 1800" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', marginTop: 6, padding: '8px', width: '100%' }} type="number" value={zoneBreadthMm} />
+                  Breadth (P0-P1) · inches
+                  <div style={{ alignItems: 'center', display: 'flex', gap: 7, marginTop: 6 }}>
+                    <input disabled={busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneBreadthInches(event.target.value)} placeholder="e.g. 70.87" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneBreadthInches} />
+                    <span style={{ color: 'var(--tx2)', fontWeight: 750 }}>in</span>
+                  </div>
                 </label>
                 <div style={{ color: 'var(--tx3)', fontSize: 10.5, gridColumn: '1 / -1', lineHeight: 1.5 }}>
-                  Required range: {RECTANGLE_MIN_MM}-{RECTANGLE_MAX_MM} mm. Corner order: P0 far-left, P1 far-right, P2 near-right, P3 near-left.
+                  Required range: {RECTANGLE_MIN_INCHES.toFixed(2)}-{RECTANGLE_MAX_INCHES.toFixed(2)} in. Values are converted to millimetres for DS. Corner order: P0 far-left, P1 far-right, P2 near-right, P3 near-left.
                 </div>
               </div>
             )}
@@ -798,13 +834,13 @@ export default function MeasurementCalibration() {
                     {status.active_zone.zone_type === 'rectangle' && (
                       <>
                         <span>Declared breadth x length</span>
-                        <strong style={{ color: 'var(--tx)' }}>{status.active_zone.zone_breadth_mm ?? '-'} x {status.active_zone.zone_length_mm ?? '-'} mm</strong>
+                        <strong style={{ color: 'var(--tx)' }}>{displayInchesFromMillimeters(status.active_zone.zone_breadth_mm)} x {displayInchesFromMillimeters(status.active_zone.zone_length_mm)}</strong>
                         {activeMetricSolveRecorded ? (
                             <>
                               <span>Planar scale X / Y</span>
                               <strong style={{ color: 'var(--tx)' }}>{Number(status.active_zone.planar_scale_x).toFixed(4)} / {Number(status.active_zone.planar_scale_y).toFixed(4)}</strong>
                               <span>Corner RMS</span>
-                              <strong style={{ color: 'var(--tx)' }}>{Number(status.active_zone.rectangle_rms_mm).toFixed(2)} mm</strong>
+                              <strong style={{ color: 'var(--tx)' }}>{displayInchesFromMillimeters(status.active_zone.rectangle_rms_mm)}</strong>
                             </>
                           ) : (
                             <div style={{ color: 'var(--tx3)', gridColumn: '1 / -1', marginTop: 2 }}>Metric solve: not recorded for this calibration.</div>
@@ -834,7 +870,7 @@ export default function MeasurementCalibration() {
           <div className="space-y-2">
             <p>The selected measurement surface must be completely empty.</p>
             {zoneType === 'rectangle' && (
-              <p>Please confirm the declared {zoneBreadthMm} mm breadth and {zoneLengthMm} mm length were physically tape-measured.</p>
+              <p>Please confirm the declared {zoneBreadthInches} in breadth and {zoneLengthInches} in length were physically tape-measured.</p>
             )}
             <p className="font-medium text-[var(--tx)]">Objects inside the zone will corrupt the reference plane used by future measurements.</p>
           </div>
