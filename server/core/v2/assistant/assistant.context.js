@@ -37,7 +37,7 @@ async function buildFeatureCatalog(req) {
 
   const modules = TOUR_MODULES
     .filter((module) => !module.tourOnly)
-    .filter((module) => !module.modulePageKey || admin?.moduleConfig?.mattressMeasurement?.[module.modulePageKey] === true)
+    .filter((module) => !module.modulePageKey || admin?.moduleConfig?.[module.moduleKey || 'mattressMeasurement']?.[module.modulePageKey] === true)
     .filter((module) => isModuleVisible(module, permissions) && isModuleLogEnabled(module, logs))
     .map(({ key, label, path, group, description }) => ({
       key,

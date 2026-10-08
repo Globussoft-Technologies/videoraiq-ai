@@ -16,6 +16,7 @@ const MODULE_KEYS = {
     "raspberryPiDevices",
     "measurementCalibration",
   ],
+  solarLineQc: ["solderLine", "solderAlertLogs", "operatorReports"],
 };
 
 const normalizeModuleConfig = (moduleConfig = {}) => Object.fromEntries(

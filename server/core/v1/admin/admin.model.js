@@ -89,6 +89,11 @@ const adminSchema = new mongoose.Schema({
       raspberryPiDevices: { type: Boolean, default: false },
       measurementCalibration: { type: Boolean, default: false },
     },
+    solarLineQc: {
+      solderLine: { type: Boolean, default: false },
+      solderAlertLogs: { type: Boolean, default: false },
+      operatorReports: { type: Boolean, default: false },
+    },
   },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).

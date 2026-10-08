@@ -179,6 +179,11 @@ class ClientConfigService {
               raspberryPiDevices: admin.moduleConfig?.mattressMeasurement?.raspberryPiDevices === true,
               measurementCalibration: admin.moduleConfig?.mattressMeasurement?.measurementCalibration === true,
             },
+            solarLineQc: {
+              solderLine: admin.moduleConfig?.solarLineQc?.solderLine === true,
+              solderAlertLogs: admin.moduleConfig?.solarLineQc?.solderAlertLogs === true,
+              operatorReports: admin.moduleConfig?.solarLineQc?.operatorReports === true,
+            },
           },
         })
       );
