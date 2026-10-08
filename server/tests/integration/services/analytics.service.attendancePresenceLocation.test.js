@@ -41,6 +41,57 @@ beforeEach(async () => {
   await clearCollections();
 });
 
+describe("AnalyticsService attendance rollup", () => {
+  it("counts repeated events once per employee-day and retains camera filtering", async () => {
+    const adminId = new mongoose.Types.ObjectId();
+    const employee = await AuthorizedUsers.create({
+      adminId, firstName: "Rollup", lastName: "User", email: "rollup@test.com",
+    });
+    const channel = new mongoose.Types.ObjectId();
+    const otherChannel = new mongoose.Types.ObjectId();
+    await Attendance.collection.insertOne({
+      user: adminId, employee: employee._id,
+      createdAt: new Date("2026-10-01T08:00:00Z"),
+      events: [
+        { cameraType: "checkin", timestamp: new Date("2026-10-01T08:00:00Z"), channel },
+        { cameraType: "checkin", timestamp: new Date("2026-10-01T09:00:00Z"), channel },
+        { cameraType: "checkout", timestamp: new Date("2026-10-01T17:00:00Z"), channel: otherChannel },
+      ],
+    });
+    const scope = { adminId, employeeIds: [employee._id], nvrIds: [], channelIds: [], eventScopeEmpty: false };
+    const range = {
+      start: { toDate: () => new Date("2026-10-01T00:00:00Z") },
+      end: { toDate: () => new Date("2026-10-01T23:59:59.999Z") },
+    };
+    const rules = { fullDayHours: 8, halfDayHours: 4, graceHours: 0 };
+    const all = await AnalyticsService._attendanceRollup(scope, range, rules, "UTC");
+    expect(all).toMatchObject({ attended: 1, logs: 1, checkinEvents: 2, checkoutEvents: 1, events: 3 });
+    const filtered = await AnalyticsService._attendanceRollup({ ...scope, channelIds: [channel] }, range, rules, "UTC");
+    expect(filtered).toMatchObject({ attended: 1, logs: 1, checkinEvents: 2, checkoutEvents: 0, events: 2 });
+    // Execute the old stage order against the same database and compare the
+    // entire facet, including grading/daily buckets, not just selected totals.
+    const shiftId = new mongoose.Types.ObjectId();
+    for (const shift of [null, { startTime: "09:00", endTime: "17:00" }, { startTime: "22:00", endTime: "06:00" }]) {
+      await AuthorizedUsers.collection.updateOne({ _id: employee._id }, { $set: { shiftId: shift ? shiftId : null } });
+      if (shift) await mongoose.connection.collection("shifts").updateOne({ _id: shiftId }, { $set: shift }, { upsert: true });
+      for (const timezone of ["UTC", "Asia/Kolkata", "Asia/Riyadh"]) {
+        for (const channelIds of [[], [channel], [otherChannel]]) {
+          const spy = vi.spyOn(Attendance, "aggregate");
+          await AnalyticsService._attendanceRollup({ ...scope, channelIds }, range, rules, timezone);
+          const pipeline = spy.mock.calls[0][0];
+          spy.mockRestore();
+          const unwindIndex = pipeline.findIndex((stage) => stage.$unwind === "$events");
+          const joins = pipeline.slice(1, unwindIndex);
+          const afterEvents = unwindIndex + 1 + (channelIds.length ? 1 : 0);
+          const original = [pipeline[0], ...pipeline.slice(unwindIndex, afterEvents), ...joins, ...pipeline.slice(afterEvents)];
+          const [before, after] = await Promise.all([Attendance.aggregate(original), Attendance.aggregate(pipeline)]);
+          expect(after).toEqual(before);
+        }
+      }
+    }
+  });
+});
+
 describe("AnalyticsService.attendancePresence — location filter", () => {
   it("scopes roster and counts to the selected location", async () => {
     const admin = await Admin.create({

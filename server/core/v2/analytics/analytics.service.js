@@ -434,11 +434,12 @@ class AnalyticsService {
           },
         },
       },
+      // Employee/shift depend on the attendance row, not an individual event.
+      // Join once before fan-out rather than repeating two lookups for every
+      // check-in/check-out; still resolve shifts before the night-day grouping.
+      ...employeeShiftJoinStages("$employee"),
       { $unwind: "$events" },
       ...cameraStages,
-      // Resolve each row's shift before grouping — a night shift's day bucket
-      // is derived from its start time, so this cannot wait until after.
-      ...employeeShiftJoinStages("$employee"),
       {
         // One document per attendance log row. First check-in / last check-out
         // are derived from $min/$max per camera type rather than a $sort +
