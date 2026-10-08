@@ -11,9 +11,12 @@ import { ModuleConfigProvider } from '@/context/ModuleConfigContext';
 import { AttendanceSocketProvider } from '@/context/AttendanceSocketContext';
 import { DetectionNotificationProvider } from '@/context/DetectionNotificationContext';
 import { TimezoneProvider } from '@/context/TimezoneContext';
+import { applyBrowserBranding } from '@/lib/branding';
 import { router } from './App';
 import './utils/setupAxiosSession';
 import './index.css';
+
+applyBrowserBranding();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

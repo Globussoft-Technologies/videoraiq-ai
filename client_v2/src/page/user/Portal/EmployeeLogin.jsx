@@ -424,7 +424,7 @@ export default function EmployeeLogin() {
               </button>
 
               <p className="text-center mt-[14px] font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.08em] text-[#9aa4b8]">
-                © 2026 VIDEORAIQ · SECURE SESSION
+                {isKhanbas ? "© 2026 · SECURE SESSION" : "© 2026 VIDEORAIQ · SECURE SESSION"}
               </p>
             </>
           )}

@@ -267,7 +267,9 @@ const LoginForm = () => {
               Welcome back 
             </h2>
             <p style={{ fontSize: 13, color: "#98a2bd", margin: "6px 0 0" }}>
-              {isLogin ? "Sign in to your VideoraIQ command center" : "Set up your VideoraIQ surveillance workspace"}
+              {isLogin
+                ? (isKhanbas ? "Sign in to your command center" : "Sign in to your VideoraIQ command center")
+                : "Set up your VideoraIQ surveillance workspace"}
             </p>
           </div>
 

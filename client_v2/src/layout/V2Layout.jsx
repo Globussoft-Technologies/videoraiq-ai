@@ -19,6 +19,7 @@ import { timeAgo } from '../lib/format';
 import { shouldHidePlayback } from '../lib/nvrCapabilities';
 import LiveDemo from '../pages/LiveDemo/LiveDemo';
 import { hasLiveDemoPlan } from '../utils/jwt';
+import { BRAND_NAME } from '../lib/branding';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
@@ -368,7 +369,7 @@ function Shell() {
                 color: 'var(--tx3)',
               }}
             >
-              © 2026 VideoraIQ. All rights reserved.
+              © 2026 {BRAND_NAME}. All rights reserved.
               </footer>
             )}
           </div>
