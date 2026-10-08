@@ -82,7 +82,7 @@ export const ZONE_EXTRA_FIELDS = {
   loiteringWithAuthSettings: ['threshold'],
   tableOccupancyDetectionSettings: ['threshold'],
   deskAbsenceSettings: ['threshold', 'capacity'],
-  deskSolarShoulderDetectionSettings: ['threshold', 'capacity'],
+  deskSolarShoulderDetectionSettings: ['threshold'],
   crowdDetectionSettings: ['capacity'],
   carModelDetectionSettings: ['company'],
   personFallSickDetectionSettings: ['threshold'],
