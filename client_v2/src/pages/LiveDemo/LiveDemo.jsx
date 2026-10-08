@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ConfirmationModal from '@/components/DeleteConfirmation';
 import {
   Camera,
   Check,
@@ -2355,6 +2356,8 @@ export default function LiveDemo({ active = true }) {
   const [confirmedZoneNames, setConfirmedZoneNames] = useState([]);
   const [configurationComplete, setConfigurationComplete] = useState(false);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+  const [confirmRemoveClip, setConfirmRemoveClip] = useState(false);
+  const [removingClip, setRemovingClip] = useState(false);
   const [zoneActionBusy, setZoneActionBusy] = useState(false);
   // Which settingType the in-flight /process job was submitted for — read by
   // the socket handler instead of the live `selected` detection, since the
@@ -4089,8 +4092,8 @@ export default function LiveDemo({ active = true }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => resetClipState({ deleteRemote: true })}
-                    disabled={isClipBusy}
+                    onClick={() => setConfirmRemoveClip(true)}
+                    disabled={isClipBusy || removingClip}
                     className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -4210,6 +4213,24 @@ export default function LiveDemo({ active = true }) {
         busy={zoneActionBusy}
         onCancel={() => !zoneActionBusy && setConfirmDeleteIndex(null)}
         onConfirm={confirmDeleteZone}
+      />
+      <ConfirmationModal
+        open={confirmRemoveClip && active}
+        title="Remove this clip?"
+        message="This removes the current clip and clears its zones, configuration progress, and results from this demo."
+        confirmLabel="Remove clip"
+        loading={removingClip}
+        onClose={() => !removingClip && setConfirmRemoveClip(false)}
+        onConfirm={async () => {
+          if (removingClip || isClipBusy) return;
+          setRemovingClip(true);
+          try {
+            await resetClipState({ deleteRemote: true });
+            setConfirmRemoveClip(false);
+          } finally {
+            setRemovingClip(false);
+          }
+        }}
       />
     </div>
   );
