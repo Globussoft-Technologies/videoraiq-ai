@@ -10,6 +10,7 @@ import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import IncidentZoneDetails from './IncidentZoneDetails';
 
 const SEV_COLOR = {
   high: '#ef4444', critical: '#ef4444',
@@ -684,6 +685,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               </div>
             </>
           )}
+          <IncidentZoneDetails item={item} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>

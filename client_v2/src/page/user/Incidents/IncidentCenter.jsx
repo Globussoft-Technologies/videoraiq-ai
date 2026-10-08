@@ -33,6 +33,7 @@ import getAccessToken from '../../../utils/getAccessToken';
 import { exportIncidentCenter } from './incidentCenterExport';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
+const LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 140px 110px 70px 90px 100px 135px 160px';
 const DELETE_BATCH_SIZE = 250;
 
 const SEVERITIES = [
@@ -1294,6 +1295,9 @@ function IncidentListRow({
   const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
+  const zoneRows = item.incidentType === 'deskSolarShoulderDetection' && Array.isArray(item.zones)
+    ? item.zones.filter((zone) => zone && typeof zone === 'object')
+    : [];
 
   const handleRowClick = () => {
     if (deleteMode) onToggleDelete?.();
@@ -1324,8 +1328,8 @@ function IncidentListRow({
         onClick={handleRowClick}
         className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
         style={{
-          display: 'grid', gridTemplateColumns: '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 90px 100px 135px 160px',
-          gap: 12, alignItems: 'center', minWidth: 1050, padding: '10px 12px',
+          display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS,
+          gap: 12, alignItems: 'center', minWidth: 1420, padding: '10px 12px',
           background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
           borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
         }}
@@ -1363,6 +1367,16 @@ function IncidentListRow({
           <span title={camera} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera}</span>
           <span title={nvr} style={{ fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
         </div>
+
+        {['zone', 'presenceSec', 'done'].map((field) => (
+          <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+            {zoneRows.length ? zoneRows.map((zone, index) => (
+              <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {zone[field] ?? '—'}
+              </span>
+            )) : <span>—</span>}
+          </div>
+        ))}
 
         <div role="cell">
           <span style={{ display: 'inline-flex', border: `1px solid ${LIST_SEVERITY_COLORS[severity] || 'var(--tx3)'}`, color: LIST_SEVERITY_COLORS[severity] || 'var(--tx3)', borderRadius: 20, padding: '3px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' }}>
@@ -2612,12 +2626,15 @@ export default function IncidentCenter() {
             <div data-tour="incidents-list" role="table" aria-label="Incidents" style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 12, background: 'var(--bg1solid)', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
               <div
                 role="row"
-                style={{ display: 'grid', gridTemplateColumns: '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 90px 100px 135px 160px', gap: 12, alignItems: 'center', minWidth: 1050, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
+                style={{ display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS, gap: 12, alignItems: 'center', minWidth: 1420, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
               >
                 <span role="columnheader">Select</span>
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
+                <span role="columnheader">Zone</span>
+                <span role="columnheader">Presence (s)</span>
+                <span role="columnheader">Done</span>
                 <span role="columnheader">Severity</span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader">Time</span>
