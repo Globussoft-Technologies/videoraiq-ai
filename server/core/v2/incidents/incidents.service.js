@@ -3461,8 +3461,7 @@ console.log(result,'result');
       }));
     }
 
-    const basePipeline = [
-      { $match: matchStage },
+    const lookupStages = [
       {
         $lookup: {
           from: "nvrs",
@@ -3486,6 +3485,7 @@ console.log(result,'result');
       },
       { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
     ];
+    const basePipeline = [{ $match: matchStage }, ...lookupStages];
 
     // Tagged/untagged filtering runs inside basePipeline so the $count and the
     // $skip/$limit aggregations narrow identically and totalCount stays exact.
@@ -3571,26 +3571,52 @@ console.log(result,'result');
     // sortField/sortOrder when a column header is clicked; without a
     // recognised field this keeps the previous behaviour (newest first).
     const sortPath = LOG_SORT_FIELDS[String(sortField ?? "").trim()];
+    let sortStage;
     if (sortPath) {
-      const sortStage = { [sortPath]: sortOrder === "asc" ? 1 : -1 };
+      sortStage = { [sortPath]: sortOrder === "asc" ? 1 : -1 };
       // Tiebreaker: a low-cardinality column (colour, year, company) leaves
       // most rows tied, and an unstable order between the $count and the
       // $skip/$limit aggregation lets a row repeat or vanish across pages.
       if (sortPath !== "timeOfIncident") sortStage.timeOfIncident = -1;
       sortStage._id = -1;
-      basePipeline.push({ $sort: sortStage });
     } else {
-      basePipeline.push({ $sort: { timeOfIncident: -1 } });
+      sortStage = { timeOfIncident: -1 };
     }
 
-    const [countResult, logs] = await Promise.all([
-      Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
-      Incident.aggregate([
-        ...basePipeline,
-        { $skip: parseInt(skip) },
-        { $limit: parseInt(limit) },
-      ]),
-    ]);
+    const parsedSkip = parseInt(skip);
+    const parsedLimit = parseInt(limit);
+    const sortsOnJoinedField = sortPath === "nvrData.nvrName" || sortPath === "channelData.name";
+    const canPageBeforeLookups = !postLookupSearch && !attachVehicleOwners && !sortsOnJoinedField;
+
+    let countResult;
+    let logs;
+    if (canPageBeforeLookups) {
+      // The normal log-list path filters and sorts entirely on incident fields.
+      // Count from the indexed match alone, and only join NVR/camera details for
+      // the requested page instead of every matching incident.
+      [countResult, logs] = await Promise.all([
+        Incident.aggregate([{ $match: matchStage }, { $count: "totalCount" }]),
+        Incident.aggregate([
+          { $match: matchStage },
+          { $sort: sortStage },
+          { $skip: parsedSkip },
+          { $limit: parsedLimit },
+          ...lookupStages,
+        ]),
+      ]);
+    } else {
+      // Joined-field search/sort and vehicle-owner filtering must retain the
+      // original stage order. The count still does not need the final sort.
+      [countResult, logs] = await Promise.all([
+        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...basePipeline,
+          { $sort: sortStage },
+          { $skip: parsedSkip },
+          { $limit: parsedLimit },
+        ]),
+      ]);
+    }
 
     if (attachVehicleOwners) {
       await attachTaggedUsers(logs, data?.adminId);
@@ -4992,24 +5018,32 @@ console.log(result,'result');
 
       const parsedSkip = Math.max(0, Number.parseInt(skip, 10) || 0);
       const parsedLimit = Math.min(10000, Math.max(1, Number.parseInt(limit, 10) || 10));
-      const [countResult, summaryResult, logs] = await Promise.all([
-        Incident.aggregate([...pipeline, { $count: "totalCount" }]),
+      const [totalsFacet, logs] = await Promise.all([
         Incident.aggregate([
           ...pipeline,
           {
-            $group: {
-              _id: null,
-              vehicles: { $sum: 1 },
-              loadedBoxes: { $sum: "$loadedBoxCount" },
-              unloadedBoxes: { $sum: "$unloadedBoxCount" },
-              totalBoxes: { $sum: "$boxCount" },
-              events: { $sum: "$eventCount" },
+            $facet: {
+              count: [{ $count: "totalCount" }],
+              summary: [
+                {
+                  $group: {
+                    _id: null,
+                    vehicles: { $sum: 1 },
+                    loadedBoxes: { $sum: "$loadedBoxCount" },
+                    unloadedBoxes: { $sum: "$unloadedBoxCount" },
+                    totalBoxes: { $sum: "$boxCount" },
+                    events: { $sum: "$eventCount" },
+                  },
+                },
+                { $project: { _id: 0 } },
+              ],
             },
           },
-          { $project: { _id: 0 } },
         ]),
         Incident.aggregate([...pipeline, { $skip: parsedSkip }, { $limit: parsedLimit }]),
       ]);
+      const countResult = totalsFacet[0]?.count || [];
+      const summaryResult = totalsFacet[0]?.summary || [];
 
       return res.status(200).json(
         Response.userSuccessResp(

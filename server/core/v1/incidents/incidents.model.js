@@ -39,6 +39,16 @@ const incidentSchema = new Schema({
   type:{type: String} // there are few types of detection like counter gauge binary
 }, options);
 
+// Tenant-scoped indexes for the common v2 incident access patterns. These
+// preserve the existing document and API response shapes; they only let MongoDB
+// satisfy date ranges and newest-first sorting without scanning the collection.
+incidentSchema.index({ userId: 1, timeOfIncident: -1 });
+incidentSchema.index({ userId: 1, incidentType: 1, timeOfIncident: -1 });
+incidentSchema.index({ userId: 1, channelId: 1, timeOfIncident: -1 });
+incidentSchema.index({ userId: 1, nvrId: 1, timeOfIncident: -1 });
+incidentSchema.index({ userId: 1, resolved: 1, timeOfIncident: -1 });
+incidentSchema.index({ userId: 1, incidentType: 1, vehicleNumber: 1, timeOfIncident: -1 });
+
 const Incident = model('Incident', incidentSchema);
 
 // Cashier Theft Detection
