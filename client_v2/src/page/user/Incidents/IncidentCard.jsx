@@ -664,10 +664,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                 )}
                 {/* Absence stays open until DS reports the operator back (returnedAt). */}
                 {item.incidentType === 'deskSolarShoulderDetection' && (
-                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: item.eventType !== 'missedSolder' && item.returnedAt ? 'var(--ok)' : 'var(--crit)' }}>
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: item.eventType !== 'panel' && item.returnedAt ? 'var(--ok)' : 'var(--crit)' }}>
                     {item.zone && <span style={{ color: 'var(--tx3)', fontWeight: 500, marginRight: 5 }}>{item.zone}</span>}
-                    {item.eventType === 'missedSolder'
-                      ? `Missed P${item.point ?? '?'}${item.panelId ? ` · ${item.panelId}` : ''}`
+                    {item.eventType === 'panel'
+                      ? `Missed ${item.missedJoints ?? '?'} joint${item.missedJoints === 1 ? '' : 's'}${item.panelId ? ` · ${item.panelId}` : ''}`
                       : item.returnedAt
                         ? `Returned${item.durationSec != null ? ` · ${absenceDuration(item.durationSec)}` : ''}`
                         : 'Desk empty'}

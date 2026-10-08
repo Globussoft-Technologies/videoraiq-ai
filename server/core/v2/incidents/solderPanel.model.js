@@ -1,22 +1,24 @@
 import mongoose from "mongoose";
 
 // One panel that passed a solder-line camera (deskSolarShoulderDetection).
-// Not an incident: these are the throughput / solder-time samples the Solder
-// Line pages aggregate per hour. `joints` lists only the points that were
-// soldered; a point missing from it was missed (DS raises a missedSolder
-// incident for that, with the snapshot).
+// Not an incident: the throughput / solder-time samples the Solder Line pages
+// aggregate per hour. Written from DS's "Solar panel processing" payload
+// (incidents/create with `zones`); a panel with a missed joint additionally
+// becomes an incident so it alerts. See solderLine.service.recordSolderPanel.
 const solderPanelSchema = new mongoose.Schema(
   {
     userId: { type: String, required: true },
     channelId: { type: mongoose.Schema.Types.ObjectId, ref: "Channel", required: true },
     panelId: { type: String, required: true },
     time: { type: Date, required: true },
-    joints: [
+    // Per operator zone: seconds present at the desk for this panel, and
+    // solder joints done (DS: presence_time, shoulderings_done).
+    zones: [
       {
         _id: false,
-        point: { type: Number, min: 1 },
         zone: String,
-        solderSec: { type: Number, min: 0 },
+        presenceSec: { type: Number, min: 0 },
+        done: { type: Number, min: 0 },
       },
     ],
   },

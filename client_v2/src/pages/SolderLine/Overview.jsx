@@ -9,8 +9,8 @@ import {
 } from './ui';
 import { downloadXlsx } from './exports';
 
-const NO_THROUGHPUT = 'Panel counts and solder times appear here once DS posts one event per panel to /incidents/solder-line/panels.';
-const NO_MISSED = 'Missed-solder alerts appear here once DS raises deskSolarShoulderDetection incidents with eventType "missedSolder".';
+const NO_THROUGHPUT = 'Panel counts and solder times appear here once DS posts its per-panel "Solar panel processing" events.';
+const NO_MISSED = 'Missed-solder alerts appear here when a panel event reports a zone with joints left undone.';
 
 function stationStatus(s) {
   if (s.sum.absentNow) return ['ABSENCE', BAD];

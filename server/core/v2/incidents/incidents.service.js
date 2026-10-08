@@ -73,6 +73,7 @@ import {
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
 } from "./incidents.model.js";
+import { recordSolderPanel } from "./solderLine.service.js";
 const modelMap = {
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
@@ -438,6 +439,34 @@ class IncidentsService {
         }
       }
 
+      // DS's per-panel payload ("Solar panel processing", with `zones`). Every
+      // panel feeds the Solder Line throughput; only a panel that left joints
+      // undone becomes an incident (and so an alert). A complete panel is not
+      // an incident at all, so it never floods Incident Center or email.
+      let solderPanel = null;
+      if (incidentType === "deskSolarShoulderDetection" && req.body.zones && typeof req.body.zones === "object") {
+        if (!channelId) return res.status(400).json({ error: "channelId is required" });
+        solderPanel = await recordSolderPanel({ userId, channelId, body: req.body });
+        delete req.body.zones; // stored normalized below, not as DS's object
+        if (!solderPanel.missedJoints) {
+          return res.status(200).json(
+            Response.userSuccessResp("Panel recorded", { panelId: solderPanel.panelId, missedJoints: 0 }),
+          );
+        }
+        const retried = await Model.findOne({
+          userId: userId?.toString(),
+          channelId,
+          eventType: "panel",
+          panelId: solderPanel.panelId,
+          timeOfIncident: solderPanel.time,
+        });
+        if (retried) {
+          return res.status(200).json(
+            Response.userSuccessResp("Incident already processed", { Incident: retried.toObject(), duplicate: true }),
+          );
+        }
+      }
+
       const currentTime = new Date();
 
       // Check if the incidentType needs special update logic. Requires a
@@ -775,10 +804,20 @@ class IncidentsService {
         newIncident.alertThreshold = req?.body?.alertThreshold ?? 80;
         newIncident.triggerNotification = req?.body?.triggerNotification;
       } else if (incidentType === "deskSolarShoulderDetection") {
-        // eventId, personCount, capacity, thresholdSec, durationSec and
-        // returnedAt arrive under their own names via ...req.body above.
-        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
-        newIncident.zone = firstFilled(req.body.zone, req.body.zoneName, req.body.zone_name);
+        if (solderPanel) {
+          // A panel with missed joints (see the routing above).
+          newIncident.eventType = "panel";
+          newIncident.timeOfIncident = solderPanel.time;
+          newIncident.panelId = solderPanel.panelId;
+          newIncident.zones = solderPanel.zones;
+          newIncident.missedJoints = solderPanel.missedJoints;
+        } else {
+          // An absence: eventId, personCount, capacity, thresholdSec,
+          // durationSec and returnedAt arrive under their own names via
+          // ...req.body above.
+          newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
+          newIncident.zone = firstFilled(req.body.zone, req.body.zoneName, req.body.zone_name);
+        }
       } else if (industrialIncidentTypes.has(incidentType)) {
         newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;

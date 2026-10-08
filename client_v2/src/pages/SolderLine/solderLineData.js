@@ -26,12 +26,24 @@ export const clock = (m) => (m ? m.format('HH:mm:ss') : '—');
 
 function buildStation(station, data, now) {
   const id = station._id;
+  const mine = (row) => String(row.channelId) === id;
   const zones = station.zones.map((z) => z.name);
   const addZone = (name) => {
     const zone = name || 'Unassigned';
     if (!zones.includes(zone)) zones.push(zone);
     return zones.indexOf(zone);
   };
+  // Zones DS reports that aren't configured get a stable order (e.g.
+  // worker_zone_left before worker_zone_right), so OP numbers and point
+  // numbers don't depend on which event happened to arrive first.
+  [...new Set([
+    ...data.absences.filter(mine).map((a) => a.zone),
+    ...data.missed.filter(mine).map((m) => m.zone),
+    ...data.hourly.filter(mine).flatMap((r) => r.zones.map((z) => z.zone)),
+  ].filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .forEach(addZone);
+  const perZone = data.pointsPerZone || DEFAULT_POINTS / 2;
 
   const dayEnd = tzMoment(data.endDate).endOf('day');
   const liveEnd = moment.min(now, dayEnd);
@@ -51,13 +63,22 @@ function buildStation(station, data, now) {
       };
     });
 
+  // The server sends one entry per zone that left joints undone on a panel
+  // (`done` of perZone). DS reports counts, not which points, so the missing
+  // ones are taken as the zone's last points: OP-1 owns P1–P3, OP-2 P4–P6.
+  // ponytail: positional guess; use DS's point list if it ever sends one.
   const missed = data.missed
-    .filter((m) => String(m.channelId) === id)
-    .map((m, i) => ({
-      id: `MS-${String(i + 1).padStart(3, '0')}`, _id: m._id, type: 'missed',
-      op: addZone(m.zone), zone: m.zone || 'Unassigned',
-      point: m.point, panelId: m.panelId, start: tzMoment(m.timeOfIncident), image: m.Image,
-    }));
+    .filter(mine)
+    .flatMap((m) => {
+      const op = addZone(m.zone);
+      return Array.from({ length: Math.max(0, perZone - (m.done || 0)) }, (_, k) => ({
+        _id: `${m._id}:${k}`, type: 'missed',
+        op, zone: m.zone || 'Unassigned',
+        point: op * perZone + (m.done || 0) + k + 1,
+        panelId: m.panelId, start: tzMoment(m.timeOfIncident), image: m.Image,
+      }));
+    })
+    .map((m, i) => ({ ...m, id: `MS-${String(i + 1).padStart(3, '0')}` }));
 
   // Hour-of-day buckets ("06".."23"), summed across days for multi-day ranges.
   const buckets = new Map();
@@ -76,9 +97,10 @@ function buildStation(station, data, now) {
       const c = opCell(b, addZone(z.zone));
       c.joints += z.joints;
       c.solderSec += z.solderSec;
+      c.missed += z.missed || 0;
     });
   });
-  missed.forEach((m) => { opCell(bucket(m.start.format('HH')), m.op).missed += 1; });
+  missed.forEach((m) => bucket(m.start.format('HH')));
   absences.forEach((a) => bucket(a.start.format('HH')));
 
   const present = [...buckets.keys()].map(Number);
@@ -97,7 +119,7 @@ function buildStation(station, data, now) {
   const windowEnd = now.isBefore(dayEnd) ? now : (hours.length ? tzMoment(data.endDate).startOf('day').hour(Number(hours[hours.length - 1]) + 1) : (ends.length ? moment.max(ends) : null));
   const windowSec = windowStart && windowEnd ? Math.max(1, windowEnd.diff(windowStart, 'seconds')) : 0;
 
-  const pointsPerPanel = Math.max(DEFAULT_POINTS, ...missed.map((m) => m.point || 0));
+  const pointsPerPanel = zones.length ? perZone * zones.length : DEFAULT_POINTS;
   const ops = zones.map((zone, i) => {
     const ev = absences.filter((a) => a.op === i);
     const away = sum(ev.map((a) => a.durSec));

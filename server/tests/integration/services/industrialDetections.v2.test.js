@@ -466,5 +466,34 @@ describe("desk solar shoulder absence incidents", () => {
     expect(docs).toHaveLength(1);
     expect(docs[0].returnedAt.toISOString()).toBe("2026-10-07T06:12:14.000Z");
     expect(docs[0].durationSec).toBe(134);
+
+    // DS's per-panel payload: a complete panel is only a throughput sample…
+    const panel = (panelId, rightDone) => ({
+      eventId: undefined,
+      incidentName: "Solar panel processing",
+      panelId,
+      timeOfIncident: "2026-10-07T06:20:00Z",
+      Image: "https://nas.example.com/incidents/panel.jpg",
+      zones: {
+        worker_zone_left: { presence_time: 14.3, shoulderings_done: 3 },
+        worker_zone_right: { presence_time: 12.8, shoulderings_done: rightDone },
+      },
+    });
+    const complete = await post(panel("PNL-0374", 3));
+    expect(payload(complete).data).toMatchObject({ panelId: "PNL-0374", missedJoints: 0 });
+    expect(await incidentModels.DeskSolarShoulderDetectionIncident.countDocuments({ eventType: "panel" })).toBe(0);
+
+    // …a panel with a joint left undone also becomes an incident (and alerts),
+    // and DS retrying the same post doesn't raise a second one.
+    await post(panel("PNL-0375", 2));
+    const retry = await post(panel("PNL-0375", 2));
+    expect(payload(retry).data.duplicate).toBe(true);
+    const panels = await incidentModels.DeskSolarShoulderDetectionIncident.find({ eventType: "panel" }).lean();
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toMatchObject({ panelId: "PNL-0375", missedJoints: 1 });
+    expect(panels[0].zones).toEqual([
+      { zone: "worker_zone_left", presenceSec: 14.3, done: 3 },
+      { zone: "worker_zone_right", presenceSec: 12.8, done: 2 },
+    ]);
   });
 });

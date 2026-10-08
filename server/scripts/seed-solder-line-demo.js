@@ -9,7 +9,11 @@
  *
  * --admin matches the admin's email, login or first name (case-insensitive).
  * Everything inserted is marked so --remove deletes only this data:
- *   incidents: eventId starts with "demo-solder-"   panels: panelId starts with "DEMO-"
+ *   absence incidents: eventId starts with "demo-solder-"
+ *   panel samples and panel incidents: panelId starts with "DEMO-"
+ * Panels follow DS's "Solar panel processing" payload (zones → presence_time,
+ * shoulderings_done); a panel with a short zone is also a "panel" incident.
+ * --remove also clears demo rows from the previous (missedSolder) format.
  * Incidents are inserted directly, so no alert / email / Telegram / push fires,
  * and no camera's detection settings are touched (nothing is sent to DS).
  * The licence row (DetectionAllocation) is created only if missing, and only
@@ -27,7 +31,7 @@ dotenv.config({ path: path.join(serverRoot, ".env") });
 const SETTING = "deskSolarShoulderDetectionSettings";
 const EVENT_PREFIX = "demo-solder-";
 const PANEL_PREFIX = "DEMO-";
-const ZONES = ["Workstation 1", "Workstation 2"]; // P1–P3 → WS1, P4–P6 → WS2
+const ZONES = ["worker_zone_left", "worker_zone_right"]; // DS zone names; P1–P3 left, P4–P6 right
 const SHIFT = [6, 14]; // 06:00–14:00 in the admin's timezone
 
 const args = process.argv.slice(2);
@@ -71,7 +75,10 @@ function buildDay({ admin, channels, images, day, now, tz, moment, isToday }) {
     const image = images.get(String(channel._id)) || null;
     const tag = `${day.replace(/-/g, "")}-${ci + 1}`;
 
-    // Panels: ~38–47 an hour, joint times around 4.2 s (WS1) / 4.6 s (WS2).
+    // Panels: ~38–47 an hour, built as DS's "Solar panel processing" payload
+    // (zones → presence_time, shoulderings_done of 3), then stored the way
+    // incidents/create stores it: every panel a SolderPanel sample, and a
+    // panel with a short zone also an incident (eventType "panel").
     let panelNo = 0;
     for (let h = start.clone(); h.isBefore(end); h.add(1, "hour")) {
       const perHour = 38 + Math.floor(r() * 10);
@@ -80,28 +87,25 @@ function buildDay({ admin, channels, images, day, now, tz, moment, isToday }) {
         if (!time.isBefore(end)) break;
         panelNo += 1;
         const panelId = `${PANEL_PREFIX}${tag}-${String(panelNo).padStart(4, "0")}`;
-        const missedPoint = r() < 0.03 ? 1 + Math.floor(r() * 6) : null;
-        const joints = [1, 2, 3, 4, 5, 6]
-          .filter((p) => p !== missedPoint)
-          .map((point) => ({
-            point,
-            zone: ZONES[point <= 3 ? 0 : 1],
-            solderSec: +((point <= 3 ? 4.2 : 4.6) + (r() - 0.5) * 0.9).toFixed(2),
-          }));
-        panels.push({ userId: base.userId, channelId: channel._id, panelId, time: time.toDate(), joints });
-        if (missedPoint) {
+        const dsZones = Object.fromEntries(ZONES.map((zone, zi) => [zone, {
+          presence_time: +((zi ? 13.2 : 12.4) + (r() - 0.5) * 3).toFixed(1),
+          shoulderings_done: r() < 0.015 ? 3 - (1 + Math.floor(r() * 2)) : 3,
+        }]));
+        const zones = Object.entries(dsZones).map(([zone, z]) => ({ zone, presenceSec: z.presence_time, done: z.shoulderings_done }));
+        const missedJoints = zones.reduce((sum, z) => sum + Math.max(0, 3 - z.done), 0);
+        panels.push({ userId: base.userId, channelId: channel._id, panelId, time: time.toDate(), zones });
+        if (missedJoints) {
           incidents.push({
             ...base,
-            eventType: "missedSolder",
-            eventId: `${EVENT_PREFIX}miss-${panelId}-P${missedPoint}`,
-            incidentName: "Missed Solder Point",
-            point: missedPoint,
+            eventType: "panel",
+            incidentName: "Solar panel processing",
             panelId,
-            zone: ZONES[missedPoint <= 3 ? 0 : 1],
-            timeOfIncident: time.clone().add(20, "seconds").toDate(),
+            zones,
+            missedJoints,
+            timeOfIncident: time.toDate(),
             severity: "high",
             Image: image,
-            description: `Point P${missedPoint} not soldered on ${panelId}`,
+            description: `${missedJoints} solder joint${missedJoints === 1 ? "" : "s"} missed on ${panelId}`,
           });
         }
       }
@@ -165,7 +169,7 @@ async function main() {
   console.log(`Admin: ${admin.name_f || ""} ${admin.name_l || ""} <${admin.email || admin.login}> (user_id ${userId})`);
 
   if (flag("--remove")) {
-    const inc = await DeskSolarShoulderDetectionIncident.deleteMany({ userId, eventId: { $regex: `^${EVENT_PREFIX}` } });
+    const inc = await DeskSolarShoulderDetectionIncident.deleteMany({ userId, $or: [{ eventId: { $regex: `^${EVENT_PREFIX}` } }, { panelId: { $regex: `^${PANEL_PREFIX}` } }] });
     const pan = await SolderPanel.deleteMany({ userId, panelId: { $regex: `^${PANEL_PREFIX}` } });
     console.log(`Removed ${inc.deletedCount} demo incidents and ${pan.deletedCount} demo panels.`);
     if (flag("--remove-allocation")) {
@@ -194,7 +198,7 @@ async function main() {
 
   console.log(`Cameras: ${channels.map((c) => c.customName || c.name).join(", ")}`);
   console.log(`Days: ${days.join(", ")} (${tz}, shift ${SHIFT[0]}:00–${SHIFT[1]}:00)`);
-  console.log(`Would insert ${incidents.filter((i) => i.eventType === "absence").length} absences, ${incidents.filter((i) => i.eventType === "missedSolder").length} missed-solder incidents, ${panels.length} panels.`);
+  console.log(`Would insert ${incidents.filter((i) => i.eventType === "absence").length} absences, ${incidents.filter((i) => i.eventType === "panel").length} panels with missed joints (incidents), ${panels.length} panels.`);
 
   const existing = await Allocation.findOne({ adminId: admin._id, settingType: SETTING }).lean();
   console.log(existing ? `Licence row already exists (enabled: ${existing.enabled}).` : "Would create the licence row so the Solar Line QC pages show.");
@@ -204,8 +208,9 @@ async function main() {
     return;
   }
 
-  const already = await DeskSolarShoulderDetectionIncident.countDocuments({ userId, eventId: { $regex: `^${EVENT_PREFIX}` } });
-  if (already) throw new Error(`Demo data already present (${already} incidents). Run --remove first.`);
+  const already = await DeskSolarShoulderDetectionIncident.countDocuments({ userId, $or: [{ eventId: { $regex: `^${EVENT_PREFIX}` } }, { panelId: { $regex: `^${PANEL_PREFIX}` } }] })
+    + await SolderPanel.countDocuments({ userId, panelId: { $regex: `^${PANEL_PREFIX}` } });
+  if (already) throw new Error(`Demo data already present (${already} rows). Run --remove first.`);
 
   await DeskSolarShoulderDetectionIncident.insertMany(incidents);
   await SolderPanel.insertMany(panels);

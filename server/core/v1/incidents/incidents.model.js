@@ -630,12 +630,19 @@ const BlurredCameraDetectionIncident = Incident.discriminator(
 // - absence: DS opens the incident when the desk has been empty for
 //   threshold_sec, then posts again with the same eventId when the operator
 //   returns, which fills returnedAt/durationSec. returnedAt null = still absent.
-// - missedSolder: one incident per solder point (1-6) a panel left without.
+// - panel: DS's per-panel "Solar panel processing" payload, kept as an
+//   incident only when a zone left joints undone (missedJoints > 0); complete
+//   panels are just throughput samples (SolderPanel). zones: per operator zone,
+//   seconds present and joints done (DS: presence_time, shoulderings_done).
 const DeskSolarShoulderDetectionSchema = new Schema({
-  eventType: { type: String, enum: ["absence", "missedSolder"], default: "absence" },
+  eventType: { type: String, enum: ["absence", "panel"], default: "absence" },
   eventId: { type: String, default: null, index: true },
-  point: { type: Number, default: null, min: 1 },
   panelId: { type: String, default: null },
+  zones: {
+    type: [{ _id: false, zone: String, presenceSec: Number, done: Number }],
+    default: undefined,
+  },
+  missedJoints: { type: Number, default: undefined, min: 0 },
   personCount: { type: Number, default: null, min: 0 },
   capacity: { type: Number, default: null, min: 0 },
   thresholdSec: { type: Number, default: null, min: 0 },

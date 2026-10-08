@@ -1,11 +1,9 @@
-import Joi from "joi";
 import mongoose from "mongoose";
 import momentTZ from "moment-timezone";
 import Channel from "../channels/channels.model.js";
 // Registered here because getSolderLine populates them.
 import "../NVR/nvr.model.js";
 import "../detectionSettings/detectionSettings.model.js";
-import adminModel from "../admin/admin.model.js";
 import { DeskSolarShoulderDetectionIncident } from "./incidents.model.js";
 import SolderPanel from "./solderPanel.model.js";
 import Response from "../../../utils/response.js";
@@ -15,64 +13,51 @@ import { getRequestTimezone } from "../../../utils/timezone.js";
 import { buildStreamingUrl } from "../../../utils/rtspStream.js";
 
 const SETTING = "deskSolarShoulderDetectionSettings";
+// ponytail: every operator zone owns 3 of the junction box's 6 solder points
+// (OP-1 P1–P3, OP-2 P4–P6). Make it per-zone config if a line differs.
+export const POINTS_PER_ZONE = 3;
 // ponytail: hard cap per request; a month of a busy line fits, page it if a
 // client ever outgrows it.
 const MAX_EVENTS = 5000;
 
-const panelSchema = Joi.object({
-  adminId: Joi.string().hex().length(24).required(),
-  channelId: Joi.string().hex().length(24).required(),
-  panelId: Joi.string().trim().max(100).required(),
-  time: Joi.date().iso().required(),
-  joints: Joi.array()
-    .items(
-      Joi.object({
-        point: Joi.number().integer().min(1).max(50).required(),
-        zone: Joi.string().allow("", null),
-        solderSec: Joi.number().min(0).allow(null),
-      }).unknown(true),
-    )
-    .max(50)
-    .default([]),
-}).unknown(true);
-
 const toObjectIds = (ids) =>
   ids.map(String).filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
 
+const count = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+/**
+ * DS's per-panel "Solar panel processing" payload (incidents/create with
+ * `zones: { <zone name>: { presence_time, shoulderings_done } }`): stores the
+ * panel sample the charts aggregate, and reports how many joints were missed.
+ * A retried post of the same panel is not counted twice.
+ */
+export async function recordSolderPanel({ userId, channelId, body }) {
+  const zones = Object.entries(body.zones || {})
+    .slice(0, 20)
+    .map(([zone, value]) => ({
+      zone: String(zone).slice(0, 100),
+      presenceSec: count(value?.presence_time),
+      done: Math.round(count(value?.shoulderings_done)),
+    }));
+  const time = body.timeOfIncident && !Number.isNaN(Date.parse(body.timeOfIncident)) ? new Date(body.timeOfIncident) : new Date();
+  const panelId = String(body.panelId || `PNL-${time.getTime()}`).slice(0, 100);
+
+  await SolderPanel.updateOne(
+    { channelId, panelId, time },
+    { $set: { userId: String(userId), zones } },
+    { upsert: true, runValidators: true },
+  );
+  const missedJoints = zones.reduce((sum, z) => sum + Math.max(0, POINTS_PER_ZONE - z.done), 0);
+  return { zones, panelId, time, missedJoints };
+}
+
 class SolderLineService {
-  // DS posts one of these per panel that leaves a solder-line camera.
-  async recordPanel(req, res, next) {
-    try {
-      const { error, value } = panelSchema.validate(req.body || {});
-      if (error) return res.status(400).send(Response.validationFailResp(error.message, "Validation Failed!"));
-
-      const admin = await adminModel.findById(value.adminId).select("user_id").lean();
-      if (!admin) return res.status(400).send(Response.validationFailResp("Admin not found!", "Validation Failed!"));
-      const userId = admin.user_id.toString();
-      if (!(await Channel.exists({ _id: value.channelId, userId }))) {
-        return res.status(400).send(Response.validationFailResp("Invalid Channel ID", "Validation Failed!"));
-      }
-
-      await SolderPanel.updateOne(
-        { channelId: value.channelId, panelId: value.panelId, time: value.time },
-        {
-          $set: {
-            userId,
-            joints: value.joints.map(({ point, zone, solderSec }) => ({ point, zone, solderSec })),
-          },
-        },
-        { upsert: true, runValidators: true },
-      );
-      return res.status(200).send(Response.userSuccessResp("Panel recorded", { panelId: value.panelId }));
-    } catch (error) {
-      logger.error(error);
-      next(new AppError("Failed to record solder panel", 500));
-    }
-  }
-
   // Everything the Solder Line pages need for a date range: the cameras
-  // running the detection, their absence + missed-solder alerts, and panel
-  // throughput / solder time per camera, hour and zone (admin timezone).
+  // running the detection, their absence alerts, panels with missed joints,
+  // and panel throughput / solder time per camera, hour and zone (admin tz).
   async getSolderLine(req, res, next) {
     try {
       const userId = req?.verified?.userData?.user_id?.toString();
@@ -88,13 +73,13 @@ class SolderLineService {
       const authorized = req?.verified?.authorizedChannel?.channels;
       const scope = Array.isArray(authorized) ? { $in: toObjectIds(authorized) } : null;
 
-      const [events, [throughput]] = await Promise.all([
+      const [events, throughput] = await Promise.all([
         DeskSolarShoulderDetectionIncident.find({
           userId,
           timeOfIncident: range,
           ...(scope && { channelId: scope }),
         })
-          .select("eventType zone timeOfIncident returnedAt durationSec Image description point panelId channelId personCount capacity thresholdSec")
+          .select("eventType zone zones panelId timeOfIncident returnedAt durationSec Image description channelId personCount capacity thresholdSec")
           .sort({ timeOfIncident: 1 })
           .limit(MAX_EVENTS)
           .lean(),
@@ -104,13 +89,14 @@ class SolderLineService {
           {
             $facet: {
               panels: [{ $group: { _id: { channelId: "$channelId", hour: "$hour" }, panels: { $sum: 1 } } }],
-              joints: [
-                { $unwind: "$joints" },
+              zones: [
+                { $unwind: "$zones" },
                 {
                   $group: {
-                    _id: { channelId: "$channelId", hour: "$hour", zone: "$joints.zone" },
-                    joints: { $sum: 1 },
-                    solderSec: { $sum: { $ifNull: ["$joints.solderSec", 0] } },
+                    _id: { channelId: "$channelId", hour: "$hour", zone: "$zones.zone" },
+                    joints: { $sum: "$zones.done" },
+                    solderSec: { $sum: "$zones.presenceSec" },
+                    missed: { $sum: { $max: [0, { $subtract: [POINTS_PER_ZONE, "$zones.done"] }] } },
                   },
                 },
               ],
@@ -125,10 +111,28 @@ class SolderLineService {
         if (!hourly.has(key)) hourly.set(key, { channelId: String(channelId), hour, panels: 0, zones: [] });
         return hourly.get(key);
       };
-      throughput.panels.forEach(({ _id, panels }) => { row(_id).panels = panels; });
-      throughput.joints.forEach(({ _id, joints, solderSec }) => {
-        row(_id).zones.push({ zone: _id.zone || "", joints, solderSec });
+      throughput[0].panels.forEach(({ _id, panels }) => { row(_id).panels = panels; });
+      throughput[0].zones.forEach(({ _id, joints, solderSec, missed }) => {
+        row(_id).zones.push({ zone: _id.zone || "", joints, solderSec, missed });
       });
+
+      const absences = events.filter((e) => e.eventType !== "panel" && e.eventType !== "missedSolder");
+      // One entry per zone that left joints undone on a panel; the page numbers
+      // the missing points from the zone's position.
+      const missed = events
+        .filter((e) => e.eventType === "panel")
+        .flatMap((e) => (e.zones || [])
+          .filter((z) => z.done < POINTS_PER_ZONE)
+          .map((z) => ({
+            _id: `${e._id}:${z.zone}`,
+            incidentId: e._id,
+            channelId: e.channelId,
+            panelId: e.panelId,
+            timeOfIncident: e.timeOfIncident,
+            Image: e.Image,
+            zone: z.zone,
+            done: z.done,
+          })));
 
       // Cameras with the detection on, plus any camera that has data in the
       // range even if the detection was switched off since.
@@ -178,9 +182,10 @@ class SolderLineService {
           timezone,
           startDate,
           endDate,
+          pointsPerZone: POINTS_PER_ZONE,
           stations,
-          absences: events.filter((e) => e.eventType !== "missedSolder"),
-          missed: events.filter((e) => e.eventType === "missedSolder"),
+          absences,
+          missed,
           hourly: [...hourly.values()].sort((a, b) => a.hour.localeCompare(b.hour)),
           truncated: events.length >= MAX_EVENTS,
         }),
