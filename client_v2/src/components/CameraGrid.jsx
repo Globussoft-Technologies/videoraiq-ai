@@ -419,6 +419,7 @@ export default function CameraGrid() {
         {/* Playback date filter */}
         <div style={{ maxWidth: '100%', flexShrink: 0 }}>
           <SingleDatePicker
+            portalContainer={isPageFS ? pageRef.current : undefined}
             value={dateStr}
             maxDate={todayStr}
             onChange={(date) => { if (date) setDateStr(date); }}

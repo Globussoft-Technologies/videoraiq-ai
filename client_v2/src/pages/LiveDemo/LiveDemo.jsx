@@ -3671,7 +3671,7 @@ export default function LiveDemo({ active = true }) {
             <>
               <div data-tour="demo-categories" className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--tx3)]">
-                  23 Models
+                  {filteredDetections.length} {filteredDetections.length === 1 ? 'Model' : 'Models'}
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {categories.map((category) => (

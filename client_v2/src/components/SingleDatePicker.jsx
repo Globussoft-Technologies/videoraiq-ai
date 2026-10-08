@@ -11,6 +11,7 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
  * both dark and light mode. Contract: value/onChange use 'YYYY-MM-DD' strings.
  * Optional minDate / maxDate ('YYYY-MM-DD') cap selectable days.
  * Optional placeholder overrides the empty-state label.
+ * Optional portalContainer hosts the popup; defaults to document.body.
  */
 const SingleDatePicker = ({
   value,
@@ -19,6 +20,7 @@ const SingleDatePicker = ({
   placeholder = 'Select Date',
   clearable = false,
   onChange,
+  portalContainer,
 }) => {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() =>
@@ -78,7 +80,7 @@ const SingleDatePicker = ({
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, isMobile]);
+  }, [open, isMobile, portalContainer]);
 
   const selected = value ? moment(value, 'YYYY-MM-DD') : null;
   const min = minDate ? moment(minDate, 'YYYY-MM-DD').startOf('day') : null;
@@ -275,7 +277,7 @@ const SingleDatePicker = ({
               {calendarBody}
             </div>
           ),
-          document.body
+          portalContainer || document.body
         )}
     </div>
   );
