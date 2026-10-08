@@ -20,6 +20,7 @@
     "crypto-js": "^4.2.0",
     "dashjs": "^5.2.1",
     "firebase": "12.19.0",
+    "fflate": "0.8.3",
     "formik": "^2.4.6",
     "hls.js": "^1.6.16",
     "js-cookie": "^3.0.5",

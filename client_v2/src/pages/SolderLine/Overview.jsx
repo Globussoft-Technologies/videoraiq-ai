@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, ImageOff, LayoutGrid, Rows3 } from 'lucide-react';
+import { useState } from 'react';
+import { Download, ImageOff, LayoutGrid, Rows3 } from 'lucide-react';
 import CameraStream from '@/components/CameraStream';
 import { mediaUrl } from '@/lib/format';
 import { clock, dur, opColor } from './solderLineData';
 import {
-  BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead, Kpi, KpiGrid,
+  BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
   OpBadge, StatusPill, Chip, Waiting, SnapshotPreview, fmt,
 } from './ui';
 import { downloadXlsx } from './exports';
@@ -35,25 +35,9 @@ function Snap({ image, children, onOpen, ratio = '16 / 9' }) {
 
 function LineSection({ model, sel, setSel }) {
   const [matrix, setMatrix] = useState(false);
-  const { line, stations } = model;
-  const worst = [...stations].sort((a, b) => b.sum.missed - a.sum.missed)[0];
-  const fastest = stations.filter((s) => s.sum.avgJoint != null).sort((a, b) => a.sum.avgJoint - b.sum.avgJoint)[0];
+  const { stations } = model;
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ ...label, fontWeight: 700 }}>Line · all camera stations</span>
-        <span style={{ flex: 1, height: 1, background: 'var(--bd)' }} />
-      </div>
-      <KpiGrid>
-        <Kpi label="Panels · line" value={line.hasThroughput ? line.panels.toLocaleString('en-IN') : '—'} sub={`${stations.length} stations`} color={CY} />
-        <Kpi label="Coverage · line" value={fmt(line.coverage, 2)} unit={line.coverage != null ? '%' : ''} sub={line.hasThroughput ? `${line.joints.toLocaleString('en-IN')} joints done` : 'Waiting for panel data'} color={OK} valueColor={OK} />
-        <Kpi label="Missed · line" value={line.missed} sub={worst?.sum.missed ? `Most at ${worst.name} (${worst.sum.missed})` : 'No missed points'} color={BAD} valueColor="#ff6b6b" />
-        <Kpi label="Absence alerts" value={line.absences} sub={`${line.absentNow} desk${line.absentNow === 1 ? '' : 's'} empty right now`} color={WARN} valueColor={WARN} />
-        <Kpi label="Unavailable time" value={dur(line.away)} sub={`All ${line.operators} operators`} color="#a855f7" />
-        <Kpi label="Avg / joint · line" value={fmt(line.avgJoint, 2)} unit={line.avgJoint != null ? 's' : ''} sub={fastest ? `Fastest ${fastest.name} · ${fastest.sum.avgJoint.toFixed(2)} s` : 'Waiting for panel data'} color="#94a3b8" />
-        <Kpi label="At desk now" value={`${line.operators - line.absentNow} / ${line.operators}`} sub="Operators present on line" color={OK} />
-      </KpiGrid>
-
       <Panel>
         <PanelHead
           title="Camera stations"
@@ -185,45 +169,6 @@ function CompareTable({ stations, sel, setSel }) {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function StationBar({ model, sel, setSel }) {
-  const s = model.stations[sel];
-  const n = model.stations.length;
-  const arrow = (d, Icon) => (
-    <button type="button" onClick={() => setSel((sel + d + n) % n)} style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx2)', border: '1px solid var(--bd2)', background: 'var(--bg2)' }}>
-      <Icon size={15} />
-    </button>
-  );
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 14, background: 'linear-gradient(90deg, rgba(59,130,246,.16), rgba(168,85,247,.07) 55%, transparent)', border: '1px solid rgba(59,130,246,.38)' }}>
-      {n > 1 && arrow(-1, ChevronLeft)}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ ...label, fontSize: 9 }}>Viewing station</span>
-        <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 20, lineHeight: 1 }}>{s.name} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx3)' }}>{s.nvrName}</span></span>
-      </div>
-      <span style={{ width: 1, height: 34, background: 'var(--bd2)' }} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {s.ops.map((o) => (
-          <span key={o.i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-            <OpBadge op={o.i} /><span style={{ fontWeight: 600 }}>{o.zone}</span>
-            {o.thresholdSec != null && <span style={{ color: 'var(--tx3)', fontSize: 11 }}>alert after {o.thresholdSec}s empty</span>}
-          </span>
-        ))}
-      </div>
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-        {model.stations.map((st, i) => {
-          const c = stationStatus(st)[1];
-          return (
-            <Chip key={st._id} on={i === sel} color="linear-gradient(135deg, #3b82f6, #a855f7)" onClick={() => setSel(i)}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />{st.name}
-            </Chip>
-          );
-        })}
-      </div>
-      {n > 1 && arrow(1, ChevronRight)}
     </div>
   );
 }
@@ -688,10 +633,8 @@ const btnGhost = { display: 'flex', alignItems: 'center', gap: 6, height: 32, pa
 
 // ---------------------------------------------------------------- page
 
-export default function Overview({ model, onOpenLogs }) {
-  const [sel, setSel] = useState(0);
+export default function Overview({ model, onOpenLogs, selected, onSelect }) {
   const [openId, setOpenId] = useState(null);
-  useEffect(() => { if (sel >= model.stations.length) setSel(0); }, [model.stations.length, sel]);
   if (!model.stations.length) {
     return (
       <Panel>
@@ -701,9 +644,8 @@ export default function Overview({ model, onOpenLogs }) {
       </Panel>
     );
   }
-  const s = model.stations[Math.min(sel, model.stations.length - 1)];
+  const s = model.stations[Math.min(selected, model.stations.length - 1)];
   const absentOp = s.ops.find((o) => o.absentNow);
-  const sKpi = s.sum;
   return (
     <>
       {absentOp && model.isToday && (
@@ -713,17 +655,7 @@ export default function Overview({ model, onOpenLogs }) {
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>{absentOp.zone} desk empty on {s.name}</span>
         </div>
       )}
-      <LineSection model={model} sel={sel} setSel={setSel} />
-      <StationBar model={model} sel={sel} setSel={setSel} />
-      <KpiGrid>
-        <Kpi label="Panels counted" value={sKpi.hasThroughput ? sKpi.panels : '—'} sub="Conveyor count" color={CY} />
-        <Kpi label="Solder joints" value={sKpi.hasThroughput ? sKpi.joints.toLocaleString('en-IN') : '—'} unit={sKpi.hasThroughput ? `/ ${(sKpi.panels * s.pointsPerPanel).toLocaleString('en-IN')}` : ''} sub={`${s.pointsPerPanel} points per panel`} color="#3b82f6" />
-        <Kpi label="Coverage" value={fmt(sKpi.coverage, 2)} unit={sKpi.coverage != null ? '%' : ''} sub="Joints done ÷ joints required" color={OK} valueColor={OK} />
-        <Kpi label="Missed solders" value={sKpi.missed} sub={s.ops.map((o) => `${o.code} ${o.missed}`).join(' · ')} color={BAD} valueColor="#ff6b6b" />
-        <Kpi label="Absence alerts" value={sKpi.absences} sub={s.ops.map((o) => `${o.code} ${o.alerts}`).join(' · ')} color={WARN} valueColor={WARN} />
-        <Kpi label="Unavailable time" value={dur(sKpi.away)} sub="All desks combined" color="#a855f7" />
-        <Kpi label="Avg / joint" value={fmt(sKpi.avgJoint, 2)} unit={sKpi.avgJoint != null ? 's' : ''} sub={s.ops.map((o) => `${o.code} ${fmt(o.avgJoint, 2)}`).join(' · ')} color="#94a3b8" />
-      </KpiGrid>
+      <LineSection model={model} sel={selected} setSel={onSelect} />
       <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} />
       <SolderSection s={s} preview={setOpenId} />
       <HourSection s={s} model={model} />

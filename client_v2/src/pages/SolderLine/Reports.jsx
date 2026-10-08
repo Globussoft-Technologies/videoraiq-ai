@@ -137,10 +137,9 @@ function Table({ rows }) {
   );
 }
 
-export default function Reports({ model, range, today, onRangeChange }) {
+export default function Reports({ model, selected, onSelect, range, today, onRangeChange }) {
   const [type, setType] = useState('compare');
-  const [sel, setSel] = useState(0);
-  const s = model.stations[Math.min(sel, model.stations.length - 1)];
+  const s = model.stations[Math.min(selected, model.stations.length - 1)];
   const typeMeta = TYPES.find((t) => t.v === type);
   const period = periods(today).find(([, a, b]) => a === range.startDate && b === range.endDate);
   const periodLabel = period ? period[0] : `${range.startDate} → ${range.endDate}`;
@@ -180,7 +179,7 @@ export default function Reports({ model, range, today, onRangeChange }) {
               <>
                 <div style={{ ...label, marginTop: 4 }}>Station</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {model.stations.map((st, i) => <Chip key={st._id} on={st === s} color="var(--violet)" onClick={() => setSel(i)}>{st.name}</Chip>)}
+                  {model.stations.map((st, i) => <Chip key={st._id} on={st === s} color="var(--violet)" onClick={() => onSelect(i)}>{st.name}</Chip>)}
                 </div>
               </>
             )}

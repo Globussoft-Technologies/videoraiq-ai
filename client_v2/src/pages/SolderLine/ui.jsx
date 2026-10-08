@@ -5,7 +5,7 @@ import { mediaUrl } from '@/lib/format';
 import { opColor } from './solderLineData';
 
 /** Full-screen snapshot viewer with previous/next over `items` (alerts with `_id` + `image`). */
-export function SnapshotPreview({ items, openId, onOpen, onClose }) {
+export function SnapshotPreview({ items, openId, onOpen, onClose, fullscreenOnOpen = false }) {
   const [loading, setLoading] = useState(true);
   const list = items.filter((x) => x.image);
   const idx = list.findIndex((x) => x._id === openId);
@@ -24,6 +24,7 @@ export function SnapshotPreview({ items, openId, onOpen, onClose }) {
       position={idx + 1}
       total={list.length}
       onClose={onClose}
+      initialFullscreen={fullscreenOnOpen}
     />
   );
 }

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Download, LayoutGrid, List } from 'lucide-react';
+import { Download, ImageOff, LayoutGrid, List, Maximize2 } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
 import { clock, dur } from './solderLineData';
 import { BAD, WARN, mono, label, Panel, OpBadge, StatusPill, Chip, Waiting, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
+import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
 
 const TYPE_META = {
   absence: { label: 'ABSENCE', color: WARN },
@@ -22,9 +23,19 @@ function TypeTag({ type, style }) {
 function Thumb({ r, onOpen, ratio = '16 / 9', width }) {
   return (
     <div style={{ position: 'relative', width, aspectRatio: ratio, borderRadius: 7, overflow: 'hidden', background: '#0a0e15', border: '1px solid var(--bd2)' }}>
-      {r.image && <img src={mediaUrl(r.image)} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-      {r.image && <button type="button" onClick={onOpen} title="View full screen" style={{ position: 'absolute', inset: 0, background: 'none', border: 'none', cursor: 'zoom-in' }} />}
+      {r.image ? <img src={mediaUrl(r.image)} alt={`Snapshot for ${r.id}`} loading="lazy" onClick={onOpen} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} /> : (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#94a3b8', fontSize: 11 }}><ImageOff size={20} />No snapshot available</div>
+      )}
+      <button type="button" disabled={!r.image} onClick={onOpen} aria-label={`View ${r.id} full screen`} title={r.image ? 'View full screen' : 'No snapshot available'} style={{ position: 'absolute', zIndex: 2, top: 8, right: 8, width: 30, height: 30, display: 'grid', placeItems: 'center', color: '#fff', background: 'rgba(6,8,13,.8)', border: '1px solid #ffffff40', borderRadius: 5, cursor: r.image ? 'pointer' : 'not-allowed', opacity: r.image ? 1 : 0.45 }}><Maximize2 size={16} /></button>
     </div>
+  );
+}
+
+function ImageDownload({ row, onDownload, busy, style }) {
+  const available = Boolean(row.image);
+  const buttonStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '0 12px', fontSize: 11, cursor: available ? 'pointer' : 'not-allowed', opacity: available ? 1 : 0.45, ...style };
+  return (
+    <button type="button" disabled={!available || busy} onClick={onDownload} title={available ? 'Download this image' : 'No snapshot available'} aria-label={`Download image for ${row.id}`} style={buttonStyle}><Download size={12} />{busy ? 'Saving…' : 'Image'}</button>
   );
 }
 
@@ -33,14 +44,15 @@ const status = (r) => (r.type === 'missed' ? <StatusPill text="LOGGED" color={WA
 export default function AlertLogs({ model, rows }) {
   const [type, setType] = useState('all');
   const [op, setOp] = useState('all');
-  const [station, setStation] = useState('all');
-  const [grid, setGrid] = useState(false);
+  const [grid, setGrid] = useState(true);
   const [openId, setOpenId] = useState(null);
+  const [downloadError, setDownloadError] = useState('');
+  const [zipBusy, setZipBusy] = useState(false);
+  const [downloading, setDownloading] = useState({});
 
   const opCodes = useMemo(() => [...new Set(rows.map((r) => r.opCode))].sort(), [rows]);
   const shown = rows.filter((r) => (type === 'all' || r.type === type)
-    && (op === 'all' || r.opCode === op)
-    && (station === 'all' || r.station._id === station));
+    && (op === 'all' || r.opCode === op));
   const when = (m) => (model.singleDay ? clock(m) : m.format('DD MMM HH:mm:ss'));
 
   const exportRows = () => shown.map((r) => {
@@ -54,6 +66,20 @@ export default function AlertLogs({ model, rows }) {
     };
   });
   const fileName = `solder-alerts_${shown[0]?.start.format('YYYY-MM-DD') || 'empty'}`;
+  const runDownload = async (action) => {
+    setDownloadError('');
+    try { await action(); } catch (error) { setDownloadError(error.message || 'Could not download the snapshot.'); }
+  };
+  const saveZip = async () => {
+    setZipBusy(true);
+    try { await runDownload(() => downloadSnapshotsZip(shown)); } finally { setZipBusy(false); }
+  };
+  const saveImage = async (row) => {
+    setDownloading((current) => ({ ...current, [row._id]: true }));
+    try { await runDownload(() => downloadSnapshot(row)); } finally {
+      setDownloading((current) => ({ ...current, [row._id]: false }));
+    }
+  };
 
   return (
     <>
@@ -73,22 +99,16 @@ export default function AlertLogs({ model, rows }) {
         <span style={label}>Operator</span>
         <Chip on={op === 'all'} onClick={() => setOp('all')}>ALL</Chip>
         {opCodes.map((c) => <Chip key={c} on={op === c} color="var(--blue)" onClick={() => setOp(c)}>{c}</Chip>)}
-        {model.stations.length > 1 && (
-          <>
-            <span style={{ width: 1, height: 22, background: 'var(--bd2)', margin: '0 4px' }} />
-            <span style={label}>Station</span>
-            <Chip on={station === 'all'} onClick={() => setStation('all')}>ALL</Chip>
-            {model.stations.map((s) => <Chip key={s._id} on={station === s._id} color="var(--violet)" onClick={() => setStation(s._id)}>{s.name}</Chip>)}
-          </>
-        )}
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{shown.length} SHOWN</span>
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
           <Chip on={grid} color="var(--blue)" onClick={() => setGrid(true)}><LayoutGrid size={13} />Grid</Chip>
+          <button type="button" disabled={zipBusy || !shown.some((r) => r.image)} onClick={saveZip} title="Download visible snapshots as ZIP" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', borderRadius: 8, cursor: zipBusy ? 'wait' : 'pointer', color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', opacity: shown.some((r) => r.image) ? 1 : 0.5, ...mono, fontSize: 10.5, fontWeight: 700 }}><Download size={13} />{zipBusy ? 'PREPARING ZIP' : 'SNAPSHOTS .ZIP'}</button>
           <Chip onClick={() => downloadXlsx(exportRows(), fileName)}>XLSX</Chip>
           <Chip onClick={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: `${shown.length} alerts`, rows: exportRows(), filename: fileName })}>PDF</Chip>
         </span>
       </Panel>
+      {downloadError && <div role="alert" style={{ color: BAD, fontSize: 12 }}>{downloadError}</div>}
 
       {!shown.length ? (
         <Panel><Waiting title="No alerts" minH={200}>No absence or missed-solder alerts match these filters in this date range.</Waiting></Panel>
@@ -106,7 +126,7 @@ export default function AlertLogs({ model, rows }) {
                 <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <OpBadge op={r.op} code={r.opCode} />
-                    <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{r.station.name} · {r.id}</span>
+                    <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{r.id}</span>
                     <span style={{ marginLeft: 'auto' }}>{status(r)}</span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13.5 }}>{d.title}</div>
@@ -114,7 +134,7 @@ export default function AlertLogs({ model, rows }) {
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, borderTop: '1px solid var(--bd)' }}>
                     <span style={{ ...label, fontSize: 9 }}>{d.metricLabel}</span>
                     <span style={{ ...mono, fontSize: 13, fontWeight: 700 }}>{d.metric}</span>
-                    {r.image && <a href={mediaUrl(r.image)} target="_blank" rel="noreferrer" title="Open snapshot" style={{ marginLeft: 'auto', color: 'var(--tx2)' }}><Download size={15} /></a>}
+                    <ImageDownload row={r} onDownload={() => saveImage(r)} busy={downloading[r._id]} style={{ marginLeft: 'auto' }} />
                   </div>
                 </div>
               </Panel>
@@ -126,22 +146,24 @@ export default function AlertLogs({ model, rows }) {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 1040 }}>
               {[null, ...shown].map((r) => {
-                const cols = { display: 'grid', gridTemplateColumns: '132px 76px 116px 90px 110px 110px minmax(0, 1fr) 92px 96px 32px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
+                const cols = { display: 'grid', gridTemplateColumns: '168px 76px 116px 90px 110px minmax(0, 1fr) 92px 96px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
                 if (!r) {
                   return (
                     <div key="head" style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-                      <span>SNAPSHOT</span><span>ALERT</span><span>TYPE</span><span>OPERATOR</span><span>STATION</span><span>TIME</span><span>DETAIL</span><span>METRIC</span><span>STATUS</span><span />
+                      <span>SNAPSHOT / ACTIONS</span><span>ALERT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>METRIC</span><span>STATUS</span>
                     </div>
                   );
                 }
                 const d = describe(r);
                 return (
                   <div key={r._id} style={{ ...cols, fontSize: 12.5 }}>
-                    <Thumb r={r} width={132} onOpen={() => setOpenId(r._id)} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                      <Thumb r={r} width={168} onOpen={() => setOpenId(r._id)} />
+                      <ImageDownload row={r} onDownload={() => saveImage(r)} busy={downloading[r._id]} style={{ alignSelf: 'flex-end' }} />
+                    </div>
                     <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>{r.id}</span>
                     <TypeTag type={r.type} />
                     <OpBadge op={r.op} code={r.opCode} />
-                    <span style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.station.name}</span>
                     <span style={{ ...mono, fontWeight: 600 }}>{when(r.start)}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: 'block', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.title}</span>
@@ -149,7 +171,6 @@ export default function AlertLogs({ model, rows }) {
                     </span>
                     <span style={{ ...mono, fontWeight: 700 }}>{d.metric}</span>
                     {status(r)}
-                    {r.image ? <a href={mediaUrl(r.image)} target="_blank" rel="noreferrer" title="Open snapshot" style={{ color: 'var(--tx2)' }}><Download size={15} /></a> : <span />}
                   </div>
                 );
               })}
@@ -157,7 +178,7 @@ export default function AlertLogs({ model, rows }) {
           </div>
         </Panel>
       )}
-      <SnapshotPreview items={shown} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
+      <SnapshotPreview items={shown} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} fullscreenOnOpen />
     </>
   );
 }

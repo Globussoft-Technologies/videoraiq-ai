@@ -20,11 +20,12 @@ const ImagePreviewModal = ({
   total = 0,
   zoomControlsPosition = 'right',
   onClose,
+  initialFullscreen = false,
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(initialFullscreen);
   const dragRef = useRef({ startX: 0, startY: 0, panX: 0, panY: 0 });
 
   useEffect(() => {

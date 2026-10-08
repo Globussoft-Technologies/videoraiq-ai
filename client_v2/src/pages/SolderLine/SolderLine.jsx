@@ -13,6 +13,7 @@ import { mono, BAD, OK } from './ui';
 import Overview from './Overview';
 import AlertLogs from './AlertLogs';
 import Reports from './Reports';
+import SolderSummary from './SolderSummary';
 
 const REFRESH_MS = 30000;
 const TABS = [
@@ -39,6 +40,7 @@ export default function SolderLine() {
   const [raw, setRaw] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(0);
 
   const logs = permissions?.logs;
   const canView = typeof logs?.deskSolarShoulderLogs?.view === 'boolean'
@@ -74,8 +76,8 @@ export default function SolderLine() {
 
   const live = model?.isToday;
   return (
-    <div style={{ padding: '18px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid var(--bd)' }}>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 22px', background: 'var(--bg1)', borderBottom: '1px solid var(--bd)' }}>
         {visibleTabs.map((t) => (
           <NavLink key={t.view} to={t.to} end style={({ isActive }) => ({
             display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600,
@@ -88,32 +90,26 @@ export default function SolderLine() {
             )}
           </NavLink>
         ))}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 6 }}>
-          {model && (
-            <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>
-              {model.stations.length} STATION{model.stations.length === 1 ? '' : 'S'} · {model.line.operators} OPERATORS
-            </span>
-          )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, padding: '5px 0' }}>
           {live && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999, border: `1px solid ${OK}66`, background: `${OK}1a` }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: OK, animation: 'vq-blink 1.4s ease-in-out infinite' }} />
               <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: OK }}>LIVE</span>
             </span>
           )}
-          {view !== 'reports' && (
-            <PresetDateRangePicker
-              startDate={range.startDate}
-              endDate={range.endDate}
-              maxDate={today}
-              onRangeChange={({ start, end }) => {
-                const startDate = start ? moment(start).format('YYYY-MM-DD') : today;
-                setRange({ startDate, endDate: end ? moment(end).format('YYYY-MM-DD') : startDate });
-              }}
-            />
-          )}
-        </span>
+          <PresetDateRangePicker
+            startDate={range.startDate}
+            endDate={range.endDate}
+            maxDate={today}
+            onRangeChange={({ start, end }) => {
+              const startDate = start ? moment(start).format('YYYY-MM-DD') : today;
+              setRange({ startDate, endDate: end ? moment(end).format('YYYY-MM-DD') : startDate });
+            }}
+          />
+        </div>
       </div>
 
+      <div style={{ padding: '22px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {error && (
         <div style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${BAD}66`, color: BAD, fontSize: 12.5 }}>
           {error} <button type="button" onClick={() => load()} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>Retry</button>
@@ -125,11 +121,13 @@ export default function SolderLine() {
 
       {loading && !model ? <PageLoader /> : !model ? null : (
         <>
-          {view === 'overview' && <Overview model={model} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
+          <SolderSummary model={model} selected={selected} onSelect={setSelected} />
+          {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
           {view === 'logs' && <AlertLogs model={model} rows={rows} />}
-          {view === 'reports' && <Reports model={model} range={range} today={today} onRangeChange={setRange} />}
+          {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={setRange} />}
         </>
       )}
+      </div>
     </div>
   );
 }

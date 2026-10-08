@@ -294,7 +294,7 @@ export const VIEW_META = {
   'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
-  'solder-line': { title: 'JB Solder Line', sub: 'Desk presence, solder coverage and operator reports' },
+  'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
