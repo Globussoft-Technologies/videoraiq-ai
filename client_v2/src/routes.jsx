@@ -1,4 +1,4 @@
-import { Route } from 'react-router-dom';
+import { Route, useLocation } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
 import HomeRedirect from './layout/HomeRedirect';
 import RequirePermission from './layout/RequirePermission';
@@ -84,6 +84,20 @@ const guard = (permissionKey, permissionSubKey, element) => (
   </RequirePermission>
 );
 
+function SolderLineRoute() {
+  const { pathname } = useLocation();
+  const modulePageKey = pathname.startsWith('/solder-line/reports')
+    ? 'operatorReports'
+    : pathname.startsWith('/solder-line/logs')
+      ? 'solderAlertLogs'
+      : 'solderLine';
+  return (
+    <RequirePermission permissionKey="logs" permissionSubKey="deskSolarShoulderLogs" moduleKey="solarLineQc" modulePageKey={modulePageKey}>
+      <SolderLine />
+    </RequirePermission>
+  );
+}
+
 export const v2Routes = (
   <Route element={<V2Layout />}>
     <Route index element={<HomeRedirect />} />
@@ -154,7 +168,7 @@ export const v2Routes = (
 
     {/* Solar Line QC — Desk Solar Shoulder detection. One route so the
         Overview / Alert Logs / Reports tabs share a single mounted shell. */}
-    <Route path="solder-line/*" element={guard('logs', 'deskSolarShoulderLogs', <SolderLine />)} />
+    <Route path="solder-line/*" element={<SolderLineRoute />} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

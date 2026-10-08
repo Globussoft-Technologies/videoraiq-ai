@@ -30,7 +30,7 @@ function firstVisiblePath(permissions, modules) {
 // this so navigating straight to e.g. /dashboard with dashboard.view === false
 // bounces to the first page the role actually has, instead of rendering it
 // anyway.
-export default function RequirePermission({ permissionKey, permissionSubKey, modulePageKey, children }) {
+export default function RequirePermission({ permissionKey, permissionSubKey, moduleKey = 'mattressMeasurement', modulePageKey, children }) {
   const { permissions, loading, error, refresh } = usePermissions();
   const { modules, loading: modulesLoading } = useModuleConfig();
 
@@ -41,7 +41,7 @@ export default function RequirePermission({ permissionKey, permissionSubKey, mod
   }
 
   const item = { permissionKey, permissionSubKey };
-  if (isItemVisible(item, permissions) && (!modulePageKey || isModuleAllowed({ moduleKey: 'mattressMeasurement', modulePageKey }, modules))) return children;
+  if (isItemVisible(item, permissions) && (!modulePageKey || isModuleAllowed({ moduleKey, modulePageKey }, modules))) return children;
 
   const fallback = firstVisiblePath(permissions, modules);
   return fallback

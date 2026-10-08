@@ -53,7 +53,10 @@ const ClientConfig = () => {
   const [stats, setStats] = useState(null)
   const [detections, setDetections] = useState([])
   const [totalCameras, setTotalCameras] = useState(0)
-  const [modulePermissions, setModulePermissions] = useState({ measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false })
+  const [modulePermissions, setModulePermissions] = useState({
+    mattressMeasurement: { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
+    solarLineQc: { solderLine: false, solderAlertLogs: false, operatorReports: false },
+  })
   const [savingModule, setSavingModule] = useState(false)
 
   // Baseline snapshot to diff against, so Save only PUTs what changed.
@@ -113,7 +116,10 @@ const ClientConfig = () => {
     const data = res?.body?.data ?? res?.data ?? {}
     const dets = Array.isArray(data.detections) ? data.detections : []
     setStats(data.stats || null)
-    setModulePermissions(data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false })
+    setModulePermissions({
+      mattressMeasurement: data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
+      solarLineQc: data.modules?.solarLineQc || { solderLine: false, solderAlertLogs: false, operatorReports: false },
+    })
     setDetections(dets)
     setTotalCameras(data.stats?.totalCameras ?? 0)
     setBaseline({
@@ -221,13 +227,13 @@ const ClientConfig = () => {
 
   const camerasTabDirty = dirtyCameraToggles.length > 0
 
-  const handleModuleChange = async (next) => {
+  const handleModuleChange = async (moduleKey, next) => {
     if (savingModule) return
     const previous = modulePermissions
-    setModulePermissions(next)
+    setModulePermissions({ ...previous, [moduleKey]: next })
     setSavingModule(true)
     try {
-      await updateModuleConfig(adminId, 'mattressMeasurement', next)
+      await updateModuleConfig(adminId, moduleKey, next)
     } catch (err) {
       setModulePermissions(previous)
       notifyApiError(err, 'Failed to save module permissions')

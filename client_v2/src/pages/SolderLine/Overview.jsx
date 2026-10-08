@@ -358,7 +358,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
                   </div>
                   <div style={{ marginTop: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {latest.image && <a href={mediaUrl(latest.image)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, textDecoration: 'none' }}><Download size={13} />Image</a>}
-                    <button type="button" onClick={onOpenLogs} style={btnGhost}>All alert logs →</button>
+                    {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnGhost}>All alert logs →</button>}
                   </div>
                 </div>
               </div>
@@ -399,7 +399,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Chip on={opFilter === 'all'} onClick={() => setOpFilter('all')}>ALL</Chip>
             {s.ops.map((o) => <Chip key={o.i} on={opFilter === String(o.i)} color={o.color} onClick={() => setOpFilter(String(o.i))}>{o.code}</Chip>)}
-            <button type="button" onClick={onOpenLogs} style={btnPrimary}>Logs with snapshots →</button>
+            {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnPrimary}>Logs with snapshots →</button>}
           </span>
         </div>
         <div style={{ overflowX: 'auto' }}>

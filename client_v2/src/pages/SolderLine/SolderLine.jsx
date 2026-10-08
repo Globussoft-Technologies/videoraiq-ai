@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
+import { useModuleConfig } from '@/context/ModuleConfigContext';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
@@ -15,9 +16,9 @@ import Reports from './Reports';
 
 const REFRESH_MS = 30000;
 const TABS = [
-  { view: 'overview', label: 'Overview', to: '/solder-line' },
-  { view: 'logs', label: 'Alert Logs', to: '/solder-line/logs' },
-  { view: 'reports', label: 'Reports', to: '/solder-line/reports' },
+  { view: 'overview', label: 'Overview', to: '/solder-line', modulePageKey: 'solderLine' },
+  { view: 'logs', label: 'Alert Logs', to: '/solder-line/logs', modulePageKey: 'solderAlertLogs' },
+  { view: 'reports', label: 'Reports', to: '/solder-line/reports', modulePageKey: 'operatorReports' },
 ];
 
 /**
@@ -30,6 +31,9 @@ export default function SolderLine() {
   const { pathname } = useLocation();
   const view = TABS.find((t) => t.view !== 'overview' && pathname.startsWith(t.to))?.view || 'overview';
   const { permissions, loading: permissionsLoading } = usePermissions();
+  const { modules } = useModuleConfig();
+  const visibleTabs = TABS.filter((tab) => modules?.solarLineQc?.[tab.modulePageKey] === true);
+  const canOpenLogs = modules?.solarLineQc?.solderAlertLogs === true;
   const today = moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD');
   const [range, setRange] = useState({ startDate: today, endDate: today });
   const [raw, setRaw] = useState(null);
@@ -72,7 +76,7 @@ export default function SolderLine() {
   return (
     <div style={{ padding: '18px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid var(--bd)' }}>
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <NavLink key={t.view} to={t.to} end style={({ isActive }) => ({
             display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600,
             textDecoration: 'none', color: isActive ? 'var(--tx)' : 'var(--tx3)', marginBottom: -1,
@@ -121,7 +125,7 @@ export default function SolderLine() {
 
       {loading && !model ? <PageLoader /> : !model ? null : (
         <>
-          {view === 'overview' && <Overview model={model} onOpenLogs={() => navigate('/solder-line/logs')} />}
+          {view === 'overview' && <Overview model={model} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
           {view === 'logs' && <AlertLogs model={model} rows={rows} />}
           {view === 'reports' && <Reports model={model} range={range} today={today} onRangeChange={setRange} />}
         </>
