@@ -164,6 +164,7 @@ export const initSocket = (server) => {
     sub.subscribe(
       "purchasedCameras:update",
       "detectionAllocation:update",
+      "moduleConfig:update",
       "detectionCatalog:sync",
       (err) => {
         if (err) logger.error(`Failed to subscribe superadmin channels: ${err.message}`);
@@ -189,6 +190,16 @@ export const initSocket = (server) => {
         const update = JSON.parse(message);
         const { adminId, userId } = update;
         if (!adminId) return;
+
+        if (channel === "moduleConfig:update") {
+          // Read the current tenant snapshot so delayed messages cannot replay
+          // older grants over a more recent super-admin change.
+          const admin = await adminModel.findById(adminId).select("moduleConfig").lean();
+          if (admin) {
+            io.emit(`moduleConfig_${adminId}`, { modules: admin.moduleConfig || {} });
+          }
+          return;
+        }
 
         if (channel === "purchasedCameras:update") {
           // Recompute the full snapshot so `remaining` reflects current state, and
