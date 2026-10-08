@@ -259,7 +259,7 @@ export default function LiveWallGrid() {
   const [search,     setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState(''); // '' | 'live' | 'offline'
   const [fullscreen, setFullscreen] = useState(null);
-  const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
+  const [isPageFS,   setIsPageFS]   = useState(() => !!document.fullscreenElement); // browser fullscreen
   const pageRef = useRef(null);
 
   /* â”€â”€ Multi-select filters (all arrays of ids/values) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -436,11 +436,21 @@ export default function LiveWallGrid() {
   }, []);
   const closeFullscreen = useCallback(() => {
     setFullscreen(null);
-    if ((autoPageFsRef.current || document.fullscreenElement === pageRef.current) && document.fullscreenElement) {
+    if ((autoPageFsRef.current || document.fullscreenElement === pageRef.current || document.fullscreenElement === document.documentElement) && document.fullscreenElement) {
       document.exitFullscreen?.();
     }
     autoPageFsRef.current = false;
   }, []);
+
+  // Search deep-links can open the camera overlay without browser fullscreen.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeFullscreen();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fullscreen, closeFullscreen]);
 
   /* Browser fullscreen toggle */
   function togglePageFullscreen() {
@@ -480,6 +490,7 @@ export default function LiveWallGrid() {
         setFullscreen(null);
       }
     };
+    setIsPageFS(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', h);
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);

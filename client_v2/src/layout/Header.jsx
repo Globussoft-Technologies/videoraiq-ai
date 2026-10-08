@@ -417,6 +417,12 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       || (r.kind === 'Detection' && assignedDetectionIndex.some((detection) => detection.to === r.to))
     );
     if (!allowed) return;
+    if (r.kind === 'Camera' && !document.fullscreenElement) {
+      // Request during selection; the Live Wall page may still need to mount.
+      document.documentElement.requestFullscreen?.().catch(() => {
+        // Keep the camera overlay available if fullscreen is denied.
+      });
+    }
     navigate(r.to, r.state ? { state: r.state } : undefined);
     setSearchOpen(false);
     setQuery('');
