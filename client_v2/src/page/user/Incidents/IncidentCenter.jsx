@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
+import { nowInConfiguredTimezone } from '../../../utils/timezone';
 import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -1475,8 +1476,8 @@ export default function IncidentCenter() {
   const [detTypes,   setDetTypes]   = useState(() => new Set());
   const [sevSet,     setSevSet]     = useState(() => new Set(initialSeverityFilter ? [initialSeverityFilter] : []));
   const [statusSet,  setStatusSet]  = useState(() => new Set(initialStatusFilter ? [initialStatusFilter] : []));
-  const [dateFrom,   setDateFrom]   = useState(() => initialDate || '');
-  const [dateTo,     setDateTo]     = useState(() => initialDate || '');
+  const [dateFrom,   setDateFrom]   = useState(() => initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
+  const [dateTo,     setDateTo]     = useState(() => initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
   const [nvrIds,     setNvrIds]     = useState([]);
   const [channelIds, setChannelIds] = useState([]);
   const [deptIds,    setDeptIds]    = useState([]);

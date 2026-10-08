@@ -522,7 +522,8 @@ const VehicleCheckInOutLogs = () => {
           </div>
 
           <span className="text-[11px] text-[var(--tx3)] ml-auto">
-            {totalCount} vehicle{totalCount === 1 ? '' : 's'} · {inCustodyCount} in custody
+            {totalCount} vehicle{totalCount === 1 ? '' : 's'}
+            {custody === '' && <> · {inCustodyCount} in custody</>}
           </span>
         </div>
 
