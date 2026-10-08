@@ -59,7 +59,7 @@ const detections = [
   // { name: 'Vehicle Traffic Obstruction', subtitle: 'Blockage', category: 'vehicles', color: '#7c3aed', settingType: 'vehicleObstructionSettings' },
   { name: 'PPE Detection', subtitle: 'Hard hat / vest', category: 'safety', color: '#f59e0b', settingType: 'personalProtectiveEquipmentSettings' },
   { name: 'Food Service PPE Detection', subtitle: 'Hygiene', category: 'safety', color: '#f6a51a', settingType: 'foodServicePPEDetectionSettings' },
-  { name: 'Fire & Smoke Detection', subtitle: 'Hazard', category: 'safety', color: '#fb923c' },
+  { name: 'Fire & Smoke Detection', subtitle: 'Hazard', category: 'safety', color: '#fb923c', settingType: 'fireSmokeDetectionSettings' },
   { name: 'Desk Absence Detection', subtitle: 'Workstation', category: 'workplace', color: '#38c5dd', settingType: 'deskAbsenceSettings' },
   { name: 'Guard Absence Detection', subtitle: 'Post coverage', category: 'workplace', color: '#22c7d8', settingType: 'guardAbsenceSettings' },
   { name: 'Restaurant Table Occupancy', subtitle: 'Seating', category: 'workplace', color: '#06b6d4', settingType: 'tableOccupancyDetectionSettings' },
@@ -2332,6 +2332,7 @@ export default function LiveDemo({ active = true }) {
   const clipInputRef = useRef(null);
   const videoRef = useRef(null);
   const stageRef = useRef(null);
+  const detectionListRef = useRef(null);
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
   const [videoRect, setVideoRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const [drawing, setDrawing] = useState(false);
@@ -2351,6 +2352,7 @@ export default function LiveDemo({ active = true }) {
   // response, never from live edits in the Zone Settings panel, so the label
   // on screen never gets ahead of what the server actually has.
   const [confirmedZoneNames, setConfirmedZoneNames] = useState([]);
+  const [configurationComplete, setConfigurationComplete] = useState(false);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
   const [zoneActionBusy, setZoneActionBusy] = useState(false);
   // Which settingType the in-flight /process job was submitted for — read by
@@ -2451,6 +2453,12 @@ export default function LiveDemo({ active = true }) {
     if (!active) videoRef.current?.pause();
   }, [active]);
 
+  useEffect(() => {
+    if (active && detectionListRef.current) {
+      detectionListRef.current.scrollTop = 0;
+    }
+  }, [active]);
+
   // Loads one Live Demo record into every component on the page: video player,
   // zones, session analytics, and (scoped to that record's video) the matched
   // alerts / attendance log / incidents panels. Shared by the mount-restore
@@ -2505,6 +2513,11 @@ export default function LiveDemo({ active = true }) {
     setVideoRecord(record);
     setRecordVideos(videos);
     setClipStatus(nextStatus);
+    const configured = ready || restoredZones.length > 0 || (
+      String(latestSaved?.recordId || '') === String(recordId)
+      && latestSaved?.configurationComplete === true
+    );
+    setConfigurationComplete(configured);
     setClipProgress(ready || nextStatus === 'uploaded' ? 100 : 75);
     savedZonesRef.current = restoredZones;
     setSavedZones(restoredZones);
@@ -2517,6 +2530,7 @@ export default function LiveDemo({ active = true }) {
       videoRecord: record,
       videos,
       status: nextStatus,
+      configurationComplete: configured,
       settingType,
       uploadedVideoPath: video?.videoUrl || readLiveDemoSession()?.uploadedVideoPath || '',
     });
@@ -2576,12 +2590,9 @@ export default function LiveDemo({ active = true }) {
     }
 
     const recordId = saved.recordId || recordIdOf(saved.videoRecord);
-    // Only an actively in-flight processing job is worth resuming on landing —
-    // an already-uploaded-but-unsubmitted clip or an already-finished ('ready')
-    // run should not block the empty upload state; finished runs live in
-    // Recent Demos instead.
-    const isActiveJob = saved.status === 'processing' || saved.status === 'awaiting-ds';
-    if (!recordId || !saved.uploadedVideoPath || !isActiveJob) {
+    // Restore the active clip at every saved stage; server data determines
+    // whether it is configured, still processing, or ready for review.
+    if (!recordId || !saved.uploadedVideoPath) {
       clearLiveDemoSession();
       return;
     }
@@ -2601,6 +2612,7 @@ export default function LiveDemo({ active = true }) {
     setRecordVideos(saved.videos || saved.videoRecord?.videos || []);
     setMatchedAlerts(Array.isArray(saved.matchedAlerts) ? saved.matchedAlerts : []);
     setClipStatus(saved.status);
+    setConfigurationComplete(saved.configurationComplete === true);
     setClipProgress(75);
 
     loadDemoRecord(recordId, { fallbackRecord: saved.videoRecord, fallbackStatus: saved.status, fallbackVideos: saved.videos })
@@ -2866,6 +2878,7 @@ export default function LiveDemo({ active = true }) {
     setUploadedVideoPath('');
     setUploadedVideoUrl('');
     setVideoRecord(null);
+    setConfigurationComplete(false);
     setRecordVideos([]);
     setSessionAnalytics(null);
     setProcessJob(null);
@@ -3157,6 +3170,16 @@ export default function LiveDemo({ active = true }) {
     setZoneSettings(syncZoneSettings(confirmedConfigs, confirmedZones.length, zoneNoun));
     setConfirmedZoneNames(confirmedConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
     setDrawing(false);
+    setConfigurationComplete(confirmedZones.length > 0);
+    updateLiveDemoSession({
+      adminId: user?.adminId,
+      recordId,
+      videoRecord: record,
+      videos: videosData?.videos || record?.videos || [],
+      uploadedVideoPath,
+      settingType: detectionKey,
+      configurationComplete: confirmedZones.length > 0,
+    });
   };
 
   const handleDeleteZone = (index) => {
@@ -3549,6 +3572,8 @@ export default function LiveDemo({ active = true }) {
         detectors: [{ name: selected.settingType }],
       });
       setProcessJob(job?.job || job);
+      setConfigurationComplete(true);
+      updateLiveDemoSession({ configurationComplete: true });
       const estimate = Number(job?.job?.estimated_completion_seconds);
       // Budget = estimated_completion_seconds + 20%. The loader counts down from
       // this same value and the job is aborted once it elapses.
@@ -3611,7 +3636,9 @@ export default function LiveDemo({ active = true }) {
 
           <div data-tour="demo-steps" className="flex items-center gap-4">
             {steps.map(([number, label], index) => {
-              const active = index <= 1;
+              const reviewComplete = recordVideos.some((video) => video?.dsVideoUrl);
+              const active = index <= 1 || (index === 2 && (configurationComplete || reviewComplete)) || (index === 3 && reviewComplete);
+              const completed = (index === 2 && (configurationComplete || reviewComplete)) || (index === 3 && reviewComplete);
               return (
                 <div key={label} className="flex items-center gap-2 text-xs font-semibold text-[var(--tx3)]">
                   <span
@@ -3619,7 +3646,7 @@ export default function LiveDemo({ active = true }) {
                       active ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white' : 'border border-[var(--bd2)] text-[var(--tx3)]'
                     }`}
                   >
-                    {number}
+                    {completed ? <Check className="h-3.5 w-3.5" /> : number}
                   </span>
                   <span className={active ? 'text-[var(--tx)]' : ''}>{label}</span>
                 </div>
@@ -3691,7 +3718,7 @@ export default function LiveDemo({ active = true }) {
                 </div>
               </div>
 
-              <div data-tour="demo-models" className="grid max-h-[258px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div ref={detectionListRef} data-tour="demo-models" className="grid max-h-[258px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredDetections.map((item) => {
                   const selectedCard = selectedDetection === item.name;
                   return (

@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// Route components unmount during navigation. Opt-in entries in this module
+// cache survive those unmounts for the lifetime of the SPA, which lets a
+// returning screen render its last successful response while it revalidates.
+const responseCache = new Map();
+
 /**
  * Generic data-fetching hook with loading / error / empty handling and refetch.
  *
  * @param {Function} fetcher  async () => data  (memoize with useCallback at call site)
  * @param {Array}    deps     dependency list that triggers a refetch
- * @param {Object}   opts     { enabled, initialData, pollMs }
+ * @param {Object}   opts     { enabled, initialData, pollMs, cacheKey }
  */
 export function useApi(fetcher, deps = [], opts = {}) {
-  const { enabled = true, initialData = null, pollMs = 0 } = opts;
-  const [data, setData] = useState(initialData);
-  const [loading, setLoading] = useState(enabled);
+  const { enabled = true, initialData = null, pollMs = 0, cacheKey = '' } = opts;
+  const hasCachedData = !!cacheKey && responseCache.has(cacheKey);
+  const [data, setData] = useState(() => (
+    hasCachedData ? responseCache.get(cacheKey) : initialData
+  ));
+  const [loading, setLoading] = useState(enabled && !hasCachedData);
   const [error, setError] = useState(null);
+  const previousCacheKey = useRef(cacheKey);
   const mounted = useRef(true);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
@@ -31,7 +40,10 @@ export function useApi(fetcher, deps = [], opts = {}) {
     setError(null);
     try {
       const result = await fetcherRef.current();
-      if (mounted.current && requestId === requestIdRef.current) setData(result);
+      if (mounted.current && requestId === requestIdRef.current) {
+        if (cacheKey) responseCache.set(cacheKey, result);
+        setData(result);
+      }
     } catch (err) {
       if (mounted.current && requestId === requestIdRef.current) setError(err);
       // eslint-disable-next-line no-console
@@ -40,15 +52,24 @@ export function useApi(fetcher, deps = [], opts = {}) {
       if (mounted.current && requestId === requestIdRef.current && !silent) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [enabled, cacheKey]);
 
   useEffect(() => {
     mounted.current = true;
-    run();
+    if (previousCacheKey.current !== cacheKey) {
+      setData(cacheKey && responseCache.has(cacheKey) ? responseCache.get(cacheKey) : initialData);
+      setLoading(enabled && !(cacheKey && responseCache.has(cacheKey)));
+      previousCacheKey.current = cacheKey;
+    }
+    // Cached data is already useful UI. Refresh it in the background instead
+    // of making the screen look empty (or, worse, showing false/zero defaults).
+    run({ silent: !!cacheKey && responseCache.has(cacheKey) });
     let id;
     if (pollMs > 0) id = setInterval(run, pollMs);
     return () => {
       mounted.current = false;
+      // Also invalidate requests when an enabled flag or cache scope changes.
+      requestIdRef.current += 1;
       if (id) clearInterval(id);
     };
     // `enabled` must be tracked here, not just inside run() — callers like
@@ -59,7 +80,7 @@ export function useApi(fetcher, deps = [], opts = {}) {
     // mount (deps like [page, search] don't change), so data never loads
     // until something else changes deps — e.g. a hard refresh never fetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, enabled]);
+  }, [...deps, enabled, cacheKey]);
 
   const isEmpty =
     !loading &&

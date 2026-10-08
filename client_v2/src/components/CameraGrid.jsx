@@ -11,6 +11,9 @@ import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/m
 import { fetchIncidentById } from '../helpers/incidents';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import moment from 'moment-timezone';
+import { useTimezone } from '../context/TimezoneContext';
+import { getConfiguredTimezone } from '../utils/timezone';
 
 /* Camera-type maps to the channel `checkType` field on the backend. */
 const CAM_TYPE_OPTIONS = [
@@ -79,7 +82,7 @@ const INCIDENT_PREVIEW_PREROLL_MS = 10 * 1000;
 
 /** Local YYYY-MM-DD for a Date — matches an <input type="date"> value, not UTC-shifted. */
 function toDateInputValue(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return moment(date).tz(getConfiguredTimezone()).format('YYYY-MM-DD');
 }
 
 function PlaybackEmptyState() {
@@ -132,6 +135,7 @@ function PlaybackEmptyState() {
 }
 
 export default function CameraGrid() {
+  const { timezone } = useTimezone();
   const ctx      = useOutletContext() || {};
   const ctxLoc   = ctx.location || '';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -148,8 +152,7 @@ export default function CameraGrid() {
     // Give incident previews enough lead-in to show what caused the event.
     // Keep playback on the incident's selected day when an event occurs during
     // its first ten seconds instead of rolling the timeline into yesterday.
-    const incidentDayStart = new Date(incidentAt);
-    incidentDayStart.setHours(0, 0, 0, 0);
+    const incidentDayStart = moment(incidentAt).tz(timezone).startOf('day').toDate();
     const previewAt = new Date(Math.max(
       incidentDayStart.getTime(),
       incidentAt.getTime() - INCIDENT_PREVIEW_PREROLL_MS,
@@ -162,7 +165,7 @@ export default function CameraGrid() {
       throw new Error('Recorded playback is unavailable for this camera.');
     }
     return { incidentId: deepLinkIncidentId, channel, at: previewAt.toISOString() };
-  }, [deepLinkIncidentId], { enabled: Boolean(deepLinkIncidentId) });
+  }, [deepLinkIncidentId, timezone], { enabled: Boolean(deepLinkIncidentId) });
 
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
@@ -170,11 +173,15 @@ export default function CameraGrid() {
   const [dateStr,    setDateStr]    = useState(() => toDateInputValue(new Date())); // playback date, YYYY-MM-DD
   const pageRef = useRef(null);
 
-  const todayStr = useMemo(() => toDateInputValue(new Date()), []);
-  const playbackDate = useMemo(() => {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }, [dateStr]);
+  const todayStr = moment().tz(timezone).format('YYYY-MM-DD');
+  const previousTimezone = useRef(timezone);
+  useEffect(() => {
+    if (previousTimezone.current !== timezone) {
+      setDateStr(moment().tz(timezone).format('YYYY-MM-DD'));
+      previousTimezone.current = timezone;
+    }
+  }, [timezone]);
+  const playbackDate = useMemo(() => moment.tz(dateStr, 'YYYY-MM-DD', timezone).toDate(), [dateStr, timezone]);
 
   /* ── Multi-select filters (all arrays of ids/values) ────────────── */
   const [selLoc,  setSelLoc]  = useState([]); // location names

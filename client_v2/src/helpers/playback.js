@@ -2,6 +2,8 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
 import getStreamHost from '@/utils/getStreamHost';
+import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '../utils/timezone';
 
 const Api_url = import.meta.env.VITE_BACKEND;
 
@@ -36,23 +38,12 @@ function resolveStreamUrl(playbackUrl) {
 }
 
 /**
- * Compact timestamp (YYYYMMDDTHHmmssZ) encoding LOCAL wall-clock time — the
- * trailing "Z" is a literal suffix in this format, not a UTC marker. Matches
- * V1's TimelineBar.jsx:formatToApiTime(), which uses local getters
- * (getFullYear/getHours/...), not toISOString(). Using true UTC here (as
- * toISOString() would) shifts every request by the browser's UTC offset
- * (e.g. -5:30 in IST), silently requesting the wrong recording window.
+ * Legacy compact timestamp encoding admin wall-clock time. The trailing Z
+ * is a literal protocol suffix, not a UTC marker. Browser timezone must not
+ * influence this value. Device-specific zones require a backend adapter.
  */
 export function toCompactLocalTime(date) {
-  const d = new Date(date);
-  const pad = (n) => String(n).padStart(2, '0');
-  const y = d.getFullYear();
-  const mo = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-  const h = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  const s = pad(d.getSeconds());
-  return `${y}${mo}${day}T${h}${mi}${s}Z`;
+  return moment(date).tz(getConfiguredTimezone()).format('YYYYMMDD[T]HHmmss[Z]');
 }
 
 /**
@@ -129,13 +120,22 @@ export const getPlaybackThumbnail = async ({
   return res.data;
 };
 
+// Explicit offsets are absolute instants. Legacy device responses without an
+// offset use the admin zone until device-specific timezone metadata exists.
+function parseRecordingTime(value) {
+  if (!value) return new Date(NaN);
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(value))
+    ? new Date(value)
+    : moment.tz(value, getConfiguredTimezone()).toDate();
+}
+
 /** Normalize the Hikvision CMSearchResult XML (parsed via xml2js, explicitArray:false) into [{start,end}]. */
 export function normalizeRecordingSegments(timeline) {
   if (Array.isArray(timeline?.segments)) {
     return timeline.segments
       .map((segment) => {
-        const start = new Date(segment?.startTime);
-        const end = new Date(segment?.endTime);
+        const start = parseRecordingTime(segment?.startTime);
+        const end = parseRecordingTime(segment?.endTime);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
         return { start, end };
       })
@@ -148,8 +148,8 @@ export function normalizeRecordingSegments(timeline) {
     .map((it) => {
       const span = it?.timeSpan;
       if (!span?.startTime || !span?.endTime) return null;
-      const start = new Date(span.startTime);
-      const end = new Date(span.endTime);
+      const start = parseRecordingTime(span.startTime);
+      const end = parseRecordingTime(span.endTime);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
       return { start, end };
     })

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import moment from 'moment-timezone';
+import { useTimezone } from '../context/TimezoneContext';
 import { Play, Pause, ChevronLeft, ChevronRight, Maximize2, Minimize2, SkipBack, SkipForward, RotateCcw, RotateCw } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
 import BufferingIndicator from './BufferingIndicator';
@@ -28,6 +30,9 @@ const MANIFEST_RETRY_LIMIT = 20;
 const SECURUS_MANIFEST_RETRY_LIMIT = 4;
 const SECURUS_RECOVERY_DELAY_MS = 500;
 const SECURUS_RECOVERY_LIMIT = 3;
+const DAHUA_MANIFEST_RETRY_LIMIT = 4;
+const DAHUA_RECOVERY_DELAY_MS = 500;
+const DAHUA_RECOVERY_LIMIT = 3;
 const PLAYBACK_PREVIEW_CACHE_LIMIT = 100;
 const PLAYBACK_PREVIEW_WINDOW_MS = 5 * 1000;
 const HONEYWELL_MUTEX_RETRY_MS = 5000;
@@ -43,10 +48,8 @@ function fmtClock(ms) {
 }
 
 /** Midnight (local time) for the given date, as a Date. */
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+function startOfDay(date, timezone) {
+  return moment(date).tz(timezone).startOf('day').toDate();
 }
 
 /**
@@ -55,6 +58,7 @@ function startOfDay(date) {
  * Enhanced with 24-hour down to 5-minute time-scale zoom and actual video frame thumbnails.
  */
 export default function PlaybackTimeline({ channel, date = new Date(), initialAt, onPrev, onNext, onExpand, isExpanded }) {
+  const { timezone } = useTimezone();
   const themeContext = useTheme();
   const isDark = themeContext?.isDark ?? (typeof document !== 'undefined' && (
     document.documentElement.classList.contains('dark') ||
@@ -66,7 +70,11 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   const camName = channel?.customName || channel?.name || 'Camera';
   const camSite = channel?.location || channel?.locationName || channel?.site || '';
   const nvrId = channel?.nvrId?._id || channel?.nvrId;
-  const day = useMemo(() => startOfDay(date), [date]);
+  const nvrBrand = String(
+    channel?.nvrId?.brand || channel?.nvrBrand || channel?.brand || '',
+  ).trim().toLowerCase();
+  const isDahuaProtocolNvr = nvrBrand === 'dahua' || nvrBrand === 'cpplus';
+  const day = useMemo(() => startOfDay(date, timezone), [date, timezone]);
   const initialOffsetMs = useMemo(() => {
     if (!initialAt) return null;
     const offset = new Date(initialAt).getTime() - day.getTime();
@@ -118,12 +126,18 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   // manual Play already fixes that by opening a new backend session; keep a
   // bounded automatic equivalent so normal playback does not require a click.
   const securusRecoveriesRef = useRef(0);
+  // Dahua and CP Plus use the same recorder protocol. Their stream-server HLS
+  // session can occasionally stop producing segments even though the NVR is
+  // still serving the recording. Recreate that session transparently before
+  // asking the user to press Play.
+  const dahuaRecoveriesRef = useRef(0);
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
       onPlaying: (value) => {
         if (value) dashRecoveriesRef.current = 0;
         if (value) securusRecoveriesRef.current = 0;
+        if (value) dahuaRecoveriesRef.current = 0;
         playbackProgressRef.current.playing = value;
         setPlaying(value);
       },
@@ -156,6 +170,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     setThumbnailCache(new Map());
     loadedRangeMsRef.current = null;
     securusRecoveriesRef.current = 0;
+    dahuaRecoveriesRef.current = 0;
   }, [channelId, +day]);
 
   useEffect(() => () => {
@@ -169,7 +184,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     let cancelled = false;
     setLoadingMeta(true);
 
-    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    const dateStr = moment(day).tz(timezone).format('YYYY-MM-DD');
     const endOfDay = new Date(day.getTime() + DAY_MS - 1);
 
     Promise.allSettled([
@@ -186,7 +201,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     });
 
     return () => { cancelled = true; };
-  }, [channelId, nvrId, +day, channel?.channelId]);
+  }, [channelId, nvrId, +day, channel?.channelId, timezone]);
 
   // Pre-populate thumbnail cache from real incident frames
   useEffect(() => {
@@ -275,7 +290,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     streamStartMsRef.current = requestedMs;
     clockAnchoredRef.current = false;
     fragmentAnchorsRef.current = [];
-    playlistClockRef.current = createPlaylistClock(requestedMs);
+    playlistClockRef.current = createPlaylistClock(requestedMs, day.getTime());
     setVideoState('loading');
     scrubTimerRef.current = setTimeout(async () => {
       const startTime = new Date(day.getTime() + requestedMs);
@@ -403,6 +418,35 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       }, SECURUS_RECOVERY_DELAY_MS);
       return true;
     };
+    const recoverDahuaPlayback = () => {
+      if (!isDahuaProtocolNvr || !isCurrent() ||
+          !transportRef.current?.wantsPlayback ||
+          dahuaRecoveriesRef.current >= DAHUA_RECOVERY_LIMIT) {
+        return false;
+      }
+
+      // Requesting playback again makes the stream server replace the failed
+      // Dahua/CP Plus HLS session. Resume from the frame the user had reached,
+      // so this behaves like an invisible Play retry rather than a new seek.
+      const resumeAtMs = Math.min(
+        DAY_MS - 1,
+        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
+      );
+      dahuaRecoveriesRef.current += 1;
+      failed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      playbackProgressRef.current = { playing: false, buffering: true };
+      setPlaying(false);
+      setBuffering(true);
+      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      retryTimer = setTimeout(() => {
+        if (!cancelled && seekToken === seekTokenRef.current &&
+            transportRef.current?.wantsPlayback) {
+          loadAtRef.current?.(resumeAtMs);
+        }
+      }, DAHUA_RECOVERY_DELAY_MS);
+      return true;
+    };
 
     // Honeywell/TVT NVRs serve recordings as DASH (.mpd), not HLS — a static,
     // finite manifest (no live edge), so dash.js's own timeline is already
@@ -492,7 +536,9 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
           const status = data?.response?.status || data?.networkDetails?.status;
           const retryLimit = isSecurusPlayback
             ? SECURUS_MANIFEST_RETRY_LIMIT
-            : MANIFEST_RETRY_LIMIT;
+            : isDahuaProtocolNvr
+              ? DAHUA_MANIFEST_RETRY_LIMIT
+              : MANIFEST_RETRY_LIMIT;
           if (status === 404 && attempts < retryLimit) {
             attempts += 1;
             playbackProgressRef.current = { playing: false, buffering: true };
@@ -503,6 +549,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
             return;
           }
           if (recoverSecurusPlayback()) return;
+          if (recoverDahuaPlayback()) return;
           failPlayback();
         });
       };
@@ -517,7 +564,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
       else { video.removeAttribute('src'); video.load(); }
     };
-  }, [videoUrl, day, sourceRevision]);
+  }, [videoUrl, day, sourceRevision, isDahuaProtocolNvr]);
 
   // Fullscreen must preserve the current source and the user's play/pause intent.
   useEffect(() => {

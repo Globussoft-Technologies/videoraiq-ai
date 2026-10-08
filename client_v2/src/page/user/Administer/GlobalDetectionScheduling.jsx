@@ -51,6 +51,7 @@ const SCHEDULER_LAG_NOTE =
   'Schedule changes are applied by the existing detection scheduler on its next run — normally within about 1 minute.';
 
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+const nvrListCache = new Map();
 const TIME_HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
 const TIME_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
 
@@ -875,14 +876,15 @@ function ApplyToAllDaysButton({ options, onPick, disabled, title }) {
   );
 }
 
-export default function GlobalDetectionScheduling({ canEdit = true }) {
+export default function GlobalDetectionScheduling({ canEdit = true, cacheScope = 'current-user' }) {
   const { timezone } = useTimezone();
   // Subscribed panel-wide, not per NVR: transitions for any camera are
   // worth seeing while verifying.
   const { events: scheduleEvents, clear: clearScheduleEvents } = useDetectionScheduleEvents();
 
-  const [nvrs, setNvrs] = useState([]);
-  const [nvrsLoading, setNvrsLoading] = useState(true);
+  const cachedNvrs = nvrListCache.get(cacheScope);
+  const [nvrs, setNvrs] = useState(() => cachedNvrs || []);
+  const [nvrsLoading, setNvrsLoading] = useState(!cachedNvrs);
   const [selectedNvrId, setSelectedNvrId] = useState('');
 
   const [nvrData, setNvrData] = useState(null);
@@ -911,13 +913,18 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
   useEffect(() => {
     let alive = true;
     getNvrs(0, 200)
-      .then((result) => alive && setNvrs(result?.nvrs || []))
+      .then((result) => {
+        if (!alive) return;
+        const nextNvrs = result?.nvrs || [];
+        nvrListCache.set(cacheScope, nextNvrs);
+        setNvrs(nextNvrs);
+      })
       .catch((error) => alive && toast.error(globalScheduleErrorMessage(error, 'Failed to load NVRs')))
       .finally(() => alive && setNvrsLoading(false));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [cacheScope]);
 
   /**
    * With no NVR picked yet (or after closing out of one back to the picker),
@@ -929,11 +936,15 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     if (selectedNvrId) return undefined;
     const interval = setInterval(() => {
       getNvrs(0, 200)
-        .then((result) => setNvrs(result?.nvrs || []))
+        .then((result) => {
+          const nextNvrs = result?.nvrs || [];
+          nvrListCache.set(cacheScope, nextNvrs);
+          setNvrs(nextNvrs);
+        })
         .catch(() => {});
     }, 30000);
     return () => clearInterval(interval);
-  }, [selectedNvrId]);
+  }, [selectedNvrId, cacheScope]);
 
   const nvrLabels = useMemo(
     () => nvrs.map((nvr) => nvr.nvrName || nvr.deviceName || nvr._id),

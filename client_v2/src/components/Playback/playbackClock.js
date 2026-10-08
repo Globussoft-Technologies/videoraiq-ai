@@ -27,17 +27,19 @@ export function observePlaybackClock(video, { canAdvance, onTime }) {
 }
 
 // Use the fragment being played, never a fragment merely downloaded ahead.
-export function fragmentClockOffset(fragment) {
+export function fragmentClockOffset(fragment, dayStart = null) {
   if (fragment?.programDateTime == null || !Number.isFinite(fragment.start)) return null;
   const date = new Date(fragment.programDateTime);
   if (!Number.isFinite(date.getTime())) return null;
-  const wallTime = ((date.getHours() * 60 + date.getMinutes()) * 60 + date.getSeconds()) * 1000 + date.getMilliseconds();
+  const wallTime = dayStart !== null
+    ? date.getTime() - dayStart
+    : ((date.getHours() * 60 + date.getMinutes()) * 60 + date.getSeconds()) * 1000 + date.getMilliseconds();
   return wallTime - fragment.start * 1000;
 }
 
 // Keep recording time by segment identity: HLS can rebase media time to zero
 // when a retry opens a rolling playlist whose earlier segments have expired.
-export function createPlaylistClock(requestedTime) {
+export function createPlaylistClock(requestedTime, dayStart = null) {
   const segments = new Map();
   const key = (fragment) => `${fragment.level ?? 0}:${fragment.cc ?? 0}:${fragment.sn}`;
   const valid = (fragment) => Number.isFinite(fragment?.sn) && Number.isFinite(fragment.start) && Number.isFinite(fragment.duration) && fragment.duration > 0;
@@ -58,7 +60,7 @@ export function createPlaylistClock(requestedTime) {
         if (previous) offset = previous.time + previous.duration * 1000 - first.start * 1000;
       }
       for (const fragment of fragments) {
-        const explicitOffset = fragmentClockOffset(fragment);
+        const explicitOffset = fragmentClockOffset(fragment, dayStart);
         const recordingOffset = explicitOffset ?? offset;
         if (!Number.isFinite(recordingOffset)) continue;
         const id = key(fragment);
@@ -70,7 +72,7 @@ export function createPlaylistClock(requestedTime) {
       // A long VOD playlist may include thousands of segments ahead of playback.
     },
     offset(fragment) {
-      const explicitOffset = fragmentClockOffset(fragment);
+      const explicitOffset = fragmentClockOffset(fragment, dayStart);
       if (explicitOffset !== null) return explicitOffset;
       if (!valid(fragment)) return null;
       const segment = segments.get(key(fragment));

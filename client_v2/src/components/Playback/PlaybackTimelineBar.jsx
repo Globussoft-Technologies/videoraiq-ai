@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import moment from 'moment-timezone';
+import { useTimezone } from '../../context/TimezoneContext';
 import { createPortal } from 'react-dom';
 import { ZoomIn, ZoomOut, Clock, ShieldAlert } from 'lucide-react';
 import { useTheme } from '../../theme/ThemeContext';
@@ -197,6 +199,7 @@ export default function PlaybackTimelineBar({
   onFutureSeekAttempt,
   onPreviewRequest,
 }) {
+  const { timezone } = useTimezone();
   const themeContext = useTheme();
   const isDark = themeContext?.isDark ?? (typeof document !== 'undefined' && (
     document.documentElement.classList.contains('dark') ||
@@ -225,10 +228,8 @@ export default function PlaybackTimelineBar({
   const [previewPosition, setPreviewPosition] = useState({ left: 8, bottom: 8, maxHeight: 'calc(100vh - 16px)', width: 300 });
 
   const dayStart = useMemo(() => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }, [date]);
+    return moment(date).tz(timezone).startOf('day').valueOf();
+  }, [date, timezone]);
 
   const incidentMarkers = useMemo(() => events.flatMap((event, index) => {
     if (!event?.timeOfIncident) return [];
@@ -734,7 +735,7 @@ export default function PlaybackTimelineBar({
             <span>24-Hour Playback Timeline</span>
           </div>
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[11px] border" style={{ backgroundColor: isDark ? 'var(--bg2)' : '#f1f5f9', color: isDark ? '#cbd5e1' : '#000000', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)' }}>
-            <span>{new Date(dayStart).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            <span>{new Date(dayStart).toLocaleDateString(undefined, { timeZone: timezone, day: '2-digit', month: 'short', year: 'numeric' })} ({timezone})</span>
             <span className="opacity-40">·</span>
             <span className="font-semibold text-violet-600 dark:text-violet-400">{formatClock(cursorMs, true)}</span>
           </div>

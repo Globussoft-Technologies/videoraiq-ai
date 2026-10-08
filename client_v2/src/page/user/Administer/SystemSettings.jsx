@@ -615,6 +615,10 @@ export default function SystemSettings() {
   const isAdmin = !user?.memberId;
   const { permissions } = usePermissions();
   const { setTimezone: setGlobalTimezone } = useTimezone();
+  const settingsCacheScope = String(
+    user?.memberId || user?._id || user?.id || user?.userId || user?.user_id || user?.email || 'current-user'
+  );
+  const settingsCacheKey = (resource) => `settings:${settingsCacheScope}:${resource}`;
   const settingsPermissions = permissions?.settings || {};
   const hasSettingsPermission = (key) => settingsPermissions === true || settingsPermissions?.[key] === true;
   const canEditSettings = hasSettingsPermission('edit') || hasSettingsPermission('update');
@@ -626,28 +630,51 @@ export default function SystemSettings() {
   // grant the ability to flip these switches.
   const canEnableSetting = canEditSettings;
   const canDisableSetting = canEditSettings;
-  const adminApi = useApi(() => fetchAdmin(), []);
+  const adminApi = useApi(() => fetchAdmin(), [], { cacheKey: settingsCacheKey('admin') });
   // Same self-service account summary (name, email) shown on My Profile.
   // Admins resolve from their own token (no id needed); sub-users aren't in
   // that tenant summary, so their own /users/fetch record is used instead —
   // same isAdmin split MyProfile.jsx uses.
-  const myAccountApi = useApi(() => fetchMyAccount(), [], { enabled: isAdmin });
+  const myAccountApi = useApi(() => fetchMyAccount(), [], {
+    enabled: isAdmin,
+    cacheKey: settingsCacheKey('my-account'),
+  });
   const selfUserApi = useApi(
     () => fetchAuthorizedUserById(user?.memberId),
     [user?.memberId],
-    { enabled: !isAdmin && !!user?.memberId },
+    {
+      enabled: !isAdmin && !!user?.memberId,
+      cacheKey: settingsCacheKey('self-user'),
+    },
   );
-  const timezoneApi = useApi(() => fetchTimezone(), []);
-  const timezonesApi = useApi(() => getTimezones(), []);
-  const emailRecipientsApi = useApi(() => getRecipients('email', '', 'All', 0, 100), []);
-  const phoneRecipientsApi = useApi(() => getRecipients('phone', '', 'All', 0, 100), []);
-  const telegramApi = useApi(() => getTelegramLinkCode(), [], { pollMs: 10000 });
-  const alertSwitchesApi = useApi(() => getAlertSwitches(), []);
-  const detectionTypesApi = useApi(() => getDetectionTypes(), []);
-  const detectionSettingsApi = useApi(() => getDetectionSettings({ skip: 0, limit: 500 }), []);
-  const channelsApi = useApi(() => getChannels({ skip: 0, limit: 1000 }), []);
+  const timezoneApi = useApi(() => fetchTimezone(), [], { cacheKey: settingsCacheKey('timezone') });
+  const timezonesApi = useApi(() => getTimezones(), [], { cacheKey: settingsCacheKey('timezones') });
+  const emailRecipientsApi = useApi(() => getRecipients('email', '', 'All', 0, 100), [], {
+    cacheKey: settingsCacheKey('email-recipients'),
+  });
+  const phoneRecipientsApi = useApi(() => getRecipients('phone', '', 'All', 0, 100), [], {
+    cacheKey: settingsCacheKey('phone-recipients'),
+  });
+  const telegramApi = useApi(() => getTelegramLinkCode(), [], {
+    pollMs: 10000,
+    cacheKey: settingsCacheKey('telegram-link'),
+  });
+  const alertSwitchesApi = useApi(() => getAlertSwitches(), [], {
+    cacheKey: settingsCacheKey('alert-switches'),
+  });
+  const detectionTypesApi = useApi(() => getDetectionTypes(), [], {
+    cacheKey: settingsCacheKey('detection-types'),
+  });
+  const detectionSettingsApi = useApi(() => getDetectionSettings({ skip: 0, limit: 500 }), [], {
+    cacheKey: settingsCacheKey('detection-settings'),
+  });
+  const channelsApi = useApi(() => getChannels({ skip: 0, limit: 1000 }), [], {
+    cacheKey: settingsCacheKey('channels'),
+  });
 
-  const attendanceSettingsApi = useApi(() => getAttendanceSettings(), []);
+  const attendanceSettingsApi = useApi(() => getAttendanceSettings(), [], {
+    cacheKey: settingsCacheKey('attendance-settings'),
+  });
 
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
@@ -1462,7 +1489,7 @@ export default function SystemSettings() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-        <GlobalDetectionScheduling canEdit={canEditSettings} />
+        <GlobalDetectionScheduling key={settingsCacheScope} canEdit={canEditSettings} cacheScope={settingsCacheScope} />
 
         <Panel>
           <PanelHeader
