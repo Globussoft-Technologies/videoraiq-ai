@@ -5,6 +5,7 @@ import { clock, dur } from './solderLineData';
 import { BAD, WARN, mono, label, Panel, OpBadge, StatusPill, Chip, Waiting, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
+import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const TYPE_META = {
   absence: { label: 'ABSENCE', color: WARN },
@@ -41,7 +42,7 @@ function ImageDownload({ row, onDownload, busy, style }) {
 
 const status = (r) => (r.type === 'missed' ? <StatusPill text="LOGGED" color={WARN} /> : <StatusPill active={r.active} />);
 
-export default function AlertLogs({ model, rows }) {
+export default function AlertLogs({ model, rows, range }) {
   const [type, setType] = useState('all');
   const [op, setOp] = useState('all');
   const [grid, setGrid] = useState(true);
@@ -53,6 +54,8 @@ export default function AlertLogs({ model, rows }) {
   const opCodes = useMemo(() => [...new Set(rows.map((r) => r.opCode))].sort(), [rows]);
   const shown = rows.filter((r) => (type === 'all' || r.type === type)
     && (op === 'all' || r.opCode === op));
+  const pagination = useSolderPagination(shown, JSON.stringify([type, op, range?.startDate, range?.endDate]));
+  const { pageRows } = pagination;
   const when = (m) => (model.singleDay ? clock(m) : m.format('DD MMM HH:mm:ss'));
 
   const exportRows = () => shown.map((r) => {
@@ -100,21 +103,22 @@ export default function AlertLogs({ model, rows }) {
         <Chip on={op === 'all'} onClick={() => setOp('all')}>ALL</Chip>
         {opCodes.map((c) => <Chip key={c} on={op === c} color="var(--blue)" onClick={() => setOp(c)}>{c}</Chip>)}
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{shown.length} SHOWN</span>
+          <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{shown.length} FILTERED</span>
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
           <Chip on={grid} color="var(--blue)" onClick={() => setGrid(true)}><LayoutGrid size={13} />Grid</Chip>
-          <button type="button" disabled={zipBusy || !shown.some((r) => r.image)} onClick={saveZip} title="Download visible snapshots as ZIP" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', borderRadius: 8, cursor: zipBusy ? 'wait' : 'pointer', color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', opacity: shown.some((r) => r.image) ? 1 : 0.5, ...mono, fontSize: 10.5, fontWeight: 700 }}><Download size={13} />{zipBusy ? 'PREPARING ZIP' : 'SNAPSHOTS .ZIP'}</button>
+          <button type="button" disabled={zipBusy || !shown.some((r) => r.image)} onClick={saveZip} title="Download all filtered snapshots as ZIP" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', borderRadius: 8, cursor: zipBusy ? 'wait' : 'pointer', color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', opacity: shown.some((r) => r.image) ? 1 : 0.5, ...mono, fontSize: 10.5, fontWeight: 700 }}><Download size={13} />{zipBusy ? 'PREPARING ZIP' : 'SNAPSHOTS .ZIP'}</button>
           <Chip onClick={() => downloadXlsx(exportRows(), fileName)}>XLSX</Chip>
           <Chip onClick={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: `${shown.length} alerts`, rows: exportRows(), filename: fileName })}>PDF</Chip>
         </span>
       </Panel>
       {downloadError && <div role="alert" style={{ color: BAD, fontSize: 12 }}>{downloadError}</div>}
+      <SolderPagination pagination={pagination} label="Solder Alert Logs" />
 
       {!shown.length ? (
         <Panel><Waiting title="No alerts" minH={200}>No absence or missed-solder alerts match these filters in this date range.</Waiting></Panel>
       ) : grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
-          {shown.map((r) => {
+          {pageRows.map((r) => {
             const d = describe(r);
             return (
               <Panel key={r._id} pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -145,7 +149,7 @@ export default function AlertLogs({ model, rows }) {
         <Panel pad={false}>
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 1040 }}>
-              {[null, ...shown].map((r) => {
+              {[null, ...pageRows].map((r) => {
                 const cols = { display: 'grid', gridTemplateColumns: '168px 76px 116px 90px 110px minmax(0, 1fr) 92px 96px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
                 if (!r) {
                   return (
@@ -178,7 +182,8 @@ export default function AlertLogs({ model, rows }) {
           </div>
         </Panel>
       )}
-      <SnapshotPreview items={shown} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} fullscreenOnOpen />
+      {pagination.totalPages > 1 && <SolderPagination pagination={pagination} label="Solder Alert Logs" />}
+      <SnapshotPreview items={pageRows} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} fullscreenOnOpen />
     </>
   );
 }

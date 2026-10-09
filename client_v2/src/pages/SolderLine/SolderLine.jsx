@@ -123,7 +123,7 @@ export default function SolderLine() {
         <>
           <SolderSummary model={model} selected={selected} onSelect={setSelected} />
           {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
-          {view === 'logs' && <AlertLogs model={model} rows={rows} />}
+          {view === 'logs' && <AlertLogs model={model} rows={rows} range={range} />}
           {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={setRange} />}
         </>
       )}

@@ -8,6 +8,7 @@ import {
   OpBadge, StatusPill, Chip, Waiting, SnapshotPreview, fmt,
 } from './ui';
 import { downloadXlsx } from './exports';
+import LatestPanel from './LatestPanel';
 
 const NO_THROUGHPUT = 'Panel counts and solder times appear here once DS posts its per-panel "Solar panel processing" events.';
 const NO_MISSED = 'Missed-solder alerts appear here when a panel event reports a zone with joints left undone.';
@@ -272,11 +273,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
             </span>
           </div>
           <LiveCamera s={s} />
-          <div style={{ padding: 14 }}>
-            <Waiting title="Current panel" minH={110}>
-              Live P1–P{s.pointsPerPanel} solder status needs a per-panel feed from DS. Panel totals and missed points below fill in from the events DS posts.
-            </Waiting>
-          </div>
+          <LatestPanel panel={s.latestPanel} pointsPerZone={s.pointsPerZone} />
         </Panel>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>

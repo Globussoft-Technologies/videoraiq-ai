@@ -152,7 +152,7 @@ function buildStation(station, data, now) {
   });
 
   return {
-    ...station, zones, ops, absences, missed, hours, hourly, pointRows, pointsPerPanel,
+    ...station, zones, ops, absences, missed, hours, hourly, pointRows, pointsPerPanel, pointsPerZone: perZone,
     windowStart, windowEnd, windowSec,
     sum: {
       panels, joints, missed: missed.length,

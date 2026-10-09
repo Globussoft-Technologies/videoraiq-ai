@@ -5,6 +5,7 @@ import { getConfiguredTimezone } from '@/utils/timezone';
 import { clock, dur } from './solderLineData';
 import { mono, label, Panel, OpBadge, Chip, Waiting } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
+import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const TYPES = [
   { v: 'compare', t: 'Operator comparison', d: 'Presence, soldering and speed, operator by operator' },
@@ -144,6 +145,7 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
   const period = periods(today).find(([, a, b]) => a === range.startDate && b === range.endDate);
   const periodLabel = period ? period[0] : `${range.startDate} → ${range.endDate}`;
   const rows = s ? reportRows(type, s) : [];
+  const pagination = useSolderPagination(rows, JSON.stringify([type, s?._id, range.startDate, range.endDate]));
   const fileName = s ? `solder-line_${s.name}_${type}_${range.startDate}_${range.endDate}`.replace(/\s+/g, '-') : 'solder-line';
   const subtitle = s ? `${s.name} · ${s.zones.join(' & ')} · ${periodLabel}` : periodLabel;
   const btn = (primary) => ({ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: primary ? '#fff' : 'var(--tx)', border: primary ? 'none' : '1px solid var(--bd2)', background: primary ? 'linear-gradient(135deg, #3b82f6, #a855f7)' : 'var(--bg2)' });
@@ -202,7 +204,8 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
           </div>
           <div style={{ padding: '18px 22px' }}>
             {!s ? <Waiting title="No solder-line cameras" minH={200}>Turn on the Desk Solar Shoulder detection on a camera first.</Waiting>
-              : type === 'compare' ? <Compare s={s} /> : <Table rows={rows} />}
+              : type === 'compare' ? <Compare s={s} /> : <Table rows={pagination.pageRows} />}
+            {s && type !== 'compare' && <SolderPagination pagination={pagination} label={typeMeta.t} />}
             {s && type !== 'absence' && !s.sum.hasThroughput && (
               <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx3)' }}>Joint, panel and solder-time figures fill in once DS posts per-panel events.</div>
             )}
