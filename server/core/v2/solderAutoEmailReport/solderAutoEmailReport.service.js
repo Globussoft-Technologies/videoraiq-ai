@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import Joi from 'joi';
 import moment from 'moment-timezone';
 import { randomUUID } from 'node:crypto';
+import sendGridMail from '@sendgrid/mail';
+import config from 'config';
 import Report, { Delivery } from './solderAutoEmailReport.model.js';
 import Admin from '../admin/admin.model.js';
 import Channel from '../channels/channels.model.js';
@@ -12,10 +14,39 @@ import { DeskSolarShoulderDetectionIncident as Incident } from '../incidents/inc
 import Response from '../../../utils/response.js';
 import logger from '../../../utils/logger.js';
 import { validTimezone, DEFAULT_ADMIN_TIMEZONE } from '../../../utils/timezone.js';
-import mail, { getMailSender } from '../../../mailService/mail.transport.js';
 import { trackOutboundEmail, trackFailedEmail } from '../emailMonitoring/emailTracker.js';
 import { scheduledWindow } from './scheduleWindow.js';
 import { buildReportRows, buildAttachments, REPORT_TITLES } from './reportData.js';
+
+// Older deployments use SendGrid directly and do not include the optional
+// SMTP transport. Resolve it at send time so its absence cannot stop startup.
+const transportUrl = new URL('../../../mailService/mail.transport.js', import.meta.url).href;
+export async function resolveMailTransport(importer = () => import('../../../mailService/mail.transport.js')) {
+  try { return await importer(); }
+  catch (error) {
+    // Missing dependencies inside the transport are real deployment errors.
+    if (error.code !== 'ERR_MODULE_NOT_FOUND' || error.url !== transportUrl) throw error;
+    if ((process.env.MAIL_PROVIDER || 'sendgrid').trim().toLowerCase() !== 'sendgrid') {
+      throw new Error('SMTP mail requires mailService/mail.transport.js. Deploy that file before sending SMTP reports.');
+    }
+    return {
+      getMailSender: () => ({
+        name: process.env.SENDGRID_FROM_NAME || config.get('sendgrid.name'),
+        email: process.env.SENDGRID_FROM_EMAIL || config.get('sendgrid.email'),
+      }),
+      default: { send: (email) => {
+        sendGridMail.setApiKey(process.env.SENDGRID_API_KEY || config.get('sendgrid.key'));
+        return sendGridMail.send(email);
+      } },
+    };
+  }
+}
+let transportPromise;
+const getMailTransport = () => {
+  if (!transportPromise) transportPromise = resolveMailTransport().catch((error) => { transportPromise = null; throw error; });
+  return transportPromise;
+};
+const mail = { send: async (email) => (await getMailTransport()).default.send(email) };
 
 const idSchema = Joi.string().hex().length(24).required();
 const schema = Joi.object({
@@ -82,7 +113,7 @@ async function prepareEmail(report, window, timezone) {
   const subtitle = `${channel.customName || channel.name || 'Camera'} · ${window.start.format('DD MMM YYYY HH:mm')} – ${window.end.format('DD MMM YYYY HH:mm')} (${timezone})`;
   const attachments = await buildAttachments(rows, title, subtitle, report.formats);
   return {
-    from: getMailSender(), to: report.recipients, subject: `${title} — ${window.start.format('DD MMM YYYY')}`,
+    from: (await getMailTransport()).getMailSender(), to: report.recipients, subject: `${title} — ${window.start.format('DD MMM YYYY')}`,
     text: `${title}\n${subtitle}\n${rows.length} report rows.\nThe scheduled report is attached.`, attachments,
   };
 }
