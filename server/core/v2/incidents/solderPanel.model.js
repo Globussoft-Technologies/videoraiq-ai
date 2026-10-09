@@ -11,6 +11,7 @@ const solderPanelSchema = new mongoose.Schema(
     channelId: { type: mongoose.Schema.Types.ObjectId, ref: "Channel", required: true },
     panelId: { type: String, required: true },
     time: { type: Date, required: true },
+    Image: { type: String, default: "" },
     // Per operator zone: seconds present at the desk for this panel, and
     // solder joints done (DS: presence_time, shoulderings_done).
     zones: [

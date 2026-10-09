@@ -47,7 +47,7 @@ export async function recordSolderPanel({ userId, channelId, body }) {
 
   await SolderPanel.updateOne(
     { channelId, panelId, time },
-    { $set: { userId: String(userId), zones } },
+    { $set: { userId: String(userId), zones, ...(typeof body.Image === "string" && body.Image.trim() ? { Image: body.Image.trim() } : {}) } },
     { upsert: true, runValidators: true },
   );
   const missedJoints = zones.reduce((sum, z) => sum + Math.max(0, POINTS_PER_ZONE - z.done), 0);
@@ -73,7 +73,7 @@ class SolderLineService {
       const authorized = req?.verified?.authorizedChannel?.channels;
       const scope = Array.isArray(authorized) ? { $in: toObjectIds(authorized) } : null;
 
-      const [events, throughput] = await Promise.all([
+      const [events, throughput, latestPanels] = await Promise.all([
         DeskSolarShoulderDetectionIncident.find({
           userId,
           timeOfIncident: range,
@@ -103,7 +103,31 @@ class SolderLineService {
             },
           },
         ]),
+        SolderPanel.aggregate([
+          { $match: { userId, time: range, ...(scope && { channelId: scope }) } },
+          { $sort: { time: -1, _id: -1 } },
+          { $group: { _id: "$channelId", panel: { $first: "$$ROOT" } } },
+          // Older panel samples did not store their snapshot. Retrieve only
+          // the incident matching this account, camera, panel and timestamp.
+          { $lookup: {
+            from: DeskSolarShoulderDetectionIncident.collection.name,
+            let: { channel: "$_id", panelId: "$panel.panelId", time: "$panel.time" },
+            pipeline: [
+              { $match: { userId, eventType: "panel", incidentType: "deskSolarShoulderDetection", $expr: { $and: [
+                { $eq: ["$channelId", "$$channel"] },
+                { $eq: ["$panelId", "$$panelId"] },
+                { $eq: ["$timeOfIncident", "$$time"] },
+              ] } } },
+              { $sort: { _id: -1 } },
+              { $limit: 1 },
+              { $project: { _id: 0, Image: 1 } },
+            ],
+            as: "snapshot",
+          } },
+          { $project: { _id: 1, "panel._id": 1, "panel.panelId": 1, "panel.time": 1, "panel.zones": 1, "panel.Image": 1, incidentImage: { $arrayElemAt: ["$snapshot.Image", 0] } } },
+        ]),
       ]);
+      const latestPanelByChannel = new Map(latestPanels.map(({ _id, panel, incidentImage }) => [String(_id), { ...panel, Image: panel.Image || incidentImage || "" }]));
 
       const hourly = new Map();
       const row = ({ channelId, hour }) => {
@@ -165,6 +189,7 @@ class SolderLineService {
             nvrName: channel.nvrId?.nvrName || "",
             streamingUrl,
             enabled: Boolean(channel.detections?.[SETTING]?.enabled),
+            latestPanel: latestPanelByChannel.get(String(channel._id)) || null,
             zones: (settings.zone_configs || []).map((z) => ({
               name: z.name,
               capacity: z.capacity ?? null,
