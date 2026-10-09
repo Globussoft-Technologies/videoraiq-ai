@@ -55,6 +55,7 @@ export const fetchIncidentLogs = async ({
   search,
   vehicleNumber,
   boxType,
+  direction,
 }) => {
   return axios.request({
     method,
@@ -73,6 +74,7 @@ export const fetchIncidentLogs = async ({
       ...(search && { search }),
       ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
       ...(boxType?.trim() && { boxType: boxType.trim() }),
+      ...(direction && direction !== 'all' && { direction }),
     },
     headers: getHeaders(),
   });

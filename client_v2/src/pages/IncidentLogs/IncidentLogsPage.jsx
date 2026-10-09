@@ -16,6 +16,7 @@ import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
+import { stockMovementColumns } from './stockMovement';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -132,6 +133,7 @@ const IncidentLogsPage = ({ config }) => {
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [boxTypeList, setBoxTypeList] = useState([]);
+  const [stockDirection, setStockDirection] = useState('all');
   const [stockSummary, setStockSummary] = useState({
     vehicles: 0,
     loadedBoxes: 0,
@@ -257,6 +259,7 @@ const IncidentLogsPage = ({ config }) => {
         search: searchInput,
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
         boxType: config.showBoxTypeFilter ? boxType : undefined,
+        direction: config.showStockCountingFields ? stockDirection : undefined,
       });
 
       const data = res?.data?.body?.data;
@@ -345,7 +348,7 @@ const IncidentLogsPage = ({ config }) => {
       dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -566,8 +569,11 @@ const IncidentLogsPage = ({ config }) => {
   );
 
   const columns = useMemo(
-    () => buildColumns(config, { onSort, onPreview: openPreview }),
-    [config, onSort, openPreview]
+    () => {
+      const allColumns = buildColumns(config, { onSort, onPreview: openPreview });
+      return config.showStockCountingFields ? stockMovementColumns(allColumns, stockDirection) : allColumns;
+    },
+    [config, onSort, openPreview, stockDirection]
   );
 
   const gridCard = useCallback(
@@ -607,8 +613,9 @@ const IncidentLogsPage = ({ config }) => {
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
+      direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, searchInput]
+    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -680,6 +687,16 @@ const IncidentLogsPage = ({ config }) => {
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
+        dateFilterActions={config.showStockCountingFields ? (
+          <div role="group" aria-label="Stock movement" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+            {[['all', 'All'], ['loading', 'Loaded'], ['unloading', 'Unloaded']].map(([value, title]) => (
+              <button key={value} type="button" aria-pressed={stockDirection === value} onClick={() => {
+                setStockDirection(value);
+                dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
+              }} className={`h-full px-3 rounded-[7px] text-xs font-semibold cursor-pointer transition-colors ${stockDirection === value ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}>{title}</button>
+            ))}
+          </div>
+        ) : undefined}
         renderExpandedRow={config.showStockCountingFields ? renderStockEvents : undefined}
         tableContainerClassName={config.showStockCountingFields ? '!border-[var(--blue)]' : ''}
         tableHeaderClassName={config.showStockCountingFields

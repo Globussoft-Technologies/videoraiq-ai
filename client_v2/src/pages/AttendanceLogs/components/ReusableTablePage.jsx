@@ -49,6 +49,7 @@ const ReusableTablePage = ({
   onLimitChange,
   stats,
   secondaryToolbar,
+  dateFilterActions,
   datePickerVariant,
   renderExpandedRow,
   tableContainerClassName = '',
@@ -179,6 +180,8 @@ const ReusableTablePage = ({
               />
             </div>
           )}
+
+          {dateFilterActions}
 
           <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
             {hasGrid && (

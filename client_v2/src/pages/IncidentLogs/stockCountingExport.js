@@ -67,6 +67,7 @@ const fetchAllForExport = async (config, filters = {}) => {
     search: filters.searchInput,
     vehicleNumber: filters.vehicleNumber,
     boxType: filters.boxType,
+    direction: filters.direction,
   });
 
   return response?.data?.body?.data?.data || [];
@@ -79,7 +80,7 @@ const rangeNote = (filters) => (
 );
 
 const filterNote = (filters) => (
-  filters?.vehicleNumber ? `Vehicle: ${filters.vehicleNumber}` : 'All vehicles'
+  `${filters?.vehicleNumber ? `Vehicle: ${filters.vehicleNumber}` : 'All vehicles'}${filters?.direction && filters.direction !== 'all' ? ` | ${filters.direction === 'loading' ? 'Loaded' : 'Unloaded'}` : ''}`
 );
 
 const PARENT_HEADERS = [
