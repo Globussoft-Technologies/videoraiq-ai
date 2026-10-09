@@ -4716,12 +4716,18 @@ console.log(result,'result');
         severity,
         vehicleNumber,
         boxType,
+        direction,
         search,
         sortField,
         sortOrder,
       } = req.query || {};
       const toArray = (value) =>
         value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
+
+      const stockDirection = String(direction || '').trim().toLowerCase();
+      if (stockDirection && !['all', 'loading', 'unloading'].includes(stockDirection)) {
+        return res.status(400).json({ error: 'direction must be all, loading or unloading' });
+      }
 
       const match = {
         userId: data.user_id.toString(),
@@ -4796,6 +4802,7 @@ console.log(result,'result');
             },
           },
         },
+        ...(stockDirection && stockDirection !== 'all' ? [{ $match: { _stockDirection: stockDirection } }] : []),
         {
           $addFields: {
             _stockGroupKey: {

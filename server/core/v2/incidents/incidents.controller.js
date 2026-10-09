@@ -748,7 +748,8 @@ class IncidentsController {
 
   async getLoadingUnloadingStockCountingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Get Loading/Unloading Stock Counting Detection logs.'
+    #swagger.description = 'Get Loading/Unloading Stock Counting Detection logs. direction filters individual movements before vehicle aggregation, pagination and summary totals.'
+    #swagger.parameters['direction'] = { in: 'query', type: 'string', enum: ['all', 'loading', 'unloading'] }
     #swagger.security = [{ "EncryptedAuthToken": [] }] */
     return incidentsService.getLoadingUnloadingStockCountingLogs(req, res, next);
   }
