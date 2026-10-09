@@ -32,6 +32,7 @@ import { scheduleEmpExitSync } from "./services/empExitSync.service.js";
 import DetectionSettingService from "./core/v1/detectionSettings/detectionSettings.service.js";
 import AttendanceAutoEmailReportService from "./core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
 import MeasurementAutoEmailReportService from "./core/v2/measurementAutoEmailReport/measurementAutoEmailReport.service.js";
+import SolderAutoEmailReportService from "./core/v2/solderAutoEmailReport/solderAutoEmailReport.service.js";
 import { startMeasurementMediaRetryWorker } from "./core/v2/measurementMedia/measurementMedia.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
@@ -198,6 +199,7 @@ const startServer = async () => {
     DetectionSettingService.startDetectionScheduleRunner();
     AttendanceAutoEmailReportService.startRunner();
     MeasurementAutoEmailReportService.startRunner();
+    SolderAutoEmailReportService.startRunner();
     startMeasurementMediaRetryWorker();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);

@@ -35,6 +35,7 @@ import User from "../users/users.model.js";
 import LiveDemo from "../videoRecords/videoRecords.model.js";
 import AttendanceAutoEmailReport from "../attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
 import MeasurementAutoEmailReport from "../measurementAutoEmailReport/measurementAutoEmailReport.model.js";
+import SolderAutoEmailReport, { Delivery as SolderReportDelivery } from "../solderAutoEmailReport/solderAutoEmailReport.model.js";
 import LogsConfiguration from "../logsConfiguration/logsConfiguration.model.js";
 import AssistantConversation from "../assistant/assistantConversation.model.js";
 import AdminStorageConfig from "../adminStorage/adminStorage.model.js";
@@ -131,6 +132,8 @@ export async function purgeAmemberTenantData(admin) {
     ["liveDemos", LiveDemo.deleteMany({ adminId })],
     ["attendanceAutoEmailReports", AttendanceAutoEmailReport.deleteMany({ adminId })],
     ["measurementAutoEmailReports", MeasurementAutoEmailReport.deleteMany({ adminId })],
+    ["solderAutoEmailReports", SolderAutoEmailReport.deleteMany({ adminId })],
+    ["solderReportDeliveries", SolderReportDelivery.deleteMany({ adminId })],
     ["logsConfiguration", LogsConfiguration.deleteMany({ adminId })],
     ["assistantConversations", AssistantConversation.deleteMany({ adminId })],
     ["adminStorage", AdminStorageConfig.deleteMany({ adminId })],
