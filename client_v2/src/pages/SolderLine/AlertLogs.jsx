@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Download, ImageOff, LayoutGrid, List, Maximize2 } from 'lucide-react';
+import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
 import { clock, dur } from './solderLineData';
 import { BAD, WARN, mono, label, Panel, OpBadge, StatusPill, Chip, Waiting, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
+import DownloadButton from './DownloadButton';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const TYPE_META = {
@@ -24,20 +25,20 @@ function TypeTag({ type, style }) {
 function Thumb({ r, onOpen, ratio = '16 / 9', width }) {
   return (
     <div style={{ position: 'relative', width, aspectRatio: ratio, borderRadius: 7, overflow: 'hidden', background: '#0a0e15', border: '1px solid var(--bd2)' }}>
-      {r.image ? <img src={mediaUrl(r.image)} alt={`Snapshot for ${r.id}`} loading="lazy" onClick={onOpen} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} /> : (
+      {r.image ? (
+        <button type="button" onClick={onOpen} aria-label={`Open snapshot for ${r.id}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 0, background: 'transparent', cursor: 'zoom-in' }}>
+          <img src={mediaUrl(r.image)} alt={`Snapshot for ${r.id}`} loading="lazy" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />
+        </button>
+      ) : (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#94a3b8', fontSize: 11 }}><ImageOff size={20} />No snapshot available</div>
       )}
-      <button type="button" disabled={!r.image} onClick={onOpen} aria-label={`View ${r.id} full screen`} title={r.image ? 'View full screen' : 'No snapshot available'} style={{ position: 'absolute', zIndex: 2, top: 8, right: 8, width: 30, height: 30, display: 'grid', placeItems: 'center', color: '#fff', background: 'rgba(6,8,13,.8)', border: '1px solid #ffffff40', borderRadius: 5, cursor: r.image ? 'pointer' : 'not-allowed', opacity: r.image ? 1 : 0.45 }}><Maximize2 size={16} /></button>
+      <button type="button" disabled={!r.image} onClick={onOpen} aria-label={`Maximize snapshot for ${r.id}`} title={r.image ? 'Maximize image' : 'No snapshot available'} style={{ position: 'absolute', zIndex: 2, top: 8, right: 8, width: 30, height: 30, display: 'grid', placeItems: 'center', color: '#fff', background: 'rgba(6,8,13,.8)', border: '1px solid #ffffff40', borderRadius: 5, cursor: r.image ? 'pointer' : 'not-allowed', opacity: r.image ? 1 : 0.45 }}><Maximize size={16} /></button>
     </div>
   );
 }
 
-function ImageDownload({ row, onDownload, busy, style }) {
-  const available = Boolean(row.image);
-  const buttonStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '0 12px', fontSize: 11, cursor: available ? 'pointer' : 'not-allowed', opacity: available ? 1 : 0.45, ...style };
-  return (
-    <button type="button" disabled={!available || busy} onClick={onDownload} title={available ? 'Download this image' : 'No snapshot available'} aria-label={`Download image for ${row.id}`} style={buttonStyle}><Download size={12} />{busy ? 'Saving…' : 'Image'}</button>
-  );
+function ImageDownload({ row, style }) {
+  return <DownloadButton disabled={!row.image} action={() => downloadSnapshot(row)} description="image" title={row.image ? 'Download this image' : 'No snapshot available'} aria-label={`Download image for ${row.id}`} style={style}>Image</DownloadButton>;
 }
 
 const status = (r) => (r.type === 'missed' ? <StatusPill text="LOGGED" color={WARN} /> : <StatusPill active={r.active} />);
@@ -47,9 +48,6 @@ export default function AlertLogs({ model, rows, range }) {
   const [op, setOp] = useState('all');
   const [grid, setGrid] = useState(true);
   const [openId, setOpenId] = useState(null);
-  const [downloadError, setDownloadError] = useState('');
-  const [zipBusy, setZipBusy] = useState(false);
-  const [downloading, setDownloading] = useState({});
 
   const opCodes = useMemo(() => [...new Set(rows.map((r) => r.opCode))].sort(), [rows]);
   const shown = rows.filter((r) => (type === 'all' || r.type === type)
@@ -69,20 +67,6 @@ export default function AlertLogs({ model, rows, range }) {
     };
   });
   const fileName = `solder-alerts_${shown[0]?.start.format('YYYY-MM-DD') || 'empty'}`;
-  const runDownload = async (action) => {
-    setDownloadError('');
-    try { await action(); } catch (error) { setDownloadError(error.message || 'Could not download the snapshot.'); }
-  };
-  const saveZip = async () => {
-    setZipBusy(true);
-    try { await runDownload(() => downloadSnapshotsZip(shown)); } finally { setZipBusy(false); }
-  };
-  const saveImage = async (row) => {
-    setDownloading((current) => ({ ...current, [row._id]: true }));
-    try { await runDownload(() => downloadSnapshot(row)); } finally {
-      setDownloading((current) => ({ ...current, [row._id]: false }));
-    }
-  };
 
   return (
     <>
@@ -106,13 +90,11 @@ export default function AlertLogs({ model, rows, range }) {
           <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{shown.length} FILTERED</span>
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
           <Chip on={grid} color="var(--blue)" onClick={() => setGrid(true)}><LayoutGrid size={13} />Grid</Chip>
-          <button type="button" disabled={zipBusy || !shown.some((r) => r.image)} onClick={saveZip} title="Download all filtered snapshots as ZIP" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', borderRadius: 8, cursor: zipBusy ? 'wait' : 'pointer', color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd2)', opacity: shown.some((r) => r.image) ? 1 : 0.5, ...mono, fontSize: 10.5, fontWeight: 700 }}><Download size={13} />{zipBusy ? 'PREPARING ZIP' : 'SNAPSHOTS .ZIP'}</button>
-          <Chip onClick={() => downloadXlsx(exportRows(), fileName)}>XLSX</Chip>
-          <Chip onClick={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: `${shown.length} alerts`, rows: exportRows(), filename: fileName })}>PDF</Chip>
+          <DownloadButton disabled={!shown.some((r) => r.image)} action={() => downloadSnapshotsZip(shown)} description="snapshots ZIP" title="Download all filtered snapshots as ZIP" style={{ ...mono, fontSize: 10.5, fontWeight: 700 }}>SNAPSHOTS .ZIP</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadXlsx(exportRows(), fileName)} description="Excel report">XLSX</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: `${shown.length} alerts`, rows: exportRows(), filename: fileName })} description="PDF report">PDF</DownloadButton>
         </span>
       </Panel>
-      {downloadError && <div role="alert" style={{ color: BAD, fontSize: 12 }}>{downloadError}</div>}
-      <SolderPagination pagination={pagination} label="Solder Alert Logs" />
 
       {!shown.length ? (
         <Panel><Waiting title="No alerts" minH={200}>No absence or missed-solder alerts match these filters in this date range.</Waiting></Panel>
@@ -138,7 +120,7 @@ export default function AlertLogs({ model, rows, range }) {
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, borderTop: '1px solid var(--bd)' }}>
                     <span style={{ ...label, fontSize: 9 }}>{d.metricLabel}</span>
                     <span style={{ ...mono, fontSize: 13, fontWeight: 700 }}>{d.metric}</span>
-                    <ImageDownload row={r} onDownload={() => saveImage(r)} busy={downloading[r._id]} style={{ marginLeft: 'auto' }} />
+                    <ImageDownload row={r} style={{ marginLeft: 'auto' }} />
                   </div>
                 </div>
               </Panel>
@@ -148,23 +130,20 @@ export default function AlertLogs({ model, rows, range }) {
       ) : (
         <Panel pad={false}>
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 1040 }}>
+            <div style={{ minWidth: 1170 }}>
               {[null, ...pageRows].map((r) => {
-                const cols = { display: 'grid', gridTemplateColumns: '168px 76px 116px 90px 110px minmax(0, 1fr) 92px 96px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
+                const cols = { display: 'grid', gridTemplateColumns: '168px 76px 116px 90px 110px minmax(0, 1fr) 92px 96px 118px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
                 if (!r) {
                   return (
                     <div key="head" style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-                      <span>SNAPSHOT / ACTIONS</span><span>ALERT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>METRIC</span><span>STATUS</span>
+                      <span>SNAPSHOT</span><span>ALERT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>METRIC</span><span>STATUS</span><span>DOWNLOAD IMAGE</span>
                     </div>
                   );
                 }
                 const d = describe(r);
                 return (
                   <div key={r._id} style={{ ...cols, fontSize: 12.5 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <Thumb r={r} width={168} onOpen={() => setOpenId(r._id)} />
-                      <ImageDownload row={r} onDownload={() => saveImage(r)} busy={downloading[r._id]} style={{ alignSelf: 'flex-end' }} />
-                    </div>
+                    <Thumb r={r} width={168} onOpen={() => setOpenId(r._id)} />
                     <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>{r.id}</span>
                     <TypeTag type={r.type} />
                     <OpBadge op={r.op} code={r.opCode} />
@@ -175,6 +154,7 @@ export default function AlertLogs({ model, rows, range }) {
                     </span>
                     <span style={{ ...mono, fontWeight: 700 }}>{d.metric}</span>
                     {status(r)}
+                    <ImageDownload row={r} style={{ justifySelf: 'start' }} />
                   </div>
                 );
               })}
@@ -182,8 +162,8 @@ export default function AlertLogs({ model, rows, range }) {
           </div>
         </Panel>
       )}
-      {pagination.totalPages > 1 && <SolderPagination pagination={pagination} label="Solder Alert Logs" />}
-      <SnapshotPreview items={pageRows} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} fullscreenOnOpen />
+      <SolderPagination pagination={pagination} label="Solder Alert Logs" />
+      <SnapshotPreview items={pageRows} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
     </>
   );
 }

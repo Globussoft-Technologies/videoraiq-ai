@@ -23,5 +23,5 @@ export function downloadPdf({ title, subtitle, rows, filename }) {
     styles: { fontSize: 8 },
     headStyles: { fillColor: [59, 130, 246] },
   });
-  doc.save(`${filename}.pdf`);
+  return doc.save(`${filename}.pdf`, { returnPromise: true });
 }

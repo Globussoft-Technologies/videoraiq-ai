@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, ImageOff, LayoutGrid, Rows3 } from 'lucide-react';
+import { ImageOff, LayoutGrid, Rows3 } from 'lucide-react';
 import CameraStream from '@/components/CameraStream';
 import { mediaUrl } from '@/lib/format';
 import { clock, dur, opColor } from './solderLineData';
@@ -8,7 +8,10 @@ import {
   OpBadge, StatusPill, Chip, Waiting, SnapshotPreview, fmt,
 } from './ui';
 import { downloadXlsx } from './exports';
+import { downloadSnapshot } from './snapshots';
+import DownloadButton from './DownloadButton';
 import LatestPanel from './LatestPanel';
+import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const NO_THROUGHPUT = 'Panel counts and solder times appear here once DS posts its per-panel "Solar panel processing" events.';
 const NO_MISSED = 'Missed-solder alerts appear here when a panel event reports a zone with joints left undone.';
@@ -299,7 +302,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
                     <div><div style={{ ...label, fontSize: 8.5 }}>Duration</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2, color: '#ff6b6b' }}>{dur(latest.durSec)}{latest.active ? ' +' : ''}</div></div>
                   </div>
                   <div style={{ marginTop: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {latest.image && <a href={mediaUrl(latest.image)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, textDecoration: 'none' }}><Download size={13} />Image</a>}
+                    {latest.image && <DownloadButton action={() => downloadSnapshot({ ...latest, station: s })} description="image" style={btnPrimary}>Image</DownloadButton>}
                     {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnGhost}>All alert logs →</button>}
                   </div>
                 </div>
@@ -483,7 +486,8 @@ function SolderSection({ s, preview }) {
 
 // ---------------------------------------------------------------- 03 · hour by hour
 
-function HourSection({ s, model }) {
+function HourSection({ s, model, range }) {
+  const pagination = useSolderPagination(s.hourly, JSON.stringify([s._id, range?.startDate, range?.endDate]));
   const has = s.sum.hasThroughput;
   const perJoint = (o) => (o.joints ? o.solderSec / o.joints : null);
   const series = s.ops.map((o) => s.hourly.map((r) => perJoint(r.ops[o.i])));
@@ -582,7 +586,7 @@ function HourSection({ s, model }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)' }}>
               <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Hourly activity log</span>
               <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Panels, joints, misses and solder time per operator</span>
-              <button type="button" onClick={exportHourly} style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</button>
+              <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</DownloadButton>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
@@ -593,7 +597,7 @@ function HourSection({ s, model }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {s.hourly.map((r) => (
+                  {pagination.pageRows.map((r) => (
                     <tr key={r.h} style={{ borderTop: '1px solid var(--bd)' }}>
                       <td style={td}>{rangeLabel(r.h)}</td><td style={{ ...td, fontWeight: 700 }}>{r.panels}</td>
                       {r.ops.flatMap((c, i) => [
@@ -616,6 +620,9 @@ function HourSection({ s, model }) {
                 </tbody>
               </table>
             </div>
+            <div style={{ padding: '0 18px' }}>
+              <SolderPagination pagination={pagination} label="Hourly activity log" />
+            </div>
           </Panel>
         </>
       )}
@@ -630,7 +637,7 @@ const btnGhost = { display: 'flex', alignItems: 'center', gap: 6, height: 32, pa
 
 // ---------------------------------------------------------------- page
 
-export default function Overview({ model, onOpenLogs, selected, onSelect }) {
+export default function Overview({ model, onOpenLogs, selected, onSelect, range }) {
   const [openId, setOpenId] = useState(null);
   if (!model.stations.length) {
     return (
@@ -655,7 +662,7 @@ export default function Overview({ model, onOpenLogs, selected, onSelect }) {
       <LineSection model={model} sel={selected} setSel={onSelect} />
       <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} />
       <SolderSection s={s} preview={setOpenId} />
-      <HourSection s={s} model={model} />
+      <HourSection s={s} model={model} range={range} />
       <SnapshotPreview items={[...s.absences, ...s.missed]} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
     </>
   );

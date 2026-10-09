@@ -77,7 +77,7 @@ export default function SolderLine() {
   const live = model?.isToday;
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 22px', background: 'var(--bg1)', borderBottom: '1px solid var(--bd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 22px', position: 'sticky', top: 0, zIndex: 40, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)' }}>
         {visibleTabs.map((t) => (
           <NavLink key={t.view} to={t.to} end style={({ isActive }) => ({
             display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600,
@@ -122,7 +122,7 @@ export default function SolderLine() {
       {loading && !model ? <PageLoader /> : !model ? null : (
         <>
           <SolderSummary model={model} selected={selected} onSelect={setSelected} />
-          {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
+          {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} range={range} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
           {view === 'logs' && <AlertLogs model={model} rows={rows} range={range} />}
           {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={setRange} />}
         </>

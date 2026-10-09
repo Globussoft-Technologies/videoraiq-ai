@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Download } from 'lucide-react';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { clock, dur } from './solderLineData';
 import { mono, label, Panel, OpBadge, Chip, Waiting } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
+import DownloadButton from './DownloadButton';
+import AutoEmailReports from './AutoEmailReports';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const TYPES = [
@@ -187,9 +188,10 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
             )}
             <div style={{ ...label, marginTop: 4 }}>Download</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <button type="button" disabled={!rows.length} onClick={() => downloadPdf({ title: typeMeta.t, subtitle, rows, filename: fileName })} style={btn(true)}><Download size={13} />PDF</button>
-              <button type="button" disabled={!rows.length} onClick={() => downloadXlsx(rows, fileName)} style={btn(false)}><Download size={13} />Excel</button>
+              <DownloadButton disabled={!rows.length} action={() => downloadPdf({ title: typeMeta.t, subtitle, rows, filename: fileName })} description="PDF report" style={btn(true)}>PDF</DownloadButton>
+              <DownloadButton disabled={!rows.length} action={() => downloadXlsx(rows, fileName)} description="Excel report" style={btn(false)}>Excel</DownloadButton>
             </div>
+            <AutoEmailReports key={`${s?._id}:${type}`} station={s} reportType={type} title={typeMeta.t} />
           </Panel>
         </div>
 
