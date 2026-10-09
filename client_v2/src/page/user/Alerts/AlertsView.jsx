@@ -164,12 +164,28 @@ function ImageZoomModal({ url, caption, onClose }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
   const rootRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const el = rootRef.current;
+    let enteredFullscreen = false;
+    const onFullscreenChange = () => {
+      if (document.fullscreenElement === el) {
+        enteredFullscreen = true;
+      } else if (enteredFullscreen) {
+        enteredFullscreen = false;
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
     el?.requestFullscreen?.().catch(() => {});
     return () => {
-      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      if (document.fullscreenElement === el) document.exitFullscreen?.().catch(() => {});
     };
   }, []);
 

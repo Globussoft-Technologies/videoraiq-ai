@@ -325,7 +325,6 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
       </td>
       <td className="px-3 py-3 text-center">
         <div className="flex flex-col items-center gap-1.5">
-          <StatusBadge verified={user.verified} />
           <AccountStatusControl
             status={getUserStatus(user)}
             canEdit={canEdit}
@@ -334,6 +333,7 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
               onRequestStatusChange(user);
             }}
           />
+          <StatusBadge verified={user.verified} />
         </div>
       </td>
       <td className="px-3 py-3 text-center">
