@@ -37,6 +37,7 @@ import detectionCatalogRoutes from "../../core/v1/detectionCatalog/detectionCata
 import plansRoutes from "../../core/v1/plans/plans.routes.js";
 import sessionRoutes from "../../core/v1/sessions/sessions.routes.js";
 import verifySessionAccess from "../../core/v1/sessions/sessions.auth.js";
+import streamMonitoringRoutes from "../../core/v1/streamMonitoring/routes.js";
 
 const router = express.Router();
 
@@ -79,5 +80,6 @@ router.use("/client", clientRoutes);
 router.use("/client-config", clientConfigRoutes);
 router.use("/detection-catalog", detectionCatalogRoutes);
 router.use("/plans", plansRoutes);
+router.use("/stream-monitoring", streamMonitoringRoutes);
 
 export default router;
