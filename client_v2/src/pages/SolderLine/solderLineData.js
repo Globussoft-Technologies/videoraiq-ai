@@ -1,5 +1,5 @@
 import moment from 'moment-timezone';
-import { getConfiguredTimezone } from '../../utils/timezone';
+import { getConfiguredTimezone, utcToConfiguredTimezone } from '../../utils/timezone.js';
 
 /*
  * Turns GET /incidents/solder-line into what the Solder Line pages draw.
@@ -17,6 +17,7 @@ const sum = (list) => list.reduce((a, b) => a + b, 0);
 
 /** "2m 14s" / "1h 05m" */
 export function dur(sec) {
+  if (sec == null || sec === '' || !Number.isFinite(Number(sec))) return '—';
   const s = Math.max(0, Math.round(sec || 0));
   if (s >= 3600) return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
@@ -51,15 +52,19 @@ function buildStation(station, data, now) {
   const absences = data.absences
     .filter((a) => String(a.channelId) === id)
     .map((a, i) => {
-      const start = tzMoment(a.timeOfIncident);
-      const end = a.returnedAt ? tzMoment(a.returnedAt) : null;
-      const durSec = end
-        ? (a.durationSec ?? end.diff(start, 'seconds'))
-        : Math.max(a.durationSec || 0, liveEnd.diff(start, 'seconds'));
+      const start = utcToConfiguredTimezone(a.timeOfIncident);
+      const end = utcToConfiguredTimezone(a.returnedAt);
+      // An open incident can carry a measured duration. Only the API can
+      // update it; a missing return timestamp does not make it a live timer.
+      const apiDuration = a.durationSec == null || a.durationSec === '' ? null : Number(a.durationSec);
+      const durSec = apiDuration != null && Number.isFinite(apiDuration) && apiDuration >= 0
+        ? apiDuration
+        : end && start ? Math.max(0, end.diff(start, 'seconds', true)) : null;
       return {
         id: `AB-${String(i + 1).padStart(3, '0')}`, _id: a._id, type: 'absence',
         op: addZone(a.zone), zone: a.zone || 'Unassigned',
         start, end, durSec, active: !end, image: a.Image, description: a.description,
+        incident: { ...a, incidentType: 'deskSolarShoulderDetection' },
       };
     });
 
@@ -76,6 +81,10 @@ function buildStation(station, data, now) {
         op, zone: m.zone || 'Unassigned',
         point: op * perZone + (m.done || 0) + k + 1,
         panelId: m.panelId, start: tzMoment(m.timeOfIncident), image: m.Image,
+        incident: {
+          incidentType: 'deskSolarShoulderDetection', eventType: 'panel', panelId: m.panelId,
+          zones: [{ zone: m.zone, done: m.done, presenceSec: m.presenceSec }],
+        },
       }));
     })
     .map((m, i) => ({ ...m, id: `MS-${String(i + 1).padStart(3, '0')}` }));

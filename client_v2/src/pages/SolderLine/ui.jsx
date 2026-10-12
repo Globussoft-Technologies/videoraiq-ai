@@ -3,6 +3,7 @@ import { Hourglass } from 'lucide-react';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import { mediaUrl } from '@/lib/format';
 import { opColor } from './solderLineData';
+import IncidentZoneDetails from '@/page/user/Incidents/IncidentZoneDetails';
 
 /** Full-screen snapshot viewer with previous/next over `items` (alerts with `_id` + `image`). */
 export function SnapshotPreview({ items, openId, onOpen, onClose, fullscreenOnOpen = false }) {
@@ -10,6 +11,7 @@ export function SnapshotPreview({ items, openId, onOpen, onClose, fullscreenOnOp
   const list = items.filter((x) => x.image);
   const idx = list.findIndex((x) => x._id === openId);
   if (idx < 0) return null;
+  const current = list[idx];
   const go = (d) => { setLoading(true); onOpen(list[idx + d]._id); };
   return (
     <ImagePreviewModal
@@ -25,6 +27,18 @@ export function SnapshotPreview({ items, openId, onOpen, onClose, fullscreenOnOp
       total={list.length}
       onClose={onClose}
       initialFullscreen={fullscreenOnOpen}
+      details={(
+        <div style={{ display: 'grid', gap: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{current.type === 'absence' ? 'Desk Empty' : 'Missed Solder'}</div>
+          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,.7)' }}>
+            {[current.station?.name, current.station?.nvrName, current.opCode || `OP-${current.op + 1}`, current.start?.format('DD MMM YYYY HH:mm:ss')].filter(Boolean).join(' · ')}
+          </div>
+          <IncidentZoneDetails
+            item={{ ...current.incident, ...(current.type === 'absence' ? { durationSec: current.durSec } : { point: current.point }) }}
+            variant="lightbox"
+          />
+        </div>
+      )}
     />
   );
 }

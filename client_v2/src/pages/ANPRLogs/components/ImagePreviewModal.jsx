@@ -21,6 +21,7 @@ const ImagePreviewModal = ({
   zoomControlsPosition = 'right',
   onClose,
   initialFullscreen = false,
+  details,
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -238,6 +239,16 @@ const ImagePreviewModal = ({
         >
           <Maximize2 className="w-4 h-4" />
         </button>
+      )}
+      {details && (
+        <div
+          className="absolute bottom-4 left-4 right-16 z-30 max-h-[35vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-white backdrop-blur-sm"
+          onMouseDown={event => event.stopPropagation()}
+          onWheel={event => event.stopPropagation()}
+          aria-label="Snapshot details"
+        >
+          {details}
+        </div>
       )}
     </div>
   );

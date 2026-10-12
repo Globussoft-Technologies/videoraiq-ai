@@ -17,6 +17,7 @@ import {
   formatTime,
 } from '../../../pages/AttendanceLogs/components/timeUtils';
 import IncidentCard, { apiMarkResolved, ReportModal, VehicleTagStrip } from './IncidentCard';
+import IncidentZoneDetails from './IncidentZoneDetails';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
 import TaggedUserDetailsModal from '../../../components/TaggedUserDetailsModal';
@@ -905,6 +906,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const cam    = item.channelData?.name || '';
   const site   = item.nvrData?.nvrName  || item.location  || '';
   const carModel = isCarModelDetection(item);
+  const isSolder = item.incidentType === 'deskSolarShoulderDetection';
 
   return (
     <div
@@ -1086,9 +1088,9 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               maxWidth: carModel ? '100%' : undefined,
             }}
           >
-            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel ? 20 : 40, padding: carModel ? '18px 30px 20px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : 'max-content', maxWidth: '100%' }}>
+            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || isSolder ? 20 : 40, padding: carModel || isSolder ? '18px 30px 20px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : isSolder ? 'min(760px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(isSolder ? { maxHeight: '50vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
               {/* Title block */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: carModel ? '100%' : undefined }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: carModel || isSolder ? '100%' : undefined }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
                   Security Feed
                 </span>
@@ -1102,6 +1104,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   {shortDateTime(item.timeOfIncident)}{!itemRemoved && ` · ${index + 1} / ${items.length}`}
                 </span>
                 <CarModelDetails item={item} />
+                <IncidentZoneDetails item={item} variant="lightbox" />
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
                 <div style={{ marginTop: carModel ? 6 : 8 }}>

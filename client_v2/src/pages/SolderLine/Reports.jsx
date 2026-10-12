@@ -49,8 +49,8 @@ function reportRows(type, s) {
   if (type === 'absence') {
     return [...s.absences].reverse().map((a) => ({
       Alert: a.id, Operator: `OP-${a.op + 1} · ${a.zone}`, Started: a.start.format('DD MMM HH:mm:ss'),
-      Condition: a.description || `${a.zone} desk empty`, Returned: clock(a.end),
-      Duration: `${dur(a.durSec)}${a.active ? ' +' : ''}`, Status: a.active ? 'ACTIVE' : 'RESOLVED',
+      Condition: a.description || `${a.zone} desk empty`, Returned: a.end ? clock(a.end) : 'Not returned',
+      Duration: dur(a.durSec), Status: a.active ? 'ACTIVE' : 'RESOLVED',
     }));
   }
   if (type === 'missed') {

@@ -39,9 +39,6 @@ const INDUSTRIAL_DETECTION_TYPES = new Set([
   'loadingUnloadingStockCountingDetection',
 ]);
 
-// "2m 14s": how long a solder-line desk stayed empty.
-const absenceDuration = (sec) => `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
-
 // These two incident types show their detected count, but not the threshold
 // value in the Incident Center card.
 const HIDE_ALERT_THRESHOLD_TYPES = new Set([
@@ -670,7 +667,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                     {item.eventType === 'panel'
                       ? `Missed ${item.missedJoints ?? '?'} joint${item.missedJoints === 1 ? '' : 's'}${item.panelId ? ` · ${item.panelId}` : ''}`
                       : item.returnedAt
-                        ? `Returned${item.durationSec != null ? ` · ${absenceDuration(item.durationSec)}` : ''}`
+                        ? 'Returned'
                         : 'Desk empty'}
                   </span>
                 )}

@@ -14,7 +14,7 @@ const TYPE_META = {
 };
 
 const describe = (r) => (r.type === 'absence'
-  ? { title: `${r.zone} desk empty — ${r.opCode} away`, detail: [r.description, `returned ${clock(r.end)}`].filter(Boolean).join(' · '), metric: `${dur(r.durSec)}${r.active ? ' +' : ''}`, metricLabel: 'DURATION' }
+  ? { title: `${r.zone} desk empty — ${r.opCode} away`, detail: [r.description, r.end ? `Returned ${clock(r.end)}` : 'Not returned'].filter(Boolean).join(' · '), metric: dur(r.durSec), metricLabel: 'DURATION' }
   : { title: `Point P${r.point ?? '?'} not soldered${r.panelId ? ` · ${r.panelId}` : ''}`, detail: r.zone, metric: `P${r.point ?? '?'}`, metricLabel: 'POINT' });
 
 function TypeTag({ type, style }) {

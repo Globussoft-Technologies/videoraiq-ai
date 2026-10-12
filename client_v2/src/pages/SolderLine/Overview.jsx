@@ -299,7 +299,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
                   <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15, lineHeight: 1.25 }}>{latest.description || `${latest.zone} desk empty`}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div><div style={{ ...label, fontSize: 8.5 }}>Started</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2 }}>{clock(latest.start)}</div></div>
-                    <div><div style={{ ...label, fontSize: 8.5 }}>Duration</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2, color: '#ff6b6b' }}>{dur(latest.durSec)}{latest.active ? ' +' : ''}</div></div>
+                    <div><div style={{ ...label, fontSize: 8.5 }}>Duration</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2, color: '#ff6b6b' }}>{dur(latest.durSec)}</div></div>
                   </div>
                   <div style={{ marginTop: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {latest.image && <DownloadButton action={() => downloadSnapshot({ ...latest, station: s })} description="image" style={btnPrimary}>Image</DownloadButton>}
@@ -360,8 +360,8 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
                   <OpBadge op={r.op} />
                   <span style={{ ...mono, fontWeight: 600 }}>{clock(r.start)}</span>
                   <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.description || `${r.zone} desk empty`}</span>
-                  <span style={{ ...mono, fontSize: 12, color: 'var(--tx2)' }}>{clock(r.end)}</span>
-                  <span style={{ ...mono, fontWeight: 700 }}>{dur(r.durSec)}{r.active ? ' +' : ''}</span>
+                  <span style={{ ...mono, fontSize: 12, color: 'var(--tx2)' }}>{r.end ? clock(r.end) : 'Not returned'}</span>
+                  <span style={{ ...mono, fontWeight: 700 }}>{dur(r.durSec)}</span>
                   <StatusPill active={r.active} />
                 </div>
               ))}
