@@ -64,6 +64,7 @@ export function useConversations() {
   const [uploading, setUploading] = useState(false);
   const abortRef = useRef(null);
   const controllersRef = useRef(new Set());
+  const pendingChatsRef = useRef(new Map());
   const workflowRevisionRef = useRef(0);
   const activeIdRef = useRef(activeId);
   const selectedRequestRef = useRef(0);
@@ -133,8 +134,8 @@ export function useConversations() {
     if (!id) return;
     // Let a response for the previous chat finish in the background. Its
     // completion refreshes history but cannot replace this chat's messages.
-    abortRef.current = null;
-    setSending(false);
+    abortRef.current = pendingChatsRef.current.get(id) || null;
+    setSending(Boolean(abortRef.current));
     const requestId = ++selectedRequestRef.current;
     activeIdRef.current = id;
     setActiveId(id);
@@ -248,6 +249,7 @@ export function useConversations() {
       const sourceConversationId = freshWorkflow ? null : activeId;
       const sourceViewRequest = selectedRequestRef.current;
       controllersRef.current.add(controller);
+      if (sourceConversationId) pendingChatsRef.current.set(sourceConversationId, controller);
       abortRef.current = controller;
       try {
         const result = await askAssistant({
@@ -263,6 +265,8 @@ export function useConversations() {
           signal: controller.signal,
         });
         const persistedId = result?.conversation?.id;
+        const settingsUpdate = result?.ui?.type === 'settings_updated' ? result.ui : result?.assistantMessage?.ui?.type === 'settings_updated' ? result.assistantMessage.ui : null;
+        if (settingsUpdate) window.dispatchEvent(new CustomEvent('vq-assistant-settings-updated', { detail: settingsUpdate }));
         const stillViewingSource = sourceViewRequest === selectedRequestRef.current;
         if (stillViewingSource) {
           if (persistedId) {
@@ -313,10 +317,14 @@ export function useConversations() {
           if (activeIdRef.current === persistedId) setMessages(recovered);
         }
 
+        if (abortRef.current === controller) setSending(false);
         if (historyPage !== 1) setHistoryPage(1);
         else await loadHistoryPage(1);
         return result;
       } catch (error) {
+        // A failed chat is no longer generating. History/media recovery must
+        // not keep the composer in its pending state during a network outage.
+        if (abortRef.current === controller) setSending(false);
         const aborted =
           error?.name === 'AbortError' || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED';
         if (!aborted) {
@@ -366,8 +374,10 @@ export function useConversations() {
         }
       } finally {
         controllersRef.current.delete(controller);
+        if (sourceConversationId && pendingChatsRef.current.get(sourceConversationId) === controller) pendingChatsRef.current.delete(sourceConversationId);
+        const ownsVisibleRequest = abortRef.current === controller;
         if (abortRef.current === controller) abortRef.current = null;
-        if (sourceViewRequest === selectedRequestRef.current) setSending(false);
+        if (ownsVisibleRequest) setSending(false);
       }
     },
     [activeId, historyPage, hydrateMessages, loadHistoryPage, sending]

@@ -422,7 +422,7 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
             value={value}
             maxLength={MAX_ASSISTANT_MESSAGE_CHARS}
             onChange={(e) => { if (voiceState === 'transcribed') setVoiceState('editable'); onChange(e.target.value); }}
-            disabled={sending || uploading || voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting'}
+            disabled={uploading || voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting'}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {

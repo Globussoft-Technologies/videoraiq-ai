@@ -387,6 +387,7 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
 
   const handleSend = useCallback(
     async (text, attachedFiles = [], { voice = false } = {}) => {
+      if (sending) return;
       const structuredAction = text && typeof text === 'object'
         ? text
         : (Array.isArray(attachedFiles) ? null : attachedFiles);
@@ -456,12 +457,16 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
       // keep the selected photos staged for the user's actual instruction.
       if (files.length && messageText.length < 3) return;
       const result = await send(messageText, { action: structuredAction || undefined, incidentContext: incidentAssistantContext, attachments: files, attachmentCount: files.length });
+      // Failed submissions must retain the original File objects so the
+      // user can retry without selecting all enrollment photos again.
+      if (!result || result.assistantMessage?.error) return result;
       if (voice && result && activeIdRef.current === activeId) {
         setDraft('');
         draftByChatRef.current.set(draftKey, '');
       }
       if (startsRegistration && files.length > 0 && result?.assistantMessage?.ui?.workflow === 'register_new_user') {
-        await uploadRegisterFaces({ files, conversationId: result?.conversation?.id || activeId });
+        const uploaded = await uploadRegisterFaces({ files, conversationId: result?.conversation?.id || activeId });
+        if (!uploaded) return result;
         setPendingFiles([]);
         pendingFilesByChatRef.current.set(draftKey, []);
         setClearAttachmentsToken((value) => value + 1);
@@ -472,7 +477,7 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
       }
       return result;
     },
-    [activeId, draftKey, incidentAssistantContext, messages, pendingFiles, send, uploadRegisterFaces]
+    [activeId, draftKey, incidentAssistantContext, messages, pendingFiles, send, sending, uploadRegisterFaces]
   );
 
   // A suggestion is a one-click question, not a prefill — sending immediately is

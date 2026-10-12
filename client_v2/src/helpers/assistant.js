@@ -31,7 +31,7 @@ export async function askAssistant({ message, conversationId, resetWorkflow = fa
   }
 
   const imageAttachments = await Promise.all(attachments.slice(0, 3).filter((file) => /^image\/(jpeg|png)$/.test(file?.type || '')).map(fileAsDataUrl));
-  const res = await api.post(CHAT_ENDPOINT, { message, conversationId: conversationId || undefined, resetWorkflow: Boolean(resetWorkflow), action: action || undefined, workflow: workflow || undefined, step: step || undefined, incidentContext: incidentContext || undefined, attachmentCount: Number(attachmentCount) || undefined, imageAttachments: imageAttachments.length ? imageAttachments : undefined }, { signal });
+  const res = await api.post(CHAT_ENDPOINT, { message, conversationId: conversationId || undefined, resetWorkflow: Boolean(resetWorkflow), action: action || undefined, workflow: workflow || undefined, step: step || undefined, incidentContext: incidentContext || undefined, attachmentCount: Number(attachmentCount) || undefined, imageAttachments: imageAttachments.length ? imageAttachments : undefined }, { signal, timeout: 120_000 });
   const data = unwrap(res);
   return {
     ...data,
@@ -69,12 +69,13 @@ export async function listAssistantConversations({ page = 1, limit = 50, search 
   const res = await api.get(`${ASSISTANT_ENDPOINT}/conversations`, {
     params: { page, limit, ...(search.trim() ? { search: search.trim() } : {}) },
     signal,
+    timeout: 15_000,
   });
   return unwrap(res);
 }
 
 export async function getAssistantConversation(conversationId, { signal } = {}) {
-  const res = await api.get(`${ASSISTANT_ENDPOINT}/conversations/${conversationId}`, { signal });
+  const res = await api.get(`${ASSISTANT_ENDPOINT}/conversations/${conversationId}`, { signal, timeout: 15_000 });
   return unwrap(res);
 }
 
@@ -82,6 +83,7 @@ export async function fetchAssistantAttachment(conversationId, attachmentId, { s
   const res = await api.get(`${ASSISTANT_ENDPOINT}/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}`, {
     responseType: 'blob',
     signal,
+    timeout: 15_000,
   });
   return URL.createObjectURL(res.data);
 }

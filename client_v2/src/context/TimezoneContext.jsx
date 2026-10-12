@@ -47,6 +47,14 @@ export function TimezoneProvider({ children }) {
   useEffect(() => {
     refreshTimezone();
   }, [refreshTimezone]);
+  useEffect(() => {
+    const onUpdated = event => {
+      if (event.detail?.timezone) refreshTimezone();
+      if (event.detail?.channelId) window.dispatchEvent(new CustomEvent('vq-detection-toggle-change', { detail: event.detail }));
+    };
+    window.addEventListener('vq-assistant-settings-updated', onUpdated);
+    return () => window.removeEventListener('vq-assistant-settings-updated', onUpdated);
+  }, [refreshTimezone]);
 
   useEffect(() => {
     // Existing moment() call sites now inherit the tenant's configured zone.

@@ -208,8 +208,15 @@ function formatTimestampText(value) {
 // subset here keeps the transcript readable without adding a full Markdown
 // dependency just for chat bubbles.
 function renderInlineMarkdown(value, keyPrefix = '') {
-  const pieces = String(value ?? '').split(/(\*\*[^*]+\*\*|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)/g);
+  const pieces = String(value ?? '').split(/(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)/g);
   return pieces.map((piece, index) => {
+    const link = piece.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (link) {
+      try {
+        const url = new URL(link[2]);
+        if (!url.username && !url.password) return <a key={`${keyPrefix}-link-${index}`} href={url.href} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
+      } catch { /* render invalid links as text */ }
+    }
     const match = piece.match(/^\*\*(.+)\*\*$/);
     if (match) return <strong key={`${keyPrefix}-strong-${index}`} style={{ fontWeight: 750, color: 'var(--tx)' }}>{formatTimestampText(match[1])}</strong>;
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(piece)) {
@@ -623,6 +630,7 @@ function MultiSelectCard({ ui, onSelectOption }) {
         <button type="button" onClick={submit} disabled={!selected.size} style={{ border: 0, borderRadius: 8, padding: '8px 13px', color: '#fff', background: selected.size ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', cursor: selected.size ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: 12 }}>
           Continue{selected.size ? ` (${selected.size} selected)` : ''}
         </button>
+        {ui.workflow === 'create_user' && <button type="button" onClick={() => onSelectOption?.('cancel')} style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Cancel operation</button>}
       </div>
     </div>
   );
@@ -702,7 +710,7 @@ function SelectCard({ ui, onSelectOption }) {
           );
         }) : <div style={{ color: 'var(--tx3)', fontSize: 12 }}>No options available.</div>}
       </div>
-      {isRegistrationUi(ui) && <button type="button" onClick={() => onSelectOption?.('cancel')} style={{ marginTop: 11, border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontSize: 12 }}>Cancel registration</button>}
+      {(isRegistrationUi(ui) || ui.workflow === 'create_user') && <button type="button" onClick={() => onSelectOption?.('cancel')} style={{ marginTop: 11, border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontSize: 12 }}>{ui.workflow === 'create_user' ? 'Cancel operation' : 'Cancel registration'}</button>}
     </div>
   );
 }
@@ -740,10 +748,11 @@ function TextInputCard({ ui, onSelectOption }) {
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 9, padding: '9px 10px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx)', outline: 'none', fontSize: 12 }}
         />
       </label>
-      <div style={{ display: 'flex', gap: 8, marginTop: 11 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
         <button type="submit" disabled={!value.trim()} style={{ border: 0, borderRadius: 8, padding: '8px 13px', color: '#fff', background: value.trim() ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', cursor: value.trim() ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: 12 }}>Continue</button>
         {ui.allowSkip && <button type="button" onClick={() => onSelectOption?.('Skip')} style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Skip</button>}
-        {isRegistrationUi(ui) && <button type="button" onClick={() => onSelectOption?.('cancel')} style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Cancel</button>}
+        {ui.allowSkip && ['create_location', 'create_department'].includes(ui.workflow) && <button type="button" onClick={() => onSelectOption?.('Skip all optional fields')} style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Skip all optional fields</button>}
+        {(isRegistrationUi(ui) || ['create_location', 'create_department', 'create_user'].includes(ui.workflow)) && <button type="button" onClick={() => onSelectOption?.('cancel')} style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 13px', color: 'var(--tx2)', background: 'var(--bg2)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Cancel operation</button>}
       </div>
     </form>
   );
@@ -907,7 +916,7 @@ function MessageAttachments({ attachments = [] }) {
   </div>;
 }
 
-function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBatchUpload, uploading, activeWorkflow }) {
+function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBatchUpload, uploading, activeWorkflow, canContinue = false }) {
   const isUser = msg.role === 'user';
   const showIp = /\b(?:ip(?:\s+address(?:es)?)?|hostnames?)\b/i.test(userQuestion)
     && !/\b(?:without|hide|omit|exclude|don['’]?t|do not|no)\b.*\b(?:ip|hostname)\b/i.test(userQuestion);
@@ -977,6 +986,7 @@ function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowU
           </div>}
         </div>}
         {!isUser && <>
+          {canContinue && <button type="button" onClick={() => onSelectOption?.('continue')} style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer' }}>Continue</button>}
           {isVehicleLogs && <VehicleLogsResult ui={workflowUi} />}
           <ExportCard ui={workflowUi} />
           <WorkflowCard ui={workflowUi} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} active={activeWorkflow} />
@@ -989,10 +999,21 @@ function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowU
 }
 
 function TypingBubble() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const progress = elapsed >= 45
+    ? 'This is taking longer than expected. You can keep this request running or use Stop.'
+    : elapsed >= 15 ? 'Still waiting for a response. You can switch chats while this runs.'
+    : elapsed >= 5 ? 'Your request is in progress…' : '';
   return (
     <div className="vq-fadeup" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <AssistantAvatar />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 15px', borderRadius: 14, borderTopLeftRadius: 5, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+      <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '8px 15px', borderRadius: 14, borderTopLeftRadius: 5, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+        {progress && <span style={{ fontSize: 13, color: 'var(--tx2)', marginRight: 8 }}>{progress}</span>}
         {[0, 1, 2].map((i) => <span key={i} className="vq-typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--tx2)', animationDelay: `${i * 0.16}s` }} />)}
       </div>
     </div>
@@ -1018,7 +1039,8 @@ export default function MessageThread({ messages = [], sending = false, uploadin
       {messages.map((msg, index) => {
         const hasUserResponseAfter = messages.slice(index + 1).some((item) => item.role === 'user');
         const userQuestion = messages.slice(0, index).findLast((item) => item.role === 'user')?.text || '';
-        return <Bubble key={msg.id || `${msg.at || 'message'}-${index}`} msg={msg} userQuestion={userQuestion} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} activeWorkflow={index === latestWorkflowIndex && !hasUserResponseAfter} />;
+        const canContinue = msg.role === 'assistant' && index === messages.length - 1 && !sending && !uploading && typeof onSelectOption === 'function' && /temporarily unavailable|could not generate a response|couldn't fetch|could not connect|please try again|choose continue to resume/i.test(String(msg.text || ''));
+        return <Bubble key={msg.id || `${msg.at || 'message'}-${index}`} msg={msg} userQuestion={userQuestion} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} activeWorkflow={index === latestWorkflowIndex && !hasUserResponseAfter} canContinue={canContinue} />;
       })}
       {sending && <TypingBubble />}
       <div ref={endRef} />

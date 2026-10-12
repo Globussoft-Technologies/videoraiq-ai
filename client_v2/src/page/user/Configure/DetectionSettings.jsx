@@ -1181,7 +1181,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   };
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
@@ -1243,7 +1243,15 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         </span> */}
       </div>
 
-      <div style={{ position: 'relative', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
+      <div
+        className="vq-scroll"
+        role="region"
+        aria-label="Detection cameras"
+        tabIndex={0}
+        style={{ position: 'relative', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, minWidth: 0, overflowX: 'auto' }}
+      >
+        {/* Keep the header and rows aligned while narrow windows scroll. */}
+        <div style={{ minWidth: 1030 }}>
         <div style={{
           display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 150px 210px 150px 44px', gap: 0,
           padding: '12px 18px', borderBottom: '1px solid var(--bd)',
@@ -1283,6 +1291,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             />
           ))}
         </AsyncBoundary>
+        </div>
       </div>
       {checkTypeSavingId && (
         <div
