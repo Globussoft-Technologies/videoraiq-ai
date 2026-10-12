@@ -1,6 +1,6 @@
 import { getAuthUser, getInitials } from '../utils/authUser'
 
-const Topbar = ({ eyebrow, title }) => {
+const Topbar = ({ eyebrow, title, showRegionStatus = true }) => {
   const user = getAuthUser()
   const name = user?.name || 'Super Admin'
 
@@ -18,7 +18,7 @@ const Topbar = ({ eyebrow, title }) => {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-white/8 dark:bg-white/4">
+        {showRegionStatus && <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-white/8 dark:bg-white/4">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
@@ -26,7 +26,7 @@ const Topbar = ({ eyebrow, title }) => {
           <span className="font-mono text-[11px] font-medium text-gray-500 dark:text-gray-400">
             All Regions Online
           </span>
-        </div>
+        </div>}
 
         <span
           title={name}

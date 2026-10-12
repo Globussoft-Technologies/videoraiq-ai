@@ -1,17 +1,19 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
-import LoginPage from './pages/LoginPage/LoginPage'
-import ForgotPasswordPage from './pages/LoginPage/ForgotPasswordPage'
-import ResetPasswordPage from './pages/LoginPage/ResetPasswordPage'
-import RequireAuth from './components/Auth/RequireAuth'
-import AppLayout from './layout/AppLayout'
-import Clients from './pages/clients/Clients'
-import ClientConfig from './pages/clients/ClientConfig'
-import DetectionCatalog from './pages/detectionCatalog/DetectionCatalog'
-import SubscriptionPlans from './pages/subscriptionPlans/SubscriptionPlans'
-import FleetOverview from './pages/fleet/FleetOverview'
-import SessionManagement from './pages/sessionManagement/SessionManagement'
-import ComingSoon from './pages/placeholder/ComingSoon'
-import Profile from './pages/profile/Profile'
+import { Navigate, Route, Routes } from "react-router-dom";
+import LoginPage from "./pages/LoginPage/LoginPage";
+import ForgotPasswordPage from "./pages/LoginPage/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/LoginPage/ResetPasswordPage";
+import RequireAuth from "./components/Auth/RequireAuth";
+import AppLayout from "./layout/AppLayout";
+import Clients from "./pages/clients/Clients";
+import ClientConfig from "./pages/clients/ClientConfig";
+import DetectionCatalog from "./pages/detectionCatalog/DetectionCatalog";
+import SubscriptionPlans from "./pages/subscriptionPlans/SubscriptionPlans";
+import FleetOverview from "./pages/fleet/FleetOverview";
+import SessionManagement from "./pages/sessionManagement/SessionManagement";
+import ComingSoon from "./pages/placeholder/ComingSoon";
+import Profile from "./pages/profile/Profile";
+import StreamMonitoring from "./pages/streamMonitoring/StreamMonitoring";
+import AlertRecipients from "./pages/alertRecipients/AlertRecipients";
 
 const App = () => {
   return (
@@ -33,15 +35,27 @@ const App = () => {
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
         <Route path="/fleet" element={<FleetOverview />} />
+        <Route path="/stream-monitoring" element={<StreamMonitoring />} />
+        <Route
+          path="/stream-monitoring/:adminId"
+          element={<StreamMonitoring />}
+        />
+        <Route path="/alert-recipients" element={<AlertRecipients />} />
         <Route path="/session-management" element={<SessionManagement />} />
-        <Route path="/session-management/:ownerType/:ownerId" element={<SessionManagement />} />
-        <Route path="/feature-roadmap" element={<ComingSoon title="Feature Roadmap" />} />
+        <Route
+          path="/session-management/:ownerType/:ownerId"
+          element={<SessionManagement />}
+        />
+        <Route
+          path="/feature-roadmap"
+          element={<ComingSoon title="Feature Roadmap" />}
+        />
       </Route>
 
       <Route path="/" element={<Navigate to="/clients" replace />} />
       <Route path="*" element={<Navigate to="/clients" replace />} />
     </Routes>
-  )
-}
+  );
+};
 
-export default App
+export default App;

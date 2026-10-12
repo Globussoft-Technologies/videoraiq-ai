@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
@@ -521,6 +521,12 @@ const ClientConfig = () => {
                 {passed.plan}
               </span>
             )}
+            <Link
+              to={`/stream-monitoring/${adminId}`}
+              className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-600 dark:border-purple-400/30 dark:bg-purple-500/10 dark:text-purple-300"
+            >
+              <Video size={14} /> View stream status
+            </Link>
           </div>
 
           {/* License tab: changes save themselves; this only reports state, so
