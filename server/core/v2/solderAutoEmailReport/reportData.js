@@ -1,6 +1,5 @@
 import moment from 'moment-timezone';
-import PDFDocument from 'pdfkit';
-import ExcelJS from 'exceljs';
+import { buildReportPdf, buildReportXlsx } from './reportLayout.js';
 
 export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity' };
 
@@ -64,29 +63,11 @@ export function buildReportRows(type, { channel, panels, absences, window, timez
 export async function buildAttachments(rows, title, subtitle, formats) {
   const attachments = [];
   if (formats.includes('xlsx')) {
-    const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet('Report');
-    sheet.addRow([title]); sheet.addRow([subtitle]);
-    if (rows.length) {
-      const headers = Object.keys(rows[0]); sheet.addRow(headers);
-      rows.forEach((row) => sheet.addRow(headers.map((key) => row[key])));
-      sheet.columns.forEach((column) => { column.width = 24; });
-    } else sheet.addRow(['No records for this period.']);
-    attachments.push({ content: Buffer.from(await workbook.xlsx.writeBuffer()).toString('base64'), filename: 'solder-report.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', disposition: 'attachment' });
+    const buffer = await buildReportXlsx(rows, title, subtitle);
+    attachments.push({ content: buffer.toString('base64'), filename: 'solder-report.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', disposition: 'attachment' });
   }
   if (formats.includes('pdf')) {
-    const buffer = await new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ layout: 'landscape', margin: 35 });
-      const chunks = []; doc.on('data', (c) => chunks.push(c)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
-      doc.fontSize(16).text(title); doc.fontSize(10).text(subtitle); doc.moveDown();
-      if (!rows.length) doc.text('No records for this period.');
-      rows.forEach((row, index) => {
-        doc.fontSize(10).font('Helvetica-Bold').text(`Record ${index + 1}`);
-        doc.font('Helvetica').fontSize(9);
-        Object.entries(row).forEach(([key, value]) => doc.text(`${key}: ${value}`));
-        doc.moveDown();
-      });
-      doc.end();
-    });
+    const buffer = await buildReportPdf(rows, title, subtitle);
     attachments.push({ content: buffer.toString('base64'), filename: 'solder-report.pdf', type: 'application/pdf', disposition: 'attachment' });
   }
   return attachments;

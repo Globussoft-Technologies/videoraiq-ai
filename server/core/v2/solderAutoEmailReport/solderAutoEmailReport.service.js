@@ -17,6 +17,7 @@ import { validTimezone, DEFAULT_ADMIN_TIMEZONE } from '../../../utils/timezone.j
 import { trackOutboundEmail, trackFailedEmail } from '../emailMonitoring/emailTracker.js';
 import { scheduledWindow } from './scheduleWindow.js';
 import { buildReportRows, buildAttachments, REPORT_TITLES } from './reportData.js';
+import { buildEmailHtml } from './reportLayout.js';
 
 // Older deployments use SendGrid directly and do not include the optional
 // SMTP transport. Resolve it at send time so its absence cannot stop startup.
@@ -115,6 +116,7 @@ async function prepareEmail(report, window, timezone) {
   return {
     from: (await getMailTransport()).getMailSender(), to: report.recipients, subject: `${title} — ${window.start.format('DD MMM YYYY')}`,
     text: `${title}\n${subtitle}\n${rows.length} report rows.\nThe scheduled report is attached.`, attachments,
+    html: buildEmailHtml(rows, title, subtitle, report.formats),
   };
 }
 
