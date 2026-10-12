@@ -201,6 +201,47 @@ describe("assistantController.chat", () => {
     );
     expect(JSON.stringify(res._body)).not.toContain("provider internals");
   });
+
+  it("reports MCP timeouts accurately and offers continuation without losing workflow state", async () => {
+    const { req, res } = makeReqRes();
+    req.body = { message: "continue" };
+    const savedState = { workflow: "create_user", status: "collecting", currentStep: "email" };
+    conversation.workflowState = savedState;
+    const error = new Error("The assistant service timed out.");
+    error.statusCode = 504;
+    assistantService.askAssistant.mockRejectedValueOnce(error);
+    await assistantController.chat(req, res);
+    expect(res.statusCode).toBe(504);
+    expect(res._body.body.message).toContain("Choose Continue to resume");
+    expect(res._body.body.message).not.toContain("AI provider");
+    expect(conversation.workflowState).toEqual(savedState);
+  });
+
+  it("distinguishes photo storage failure from AI or enrollment failure", async () => {
+    const {req,res}=makeReqRes();
+    req.body={message:"register one user"};
+    const error=new Error("internal storage details");
+    error.code="ASSISTANT_PHOTO_STORAGE_FAILED";
+    error.statusCode=502;
+    assistantService.askAssistant.mockRejectedValueOnce(error);
+    await assistantController.chat(req,res);
+    expect(res.statusCode).toBe(502);
+    expect(res._body.body.message).toContain("saved to storage");
+    expect(res._body.body.message).toContain("Face enrollment has not started");
+    expect(res._body.body.message).not.toContain("internal storage details");
+  });
+  it("identifies an upload authentication rejection without blaming all storage", async () => {
+    const {req,res}=makeReqRes();
+    req.body={message:"register one user"};
+    const error=new Error("photo upload failed");
+    error.code="ASSISTANT_PHOTO_STORAGE_FAILED";
+    error.statusCode=502;
+    error.cause=new Error("getConnection: All configured authentication methods failed");
+    assistantService.askAssistant.mockRejectedValueOnce(error);
+    await assistantController.chat(req,res);
+    expect(res._body.body.message).toContain("rejected authentication for this photo upload");
+    expect(res._body.body.message).not.toContain("storage is unavailable");
+  });
 });
 
 describe("assistantController conversation history", () => {

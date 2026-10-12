@@ -1,3 +1,4 @@
+import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
 import logger from "../../../utils/logger.js";
@@ -1296,7 +1297,10 @@ class IncidentsService {
         );
       }
 
-      if (startDate && endDate) {
+      const exactWindow = exactIncidentWindow(req.body);
+      if (exactWindow) {
+        matchStage.timeOfIncident = exactWindow;
+      } else if (startDate && endDate) {
         const timezone = getRequestTimezone(req);
 
         matchStage.timeOfIncident = {
@@ -1630,6 +1634,17 @@ class IncidentsService {
         });
       }
 
+      if (req.body?.groupBy === "camera_nvr") {
+        const groups = await Incident.aggregate([
+          { $match: { ...matchStage } }, ...vehicleStages,
+          { $group: { _id: { channelId: "$channelId", nvrId: "$nvrId" }, count: { $sum: 1 } } },
+          { $lookup: { from: "channels", localField: "_id.channelId", foreignField: "_id", as: "camera" } },
+          { $lookup: { from: "nvrs", localField: "_id.nvrId", foreignField: "_id", as: "nvr" } },
+          { $project: { _id: 0, count: 1, cameraName: { $arrayElemAt: ["$camera.name", 0] }, nvrName: { $arrayElemAt: ["$nvr.nvrName", 0] } } },
+          { $sort: { count: -1, cameraName: 1 } },
+        ]);
+        return res.status(200).json({ totalCount: groups.reduce((total, group) => total + group.count, 0), groups });
+      }
       // Aggregated paginated data
       const data = await Incident.aggregate([
         // 1ï¸âƒ£ Match early (uses index)
@@ -1660,7 +1675,7 @@ class IncidentsService {
           },
         },
         {
-          $sort: { sortAt: -1, createdAt: -1 },
+          $sort: incidentRecordSort(req.body),
         },
 
         // 3ï¸âƒ£ Pagination BEFORE lookups

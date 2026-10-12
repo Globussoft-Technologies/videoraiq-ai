@@ -20,6 +20,7 @@ import {
 } from "../../../utils/mediaStorage.js";
 import { parseV2StoragePath, resolveEnvStorage, resolveStorageConfig } from "./adminStorage.resolver.js";
 import config from "config";
+import logger from "../../../utils/logger.js";
 
 const objectClients = new Map();
 
@@ -116,13 +117,19 @@ export async function putMediaV2({ adminId, buffer, mediaType, folderName, origi
   try {
     return await putWithContext({ context, adminId, buffer, mediaType, folderName, originalName, objectId });
   } catch (error) {
+    logger.error(`[MEDIA-UPLOAD] ${JSON.stringify({ provider: context.provider, source: context.source, versionId: context.versionId, stage: "primary", reason: /authentication methods failed/i.test(error?.message || "") ? "authentication_rejected" : "upload_failed", code: error?.code })}`);
     // Some older admin records contain expired cloud credentials. Callers
     // that explicitly opt in (currently assistant uploads) can fall back to
     // the environment storage without changing the storage choice for other
     // application media.
     if (!fallbackToEnv || context.source !== "admin") throw error;
     const envContext = { ...resolveEnvStorage(), adminId, versionId: "env" };
-    return putWithContext({ context: envContext, adminId, buffer, mediaType, folderName, originalName, objectId });
+    try {
+      return await putWithContext({ context: envContext, adminId, buffer, mediaType, folderName, originalName, objectId });
+    } catch (fallbackError) {
+      logger.error(`[MEDIA-UPLOAD] ${JSON.stringify({ provider: envContext.provider, source: "env", stage: "fallback", reason: /authentication methods failed/i.test(fallbackError?.message || "") ? "authentication_rejected" : "upload_failed", code: fallbackError?.code })}`);
+      throw fallbackError;
+    }
   }
 }
 

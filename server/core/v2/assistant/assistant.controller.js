@@ -29,7 +29,11 @@ async function storeAssistantFace({ adminId, conversationId, angle, file }) {
     });
   } catch (error) {
     logger.error(`Assistant attachment was not stored in remote media storage: ${error?.message || error}`);
-    throw error;
+    const storageError = new Error("The selected photos could not be saved to media storage.");
+    storageError.code = "ASSISTANT_PHOTO_STORAGE_FAILED";
+    storageError.statusCode = 502;
+    storageError.cause = error;
+    throw storageError;
   }
 }
 
@@ -472,7 +476,13 @@ class AssistantController {
       const statusCode = Number(error?.statusCode) || 500;
       logger.error(`Assistant chat failed: ${error?.stack || error?.message || error}`);
       const messageText =
-        statusCode === 503
+        error?.code === "ASSISTANT_PHOTO_STORAGE_FAILED"
+          ? /authentication methods failed/i.test(error?.cause?.message || "")
+            ? "The storage server rejected authentication for this photo upload. Face enrollment has not started. Your selected photos are retained for retry."
+            : "Your photos could not be saved to storage. Face enrollment has not started. Your selected photos are retained for retry."
+          : statusCode === 504
+          ? "This request took too long to finish. Your saved details are still available. Choose Continue to resume; check the operation's status before retrying a confirmed change."
+          : statusCode === 503
           ? "The AI assistant is not configured on this server."
           : statusCode === 502
             ? "The AI provider could not generate a response. Please try again."

@@ -112,6 +112,9 @@ async function callGemini(settings, systemInstruction, messages, generationOptio
               ? { thinkingConfig: { thinkingBudget: generationOptions.thinkingBudget } } : {}),
           },
         });
+        if (response?.candidates?.some(candidate => candidate.finishReason === "MAX_TOKENS")) {
+          throw configurationError("The language provider truncated its response; a complete answer is unavailable.");
+        }
         return clean(response?.text);
       } catch (error) {
         lastError = error;
@@ -128,7 +131,7 @@ async function callGemini(settings, systemInstruction, messages, generationOptio
   throw lastError;
 }
 
-async function callOpenAICompatible(settings, systemInstruction, messages) {
+async function callOpenAICompatible(settings, systemInstruction, messages, generationOptions = {}) {
   const baseUrl = settings.baseUrl || "https://api.openai.com/v1";
   const url = joinEndpoint(baseUrl, "/chat/completions");
   const headers = { "Content-Type": "application/json" };
@@ -149,14 +152,17 @@ async function callOpenAICompatible(settings, systemInstruction, messages) {
         })),
       ],
       temperature: 0.2,
-      max_tokens: 800,
+      max_tokens: generationOptions.maxOutputTokens ?? 800,
     },
     { headers, timeout: 60_000 },
   );
+  if (data?.choices?.[0]?.finish_reason === "length") {
+    throw configurationError("The language provider truncated its response; a complete answer is unavailable.");
+  }
   return clean(data?.choices?.[0]?.message?.content);
 }
 
-async function callAnthropic(settings, systemInstruction, messages) {
+async function callAnthropic(settings, systemInstruction, messages, generationOptions = {}) {
   const baseUrl = settings.baseUrl || "https://api.anthropic.com/v1";
   const url = joinEndpoint(baseUrl, "/messages");
   const { data } = await axios.post(
@@ -177,7 +183,7 @@ async function callAnthropic(settings, systemInstruction, messages) {
         ],
       })),
       temperature: 0.2,
-      max_tokens: 800,
+      max_tokens: generationOptions.maxOutputTokens ?? 800,
     },
     {
       headers: {
@@ -188,6 +194,9 @@ async function callAnthropic(settings, systemInstruction, messages) {
       timeout: 60_000,
     },
   );
+  if (data?.stop_reason === "max_tokens") {
+    throw configurationError("The language provider truncated its response; a complete answer is unavailable.");
+  }
   return clean(data?.content?.find((part) => part?.type === "text")?.text);
 }
 
@@ -199,9 +208,9 @@ export async function generateAssistantText({ systemInstruction, messages, gener
   if (settings.provider === "gemini") {
     text = await callGemini(settings, systemInstruction, messages, generationOptions);
   } else if (settings.provider === "anthropic") {
-    text = await callAnthropic(settings, systemInstruction, messages);
+    text = await callAnthropic(settings, systemInstruction, messages, generationOptions);
   } else {
-    text = await callOpenAICompatible(settings, systemInstruction, messages);
+    text = await callOpenAICompatible(settings, systemInstruction, messages, generationOptions);
   }
 
   if (!text) {

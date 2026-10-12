@@ -1,3 +1,4 @@
+import { getRequestTimezone } from "../../../utils/timezone.js";
 import logger from "../../../utils/logger.js";
 import config from "config";
 import { generateAssistantText } from "./assistant.provider.js";
@@ -98,6 +99,7 @@ export async function askAssistant({ message, history, req, workflowState, actio
 }
 
 async function askMcpAgent({ message, history, req, workflowState, action, incidentContext, attachmentCount = 0, conversationContext, conversationId }) {
+  const started = Date.now();
   // The MCP process is configured with MCP_HTTP_PORT, while the API process
   // historically expected a separate ASSISTANT_MCP_URL setting. Resolve the
   // explicit URL first, then config-file values, and finally the MCP port so
@@ -127,6 +129,8 @@ async function askMcpAgent({ message, history, req, workflowState, action, incid
       headers: {
         "Content-Type": "application/json",
         "x-access-token": String(token),
+        // Derive this from the refreshed authenticated admin, never browser input.
+        "x-videoraiq-timezone": getRequestTimezone(req),
         ...(req.headers["x-account-id"] ? { "x-account-id": String(req.headers["x-account-id"]) } : {}),
         ...(req.headers["x-user-id"] ? { "x-user-id": String(req.headers["x-user-id"]) } : {}),
         ...(req.headers["x-member-id"] ? { "x-member-id": String(req.headers["x-member-id"]) } : {})
@@ -136,7 +140,7 @@ async function askMcpAgent({ message, history, req, workflowState, action, incid
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      logger.warn?.(`MCP assistant returned HTTP ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`);
+      logger.warn?.("MCP_ASSISTANT_HTTP_FAILED", { status: response.status, elapsedMs: Date.now() - started, conversationId, workflow: workflowState?.workflow, step: workflowState?.currentStep });
       return null;
     }
     const payload = await response.json().catch(() => null);
@@ -163,7 +167,12 @@ async function askMcpAgent({ message, history, req, workflowState, action, incid
     }
     return { text: responseText, ui: returnedUi, workflowState: returnedWorkflowState, executeWorkflow: payload.executeWorkflow, ...(Object.hasOwn(payload, "conversationContext") ? { conversationContext: payload.conversationContext } : {}), contextGeneratedAt: new Date().toISOString() };
   } catch (error) {
-    logger.warn?.(`MCP assistant unavailable: ${error?.message || error}`);
+    logger.warn?.("MCP_ASSISTANT_UNAVAILABLE", { reason: error?.name, code: error?.cause?.code ?? error?.code, elapsedMs: Date.now() - started, conversationId, workflow: workflowState?.workflow, step: workflowState?.currentStep, timeout: ["TimeoutError", "AbortError"].includes(error?.name) });
+    if (["TimeoutError", "AbortError"].includes(error?.name)) {
+      const timeout = new Error("The assistant service timed out.");
+      timeout.statusCode = 504;
+      throw timeout;
+    }
     return null;
   }
 }
