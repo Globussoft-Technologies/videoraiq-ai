@@ -2,16 +2,19 @@ import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import { monitoringSettings } from "./settings.js";
 import TelegramService from "../../../services/telegram.service.js";
-import { telegramChannels, selectedTelegramChannels, telegramBotToken, telegramBotUsername } from "./telegramChannels.js";
+import { telegramChannels, selectedTelegramChannels, telegramBotIdentity } from "./telegramChannels.js";
 
-const responseData = recipient => ({ code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
+const responseData = async recipient => ({ code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
   selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
-  botUsername: telegramBotUsername(), botConfigured: !!telegramBotToken(), collectorEnabled: monitoringSettings().enabled });
+  botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: monitoringSettings().enabled });
 
 function handler(action, message) {
   return async (req, res) => {
     res.set("Cache-Control", "no-store");
-    try { return res.send(Response.SuccessResp(message, await action(req))); }
+    try {
+      await telegramBotIdentity();
+      return res.send(Response.SuccessResp(message, await action(req)));
+    }
     catch (error) {
       if (!error.status) logger.error("[STREAM_TELEGRAM] channel request failed");
       const status = error.status || 500;

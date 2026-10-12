@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import TelegramService from "../../../services/telegram.service.js";
 import { telegramWebhookSecret } from "./telegram.settings.js";
+import { telegramBotIdentity } from "../streamMonitoring/telegramChannels.js";
 
 export function verifyTelegramWebhook(req, res, next) {
   const expected = telegramWebhookSecret();
@@ -14,13 +15,19 @@ export function verifyTelegramWebhook(req, res, next) {
   return next();
 }
 
-export const webhookReady = (_req, res) => {
+export const webhookReady = async (_req, res) => {
   res.set("Cache-Control", "no-store");
-  return res.json({ ok: true, service: "videoraiq-superadmin-telegram" });
+  try {
+    const identity = await telegramBotIdentity();
+    return res.json({ ok: true, service: "videoraiq-superadmin-telegram", botId: identity.id, botUsername: identity.username });
+  } catch {
+    return res.status(503).json({ ok: false });
+  }
 };
 
 export async function webhook(req, res) {
   try {
+    await telegramBotIdentity();
     await TelegramService.handleUpdate(req.body);
     return res.json({ ok: true });
   } catch {

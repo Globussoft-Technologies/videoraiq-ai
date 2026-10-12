@@ -5,7 +5,7 @@ import logger from "../../../utils/logger.js";
 import { readInventory } from "./inventory.js";
 import { MonitoringState } from "./models.js";
 import { SuperAdminTelegramRecipient, SuperAdminTelegramDelivery } from "./telegramModels.js";
-import { telegramBotToken, selectedTelegramChannels } from "./telegramChannels.js";
+import { telegramBotToken, telegramBotIdentity, selectedTelegramChannels } from "./telegramChannels.js";
 import { buildStreamReport, notificationDue, REMINDER_MS } from "./telegramReport.js";
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -31,6 +31,7 @@ export function createStreamTelegramSender() {
     let nextDelay = REMINDER_MS;
     let schedule = false;
     try {
+      await telegramBotIdentity();
       const recipients = await SuperAdminTelegramRecipient.find({}).lean();
       if (!recipients.length) return;
       const accounts = await SuperAdmin.find({ _id: { $in: recipients.map(row => row._id) } }).select("_id").lean();

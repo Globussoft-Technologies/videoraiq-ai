@@ -1,9 +1,39 @@
 import config from "config";
+import "dotenv/config";
+import axios from "axios";
 
-export const telegramBotToken = () => config.has("Telegram.botToken")
-  ? config.get("Telegram.botToken") : config.has("domainPoint.botToken") ? config.get("domainPoint.botToken") : "";
+export const telegramBotToken = () => process.env.TELEGRAM_BOT_TOKEN || (config.has("Telegram.botToken")
+  ? config.get("Telegram.botToken") : config.has("domainPoint.botToken") ? config.get("domainPoint.botToken") : "");
 export const telegramBotUsername = () => config.has("Telegram.botUsername")
   ? config.get("Telegram.botUsername") : "@VideoraIQDEVAlertsbot";
+
+let identityCache;
+export async function telegramBotIdentity() {
+  const token = telegramBotToken();
+  const unavailable = message => Object.assign(new Error(message), { status: 503 });
+  if (!token) throw unavailable("Telegram bot is not configured");
+  if (!identityCache || identityCache.token !== token || identityCache.expiresAt <= Date.now()) {
+    const entry = { token, expiresAt: Date.now() + 300_000 };
+    entry.promise = (async () => {
+      try {
+        const { data } = await axios.get(`https://api.telegram.org/bot${token}/getMe`,
+          { timeout: 5000, maxRedirects: 0, maxContentLength: 1_000_000 });
+        if (!data?.ok || !data.result?.is_bot || !Number.isSafeInteger(data.result.id) || !data.result.username)
+          throw new Error("Invalid bot identity");
+        return { id: data.result.id, username: `@${data.result.username}` };
+      } catch {
+        if (identityCache === entry) identityCache = null;
+        throw unavailable("Unable to verify the Telegram bot. Check its token and connection");
+      }
+    })();
+    identityCache = entry;
+  }
+  const identity = await identityCache.promise;
+  const expected = String(telegramBotUsername()).replace(/^@/, "");
+  if (identity.username.slice(1).toLowerCase() !== expected.toLowerCase())
+    throw unavailable(`Configured token belongs to ${identity.username}; @${expected} is required. Set Telegram.botToken or TELEGRAM_BOT_TOKEN to the correct token`);
+  return identity;
+}
 
 // Same multi-channel and legacy single-channel normalization as stagingv2.
 export function telegramChannels(admin = {}) {

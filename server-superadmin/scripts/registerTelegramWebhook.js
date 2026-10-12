@@ -1,5 +1,5 @@
 import axios from "axios";
-import { telegramBotToken } from "../core/v1/streamMonitoring/telegramChannels.js";
+import { telegramBotToken, telegramBotIdentity } from "../core/v1/streamMonitoring/telegramChannels.js";
 import { telegramWebhookSecret, telegramWebhookUrl } from "../core/v1/telegram/telegram.settings.js";
 
 // Run from server-superadmin. No configuration files or database records are written.
@@ -12,16 +12,29 @@ export async function registerTelegramWebhook(mode = "--check") {
   if (!token || !/^[A-Za-z0-9_-]{1,256}$/.test(secret))
     throw new Error("Telegram bot or webhook secret is not configured");
   const options = { timeout: 8000, maxRedirects: 0, maxContentLength: 1_000_000 };
-
-  // Both existing configs currently name the same host. Prove that its route
-  // reaches server-superadmin before changing the shared bot's live webhook.
-  const ready = await axios.get(url, { ...options,
-    headers: { "X-Telegram-Bot-Api-Secret-Token": secret } });
-  if (ready.data?.ok !== true || ready.data?.service !== "videoraiq-superadmin-telegram")
-    throw new Error("Configured webhook URL does not reach the superadmin Telegram handler");
+  const identity = await telegramBotIdentity();
   const endpoint = `https://api.telegram.org/bot${token}`;
   const info = await axios.get(`${endpoint}/getWebhookInfo`, options);
   if (info.data?.ok !== true) throw new Error("Unable to inspect the current Telegram webhook");
+  console.log(`Bot: ${identity.username}. Registered webhook: ${info.data.result?.url || "none"}.`);
+
+  // Both existing configs currently name the same host. Prove that its route
+  // reaches server-superadmin before changing the shared bot's live webhook.
+  let ready;
+  try {
+    ready = await axios.get(url, { ...options,
+      headers: { "X-Telegram-Bot-Api-Secret-Token": secret } });
+  } catch (error) {
+    if (error.response?.status === 404)
+      throw new Error("Public Telegram webhook returns 404. Deploy server-superadmin and route this exact webhook path to it before connecting channels");
+    if (error.response?.status === 401)
+      throw new Error("Public Telegram webhook rejected the secret. Match the deployed webhook secret before registering or connecting channels");
+    throw error;
+  }
+  if (ready.data?.ok !== true || ready.data?.service !== "videoraiq-superadmin-telegram")
+    throw new Error("Configured webhook URL does not reach the superadmin Telegram handler");
+  if (ready.data.botId !== identity.id)
+    throw new Error("Local and deployed superadmin use different Telegram bots");
   if (mode === "--check") {
     console.log(`Superadmin webhook is ready: ${url}. No webhook change made.`);
     return;

@@ -5,6 +5,11 @@ import { toast } from 'react-toastify'
 // put it at err.response.data.message. Check both, then fall back.
 export const getApiMessage = (err, fallback = 'Something went wrong') => {
   const status = err?.response?.status
+  const data = err?.response?.data
+
+  if (data?.body?.status === 'failed' && typeof data.body.message === 'string' && data.body.message.trim()) {
+    return data.body.message
+  }
 
   // Gateway / server-down statuses return HTML (not our JSON envelope), so a
   // clear, actionable message beats the raw "Network Error" / Cloudflare page.
@@ -15,7 +20,6 @@ export const getApiMessage = (err, fallback = 'Something went wrong') => {
     return 'Unable to reach the server. Check your connection and try again.'
   }
 
-  const data = err?.response?.data
   // Cloudflare error pages come back as an HTML string in data — don't show that.
   const bodyMessage = typeof data === 'object' ? data?.body?.message || data?.message : null
   return bodyMessage || err?.message || fallback
