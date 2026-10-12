@@ -21,7 +21,7 @@ const STEPS = [
 const MESSAGE_MS = 520;
 const FILL_MS = 2600;
 
-export default function AuthLoader({ onComplete }) {
+export default function AuthLoader({ onComplete, pending = false }) {
   const [step, setStep] = useState(0);
   const [pct, setPct] = useState(0);
   const startRef = useRef(null);
@@ -38,11 +38,11 @@ export default function AuthLoader({ onComplete }) {
 
     startRef.current = Date.now();
     const fillIv = setInterval(() => {
-      const p = Math.min(100, Math.round(((Date.now() - startRef.current) / FILL_MS) * 100));
+      const p = Math.min(pending ? 90 : 100, Math.round(((Date.now() - startRef.current) / FILL_MS) * 100));
       setPct(p);
       // Fire once, exactly when the bar visually reaches 100% — never before,
       // so the caller's redirect can't race ahead of what the user sees.
-      if (p >= 100 && !firedRef.current) {
+      if (!pending && p >= 100 && !firedRef.current) {
         firedRef.current = true;
         onComplete?.();
       }
@@ -52,10 +52,10 @@ export default function AuthLoader({ onComplete }) {
       clearInterval(messageIv);
       clearInterval(fillIv);
     };
-  }, [onComplete]);
+  }, [onComplete, pending]);
 
   return (
-    <div className="vqauth-loader" data-theme={theme}>
+    <div className="vqauth-loader" data-theme={theme} role="status" aria-label={pending ? 'Verifying your account. Please wait.' : 'Preparing your dashboard.'}>
       <div className="vqauth-grid" />
       <div className="vqauth-glow" />
       <div className="vqauth-glow vqauth-glow--2" />
@@ -123,9 +123,9 @@ export default function AuthLoader({ onComplete }) {
         <div className="vqauth-label">
           <span className="vqauth-label-left">
             <span className="vqauth-label-dot" />
-            <span>{STEPS[step]}</span>
+            <span>{pending ? 'Verifying your account…' : STEPS[step]}</span>
           </span>
-          <span className="vqauth-label-pct">{pct}%</span>
+          {!pending && <span className="vqauth-label-pct">{pct}%</span>}
         </div>
       </div>
     </div>

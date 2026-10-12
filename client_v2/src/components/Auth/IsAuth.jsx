@@ -7,6 +7,7 @@ import { useSocket } from '@/context/SocketContext';
 import { logout } from '@/hooks/logout';
 import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
 import { isLocalSetup } from '@/utils/jwt';
+import AuthLoader from '@/page/user/Users/AuthLoader';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
@@ -425,7 +426,7 @@ export default function IsAuth({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
 
-  if (isLoading) return <div />;
+  if (isLoading) return <AuthLoader pending />;
   if (failure) {
     return (
       <main
@@ -471,5 +472,5 @@ export default function IsAuth({ children }) {
     );
   }
   if (getAccessToken()) return <>{children}</>;
-  return null;
+  return <AuthLoader pending />;
 }
