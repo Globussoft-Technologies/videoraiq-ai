@@ -56,6 +56,7 @@ export const FULL_FRAME_CONFIGS = {
       smoke_confidence: 0.25,
       fire_smoke_iou: 0.3,
       fire_smoke_cooldown_sec: 60,
+      fire_outside_zone_enabled: false,
       trigger_notification: true,
       zone_name: 'Full Frame',
       levelOfImportance: 'moderate',
@@ -285,6 +286,9 @@ function deserializeSettings(config, rawSettings = {}) {
   });
 
   // Boolean and string fields
+  if ('fire_outside_zone_enabled' in defaults) {
+    result.fire_outside_zone_enabled = rawSettings.fire_outside_zone_enabled ?? defaults.fire_outside_zone_enabled;
+  }
   result.trigger_notification = typeof rawSettings.trigger_notification === 'boolean'
     ? rawSettings.trigger_notification
     : Boolean(defaults.trigger_notification);
@@ -327,6 +331,9 @@ export function serializeSettings(config, formValues) {
   });
 
   result.trigger_notification = Boolean(formValues.trigger_notification);
+  if ('fire_outside_zone_enabled' in config.defaults) {
+    result.fire_outside_zone_enabled = formValues.fire_outside_zone_enabled === true;
+  }
   result.levelOfImportance = formValues.levelOfImportance || config.defaults?.levelOfImportance || 'moderate';
   result.zone_name = 'Full Frame';
   result.alertThreshold = config.defaults?.alertThreshold ?? 1;
@@ -855,6 +862,24 @@ export default function FullFrameDetectionSettings({
               gap: 14,
             }}
           >
+            {settingType === 'fireSmokeDetectionSettings' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--bg1)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--bd2)' }}>
+                <label htmlFor="fire_outside_zone_enabled" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>
+                  Detect Fire Outside Zones
+                </label>
+                <select
+                  id="fire_outside_zone_enabled"
+                  value={String(formState.fire_outside_zone_enabled ?? false)}
+                  disabled={!canEdit || saving}
+                  onChange={e => handleFieldChange('fire_outside_zone_enabled', e.target.value === 'true')}
+                  style={{ height: 34, padding: '0 10px', borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--bd2)', fontSize: 12.5, color: 'var(--tx)' }}
+                >
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+            )}
+
             {/* Importance level dropdown */}
             <div
               style={{

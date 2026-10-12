@@ -24,6 +24,7 @@ export default function ZoneSettingsPanel({
   isLineCrossing = false,
   isCheckInOut = false,
   isStockCounting = false,
+  isFireSmoke = false,
   laneName = '',
   onLaneNameChange,
   laneNameError = '',
@@ -161,6 +162,26 @@ export default function ZoneSettingsPanel({
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
                     )}
                   </div>
+                  {isFireSmoke && (
+                    <div>
+                      <label htmlFor={`zone-fire-outside-enabled-${i}`} style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
+                        Detect Fire Outside Zones
+                      </label>
+                      <select
+                        id={`zone-fire-outside-enabled-${i}`}
+                        value={String(z.fireOutsideZoneEnabled ?? false)}
+                        onChange={e => onUpdateField(i, 'fireOutsideZoneEnabled', e.target.value === 'true')}
+                        disabled={savingIndex === i}
+                        style={{
+                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  )}
                   {isStockCounting && (
                     <div>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>

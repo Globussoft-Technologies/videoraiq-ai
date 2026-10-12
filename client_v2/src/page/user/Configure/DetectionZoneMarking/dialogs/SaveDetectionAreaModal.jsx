@@ -25,11 +25,13 @@ export default function SaveDetectionAreaModal({
   initialPriority,
   initialLaneName,
   initialCheckInOutMode,
+  initialFireOutsideZoneEnabled = false,
   zones,
   extraFields,
   isLineCrossing = false,
   isCheckInOut = false,
   isStockCounting = false,
+  isFireSmoke = false,
   saving,
   onCancel,
   onSubmit,
@@ -37,7 +39,10 @@ export default function SaveDetectionAreaModal({
 }) {
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
-  const [zoneDrafts, setZoneDrafts] = useState(zones);
+  const [zoneDrafts, setZoneDrafts] = useState(() => zones.map(zone => ({
+    ...zone,
+    ...(isFireSmoke ? { fireOutsideZoneEnabled: zone.fireOutsideZoneEnabled ?? initialFireOutsideZoneEnabled } : {}),
+  })));
   const [errors, setErrors] = useState({});
   // Check-In / Check-Out: one detection-wide entry/exit mode, seeded from the
   // first zone (they're all kept in sync).
@@ -279,6 +284,27 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isFireSmoke && (
+                <div>
+                  <label htmlFor={`fire-outside-zone-enabled-${i}`} style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
+                    Detect Fire Outside Zones
+                  </label>
+                  <select
+                    id={`fire-outside-zone-enabled-${i}`}
+                    value={String(z.fireOutsideZoneEnabled ?? false)}
+                    onChange={e => updateZoneField(i, 'fireOutsideZoneEnabled', e.target.value === 'true')}
+                    disabled={saving}
+                    style={{
+                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: '1px solid var(--bd)',
+                      fontSize: 12.5, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              )}
               {isStockCounting && (
                 <div>
                   <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>

@@ -12,6 +12,7 @@ import {
   ATTENDANCE_DETECTION_NAME,
   ATTENDANCE_DETECTION_SETTING_TYPE,
   DEFAULT_MAX_POINTS,
+  FIRE_SMOKE_SETTING_TYPE,
   MIN_POINTS_TO_CLOSE,
   isAttendanceDetectionType,
   isStockCountingType,
@@ -103,6 +104,7 @@ export default function DetectionZoneMarking({
   // line sub-tool. So it keeps the full polygon toolbar and adds "Draw Line".
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
   const isStockCounting = isStockCountingType(activeType?.settingType);
+  const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // A line only needs its 2 endpoints (+ inside reference point) to be savable;
@@ -315,6 +317,7 @@ export default function DetectionZoneMarking({
 
   const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
     name: `Zone ${index + 1}`,
+    ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
     threshold: '0',
     company: '',
@@ -540,6 +543,7 @@ export default function DetectionZoneMarking({
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       name: z.name,
+      ...(isFireSmoke ? { fire_outside_zone_enabled: z.fireOutsideZoneEnabled ?? activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
       telegramChatId: isCheckInOut
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
         : z.telegramChatId || undefined,
@@ -1427,6 +1431,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+                isFireSmoke={isFireSmoke}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1557,6 +1562,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+                isFireSmoke={isFireSmoke}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1582,11 +1588,13 @@ export default function DetectionZoneMarking({
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
           initialLaneName={laneNameDraft}
           initialCheckInOutMode={savedDetectionMode}
+          initialFireOutsideZoneEnabled={activeType.setting?.settings?.fire_outside_zone_enabled ?? false}
           zones={pendingZones}
           extraFields={extraFieldsFor(activeType.settingType)}
           isLineCrossing={isLineCrossing}
           isCheckInOut={isCheckInOut}
           isStockCounting={isStockCounting}
+          isFireSmoke={isFireSmoke}
           saving={saving}
       onCancel={() => setShowSaveModal(false)}
       onSubmit={handleSubmitSave}

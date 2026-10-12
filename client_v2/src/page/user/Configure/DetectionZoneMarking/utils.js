@@ -39,6 +39,7 @@ export function zonesFor(setting, cameraId, settingType) {
   const polygons = isMultiZone ? raw : [raw];
   return polygons.map((poly, i) => ({
     name: configs[i]?.name || `Zone ${i + 1}`,
+    fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? '0',
     company: configs[i]?.company ?? '',
