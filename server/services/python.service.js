@@ -162,6 +162,7 @@ const buildFireSmokeDetector = (
   smoke_confidence: settings.smoke_confidence ?? 0.25,
   fire_smoke_iou: settings.fire_smoke_iou ?? 0.3,
   fire_smoke_cooldown_sec: settings.fire_smoke_cooldown_sec ?? 60,
+  fire_outside_zone_enabled: settings.fire_outside_zone_enabled ?? false,
   severity: severity ?? "high",
   zone_name: settings.zone_name ?? "Full Frame",
   trigger_notification: settings.trigger_notification ?? true,

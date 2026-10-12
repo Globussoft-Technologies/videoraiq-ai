@@ -12,6 +12,7 @@ const zoneConfigsField = {
   zone_configs: [
     {
       name: { type: String },
+      fire_outside_zone_enabled: { type: Boolean },
       capacity: { type: Number },
       threshold_sec: { type: Number },
       activity_mode: {
@@ -426,6 +427,7 @@ const FireSmokeDetectionSchema = new mongoose.Schema({
   smoke_confidence: { type: Number, min: 0, max: 1, default: 0.25 },
   fire_smoke_iou: { type: Number, min: 0, max: 1, default: 0.3 },
   fire_smoke_cooldown_sec: { type: Number, min: 0, default: 60 },
+  fire_outside_zone_enabled: { type: Boolean, default: false },
   trigger_notification: { type: Boolean, default: true },
   zone_name: { type: String, default: "Full Frame" },
   imageRequired: {
