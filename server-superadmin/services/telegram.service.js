@@ -16,11 +16,12 @@ class TelegramService {
   async getSuperAdminLinkCode(ownerId) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const previous = await SuperAdminTelegramRecipient.findById(ownerId).lean();
-      if (/^VRIQ-SA-[0-9A-F]{16}$/.test(previous?.telegramLinkCode || "")) {
+      if (/^VRIQ-[0-9A-F]{8}$/.test(previous?.telegramLinkCode || "")) {
         requestStreamTelegramReport();
         return previous;
       }
-      const code = "VRIQ-SA-" + randomBytes(8).toString("hex").toUpperCase();
+      const code = "VRIQ-" + randomBytes(4).toString("hex").toUpperCase();
+      if (await SuperAdminTelegramRecipient.findOne({ telegramLinkCode: code }).select("_id").lean()) continue;
       try {
         const recipient = await SuperAdminTelegramRecipient.findOneAndUpdate({
           _id: ownerId, telegramLinkCode: previous?.telegramLinkCode ?? null,
@@ -161,8 +162,8 @@ class TelegramService {
     if (!msg) return { ok: true, matched: false };
     const code = String(msg.text || msg.caption || "").trim().toUpperCase();
     try {
-      if (/^VRIQ-SA-[0-9A-F]{16}$/.test(code)) return await this._bindSuperAdmin(msg, code);
-      if (/^VRIQ-[0-9A-F]{8}$/.test(code)) return await this._bindStaging(msg, code);
+      // This bot belongs to Superadmin; retain already-issued legacy codes.
+      if (/^VRIQ-(?:[0-9A-F]{8}|SA-[0-9A-F]{16})$/.test(code)) return await this._bindSuperAdmin(msg, code);
       return { ok: true, matched: false };
     } catch {
       logger.warn("[TELEGRAM] webhook processing failed; Telegram may retry");

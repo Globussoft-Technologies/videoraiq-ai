@@ -5,7 +5,7 @@ import axios from "axios";
 export const telegramBotToken = () => process.env.TELEGRAM_BOT_TOKEN || (config.has("Telegram.botToken")
   ? config.get("Telegram.botToken") : config.has("domainPoint.botToken") ? config.get("domainPoint.botToken") : "");
 export const telegramBotUsername = () => config.has("Telegram.botUsername")
-  ? config.get("Telegram.botUsername") : "@VideoraIQDEVAlertsbot";
+  ? config.get("Telegram.botUsername") : "@videraIQAdminbot";
 
 let identityCache;
 export async function telegramBotIdentity() {

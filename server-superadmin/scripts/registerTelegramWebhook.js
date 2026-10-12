@@ -18,8 +18,8 @@ export async function registerTelegramWebhook(mode = "--check") {
   if (info.data?.ok !== true) throw new Error("Unable to inspect the current Telegram webhook");
   console.log(`Bot: ${identity.username}. Registered webhook: ${info.data.result?.url || "none"}.`);
 
-  // Both existing configs currently name the same host. Prove that its route
-  // reaches server-superadmin before changing the shared bot's live webhook.
+  // Prove that the public route reaches server-superadmin before changing
+  // this Superadmin bot's registration.
   let ready;
   try {
     ready = await axios.get(url, { ...options,
