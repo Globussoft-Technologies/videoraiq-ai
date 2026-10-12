@@ -83,7 +83,9 @@ const CUSTOM_DETECTION_LABELS = {
   blurredCameraDetection: 'Blurred Camera Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
+  boxPackingDetection: 'Box Packing Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
+  boxPackingDetectionSettings: 'Box Packing Detection',
 };
 
 /** Human display name for an incident/detection type. */

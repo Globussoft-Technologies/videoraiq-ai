@@ -53,6 +53,17 @@ const appendIndustrialDetectors = (
         });
         continue;
       }
+      if (name === "boxPackingDetectionSettings") {
+        // DS takes only the zone names; stored Telegram/window fields and
+        // severity stay on our side.
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        detectors.push({
+          name,
+          zones: Array.isArray(zones) ? zones : [],
+          zone_configs: configs.map((config) => ({ name: plainZoneConfig(config)?.name })),
+        });
+        continue;
+      }
       if (name === "loadingUnloadingStockCountingSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const stockZones = Array.isArray(zones) ? zones : [];

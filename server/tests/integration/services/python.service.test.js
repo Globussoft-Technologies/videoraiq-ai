@@ -385,6 +385,51 @@ describe("PythonService.startNewDetection", () => {
     });
   });
 
+  it("builds the exact box-packing payload DS expects", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    const zones = [
+      [[330, 120], [1010, 95], [1050, 620], [300, 660]],
+      [[380, 230], [650, 225], [660, 580], [390, 585]],
+      [[425, 55], [625, 50], [630, 300], [430, 305]],
+      [[845, 95], [1030, 90], [1035, 345], [850, 350]],
+    ];
+    await PythonService.startNewDetection({
+      camera_id: "6a8442b15a456c5d5521e32b",
+      nvr_id: "6a8442b15a456c5d5521e32c",
+      admin_id: "6a8442b15a456c5d5521e32d",
+      stream_url: "https://nvr.example.com/live/liwa-vf1/index.m3u8",
+      detection_modes: ["boxPackingDetectionSettings"],
+      zones,
+      // Stored configs carry our own alert fields; DS must get names only.
+      zone_configs: [
+        { _id: "z1", name: "Packing desk", startTime: "09:00 AM", telegramChatIds: ["1"] },
+        { _id: "z2", name: "Seat 1 — front left", threshold_sec: 30 },
+        { _id: "z3", name: "Seat 2 — mid left" },
+        { _id: "z4", name: "Seat 3 — top right" },
+      ],
+      severity: "high",
+    });
+
+    expect(axios.post.mock.calls[0][0]).toMatch(/\/stream$/);
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "6a8442b15a456c5d5521e32b",
+      nvr_id: "6a8442b15a456c5d5521e32c",
+      admin_id: "6a8442b15a456c5d5521e32d",
+      stream_url: "https://nvr.example.com/live/liwa-vf1/index.m3u8",
+      detectors: [{
+        name: "boxPackingDetectionSettings",
+        zones,
+        zone_configs: [
+          { name: "Packing desk" },
+          { name: "Seat 1 — front left" },
+          { name: "Seat 2 — mid left" },
+          { name: "Seat 3 — top right" },
+        ],
+      }],
+    });
+  });
+
   it("builds the exact blurred-camera detector payload", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 
@@ -558,6 +603,7 @@ describe("PythonService.stopNewDetection", () => {
     "unauthorizedAnimalEntryDetectionSettings",
     "spillsDirtyMessyAreasDetectionSettings",
     "loadingUnloadingStockCountingSettings",
+    "boxPackingDetectionSettings",
   ])("stops only the selected industrial detector %s", async (mode) => {
     axios.post.mockResolvedValueOnce({ data: { stopped: true } });
 
@@ -844,6 +890,7 @@ describe("PythonService.handleDetectionStartStop", () => {
         zone_configs: [],
         zones: [],
         ...settings,
+        fire_outside_zone_enabled: false,
         severity: "high",
       }],
     });

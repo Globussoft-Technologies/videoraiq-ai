@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { fetchIncidentLogs } from './Api';
 import { formatStatus } from './incidentColumns';
+import { boxSplitLabel } from './stockMovement';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
 
 const resolveIncidentImageUrl = (value) => {
@@ -68,7 +69,7 @@ const fetchAllForExport = async (config, params) => {
       stockCountAfter: item.stockCountAfter ?? '--',
       vehicleNumber: item.vehicleNumber || (config.showStockCountingFields ? 'Unknown' : '--'),
       direction: item.direction || item.stockMovement || '--',
-      boxTypes: (item.boxTypes || (item.boxType ? [item.boxType] : [])).join(', ') || '--',
+      boxTypes: boxSplitLabel(item),
       loadedBoxCount: item.loadedBoxCount ?? 0,
       unloadedBoxCount: item.unloadedBoxCount ?? 0,
       boxCount: item.boxCount ?? item.count ?? 0,

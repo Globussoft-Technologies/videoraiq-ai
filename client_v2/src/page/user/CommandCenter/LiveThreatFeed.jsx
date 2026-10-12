@@ -25,6 +25,7 @@ const TYPE_META = {
   spillsDirtyMessyAreasDetection: { label: 'MESSY', color: '#14b8a6' },
   loadingUnloadingStockCountingDetection: { label: 'STOCK', color: '#6366f1' },
   deskSolarShoulderDetection: { label: 'DESK', color: '#f59e0b' },
+  boxPackingDetection: { label: 'BOX', color: '#b45309' },
 };
 
 function typeMeta(alert) {

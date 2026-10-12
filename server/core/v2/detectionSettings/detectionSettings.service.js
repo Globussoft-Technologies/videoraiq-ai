@@ -44,6 +44,7 @@ import {
   loadingUnloadingStockCountingSettings,
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
+  boxPackingDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -96,6 +97,7 @@ import {
   LoadingUnloadingStockCountingSetting,
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
+  BoxPackingDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -158,6 +160,7 @@ const modelMap = {
   loadingUnloadingStockCountingSettings: LoadingUnloadingStockCountingSetting,
   blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
+  boxPackingDetectionSettings: BoxPackingDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -1765,6 +1768,7 @@ class DetectionSettingService {
         loadingUnloadingStockCountingSettings,
         blurredCameraDetectionSettings,
         deskSolarShoulderDetectionSettings,
+        boxPackingDetectionSettings,
       };
 
       return res.status(200).json(

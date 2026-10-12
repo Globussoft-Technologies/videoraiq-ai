@@ -62,6 +62,7 @@ const SHORT_LABELS = {
   loadingUnloadingStockCountingSettings: 'Stock Counting',
   blurredCameraDetectionSettings: 'Blurred Camera',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder',
+  boxPackingDetectionSettings: 'Box Packing',
 };
 
 export function humanize(settingType) {

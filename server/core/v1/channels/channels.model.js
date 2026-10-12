@@ -121,6 +121,7 @@ const detectionFields = {
   loadingUnloadingStockCountingSettings: detectionSettingSchema,
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
+  boxPackingDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

@@ -128,6 +128,7 @@ const ENGINE_LABELS = {
   loadingUnloadingStockCountingSettings: 'STOCK',
   blurredCameraDetectionSettings: 'BLUR',
   deskSolarShoulderDetectionSettings: 'DESK',
+  boxPackingDetectionSettings: 'BOX',
 };
 
 const ENGINE_NAMES = {
@@ -164,6 +165,7 @@ const ENGINE_NAMES = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
+  boxPackingDetectionSettings: 'Box Packing Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {

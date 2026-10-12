@@ -1252,6 +1252,13 @@ const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: DeskSolarShoulderDetectionSchema }),
 );
 
+// Box packing: named zones only (packing desk + seats), so the generic
+// industrial settings shape fits as-is.
+const BoxPackingDetectionSetting = DetectionSetting.discriminator(
+  "boxPackingDetectionSettings",
+  new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema.clone() }),
+);
+
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
@@ -1659,4 +1666,5 @@ export {
   LoadingUnloadingStockCountingSetting,
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
+  BoxPackingDetectionSetting,
 };

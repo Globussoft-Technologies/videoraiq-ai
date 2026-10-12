@@ -46,6 +46,7 @@ export const DETECTION_TYPES = {
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
+  boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -87,6 +88,7 @@ export const DETECTION_TYPES2 = {
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
+  boxPackingDetectionSettings: "Box Packing Detection",
 }
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
@@ -124,6 +126,7 @@ export const DETECTION_DESCRIPTIONS = {
   loadingUnloadingStockCountingSettings: "Track stock quantities during loading and unloading",
   blurredCameraDetectionSettings: "Detect sustained loss of camera image clarity",
   deskSolarShoulderDetectionSettings: "Alert when a solder-line workstation is left empty",
+  boxPackingDetectionSettings: "Track box packing at the packing desk and seats",
 };
 
 export const TYPE_MAP = {
@@ -160,6 +163,7 @@ export const TYPE_MAP = {
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
   blurredCameraDetectionSettings: "blurredCameraDetection",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
+  boxPackingDetectionSettings: "boxPackingDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -190,6 +194,7 @@ export const DETECTION_MODES_MAP = {
   loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
   deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
+  boxPackingDetectionSettings: ["boxPackingDetectionSettings"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -231,6 +236,7 @@ export const toPopulateDetections = [
   { path: "detections.loadingUnloadingStockCountingSettings.id" },
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
+  { path: "detections.boxPackingDetectionSettings.id" },
 ];
 
 // sample payloads

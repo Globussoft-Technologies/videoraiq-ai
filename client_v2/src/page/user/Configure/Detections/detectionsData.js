@@ -40,6 +40,7 @@ const DETECTION_LABEL_OVERRIDES = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
+  boxPackingDetectionSettings: 'Box Packing Detection',
   unauthorizedParkingDetectionSettings: 'Unauthorized Parking Detection',
 };
 
@@ -102,6 +103,7 @@ export const DETECTION_THRESHOLDS = {
   loadingUnloadingStockCountingSettings: [],
   blurredCameraDetectionSettings: [],
   deskSolarShoulderDetectionSettings: [],
+  boxPackingDetectionSettings: [],
 };
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */
@@ -139,7 +141,7 @@ export function thresholdLabel(key) {
 const CATEGORY_MATCHERS = [
   ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon', 'fall', 'sick']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
-  ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light', 'height', 'oil', 'gunny', 'material', 'sand', 'dust', 'waste', 'scrap', 'animal', 'messy', 'stock', 'loading', 'unloading', 'blurred', 'blur']],
+  ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light', 'height', 'oil', 'gunny', 'material', 'sand', 'dust', 'waste', 'scrap', 'animal', 'messy', 'stock', 'loading', 'unloading', 'blurred', 'blur', 'packing']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],
   ['people', ['person', 'people', 'crowd', 'face', 'attendance']],
   ['workplace', ['desk', 'guard', 'table', 'occupancy', 'door', 'phone', 'mobile', 'retail', 'food']],

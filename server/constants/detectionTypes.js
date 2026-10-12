@@ -58,6 +58,7 @@ export const DETECTION_TYPES = {
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
   blurredCameraDetectionSettings: "Blurred Camera Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
+  boxPackingDetectionSettings: "Box Packing Detection",
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
@@ -71,6 +72,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "spillsDirtyMessyAreasDetectionSettings",
   "loadingUnloadingStockCountingSettings",
   "deskSolarShoulderDetectionSettings",
+  "boxPackingDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -84,6 +86,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "spillsDirtyMessyAreasDetection",
   "loadingUnloadingStockCountingDetection",
   "deskSolarShoulderDetection",
+  "boxPackingDetection",
 ]);
 
 /**
@@ -190,6 +193,7 @@ export const TYPE_MAP = {
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
   blurredCameraDetectionSettings: "blurredCameraDetection",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
+  boxPackingDetectionSettings: "boxPackingDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -233,6 +237,7 @@ export const DETECTION_MODES_MAP = {
   loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
   deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
+  boxPackingDetectionSettings: ["boxPackingDetectionSettings"],
 };
 
 /**
@@ -297,6 +302,7 @@ export const DS_DETECTOR_BY_MODE = {
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
+  boxPackingDetectionSettings: "boxPackingDetectionSettings",
 };
 
 /**
@@ -374,6 +380,7 @@ export const DS_LOGIC_BY_MODE = {
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
+  boxPackingDetectionSettings: "boxPackingDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -431,6 +438,7 @@ export const toPopulateDetections = [
   { path: "detections.loadingUnloadingStockCountingSettings.id" },
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
+  { path: "detections.boxPackingDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1656,3 +1664,7 @@ export const deskSolarShoulderDetectionSettings = {
     ],
   },
 };
+export const boxPackingDetectionSettings = industrialDetectionExample(
+  "boxPackingDetectionSettings",
+  "Box Packing Detection",
+);

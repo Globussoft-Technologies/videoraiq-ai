@@ -37,6 +37,7 @@ const INDUSTRIAL_DETECTION_TYPES = new Set([
   'unauthorizedAnimalEntryDetection',
   'spillsDirtyMessyAreasDetection',
   'loadingUnloadingStockCountingDetection',
+  'boxPackingDetection',
 ]);
 
 // These two incident types show their detected count, but not the threshold

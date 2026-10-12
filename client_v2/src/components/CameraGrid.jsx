@@ -65,6 +65,7 @@ export const ENGINE_LABEL_MAP = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
+  boxPackingDetectionSettings: 'Box Packing Detection',
 };
 
 /* ── Extract enabled engines from channel.detections object ─────────────── */

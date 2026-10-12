@@ -17,6 +17,7 @@ export const DETECTION_FIELD_KEYS = [
   'unauthorizedAnimalEntryDetectionSettings', 'spillsDirtyMessyAreasDetectionSettings',
   'loadingUnloadingStockCountingSettings',
   'deskSolarShoulderDetectionSettings',
+  'boxPackingDetectionSettings',
 ];
 
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';

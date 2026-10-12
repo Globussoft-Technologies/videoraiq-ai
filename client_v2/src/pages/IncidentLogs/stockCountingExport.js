@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { fetchIncidentLogs } from './Api';
 import { getConfiguredTimezone } from '@/utils/timezone';
+import { boxSplitLabel } from './stockMovement';
 
 const EXPORT_LIMIT = 10000;
 const EXPORT_FILE_NAME = 'Loading-Unloading Stock Logs';
@@ -47,11 +48,6 @@ const cameraNameOf = (row) => (
   || row?.channelData?.name
   || row?.channelName
   || '--'
-);
-const boxTypesOf = (row) => (
-  (Array.isArray(row?.boxTypes) ? row.boxTypes : row?.boxType ? [row.boxType] : [])
-    .filter(Boolean)
-    .join(', ') || '--'
 );
 const movementOf = (row) => row?.direction || row?.stockMovement || '--';
 
@@ -131,7 +127,7 @@ const parentRow = (row, serial) => [
   cameraNameOf(row),
   vehicleNumberOf(row),
   movementOf(row),
-  boxTypesOf(row),
+  boxSplitLabel(row),
   row?.loadedBoxCount ?? 0,
   row?.unloadedBoxCount ?? 0,
   row?.boxCount ?? row?.count ?? 0,
@@ -151,7 +147,7 @@ const childRow = (event) => {
     dash(event?.channelName),
     '',
     direction || '--',
-    dash(event?.boxType),
+    boxSplitLabel(event),
     direction === 'loading' ? count : 0,
     direction === 'unloading' ? count : 0,
     count,
@@ -178,7 +174,7 @@ const movementRow = (vehicle, event, serial) => [
   serial,
   vehicleNumberOf(vehicle),
   eventDirection(event) || '--',
-  dash(event?.boxType),
+  boxSplitLabel(event),
   event?.boxCount ?? 0,
   dash(event?.nvrName),
   dash(event?.channelName),

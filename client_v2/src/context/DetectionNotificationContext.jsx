@@ -96,7 +96,9 @@ const DETECTION_LABELS = {
   blurredCameraDetection: 'Blurred Camera Detection',
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
+  boxPackingDetection: 'Box Packing Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
+  boxPackingDetectionSettings: 'Box Packing Detection',
 };
 
 function prettifySlug(value) {

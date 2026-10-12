@@ -84,6 +84,7 @@ const INCIDENT_COLOR = {
   vehicleCheckInOut: '#67e8f9',
   blurredCameraDetection: '#94a3b8',
   deskSolarShoulderDetection: '#f59e0b',
+  boxPackingDetection: '#b45309',
   countPersons: '#bef264',
   countVehicles: '#93c5fd',
   loiteringWithoutAuth: '#c026d3',

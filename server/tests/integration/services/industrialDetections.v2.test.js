@@ -105,6 +105,13 @@ const CASES = [
       truckPresent: true,
     },
   },
+  {
+    settingType: "boxPackingDetectionSettings",
+    incidentType: "boxPackingDetection",
+    SettingModel: settingsModels.BoxPackingDetectionSetting,
+    IncidentModel: incidentModels.BoxPackingDetectionIncident,
+    // No dedicated logs page; shows in the Incident Center.
+  },
 ];
 
 let admin;
@@ -159,6 +166,9 @@ describe("stock-counting vehicle aggregation", () => {
         vehicleNumber: "mh12ab1234",
         direction: "loading",
         boxCount: 5,
+        brownCount: 4,
+        whiteCount: 1,
+        otherCount: 0,
         Image: "/incidents/stock/event-1.jpg",
         classificationConfidence: 0.93,
       },
@@ -170,6 +180,9 @@ describe("stock-counting vehicle aggregation", () => {
         vehicleNumber: " MH12AB1234 ",
         direction: "unloading",
         boxCount: 3,
+        brownCount: 2,
+        whiteCount: 1,
+        otherCount: 0,
         Image: "/incidents/stock/event-2.jpg",
         classificationConfidence: 0.89,
       },
@@ -215,13 +228,21 @@ describe("stock-counting vehicle aggregation", () => {
       eventCount: 2,
       sessionCount: 1,
       Image: "/incidents/stock/event-2.jpg",
+      brownCount: 6,
+      whiteCount: 2,
+      otherCount: 0,
+      colourCounted: true,
     });
+    // event-3 predates the colour split, so its row falls back to boxTypes.
+    expect(result.data.find((row) => row.vehicleNumber === "KA01CD5678").colourCounted).toBe(false);
     expect(vehicle.events).toHaveLength(2);
     expect(vehicle.events).toEqual([
       expect.objectContaining({
         eventId: "event-2",
         direction: "unloading",
         boxCount: 3,
+        brownCount: 2,
+        whiteCount: 1,
         Image: "/incidents/stock/event-2.jpg",
       }),
       expect.objectContaining({
@@ -360,6 +381,7 @@ describe("v2 industrial detection incidents and logs", () => {
         expect(await IncidentModel.countDocuments({ incidentType })).toBe(1);
       }
 
+      if (!logMethod) return;
       const logsContext = serviceCtx({
         user_id: admin.user_id,
         adminId: admin._id,

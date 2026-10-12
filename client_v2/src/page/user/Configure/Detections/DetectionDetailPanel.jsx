@@ -79,6 +79,7 @@ const DETECTION_ICONS = {
   loadingUnloadingStockCountingSettings: PackageSearch,
   blurredCameraDetectionSettings: ScanEye,
   deskSolarShoulderDetectionSettings: Armchair,
+  boxPackingDetectionSettings: Package,
   'Attendance-detection': UserCheck,
 };
 

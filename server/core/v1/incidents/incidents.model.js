@@ -598,6 +598,15 @@ const LoadingUnloadingStockCountingDetectionSchema = new Schema({
   // Leave missing values undefined so the logs aggregation can distinguish a
   // legacy `count` payload from a real zero-box event.
   boxCount: { type: Number, default: undefined, min: 0 },
+  // Colour split of boxCount. session* are DS's running totals for the
+  // vehicle visit; stored for cross-checking, the logs sum the per-event ones.
+  brownCount: { type: Number, default: undefined, min: 0 },
+  whiteCount: { type: Number, default: undefined, min: 0 },
+  otherCount: { type: Number, default: undefined, min: 0 },
+  sessionBrownCount: { type: Number, default: undefined, min: 0 },
+  sessionWhiteCount: { type: Number, default: undefined, min: 0 },
+  sessionOtherCount: { type: Number, default: undefined, min: 0 },
+  sessionTotalCount: { type: Number, default: undefined, min: 0 },
   countMethod: { type: String, default: null },
   classificationStatus: { type: String, default: null },
   classificationConfidence: { type: Number, default: null, min: 0 },
@@ -663,6 +672,13 @@ const DeskSolarShoulderDetectionSchema = new Schema({
 const DeskSolarShoulderDetectionIncident = Incident.discriminator(
   "deskSolarShoulderDetection",
   DeskSolarShoulderDetectionSchema,
+);
+
+// Box packing: generic industrial incident (count / alertThreshold /
+// triggerNotification); zone, Image and timeOfIncident are base fields.
+const BoxPackingDetectionIncident = Incident.discriminator(
+  "boxPackingDetection",
+  OilLeakageDetectionSchema.clone(),
 );
 
 // Cylinder Stack Height Detection
@@ -839,4 +855,5 @@ export  {
   LoadingUnloadingStockCountingIncident,
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
+  BoxPackingDetectionIncident,
 };

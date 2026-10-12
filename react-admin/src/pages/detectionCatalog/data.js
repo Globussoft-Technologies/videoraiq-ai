@@ -236,6 +236,10 @@ export const DETECTION_META = {
     Icon: LampDesk,
     tint: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
   },
+  boxPackingDetectionSettings: {
+    Icon: Package,
+    tint: 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300',
+  },
   carModelDetectionSettings: {
     Icon: Car,
     tint: 'bg-gray-100 text-gray-500 dark:bg-white/8 dark:text-gray-400',

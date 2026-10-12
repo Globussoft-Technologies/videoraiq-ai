@@ -16,7 +16,7 @@ import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
-import { stockMovementColumns } from './stockMovement';
+import { boxSplitLabel, stockMovementColumns } from './stockMovement';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -526,7 +526,7 @@ const IncidentLogsPage = ({ config }) => {
                         </span>
                         <span className="text-[13px] text-[var(--tx2)]">
                           <span className="font-bold text-[var(--tx)]">Box Type:</span>{' '}
-                          <span className="font-semibold capitalize">{event?.boxType || '--'}</span>
+                          <span className="font-semibold capitalize">{boxSplitLabel(event)}</span>
                         </span>
                         {event?.description && (
                         <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--tx2)]" title={event.description}>

@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
+import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
 const severityClass = (severity) => {
@@ -40,6 +41,14 @@ export const StockPlaybackLink = ({ incidentId }) => incidentId ? (
     Click for preview
   </Link>
 ) : <span className={styles.text}>--</span>;
+
+// Loaded / Unloaded count with its colour split underneath.
+const BoxCountCell = ({ count, split }) => (
+  <div className="leading-tight">
+    <span className={styles.text}>{count ?? 0}</span>
+    {split && <div className="mt-0.5 whitespace-nowrap text-[11px] text-[var(--tx3)]">{split}</div>}
+  </div>
+);
 
 const formatEvidenceScore = (score) => {
   if (score == null || score === '--') return '--';
@@ -275,17 +284,17 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       {
         accessorKey: 'boxTypes',
         header: 'Box Type',
-        cell: ({ row }) => <span className={`${styles.text} capitalize`}>{row.original.boxTypes?.join(', ') || '--'}</span>,
+        cell: ({ row }) => <span className={`${styles.text} capitalize`}>{boxSplitLabel(row.original)}</span>,
       },
       {
         accessorKey: 'loadedBoxCount',
         header: 'Loaded',
-        cell: ({ row }) => <span className={styles.text}>{row.original.loadedBoxCount ?? 0}</span>,
+        cell: ({ row }) => <BoxCountCell count={row.original.loadedBoxCount} split={directionSplitLabel(row.original, 'loading')} />,
       },
       {
         accessorKey: 'unloadedBoxCount',
         header: 'Unloaded',
-        cell: ({ row }) => <span className={styles.text}>{row.original.unloadedBoxCount ?? 0}</span>,
+        cell: ({ row }) => <BoxCountCell count={row.original.unloadedBoxCount} split={directionSplitLabel(row.original, 'unloading')} />,
       },
       {
         accessorKey: 'boxCount',
@@ -409,9 +418,11 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
           <>
             <IncidentCardRow icon={Activity} label="Vehicle" value={row.vehicleNumber || 'Unknown'} />
             <IncidentCardRow icon={Activity} label="Movement" value={row.direction || '--'} />
-            <IncidentCardRow icon={Activity} label="Box Type" value={row.boxTypes?.join(', ') || '--'} />
-            <IncidentCardRow icon={Activity} label="Loaded" value={row.loadedBoxCount ?? 0} />
-            <IncidentCardRow icon={Activity} label="Unloaded" value={row.unloadedBoxCount ?? 0} />
+            <IncidentCardRow icon={Activity} label="Box Type" value={boxSplitLabel(row)} />
+            {[['Loaded', row.loadedBoxCount, 'loading'], ['Unloaded', row.unloadedBoxCount, 'unloading']].map(([label, count, direction]) => {
+              const split = directionSplitLabel(row, direction);
+              return <IncidentCardRow key={label} icon={Activity} label={label} value={split ? `${count ?? 0} (${split})` : count ?? 0} />;
+            })}
             <IncidentCardRow icon={Activity} label="Total Boxes" value={row.boxCount ?? 0} />
             <IncidentCardRow icon={Activity} label="Events" value={row.eventCount ?? 0} />
           </>

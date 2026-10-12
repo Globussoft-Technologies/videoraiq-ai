@@ -73,6 +73,7 @@ import {
   LoadingUnloadingStockCountingIncident,
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
+  BoxPackingDetectionIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
 const modelMap = {
@@ -119,6 +120,7 @@ const modelMap = {
   loadingUnloadingStockCountingDetection: LoadingUnloadingStockCountingIncident,
   blurredCameraDetection: BlurredCameraDetectionIncident,
   deskSolarShoulderDetection: DeskSolarShoulderDetectionIncident,
+  boxPackingDetection: BoxPackingDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -4868,6 +4870,9 @@ console.log(result,'result');
                 lineCrossingDirection: "$lineCrossingDirection",
                 boxType: "$boxType",
                 boxCount: "$_stockBoxCount",
+                brownCount: "$brownCount",
+                whiteCount: "$whiteCount",
+                otherCount: "$otherCount",
                 Image: "$Image",
                 timeOfIncident: "$timeOfIncident",
                 zone: "$zone",
@@ -4886,6 +4891,12 @@ console.log(result,'result');
               $sum: { $cond: [{ $eq: ["$_stockDirection", "unloading"] }, "$_stockBoxCount", 0] },
             },
             eventCount: { $sum: 1 },
+            brownCount: { $sum: "$brownCount" },
+            whiteCount: { $sum: "$whiteCount" },
+            otherCount: { $sum: "$otherCount" },
+            // 1 only when every event carries the colour split; otherwise the
+            // sums would not add up to boxCount, so the row shows boxTypes.
+            colourCounted: { $min: { $cond: [{ $isNumber: "$brownCount" }, 1, 0] } },
             countMethod: { $first: "$countMethod" },
             defaultCountApplied: {
               $max: { $cond: [{ $eq: ["$defaultCountApplied", true] }, 1, 0] },
@@ -4963,6 +4974,7 @@ console.log(result,'result');
             sessionCount: { $size: "$vehicleSessionIds" },
             defaultCountApplied: { $eq: ["$defaultCountApplied", 1] },
             truckPresent: { $eq: ["$truckPresent", 1] },
+            colourCounted: { $eq: ["$colourCounted", 1] },
             triggerNotification: { $eq: ["$triggerNotification", 1] },
             resolved: { $eq: ["$resolved", 1] },
           },
