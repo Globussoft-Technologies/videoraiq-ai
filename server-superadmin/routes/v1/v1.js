@@ -38,6 +38,7 @@ import plansRoutes from "../../core/v1/plans/plans.routes.js";
 import sessionRoutes from "../../core/v1/sessions/sessions.routes.js";
 import verifySessionAccess from "../../core/v1/sessions/sessions.auth.js";
 import streamMonitoringRoutes from "../../core/v1/streamMonitoring/routes.js";
+import telegramRoutes from "../../core/v1/telegram/telegram.routes.js";
 
 const router = express.Router();
 
@@ -81,5 +82,6 @@ router.use("/client-config", clientConfigRoutes);
 router.use("/detection-catalog", detectionCatalogRoutes);
 router.use("/plans", plansRoutes);
 router.use("/stream-monitoring", streamMonitoringRoutes);
+router.use("/superAdmin/telegram", telegramRoutes);
 
 export default router;
