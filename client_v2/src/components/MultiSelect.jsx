@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
  *   behaves exactly as before.
  * - onLoadMore(): called when the options list is scrolled near its end.
  * - hasMore/loadingMore: control the infinite-scroll loading state.
+ * - inlinePanel: expand the list in the layout instead of covering nearby controls.
  */
 const MultiSelect = ({
   options = [],
@@ -54,6 +55,7 @@ const MultiSelect = ({
   onLoadMore = null,
   hasMore = false,
   loadingMore = false,
+  inlinePanel = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -98,7 +100,7 @@ const MultiSelect = ({
     // An in-dialog panel is positioned by CSS against its own wrapper, so the
     // viewport maths below would only fight it. `pos` stays null and the panel
     // renders from the `open` flag alone.
-    if (!open || inDialog) return;
+    if (!open || inDialog || inlinePanel) return;
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
@@ -137,7 +139,7 @@ const MultiSelect = ({
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, openUp, inDialog]);
+  }, [open, openUp, inDialog, inlinePanel]);
 
   // An option with `isHeader` is a non-selectable section label (e.g. an NVR
   // name above its cameras). Searching matches real options only; a header is
@@ -176,13 +178,14 @@ const MultiSelect = ({
   // Portalled when free-standing, so an `overflow: hidden` ancestor can't clip
   // it; rendered in place inside a dialog, so the dialog's pointer-events
   // lockout can't make it inert.
-  const renderPanel = (node) => (inDialog ? node : createPortal(node, portalHost));
+  const renderPanel = (node) => (inDialog || inlinePanel ? node : createPortal(node, portalHost));
 
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
       <button
         ref={triggerRef}
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border text-[var(--tx)] text-sm cursor-pointer transition-colors ${
           tint && hasSelection ? '' : 'border-[var(--bd)] bg-[var(--bg2)] hover:border-[var(--brand)]'
@@ -223,14 +226,15 @@ const MultiSelect = ({
         </div>
       </button>
 
-      {open && (inDialog || pos) && renderPanel(
+      {open && (inlinePanel || inDialog || pos) && renderPanel(
         <div
           ref={panelRef}
           data-vq-portal-panel
-          style={inDialog ? undefined : pos}
+          style={inDialog || inlinePanel ? undefined : pos}
           className={cn(
             'z-[10030] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden',
-            inDialog &&
+            inlinePanel && 'mt-1',
+            inDialog && !inlinePanel &&
               (openUp
                 ? 'absolute bottom-full mb-1 left-0 right-0 min-w-[220px]'
                 : 'absolute top-full mt-1 left-0 right-0 min-w-[220px]'),

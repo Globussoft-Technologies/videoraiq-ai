@@ -20,6 +20,8 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
   const [action, setAction] = useState(null);
   const [preview, setPreview] = useState(null);
   const running = useRef(false);
+  const request = useRef(null);
+  useEffect(() => () => request.current?.abort(), []);
   const recipientOptions = [...options.recipients, ...recipients.filter((email) => !options.recipients.some((r) => r.email === email)).map((email) => ({ email, unavailable: true }))];
   const toggle = (values, value) => values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
   const payload = () => ({ title: name.trim(), schedule: { ...schedule, startDate: schedule.frequency === 'custom' ? schedule.startDate : null, endDate: schedule.frequency === 'custom' ? schedule.endDate : null }, recipients, formats, enabled });
@@ -27,23 +29,31 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
   const runDraft = async (event, kind) => {
     if (running.current || !event.currentTarget.form.reportValidity()) return;
     running.current = true; setSaving(true); setAction(kind);
+    const controller = new AbortController();
+    request.current = controller;
     const toastId = toast.loading(kind === 'preview' ? 'Preparing report preview...' : 'Sending test email...');
     try {
-      const res = await api.post(`${endpoint}/${kind}`, { ...payload(), channelId: station._id, reportType, ...(kind === 'preview' ? { recipients: [] } : {}) });
+      const res = await api.post(`${endpoint}/${kind}`, { ...payload(), channelId: station._id, reportType, ...(kind === 'preview' ? { recipients: [] } : {}) }, { signal: controller.signal, timeout: 120000 });
+      if (controller.signal.aborted) return;
       if (kind === 'preview') setPreview(res.data.body.data);
       toast.success(kind === 'preview' ? 'Report preview ready.' : 'Test email sent to the selected recipients.', { id: toastId });
-    } catch (e) { toast.error(getApiErrorMessage(e, 'Could not complete the request.'), { id: toastId }); }
-    finally { running.current = false; setSaving(false); setAction(null); }
+    } catch (e) {
+      if (controller.signal.aborted) toast.dismiss(toastId);
+      else toast.error(e.code === 'ECONNABORTED' ? 'The request timed out. Please try again.' : getApiErrorMessage(e, 'Could not complete the request.'), { id: toastId });
+    }
+    finally { request.current = null; running.current = false; setSaving(false); setAction(null); }
   };
   const submit = async (event) => {
     event.preventDefault();
     if (running.current) return;
     running.current = true; setSaving(true); setAction('save');
-    try { await onSave(payload()); }
-    finally { running.current = false; setSaving(false); setAction(null); }
+    const controller = new AbortController();
+    request.current = controller;
+    try { await onSave(payload(), controller.signal); }
+    finally { request.current = null; running.current = false; setSaving(false); setAction(null); }
   };
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,500px)] max-h-[85vh] overflow-y-auto p-6 border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)]">
         <DialogTitle>Auto email reports</DialogTitle>
         <DialogDescription className="text-[var(--tx3)]">{title} · {station.name}. Choose when to email this report automatically, even when the dashboard is closed.</DialogDescription>
@@ -75,13 +85,15 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
           <fieldset disabled={saving} className="flex flex-col gap-2">
             <legend className="text-sm mb-2">Verified email recipients</legend>
             {!options.recipients.length && <p className="text-xs text-[var(--tx3)]">Add and verify an email in Recipients before scheduling.</p>}
-            <MultiSelect options={recipientOptions.map((r) => ({ id: r.email, label: `${r.email}${r.unavailable ? ' (no longer verified)' : ''}`, disabled: r.unavailable }))} value={recipients} onChange={setRecipients} placeholder="Select verified email recipients" searchPlaceholder="Search email recipients..." msg="No verified email recipients" />
+            <MultiSelect inlinePanel options={recipientOptions.map((r) => ({ id: r.email, label: `${r.email}${r.unavailable ? ' (no longer verified)' : ''}`, disabled: r.unavailable }))} value={recipients} onChange={setRecipients} placeholder="Select verified email recipients" searchPlaceholder="Search email recipients..." msg="No verified email recipients" />
+            {!recipients.length && <p className="text-xs text-[var(--tx3)]">Select at least one verified recipient to save a schedule or send test mail.</p>}
             {recipients.some((email) => !options.recipients.some((r) => r.email === email)) && <p role="alert" className="text-xs text-red-500">Some saved recipients are no longer verified. Use Clear all and select verified recipients again.</p>}
           </fieldset>
           <fieldset disabled={saving} className="flex gap-4">
             <legend className="text-sm mb-2">Attachments</legend>
             {['pdf', 'xlsx'].map((format) => <label key={format} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={formats.includes(format)} onChange={() => setFormats(toggle(formats, format))} />{format === 'pdf' ? 'PDF' : 'Excel'}</label>)}
           </fieldset>
+          {!formats.length && <p className="text-xs text-[var(--tx3)]">Select PDF or Excel to preview, save, or send this report.</p>}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={saving} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Enable automatic emails</label>
           <div className="flex flex-wrap gap-2">
             <button type="button" style={button} disabled={saving || !formats.length} onClick={(e) => runDraft(e, 'preview')}>
@@ -102,7 +114,7 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
             </div>}
           </section>}
           <div className="flex justify-end gap-2">
-            <button type="button" style={button} disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="button" style={button} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, background: 'var(--blue)', color: '#fff', opacity: saving ? 0.6 : 1 }} disabled={saving || name.trim().length < 2 || !recipients.length || !formats.length || !schedule.time || (schedule.frequency === 'custom' && (!schedule.startDate || !schedule.endDate || schedule.endDate < schedule.startDate)) || recipients.some((email) => !options.recipients.some((r) => r.email === email))}>
               {action === 'save' && <Loader2 size={14} className="animate-spin" />}{action === 'save' ? 'Saving...' : 'Save schedule'}
             </button>
@@ -138,14 +150,18 @@ export default function AutoEmailReports({ station, reportType, title }) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [stationId, reportType, access.view, reload]);
-  const save = async (data) => {
+  const save = async (data, signal) => {
     try {
       const payload = { ...data, channelId: stationId, reportType };
-      if (modal._id) await api.put(`${endpoint}/${modal._id}`, payload);
-      else await api.post(endpoint, payload);
+      const config = { signal, timeout: 30000 };
+      if (modal._id) await api.put(`${endpoint}/${modal._id}`, payload, config);
+      else await api.post(endpoint, payload, config);
+      if (signal.aborted) return;
       toast.success(data.enabled ? 'Email schedule saved.' : 'Email schedule saved and disabled.');
       setModal(null); setReload((r) => r + 1);
-    } catch (e) { toast.error(getApiErrorMessage(e, 'Could not save the email schedule.')); }
+    } catch (e) {
+      if (!signal.aborted) toast.error(e.code === 'ECONNABORTED' ? 'Saving the schedule timed out. Please try again.' : getApiErrorMessage(e, 'Could not save the email schedule.'));
+    }
   };
   const toggleEnabled = async (report) => {
     if (busyId) return;
