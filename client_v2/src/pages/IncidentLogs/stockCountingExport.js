@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import moment from 'moment-timezone';
@@ -9,6 +9,30 @@ import { getConfiguredTimezone } from '@/utils/timezone';
 
 const EXPORT_LIMIT = 10000;
 const EXPORT_FILE_NAME = 'Loading-Unloading Stock Logs';
+
+// Keep the movement colours identical wherever a movement is displayed.
+// Summary rows are identified by their serial number and keep the original
+// white background; only movement detail rows receive movement colours.
+const ROW_COLORS = {
+  serial: { pdf: [255, 255, 255], excel: 'FFFFFFFF' },
+  loading: { pdf: [232, 248, 238], excel: 'FFE8F8EE' },
+  unloading: { pdf: [255, 241, 235], excel: 'FFFFF1EB' },
+  default: { pdf: [245, 247, 250], excel: 'FFF5F7FA' },
+};
+
+const EXCEL_CELL_BORDER = {
+  top: { style: 'thin', color: { rgb: 'FFD9E2F0' } },
+  bottom: { style: 'thin', color: { rgb: 'FFD9E2F0' } },
+  left: { style: 'thin', color: { rgb: 'FFD9E2F0' } },
+  right: { style: 'thin', color: { rgb: 'FFD9E2F0' } },
+};
+
+const rowColorFor = ({ serial, direction }) => {
+  if (serial) return ROW_COLORS.serial;
+  if (String(direction || '').toLowerCase() === 'loading') return ROW_COLORS.loading;
+  if (String(direction || '').toLowerCase() === 'unloading') return ROW_COLORS.unloading;
+  return ROW_COLORS.default;
+};
 
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 const formatTime = (value) => (
@@ -239,6 +263,35 @@ const linkPreviewCell = (sheet, rowIndex, columnIndex, url) => {
   };
 };
 
+const styleExcelRows = (sheet, startRow, lines, columnCount) => {
+  lines.forEach((line, lineIndex) => {
+    const color = rowColorFor(line).excel;
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const ref = XLSX.utils.encode_cell({ r: startRow + lineIndex, c: columnIndex });
+      // AOA sheets omit empty values. Create those cells as well, otherwise
+      // Excel has no border to draw for blank detail-row fields.
+      if (!sheet[ref]) sheet[ref] = { t: 's', v: '' };
+      sheet[ref].s = {
+        ...(sheet[ref].s || {}),
+        fill: { patternType: 'solid', fgColor: { rgb: color } },
+        border: EXCEL_CELL_BORDER,
+      };
+    }
+  });
+};
+
+const styleExcelHeader = (sheet, rowIndex, columnCount) => {
+  for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+    const ref = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+    if (!sheet[ref]) continue;
+    sheet[ref].s = {
+      ...(sheet[ref].s || {}),
+      border: EXCEL_CELL_BORDER,
+      font: { bold: true },
+    };
+  }
+};
+
 const exportToExcel = async (config, filters) => {
   try {
     const vehicles = await fetchAllForExport(config, filters);
@@ -253,9 +306,19 @@ const exportToExcel = async (config, filters) => {
     const groupedLines = [];
 
     vehicles.forEach((vehicle, index) => {
-      groupedLines.push({ cells: parentRow(vehicle, index + 1), image: imageUrlOf(vehicle), preview: previewUrlOf(vehicle) });
+      groupedLines.push({
+        cells: parentRow(vehicle, index + 1),
+        serial: index + 1,
+        image: imageUrlOf(vehicle),
+        preview: previewUrlOf(vehicle),
+      });
       (vehicle.events || []).forEach((event) => {
-        groupedLines.push({ cells: childRow(event), image: imageUrlOf(event), preview: previewUrlOf(event) });
+        groupedLines.push({
+          cells: childRow(event),
+          direction: eventDirection(event),
+          image: imageUrlOf(event),
+          preview: previewUrlOf(event),
+        });
       });
     });
 
@@ -266,14 +329,16 @@ const exportToExcel = async (config, filters) => {
     ]);
     vehiclesSheet['!merges'] = excelMerges(PARENT_HEADERS.length);
     vehiclesSheet['!cols'] = PARENT_HEADERS.map((header) => ({ wch: Math.max(14, header.length + 3) }));
+    styleExcelHeader(vehiclesSheet, dataStart - 1, PARENT_HEADERS.length);
     groupedLines.forEach((line, index) => {
       linkImageCell(vehiclesSheet, dataStart + index, imageColumn, line.image);
       linkPreviewCell(vehiclesSheet, dataStart + index, PARENT_HEADERS.indexOf('Preview'), line.preview);
     });
+    styleExcelRows(vehiclesSheet, dataStart, groupedLines, PARENT_HEADERS.length);
     XLSX.utils.book_append_sheet(workbook, vehiclesSheet, 'Vehicles');
 
     const movementLines = vehicles.flatMap((vehicle) => (
-      (vehicle.events || []).map((event) => ({ vehicle, event }))
+      (vehicle.events || []).map((event) => ({ vehicle, event, direction: eventDirection(event) }))
     ));
     const movementRows = movementLines.map(({ vehicle, event }, index) => (
       movementRow(vehicle, event, index + 1)
@@ -285,10 +350,12 @@ const exportToExcel = async (config, filters) => {
     ]);
     movementsSheet['!merges'] = excelMerges(MOVEMENT_HEADERS.length);
     movementsSheet['!cols'] = MOVEMENT_HEADERS.map((header) => ({ wch: Math.max(14, header.length + 3) }));
+    styleExcelHeader(movementsSheet, dataStart - 1, MOVEMENT_HEADERS.length);
     movementLines.forEach(({ event }, index) => {
       linkImageCell(movementsSheet, dataStart + index, MOVEMENT_HEADERS.indexOf('Image'), imageUrlOf(event));
       linkPreviewCell(movementsSheet, dataStart + index, MOVEMENT_HEADERS.indexOf('Preview'), previewUrlOf(event));
     });
+    styleExcelRows(movementsSheet, dataStart, movementLines, MOVEMENT_HEADERS.length);
     XLSX.utils.book_append_sheet(workbook, movementsSheet, 'Movements');
 
     XLSX.writeFile(workbook, `${EXPORT_FILE_NAME}.xlsx`);
@@ -316,9 +383,19 @@ const exportToPDF = async (config, filters) => {
 
     const body = [];
     vehicles.forEach((vehicle, index) => {
-      body.push({ child: false, image: imageUrlOf(vehicle), preview: previewUrlOf(vehicle), cells: parentRow(vehicle, index + 1) });
+      body.push({
+        serial: index + 1,
+        image: imageUrlOf(vehicle),
+        preview: previewUrlOf(vehicle),
+        cells: parentRow(vehicle, index + 1),
+      });
       (vehicle.events || []).forEach((event) => {
-        body.push({ child: true, image: imageUrlOf(event), preview: previewUrlOf(event), cells: childRow(event) });
+        body.push({
+          direction: eventDirection(event),
+          image: imageUrlOf(event),
+          preview: previewUrlOf(event),
+          cells: childRow(event),
+        });
       });
     });
 
@@ -342,8 +419,9 @@ const exportToPDF = async (config, filters) => {
       didParseCell: (data) => {
         if (data.section !== 'body') return;
         const line = body[data.row.index];
-        if (line?.child) {
-          data.cell.styles.fillColor = [245, 247, 250];
+        const color = rowColorFor(line).pdf;
+        data.cell.styles.fillColor = color;
+        if (!line?.serial) {
           data.cell.styles.textColor = [90, 98, 116];
           data.cell.styles.fontSize = 5.8;
         }
