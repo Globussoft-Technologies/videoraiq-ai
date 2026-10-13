@@ -30,6 +30,14 @@ export async function askAssistant({ message, conversationId, resetWorkflow = fa
     return { text: NOT_WIRED_REPLY };
   }
 
+  const configFile = attachments.find((file) => /\.(xlsx|xls|pdf)$/i.test(file?.name || ''));
+  if (configFile) {
+    const form = new FormData(); form.append('message', message); form.append('file', configFile);
+    if (conversationId) form.append('conversationId', conversationId);
+    const res = await api.post(`${ASSISTANT_ENDPOINT}/config-import`, form, { signal, timeout: 120_000, headers: { 'Content-Type': undefined } });
+    const data = unwrap(res); const payload = data?.reply ? data : (data?.body?.data || data?.data || data);
+    return { ...payload, text: payload?.reply || payload?.text || payload?.message || '' };
+  }
   const imageAttachments = await Promise.all(attachments.slice(0, 3).filter((file) => /^image\/(jpeg|png)$/.test(file?.type || '')).map(fileAsDataUrl));
   const res = await api.post(CHAT_ENDPOINT, { message, conversationId: conversationId || undefined, resetWorkflow: Boolean(resetWorkflow), action: action || undefined, workflow: workflow || undefined, step: step || undefined, incidentContext: incidentContext || undefined, attachmentCount: Number(attachmentCount) || undefined, imageAttachments: imageAttachments.length ? imageAttachments : undefined }, { signal, timeout: 120_000 });
   const data = unwrap(res);
@@ -86,6 +94,20 @@ export async function fetchAssistantAttachment(conversationId, attachmentId, { s
     timeout: 15_000,
   });
   return URL.createObjectURL(res.data);
+}
+
+export async function downloadAssistantConfigTemplate(kind, extension = 'xlsx') {
+  if (!['location', 'department', 'shift'].includes(kind)) throw new Error('Unknown template');
+  if (!['xlsx', 'pdf'].includes(extension)) throw new Error('Unknown template format');
+  const res = await api.get(`${ASSISTANT_ENDPOINT}/config-template/${kind}.${extension}`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${kind}-bulk-upload-template.${extension}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function deleteAssistantConversation(conversationId) {

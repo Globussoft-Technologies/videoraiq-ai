@@ -325,7 +325,10 @@
   .vq-measure-value-reveal,
   .vq-measure-result-reveal,
   .vq-measure-status-reveal,
-  .vq-measure-image-reveal { animation: none; filter: none; opacity: 1; }
+   .vq-measure-image-reveal,
+   .vq-voice-wave-bar,
+   .vq-voice-processing-dot,
+   .vq-voice-processing-button { animation: none; filter: none; opacity: 1; }
 }
 
 /* ---- AI Assistant ---- */
@@ -336,6 +339,23 @@
   32%           { opacity: 1;   transform: translateY(-3px); }
 }
 .vq-typing-dot { animation: vq-typing 1.25s ease-in-out infinite; }
+
+@keyframes vq-voice-wave {
+  0%, 100% { transform: scaleY(.45); opacity: .58; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+.vq-voice-wave-bar { transform-origin: center; animation: vq-voice-wave .72s ease-in-out infinite; }
+
+@keyframes vq-voice-processing {
+  0%, 100% { transform: scale(.82); opacity: .55; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+.vq-voice-processing-dot { animation: vq-voice-processing 1s ease-in-out infinite; }
+@keyframes vq-voice-processing-button {
+  0%, 100% { opacity: .72; box-shadow: 0 0 0 0 rgba(148,163,184,.08); }
+  50% { opacity: 1; box-shadow: 0 0 0 4px rgba(148,163,184,.12); }
+}
+.vq-voice-processing-button { animation: vq-voice-processing-button 1.15s ease-in-out infinite; }
 
 /* Starter-prompt chips drop to a single column before the two-up grid starts
    wrapping text mid-question. */

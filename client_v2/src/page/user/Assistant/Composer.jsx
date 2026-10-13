@@ -1,9 +1,10 @@
-import { createPortal, flushSync } from 'react-dom';
+import { flushSync } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Paperclip, Plus, Send, Square, X } from 'lucide-react';
+import { FileSpreadsheet, FileText, Mic, Paperclip, Plus, Send, Square, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { COMPOSER_PLACEHOLDER, COMPOSER_FOOTNOTE, MAX_ASSISTANT_MESSAGE_CHARS } from './assistant.copy';
 import { transcribeAssistantAudio } from '@/helpers/assistant';
+import AttachmentPreview from './AttachmentPreview';
 
 const MAX_TEXTAREA_H = 168;
 
@@ -316,7 +317,11 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
     setMenuOpen(false);
     const files = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!files.length || files.some((file) => !['image/jpeg', 'image/png'].includes(file.type))) return;
+    const allowed = ['image/jpeg', 'image/png', 'application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+    if (!files.length || files.some((file) => !allowed.includes(file.type))) {
+      toast.error('Upload JPG, PNG, Excel, or PDF files.');
+      return;
+    }
     // A file input only reports the files selected in the current picker
     // interaction. Keep earlier selections so opening the picker again adds
     // photos instead of replacing the thumbnails already shown.
@@ -362,27 +367,31 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
       <div style={{ width: '100%' }}>
         {selectedFiles.length > 0 && <div style={{ marginBottom: 9, padding: '10px 12px 11px', border: '1px solid rgba(99,102,241,.28)', borderRadius: 12, background: 'linear-gradient(180deg, rgba(99,102,241,.07), var(--bg2))' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 750, color: 'var(--tx)' }}>Attached photos</span>
+            <span style={{ fontSize: 11.5, fontWeight: 750, color: 'var(--tx)' }}>Attachments</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ fontSize: 10.5, color: uploading ? 'var(--blue)' : 'var(--tx3)', fontWeight: uploading ? 700 : 400 }}>{uploading ? 'Uploading images…' : `${selectedFiles.length} selected · JPG/PNG`}</span>
+              <span style={{ fontSize: 10.5, color: uploading ? 'var(--blue)' : 'var(--tx3)', fontWeight: uploading ? 700 : 400 }}>{uploading ? 'Uploading…' : `${selectedFiles.length} selected · JPG/PNG, PDF, or Excel`}</span>
               {!uploading && <button type="button" onClick={clearFiles} style={{ border: 0, background: 'transparent', color: 'var(--crit)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>Clear all</button>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 9, overflowX: 'auto' }}>
             {selectedFiles.map(({ file, url }, index) => {
               const faceLabel = registrationWorkflow && selectedFiles.length === 3 ? ['Front face', 'Left face', 'Right face'][index] : imageStep?.label;
-              return <div key={`${file.name}-${file.lastModified}-${index}`} style={{ position: 'relative', flex: '0 0 auto', width: 88, padding: 4, border: '1px solid var(--bd2)', borderRadius: 9, background: 'var(--bg1)' }}>
+              const isImage = /^image\/(jpeg|png)$/i.test(file.type || '');
+              const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+              const isSheet = /\.(xlsx?|csv)$/i.test(file.name || '') || /spreadsheet|excel|csv/i.test(file.type || '');
+              const FileIcon = isSheet ? FileSpreadsheet : FileText;
+              return <div key={`${file.name}-${file.lastModified}-${index}`} style={{ position: 'relative', flex: '0 0 auto', width: isImage ? 88 : 156, padding: 5, border: '1px solid var(--bd2)', borderRadius: 9, background: 'var(--bg1)' }}>
                 {!uploading && <button type="button" onClick={() => removeFile(index)} title={`Remove ${file.name || 'image'}`} aria-label={`Remove ${file.name || 'image'}`} style={{ position: 'absolute', top: 1, right: 1, zIndex: 1, width: 20, height: 20, padding: 0, border: '1px solid rgba(255,255,255,.8)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: 'rgba(15,23,42,.78)', cursor: 'pointer' }}><X size={12} strokeWidth={2.4} /></button>}
                 <button
                   type="button"
                   className="assistant-image-preview-trigger"
-                  onClick={() => setPreviewImage({ url, alt: faceLabel || file.name || `Selected image ${index + 1}` })}
-                  aria-label={`Open ${faceLabel || file.name || `selected image ${index + 1}`} in full view`}
+                  onClick={() => setPreviewImage({ src: url, name: faceLabel || file.name || `Selected file ${index + 1}`, kind: isPdf ? 'pdf' : isSheet ? 'sheet' : 'image' })}
+                  aria-label={`Preview ${file.name || `selected file ${index + 1}`}`}
                   style={{ display: 'block', padding: 0, border: 0, borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
                 >
-                  <img src={url} alt={faceLabel || file.name || `Selected image ${index + 1}`} style={{ display: 'block', width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--bd)', cursor: 'pointer' }} />
+                  {isImage ? <img src={url} alt={faceLabel || file.name || `Selected image ${index + 1}`} style={{ display: 'block', width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--bd)', cursor: 'pointer' }} /> : <div style={{ minHeight: 60, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--tx2)', fontSize: 11, overflowWrap: 'anywhere' }}><FileIcon size={20} /><span>{file.name}<br /><small style={{ color: 'var(--tx3)' }}>{isPdf ? 'Preview PDF' : isSheet ? 'Preview spreadsheet' : 'Attached file'}</small></span></div>}
                 </button>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 5, fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>{faceLabel || `Image ${index + 1}`}</div>
+                {isImage && <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 5, fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>{faceLabel || file.name || `Image ${index + 1}`}</div>}
               </div>;
             })}
           </div>
@@ -390,7 +399,7 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
         <div
           style={{
             display: 'flex',
-            alignItems: 'flex-end',
+             alignItems: 'center',
             gap: 10,
             padding: '9px 9px 9px 16px',
             borderRadius: 14,
@@ -401,7 +410,7 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
             position: 'relative',
           }}
         >
-          <div ref={attachmentMenuRef} style={{ position: 'relative', flex: '0 0 auto', alignSelf: 'flex-end' }}>
+           <div ref={attachmentMenuRef} style={{ position: 'relative', flex: '0 0 auto', alignSelf: 'center' }}>
             <button type="button" onClick={() => setMenuOpen((open) => !open)} disabled={sending || uploading} title="Add photos and files" aria-label="Add photos and files" style={{ width: 32, height: 32, border: 0, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: sending || uploading ? 'not-allowed' : 'pointer', color: 'var(--tx2)', background: menuOpen ? 'var(--bg3)' : 'transparent' }}>
               <Plus size={20} strokeWidth={1.8} />
             </button>
@@ -414,7 +423,7 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
                 </span>
               </button>
             </div>}
-            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" multiple hidden onChange={upload} />
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,application/pdf,.xlsx,.xls" multiple hidden onChange={upload} />
           </div>
           <textarea
             ref={taRef}
@@ -453,16 +462,16 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
           />
 
           {(voiceState === 'starting' || voiceState === 'recording' || voiceState === 'processing' || voiceState === 'submitting') && <div aria-live="polite" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 8, color: voiceState === 'recording' ? 'var(--crit)' : 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: voiceState === 'recording' ? 'var(--crit)' : 'var(--warn)', boxShadow: voiceState === 'recording' ? '0 0 0 5px rgba(239,68,68,.12)' : 'none' }} />
+             <span className={voiceState === 'processing' ? 'vq-voice-processing-dot' : undefined} style={{ width: 8, height: 8, borderRadius: '50%', background: voiceState === 'recording' ? 'var(--crit)' : 'var(--warn)', boxShadow: voiceState === 'recording' ? '0 0 0 5px rgba(239,68,68,.12)' : 'none' }} />
             <span>{voiceState === 'starting' ? 'Starting microphone…' : voiceState === 'recording' ? 'Listening…' : voiceState === 'processing' ? 'Processing…' : 'Sending…'}</span>
-            {voiceState === 'recording' && <div aria-label="Audio waveform" style={{ display: 'flex', alignItems: 'center', gap: 2, height: 24, width: 44 }}>
-              {Array.from({ length: 10 }, (_, index) => <span key={index} style={{ width: 3, height: `${Math.max(4, 5 + voiceLevel * (8 + (index % 4) * 3))}px`, borderRadius: 3, background: 'var(--crit)', transition: 'height .08s ease' }} />)}
+             {(voiceState === 'recording' || voiceState === 'processing') && <div aria-label="Audio waveform" style={{ display: 'flex', alignItems: 'center', gap: 2, height: 24, width: 44 }}>
+                {Array.from({ length: 10 }, (_, index) => <span key={index} className="vq-voice-wave-bar" style={{ width: 3, height: `${voiceState === 'recording' ? Math.max(4, 5 + voiceLevel * (8 + (index % 4) * 3)) : 6 + (index % 4) * 4}px`, borderRadius: 3, background: voiceState === 'recording' ? 'var(--crit)' : 'var(--warn)', animationDelay: `${index * 0.07}s`, transition: 'height .08s ease' }} />)}
             </div>}
           </div>}
           {voiceState === 'recording' ? (
-            <button type="button" onClick={stopVoice} title="Stop recording" aria-label="Stop recording" style={{ flex: '0 0 auto', width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: 'var(--crit)' }}><Square size={14} strokeWidth={2.4} /></button>
+             <button type="button" onClick={stopVoice} title="Stop recording" aria-label="Stop recording" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', zIndex: 2, width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: 'var(--crit)' }}><Square size={14} strokeWidth={2.4} /></button>
           ) : voiceState === 'starting' || voiceState === 'processing' || voiceState === 'submitting' ? (
-            <button type="button" disabled title={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} aria-label={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} style={{ flex: '0 0 auto', width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'wait', background: 'var(--bg3)', border: '1px solid var(--bd2)', color: 'var(--tx2)' }}><Mic size={16} /></button>
+              <button type="button" disabled title={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} aria-label={voiceState === 'starting' ? 'Starting microphone' : voiceState === 'processing' ? 'Processing recording' : 'Sending voice message'} className={voiceState === 'processing' ? 'vq-voice-processing-button' : undefined} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', zIndex: 2, width: 40, height: 40, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'wait', background: 'var(--bg3)', border: '1px solid var(--bd2)', color: 'var(--tx2)' }}><Mic size={16} /></button>
           ) : sending ? (
             <button
               type="button"
@@ -522,28 +531,7 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
           <span>{COMPOSER_FOOTNOTE}</span>
           <span aria-live="polite">{value.length}/{MAX_ASSISTANT_MESSAGE_CHARS}</span>
         </div>
-        {previewImage && createPortal(<div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image preview"
-          onClick={() => setPreviewImage(null)}
-          style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box', background: 'rgba(2, 6, 23, .86)', cursor: 'zoom-out', isolation: 'isolate' }}
-        >
-          <button
-            type="button"
-            onClick={() => setPreviewImage(null)}
-            aria-label="Close image preview"
-            style={{ position: 'absolute', top: 20, right: 24, width: 40, height: 40, border: '1px solid rgba(255,255,255,.35)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: 'rgba(15,23,42,.7)', cursor: 'pointer' }}
-          >
-            <X size={20} />
-          </button>
-          <img
-            src={previewImage.url}
-            alt={previewImage.alt}
-            onClick={(event) => event.stopPropagation()}
-            style={{ display: 'block', width: 'auto', maxWidth: 'min(70vw, 720px)', maxHeight: '78vh', objectFit: 'contain', margin: 0, borderRadius: 10, boxShadow: '0 24px 80px rgba(0,0,0,.45)', cursor: 'default' }}
-          />
-        </div>, document.documentElement)}
+        <AttachmentPreview attachment={previewImage} onClose={() => setPreviewImage(null)} />
       </div>
     </div>
   );

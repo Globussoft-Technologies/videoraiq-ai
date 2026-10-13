@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Copy, Download, Eye, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Download, Eye, FileSpreadsheet, FileText, Sparkles, X } from 'lucide-react';
 import { detectionLabel } from '../../../lib/format';
 import { api, unwrap } from '@/helpers/client';
 import { runAssistantLogExport } from './assistantLogExport';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import AttachmentPreview from './AttachmentPreview';
+import { downloadAssistantConfigTemplate } from '@/helpers/assistant';
 
 function clock(value) {
   return formatUtcInConfiguredTimezone(value, 'hh:mm A', '');
@@ -232,11 +234,47 @@ function listItemParts(line) {
   return { marker: match[1] || `${match[2]}.`, value: match[3] };
 }
 
+function ProfileDetailsText({ lines }) {
+  const title = String(lines[0] || '').trim();
+  if (!/^(?:Profile details|Profile metrics|Account overview)$/i.test(title)) return null;
+  const rows = [];
+  let section = '';
+  lines.slice(1).forEach((line, index) => {
+    const text = String(line || '').trim();
+    if (!text) return;
+    if (/^[^-].*[^:]$/.test(text) && !text.includes(':')) {
+      section = text;
+      rows.push({ type: 'section', value: text, key: `section-${index}` });
+      return;
+    }
+    if (/^-\s+/.test(text)) {
+      rows.push({ type: 'item', section, value: text.replace(/^-\s+/, ''), key: `item-${index}` });
+      return;
+    }
+    const match = text.match(/^([^:]+):\s*(.*)$/);
+    if (match) rows.push({ type: 'field', section, label: match[1], value: match[2], key: `field-${index}` });
+  });
+  return (
+    <section className="vq-profile-details" aria-label="Logged-in profile details">
+      <div className="vq-profile-details-title">{title}</div>
+      <div className="vq-profile-details-fields">
+        {rows.map((row) => row.type === 'section'
+          ? <div className="vq-profile-details-section" key={row.key}>{row.value}</div>
+          : row.type === 'item'
+            ? <div className="vq-profile-details-item" key={row.key}><span className="vq-profile-details-bullet">•</span><span>{renderInlineMarkdown(row.value, row.key)}</span></div>
+            : <div className="vq-profile-details-row" key={row.key}><span className="vq-profile-details-label">{row.label}</span><span className="vq-profile-details-value">{renderInlineMarkdown(row.value, row.key)}</span></div>)}
+      </div>
+    </section>
+  );
+}
+
 function AssistantText({ value, showIp = false }) {
   const lines = displayText(value, showIp).split('\n');
   const content = [];
   const assignments = DetectionAssignmentsText({ lines });
   if (assignments) return assignments;
+  const profile = ProfileDetailsText({ lines });
+  if (profile) return profile;
   let list = [];
   let ordered = false;
 
@@ -865,6 +903,20 @@ function WorkflowCard({ ui, onConfirm, onSelectOption, onWorkflowUpload, onWorkf
   );
 }
 
+function ConfigImportFormatCard({ ui }) {
+  const [error, setError] = useState('');
+  if (ui?.type === 'config_import_templates') return <div style={{ width: '100%', minWidth: 0, maxWidth: '100%' }}>{(ui.templates || []).map((template) => <ConfigImportFormatCard key={template.resource} ui={template} />)}</div>;
+  if (!['config_import_format', 'config_import_template'].includes(ui?.type)) return null;
+  const isTemplate = ui.type === 'config_import_template';
+  return <section style={{ width: '100%', minWidth: 0, maxWidth: 620, boxSizing: 'border-box', marginTop: 12, padding: 14, borderRadius: 12, border: `1px solid ${isTemplate ? 'var(--bd)' : 'var(--warn)'}`, background: 'var(--bg1)', overflow: 'hidden' }}>
+    <strong style={{ fontSize: 13, color: 'var(--tx)' }}>{ui.title}</strong>
+    <p style={{ margin: '6px 0 10px', fontSize: 12, color: 'var(--tx2)' }}>{isTemplate ? 'Keep these column names. Replace the example row with your records, then upload the completed Excel or PDF file here.' : 'Use these exact column names, then upload the corrected Excel or PDF file.'}</p>
+    <div style={{ overflowX: 'auto', overflowY: 'hidden', direction: 'ltr', border: '1px solid var(--bd)', borderRadius: 8, maxWidth: '100%' }}><table style={{ borderCollapse: 'collapse', width: 'max-content', minWidth: '100%', fontSize: 11, tableLayout: 'auto' }}><thead><tr>{(ui.columns || []).map((column) => <th key={column} style={{ textAlign: 'left', whiteSpace: 'nowrap', padding: '7px 9px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)' }}>{column}</th>)}</tr></thead><tbody><tr>{(ui.example || []).map((value, index) => <td key={index} style={{ whiteSpace: 'nowrap', padding: '7px 9px', color: 'var(--tx2)' }}>{value}</td>)}</tr></tbody></table></div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 10 }}>{[['xlsx', 'Excel'], ['pdf', 'PDF']].map(([extension, label]) => <button key={extension} type="button" onClick={async () => { try { setError(''); await downloadAssistantConfigTemplate(ui.resource, extension); } catch { setError(`Could not download the ${label} template. Please try again.`); } }} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 8px', border: 0, borderRadius: 8, color: '#fff', background: 'var(--blue)', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}><Download size={14} /> {label} template</button>)}</div>
+    {error && <p role="alert" style={{ color: 'var(--warn)', fontSize: 12 }}>{error}</p>}
+  </section>;
+}
+
 function NvrActionCard({ text, workflow, onSelectOption, active = true }) {
   const nvrWorkflow = workflow === 'add_network_recorder' || isNvrWorkflowPrompt(text);
   if (!active || !nvrWorkflow) return null;
@@ -916,6 +968,31 @@ function MessageAttachments({ attachments = [] }) {
   </div>;
 }
 
+function MessageFileAttachments({ attachments = [] }) {
+  const [activePreview, setActivePreview] = useState(null);
+  const items = attachments.map((attachment) => {
+    if (typeof attachment === 'string') return { src: attachment, name: 'Attached image', kind: 'image' };
+    const name = attachment?.name || attachment?.fileName || 'Attached file';
+    const mime = attachment?.mimeType || attachment?.type || '';
+    const kind = /^image\/(jpeg|png)$/i.test(mime) || /\.(jpe?g|png)$/i.test(name) ? 'image' : /\.pdf$/i.test(name) || mime === 'application/pdf' ? 'pdf' : /\.(xlsx?|csv)$/i.test(name) || /spreadsheet|excel|csv/i.test(mime) ? 'sheet' : 'file';
+    return { src: attachment?.url, name, kind, missing: !attachment?.url };
+  }).filter(Boolean);
+  if (!items.length) return null;
+  return <>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8, justifyContent: 'flex-end' }}>
+      {items.map((item, index) => {
+        const canPreview = !item.missing && ['image', 'pdf', 'sheet'].includes(item.kind);
+        const Icon = item.kind === 'sheet' ? FileSpreadsheet : FileText;
+        return <button key={`${item.name}-${index}`} type="button" disabled={!canPreview} onClick={() => canPreview && setActivePreview(item)} style={{ width: item.kind === 'image' ? 82 : 156, minHeight: 58, display: 'flex', alignItems: 'center', gap: 7, padding: 5, textAlign: 'left', borderRadius: 8, border: '1px solid rgba(255,255,255,.38)', background: item.kind === 'image' ? 'transparent' : 'rgba(255,255,255,.12)', color: '#fff', cursor: canPreview ? 'pointer' : 'default', overflow: 'hidden' }}>
+          {item.kind === 'image' && !item.missing ? <img src={item.src} alt={item.name} style={{ width: 70, height: 50, objectFit: 'cover', borderRadius: 6 }} /> : <Icon size={19} style={{ flex: '0 0 auto', opacity: .9 }} />}
+          <span style={{ minWidth: 0, fontSize: 10.5, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{item.name}<br /><span style={{ opacity: .72 }}>{item.missing ? 'Preview unavailable' : canPreview ? 'Click to preview' : 'Attached file'}</span></span>
+        </button>;
+      })}
+    </div>
+    <AttachmentPreview attachment={activePreview} onClose={() => setActivePreview(null)} />
+  </>;
+}
+
 function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowUpload, onWorkflowBatchUpload, uploading, activeWorkflow, canContinue = false }) {
   const isUser = msg.role === 'user';
   const showIp = /\b(?:ip(?:\s+address(?:es)?)?|hostnames?)\b/i.test(userQuestion)
@@ -956,20 +1033,21 @@ function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowU
   };
 
   return (
-    <div className={`vq-fadeup ${isUser ? 'vq-user-message' : ''}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+    <div className={`vq-fadeup ${isUser ? 'vq-user-message' : ''}`} style={{ display: 'flex', width: '100%', minWidth: 0, boxSizing: 'border-box', gap: 10, alignItems: 'flex-start', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
       {!isUser && <AssistantAvatar error={msg.error} />}
       <div style={{
-        width: !isUser && (isVehicleLogs || isVehicleLogsFallback) ? 'min(920px, calc(100vw - 100px))' : !isUser && workflowUi ? 'min(360px, calc(100vw - 100px))' : undefined,
+        width: !isUser && (isVehicleLogs || isVehicleLogsFallback || workflowUi) ? '100%' : undefined,
         maxWidth: !isUser ? 'calc(100% - 42px)' : 'min(85%, 640px)',
         minWidth: 0,
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
       }}>
-        {!isStructuredResult && <div style={{ display: 'flex', minWidth: 0, maxWidth: '100%', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+        {!isStructuredResult && <div style={{ display: 'flex', width: !isUser && workflowUi ? '100%' : undefined, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
           <div style={{ maxWidth: '100%', boxSizing: 'border-box', padding: '14px 18px', borderRadius: 14, borderTopRightRadius: isUser ? 5 : 14, borderTopLeftRadius: isUser ? 14 : 5, fontSize: 14, lineHeight: 1.6, whiteSpace: isUser ? 'pre-wrap' : undefined, overflowWrap: 'anywhere', color: isUser ? '#fff' : 'var(--tx)', background: isUser ? 'linear-gradient(135deg,var(--blue),var(--violet))' : msg.error ? 'rgba(255,77,77,.08)' : 'var(--bg2)', border: isUser ? '1px solid rgba(255,255,255,.16)' : `1px solid ${msg.error ? 'rgba(255,77,77,.35)' : 'var(--bd)'}`, boxShadow: isUser ? '0 3px 10px rgba(99,102,241,.14)' : 'none' }}>
             {workflowUi?.type === 'review' ? 'Please review the records below and confirm when ready.' : isUser ? String(msg.text || '') : <AssistantText value={msg.text} showIp={showIp} />}
-            {isUser && <MessageAttachments attachments={msg.attachments} />}
+            {isUser && <MessageFileAttachments attachments={msg.attachments} />}
           </div>
           {isUser && <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, marginRight: 4 }}>
             <button
@@ -989,6 +1067,7 @@ function Bubble({ msg, userQuestion = '', onConfirm, onSelectOption, onWorkflowU
           {canContinue && <button type="button" onClick={() => onSelectOption?.('continue')} style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer' }}>Continue</button>}
           {isVehicleLogs && <VehicleLogsResult ui={workflowUi} />}
           <ExportCard ui={workflowUi} />
+          <ConfigImportFormatCard ui={workflowUi} />
           <WorkflowCard ui={workflowUi} onConfirm={onConfirm} onSelectOption={onSelectOption} onWorkflowUpload={onWorkflowUpload} onWorkflowBatchUpload={onWorkflowBatchUpload} uploading={uploading} active={activeWorkflow} />
           {(!msg.ui || msg.ui.type === 'form_step') && <NvrActionCard text={msg.text} workflow={msg.ui?.workflow} onSelectOption={onSelectOption} active={activeWorkflow} />}
         </>}
