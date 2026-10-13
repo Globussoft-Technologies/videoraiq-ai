@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { dur } from './solderLineData';
 import { mediaUrl } from '@/lib/format';
 import { REPORT_METRICS as METRICS, buildSolderReportRows } from './reportRows.js';
-import SnapshotCell from './SnapshotCell';
+import ReportTable from './ReportTable';
+import SortButton, { useTableSort } from './TableSort';
+import TotalReport from './TotalReport';
 import { mono, label, Panel, OpBadge, Chip, Waiting } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import DownloadButton from './DownloadButton';
@@ -17,6 +19,7 @@ const TYPES = [
   { v: 'missed', t: 'Missed solder report', d: 'Missed joint counts by panel' },
   { v: 'hourly', t: 'Hourly activity', d: 'Panels, joints and misses per hour' },
   { v: 'panels', t: 'Panels counted per hour', d: 'Hourly panel counts in a table' },
+  { v: 'total', t: 'Total reports', d: 'All panels, zone counts, soldered and missed joints' },
 ];
 
 function periods(today) {
@@ -44,6 +47,9 @@ function Compare({ s }) {
     const max = Math.max(...known.map(([v]) => v), 0) || 1;
     return { l, hint, vals, f, win, max };
   });
+  const operatorColumns = s.ops.map(operator => `${operator.code} · ${operator.zone}`);
+  const sorting = useTableSort(rows, s._id, (row, key) => key === 'Metric' ? row.l : key === 'Result' ? row.win == null ? 'EVEN' : `OP-${row.win + 1}` : row.vals[operatorColumns.indexOf(key)]);
+  const gridColumns = `minmax(150px, 1.2fr) repeat(${s.ops.length}, minmax(110px, 1fr)) 92px`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(s.ops.length, 4)}, minmax(0, 1fr))`, gap: 12 }}>
@@ -58,8 +64,11 @@ function Compare({ s }) {
         ))}
       </div>
       <div style={{ borderRadius: 12, border: '1px solid var(--bd)', overflowX: 'auto' }}>
-        {rows.map((r, k) => (
-          <div key={r.l} style={{ display: 'grid', gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${s.ops.length}, minmax(110px, 1fr)) 92px`, gap: 12, padding: '10px 16px', alignItems: 'center', borderTop: k ? '1px solid var(--bd)' : 'none' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: gridColumns, gap: 12, padding: '10px 16px', ...mono, fontSize: 9, color: 'var(--tx3)' }}>
+          {['Metric', ...operatorColumns, 'Result'].map(column => <span key={column} role="columnheader" aria-sort={sorting.directionFor(column)}><SortButton column={column} sorting={sorting} /></span>)}
+        </div>
+        {sorting.rows.map((r) => (
+          <div key={r.l} style={{ display: 'grid', gridTemplateColumns: gridColumns, gap: 12, padding: '10px 16px', alignItems: 'center', borderTop: '1px solid var(--bd)' }}>
             <span><span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{r.l}</span><span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>{r.hint}</span></span>
             {r.l === 'Missed points' ? <span style={{ gridColumn: '2 / -1', ...mono, fontSize: 14, fontWeight: 700 }}>{s.sum.missed} · All workers</span> : <>{r.vals.map((v, i) => (
               <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -83,33 +92,17 @@ function Compare({ s }) {
   );
 }
 
-function Table({ rows }) {
-  if (!rows.length) return <Waiting title="Nothing to report" minH={200}>No data for this report in the selected period.</Waiting>;
-  const head = Object.keys(rows[0]);
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-        <thead><tr>{head.map((h) => <th key={h} style={{ textAlign: 'left', padding: '8px 6px', ...mono, fontSize: 9, letterSpacing: '.07em', fontWeight: 500, color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>{h.toUpperCase()}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid var(--bd)' }}>
-              {head.map((h) => <td key={h} style={{ padding: '9px 6px', ...(typeof r[h] === 'number' ? mono : {}) }}>{h === 'Snapshot' ? <SnapshotCell value={r[h]} /> : r[h]}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function Reports({ model, selected, onSelect, range, today, onRangeChange }) {
   const [type, setType] = useState('compare');
   const s = model.stations[Math.min(selected, model.stations.length - 1)];
   const typeMeta = TYPES.find((t) => t.v === type);
   const period = periods(today).find(([, a, b]) => a === range.startDate && b === range.endDate);
   const periodLabel = period ? period[0] : `${range.startDate} → ${range.endDate}`;
-  const rows = s ? buildSolderReportRows(type, s, mediaUrl) : [];
-  const pagination = useSolderPagination(rows, JSON.stringify([type, s?._id, range.startDate, range.endDate]));
+  const rawRows = useMemo(() => s ? buildSolderReportRows(type, s, mediaUrl) : [], [type, s]);
+  const scope = JSON.stringify([type, s?._id, range.startDate, range.endDate]);
+  const sorting = useTableSort(rawRows, scope);
+  const rows = sorting.rows;
+  const pagination = useSolderPagination(rows, `${scope}:${sorting.resetKey}`);
   const fileName = s ? `solder-line_${s.name}_${type}_${range.startDate}_${range.endDate}`.replace(/\s+/g, '-') : 'solder-line';
   const subtitle = s ? `${s.name} · ${s.zones.join(' & ')} · ${periodLabel}` : periodLabel;
   const btn = (primary) => ({ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: primary ? '#fff' : 'var(--tx)', border: primary ? 'none' : '1px solid var(--bd2)', background: primary ? 'linear-gradient(135deg, #3b82f6, #a855f7)' : 'var(--bg2)' });
@@ -169,7 +162,9 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
           </div>
           <div style={{ padding: '18px 22px' }}>
             {!s ? <Waiting title="No solder-line cameras" minH={200}>Turn on the Desk Solar Shoulder detection on a camera first.</Waiting>
-              : type === 'compare' ? <Compare s={s} /> : <Table rows={pagination.pageRows} />}
+              : type === 'compare' ? <Compare s={s} />
+                : type === 'total' ? <TotalReport rows={pagination.pageRows} sorting={sorting} />
+                  : <ReportTable rows={pagination.pageRows} sorting={sorting} label={typeMeta.t} />}
             {s && type !== 'compare' && <SolderPagination pagination={pagination} label={typeMeta.t} />}
             {s && type !== 'absence' && !s.sum.hasThroughput && (
               <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx3)' }}>Joint, panel and solder-time figures fill in once DS posts per-panel events.</div>

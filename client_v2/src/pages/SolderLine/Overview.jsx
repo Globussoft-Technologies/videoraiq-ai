@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ImageOff, LayoutGrid, Rows3, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ImageOff, LayoutGrid, Maximize2, Rows3, X } from 'lucide-react';
 import CameraStream from '@/components/CameraStream';
+import FullscreenZoomSurface from '@/components/FullscreenZoomSurface';
 import { mediaUrl } from '@/lib/format';
-import { clock, dur, opColor, describeSolderAlert } from './solderLineData';
+import { clock, dur, opColor } from './solderLineData';
 import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
   OpBadge, StatusPill, Chip, Waiting, SnapshotPreview,
@@ -12,11 +13,13 @@ import { buildSolderReportRows } from './reportRows.js';
 import { downloadSnapshot } from './snapshots';
 import DownloadButton from './DownloadButton';
 import LatestPanel from './LatestPanel';
-import SnapshotCell from './SnapshotCell';
+import SortButton, { useTableSort } from './TableSort';
+import { sortRows } from './sorting.js';
+import MissedSolderAlerts from './MissedSolderAlerts';
+import AbsenceLogTable from './AbsenceLogTable';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const NO_THROUGHPUT = 'Panel counts and completed joints appear here once DS posts its per-panel "Solar panel processing" events.';
-const NO_MISSED = 'Missed-solder alerts appear here when a panel has fewer completed joints than required.';
 
 function stationStatus(s) {
   if (s.sum.absentNow) return ['ABSENCE', BAD];
@@ -123,6 +126,7 @@ function CompareTable({ stations, sel, setSel }) {
     ['ABSENCES', (s) => s.sum.absences, -1, (v) => String(v)],
     ['PRESENCE', presence, 1, (v) => `${v.toFixed(1)}%`],
   ];
+  const sorting = useTableSort(stations, '', (station, key) => key === 'Station' ? station.name : cols.find(([name]) => name === key)?.[1](station));
   const ranges = cols.map(([, get]) => {
     const vals = stations.map(get).filter((v) => v != null);
     return vals.length ? [Math.min(...vals), Math.max(...vals)] : [0, 0];
@@ -132,10 +136,11 @@ function CompareTable({ stations, sel, setSel }) {
     <div style={{ borderRadius: 12, border: '1px solid var(--bd)', overflowX: 'auto' }}>
       <div style={{ minWidth: 200 + cols.length * 80 }}>
         <div style={{ ...grid, ...mono, fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)' }}>
-          <span style={{ padding: '10px 14px' }}>STATION · OPERATORS</span>
-          {cols.map(([l]) => <span key={l} style={{ padding: '10px 8px' }}>{l}</span>)}
+          <span role="columnheader" aria-sort={sorting.directionFor('Station')} style={{ padding: '10px 14px' }}><SortButton column="Station" sorting={sorting}>STATION · OPERATORS</SortButton></span>
+          {cols.map(([l]) => <span key={l} role="columnheader" aria-sort={sorting.directionFor(l)} style={{ padding: '10px 8px' }}><SortButton column={l} sorting={sorting}>{l}</SortButton></span>)}
         </div>
-        {stations.map((s, i) => {
+        {sorting.rows.map((s) => {
+          const i = stations.indexOf(s);
           return (
             <div key={s._id} onClick={() => setSel(i)} style={{ ...grid, cursor: 'pointer', borderBottom: '1px solid var(--bd)', background: i === sel ? 'rgba(59,130,246,.1)' : 'transparent', boxShadow: i === sel ? 'inset 3px 0 0 var(--blue)' : 'none' }}>
               <span style={{ padding: '10px 14px', minWidth: 0 }}>
@@ -161,12 +166,60 @@ function CompareTable({ stations, sel, setSel }) {
 // ---------------------------------------------------------------- 01 · zone absence
 
 function LiveCamera({ s }) {
+  const hostRef = useRef(null);
+  const closeRef = useRef(null);
+  const expandRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [fallback, setFallback] = useState(false);
+  useEffect(() => {
+    const changed = () => {
+      if (document.fullscreenElement === hostRef.current) setExpanded(true);
+      else if (!fallback) setExpanded(false);
+    };
+    document.addEventListener('fullscreenchange', changed);
+    return () => document.removeEventListener('fullscreenchange', changed);
+  }, [fallback]);
+  useEffect(() => {
+    if (!expanded) return;
+    closeRef.current?.focus();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; expandRef.current?.focus(); };
+  }, [expanded]);
+  const open = async () => {
+    try {
+      if (!hostRef.current?.requestFullscreen) throw new Error('Fullscreen unavailable');
+      await hostRef.current.requestFullscreen();
+    } catch {
+      setFallback(true);
+    }
+    setExpanded(true);
+  };
+  const close = async () => {
+    if (document.fullscreenElement === hostRef.current) await document.exitFullscreen();
+    setFallback(false);
+    setExpanded(false);
+  };
   const [w, h] = s.videoResolution;
   const polys = s.zonePolygons.length && typeof s.zonePolygons[0]?.[0] === 'number' ? [s.zonePolygons] : s.zonePolygons;
   return (
-    <div style={{ position: 'relative', aspectRatio: `${w} / ${h}`, background: '#0a0e15' }}>
+    <div ref={hostRef} role={expanded ? 'dialog' : undefined} aria-modal={expanded || undefined} aria-label={expanded ? `Live ${s.name}` : undefined}
+      onKeyDown={(event) => {
+        if (!expanded) return;
+        if (event.key === 'Escape') { event.preventDefault(); close(); }
+        if (event.key === 'Tab') {
+          const controls = [...hostRef.current.querySelectorAll('button:not(:disabled)')];
+          const first = controls[0], last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+      }}
+      style={{ position: fallback && expanded ? 'fixed' : 'relative', ...(fallback && expanded ? { inset: 0, zIndex: 10003 } : {}),
+        ...(expanded ? { width: '100vw', height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' } : { aspectRatio: `${w} / ${h}` }), background: '#0a0e15' }}>
+      <div style={{ position: 'relative', width: expanded ? `min(100vw, calc(100dvh * ${w / h}))` : '100%', aspectRatio: `${w} / ${h}` }}>
+      <FullscreenZoomSurface enabled={expanded} resetKey={s._id} toolbarStyle={{ right: 64 }}>
       {s.streamingUrl
-        ? <CameraStream channel={s} rounded={false} minH={0} immediate />
+        ? <CameraStream channel={s} rounded={false} minH={0} immediate clickToMaximize={false} />
         : <Waiting title="No stream for this camera" minH={0}>Check the camera on Cameras &amp; NVRs.</Waiting>}
       {/* ponytail: zones are drawn in the detection's videoResolution space; assumes the stream keeps that aspect ratio. */}
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -188,6 +241,14 @@ function LiveCamera({ s }) {
           </span>
         );
       })}
+      </FullscreenZoomSurface>
+      </div>
+      <button ref={expanded ? closeRef : expandRef} type="button" onClick={expanded ? close : open}
+        title={expanded ? 'Close fullscreen' : 'View live camera fullscreen'} aria-label={expanded ? 'Close fullscreen' : 'View live camera fullscreen'}
+        style={{ position: 'absolute', right: 14, ...(expanded ? { top: 14 } : { bottom: 12 }), zIndex: 40, width: 34, height: 34,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 7, border: '1px solid rgba(255,255,255,.3)', color: '#fff', background: 'rgba(15,23,42,.8)', cursor: 'pointer' }}>
+        {expanded ? <X size={18} /> : <Maximize2 size={18} />}
+      </button>
     </div>
   );
 }
@@ -322,48 +383,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 650px), 1fr))', gap: 16, padding: 16 }}>
           {!s.ops.length && <div style={{ padding: 12, fontSize: 12.5, color: 'var(--tx3)' }}>No operator zones configured.</div>}
-          {s.ops.map((o) => {
-            const rows = [...s.absences].reverse().filter((a) => a.op === o.i);
-            return (
-              <div key={o.i} style={{ border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden', minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-                  <OpBadge op={o.i} code={o.code} />
-                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{o.zone}</span>
-                  <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)' }}>{rows.length} alerts · {dur(o.away)} unavailable</span>
-                </div>
-                <div style={{ overflow: 'auto', maxHeight: 360 }}>
-                  <table aria-label={`${o.code} absence alert log`} style={{ width: '100%', minWidth: 650, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg1solid)' }}>
-                      <tr style={{ ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
-                        {['Operator', 'Alert time', 'Condition', 'Returned', 'Duration', 'Image'].map((heading) => (
-                          <th key={heading} scope="col" style={{ padding: '10px', fontWeight: 500, whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{heading}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!rows.length && <tr><td colSpan={6} style={{ padding: 18, color: 'var(--tx3)' }}>No absence alerts for {o.code} in this range.</td></tr>}
-                      {rows.map((r) => (
-                        <tr key={r._id} style={{ borderBottom: '1px solid var(--bd)' }}>
-                          <td style={{ padding: '10px' }}><OpBadge op={r.op} /></td>
-                          <td style={{ padding: '10px', ...mono, fontWeight: 600, whiteSpace: 'nowrap' }}>{model.singleDay ? clock(r.start) : r.start.format('DD MMM HH:mm:ss')}</td>
-                          <td style={{ padding: '10px', color: 'var(--tx2)' }}>{r.description || `${r.zone} desk empty`}</td>
-                          <td style={{ padding: '10px', ...mono, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{r.end ? (model.singleDay ? clock(r.end) : r.end.format('DD MMM HH:mm:ss')) : 'Not returned'}</td>
-                          <td style={{ padding: '10px', ...mono, fontWeight: 700, whiteSpace: 'nowrap' }}>{dur(r.durSec)}</td>
-                          <td style={{ padding: '8px 10px' }}>
-                            {r.image ? (
-                              <button type="button" onClick={() => preview(r._id)} aria-label={`View snapshot for ${o.code} at ${clock(r.start)}`} title="View image" style={{ display: 'block', width: 64, height: 40, padding: 0, border: '1px solid var(--bd2)', borderRadius: 5, overflow: 'hidden', background: 'var(--bg2)', cursor: 'zoom-in' }}>
-                                <img src={mediaUrl(r.image)} alt={`${o.zone} absence snapshot`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              </button>
-                            ) : <span style={{ color: 'var(--tx3)', fontSize: 11 }}>No image</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
+          {s.ops.map(o => <AbsenceLogTable key={o.i} operator={o} absences={s.absences} singleDay={model.singleDay} onPreview={preview} />)}
         </div>
       </Panel>
     </>
@@ -435,76 +455,12 @@ function SolderSection({ s }) {
             <strong>{hoverOperator ? `${hoverOperator.code} · ${hoverOperator.zone}` : 'All workers'}</strong>
             <div style={{ color: 'var(--tx3)', ...mono }}>{hoverHour.h}:00-{String(Number(hoverHour.h) + 1).padStart(2, '0')}:00</div>
             <div>Soldered joints: <strong>{hoverCounts ? hoverCounts.joints : hoverHour.ops.reduce((sum, operator) => sum + operator.joints, 0)}</strong></div>
-            {hoverOperator && <div>Operator missed joints: <strong>{hoverCounts?.missed ?? 'Not reported'}</strong></div>}
             <div style={{ color: BAD }}>Missed joints (all workers): <strong>{hoverHour.missedJoints ?? 0}</strong></div>
           </div>}
         </Panel>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
-        <Panel>
-          <PanelHead title="Solder joint coverage" sub="Labels represent panel slots; exact positions are not reported" right={s.sum.coverage != null && <span style={{ ...mono, fontSize: 11, color: OK }}>{s.sum.coverage.toFixed(2)}% COVERED</span>} />
-          {!anyMissedData ? <Waiting>{NO_MISSED}</Waiting> : (
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: `78px repeat(${s.hours.length}, minmax(34px, 1fr))`, gap: 5, minWidth: 78 + s.hours.length * 39 }}>
-                <span />
-                {s.hours.map((h) => <span key={h} style={{ textAlign: 'center', ...mono, fontSize: 9.5, color: 'var(--tx3)' }}>{h}</span>)}
-                {s.pointRows.map((row) => (
-                  <div key={row.point} style={{ display: 'contents' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, ...mono, fontSize: 11, fontWeight: 700 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: opColor(row.op) }} />P{row.point}
-                      <span style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--tx3)' }}>Panel</span>
-                    </span>
-                    {row.cells.map((m, k) => {
-                      const c = m === 0 ? OK : m === 1 ? WARN : BAD;
-                      return (
-                        <div key={k} title={`P${row.point} · ${s.hours[k]}:00 · ${m} missed`} style={{ height: 34, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', ...mono, fontSize: 12, fontWeight: 700, color: c, background: m === 0 ? 'rgba(34,197,94,.16)' : m === 1 ? 'rgba(245,166,35,.24)' : 'rgba(255,77,77,.3)', border: `1px solid ${c}55` }}>
-                          {m ? `−${m}` : '✓'}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Panel>
-
-        <Panel pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Missed solder alerts</span>
-            <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#ff6b6b', border: `1px solid ${BAD}73`, borderRadius: 5, padding: '2px 8px' }}>{s.missed.length}</span>
-            <span style={{ marginLeft: 'auto', ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>Across all workers</span>
-          </div>
-          <div style={{ flex: 1, maxHeight: 268, overflow: 'auto' }}>
-            {!s.missed.length && <div style={{ padding: 16 }}>{anyMissedData ? <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No missed solder alerts in this range.</span> : <Waiting minH={120}>{NO_MISSED}</Waiting>}</div>}
-            {!!s.missed.length && <table aria-label="Missed solder alerts" style={{ width: '100%', minWidth: 440, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-              <thead><tr style={{ ...mono, fontSize: 9, color: 'var(--tx3)', textAlign: 'left' }}>
-                <th scope="col" style={{ padding: '8px 12px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>DETAILS</th>
-                <th scope="col" style={{ width: 64, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>SCOPE</th>
-                <th scope="col" style={{ width: 76, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>TIME</th>
-                <th scope="col" style={{ width: 68, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>IMAGE</th>
-              </tr></thead>
-              <tbody>{[...s.missed].reverse().map((m) => {
-              const description = describeSolderAlert(m);
-              return (
-              <tr key={m._id} style={{ borderBottom: '1px solid var(--bd)' }}>
-                <td style={{ padding: '9px 12px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 8, background: 'rgba(255,77,77,.12)', border: `1px solid ${BAD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b6b' }}><X size={16} aria-hidden="true" /></span>
-                <span style={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
-                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{description.title}</span>
-                  <span style={{ display: 'block', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{description.detail}</span>
-                </span>
-                </div></td>
-                <td style={{ padding: '9px 6px' }}><OpBadge op={m.op} /></td>
-                <td style={{ padding: '9px 6px', ...mono, fontSize: 11.5, color: 'var(--tx2)' }}>{clock(m.start)}</td>
-                <td style={{ padding: '9px 6px' }}><SnapshotCell value={mediaUrl(m.image)} /></td>
-              </tr>
-              );
-            })}</tbody></table>}
-          </div>
-        </Panel>
-      </div>
+      <MissedSolderAlerts station={s} hasData={anyMissedData} />
     </>
   );
 }
@@ -512,10 +468,17 @@ function SolderSection({ s }) {
 // ---------------------------------------------------------------- 03 · hour by hour
 
 function HourSection({ s, model, range }) {
-  const pagination = useSolderPagination(s.hourly, JSON.stringify([s._id, range?.startDate, range?.endDate]));
+  const sorting = useTableSort(s.hourly, JSON.stringify([s._id, range?.startDate, range?.endDate]), (row, key) => {
+    if (key === 'Hour') return Number(row.h);
+    if (key === 'Panels') return row.panels;
+    if (key === 'Completed joints') return row.ops.reduce((sum, operator) => sum + operator.joints, 0);
+    if (key === 'Missed joints') return row.missedJoints;
+    return row.ops[s.ops.findIndex(operator => `${operator.code} joints` === key)]?.joints;
+  });
+  const pagination = useSolderPagination(sorting.rows, JSON.stringify([s._id, range?.startDate, range?.endDate, sorting.resetKey]));
   const rangeLabel = (h) => `${h}:00-${String(Number(h) + 1).padStart(2, '0')}:00`;
   const exportHourly = () => downloadXlsx(
-    buildSolderReportRows('hourly', s).map((row, index) => ({ ...row, Hour: rangeLabel(s.hourly[index].h) })),
+    sortRows(buildSolderReportRows('hourly', s), sorting.sort),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
   );
   if (!s.sum.hasThroughput) return <Panel><Waiting>{NO_THROUGHPUT}</Waiting></Panel>;
@@ -530,8 +493,8 @@ function HourSection({ s, model, range }) {
         <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
           <thead>
             <tr style={{ fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', textAlign: 'left' }}>
-              <th style={th}>HOUR</th><th style={th}>PANELS</th><th style={th}>COMPLETED JOINTS</th><th style={th}>MISSED JOINTS</th>
-              {s.ops.map(operator => <th key={operator.i} style={{ ...th, color: operator.color }}>{operator.code} JOINTS</th>)}
+              {['Hour', 'Panels', 'Completed joints', 'Missed joints'].map(column => <th key={column} scope="col" aria-sort={sorting.directionFor(column)} style={th}><SortButton column={column} sorting={sorting}>{column.toUpperCase()}</SortButton></th>)}
+              {s.ops.map(operator => <th key={operator.i} scope="col" aria-sort={sorting.directionFor(`${operator.code} joints`)} style={{ ...th, color: operator.color }}><SortButton column={`${operator.code} joints`} sorting={sorting}>{operator.code} JOINTS</SortButton></th>)}
             </tr>
           </thead>
           <tbody>

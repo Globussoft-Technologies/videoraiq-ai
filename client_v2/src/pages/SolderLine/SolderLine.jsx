@@ -116,7 +116,7 @@ export default function SolderLine() {
         </div>
       )}
       {model?.truncated && (
-        <div style={{ fontSize: 12, color: 'var(--warn)' }}>Showing the first 5,000 alerts of this range. Pick a shorter range to see them all.</div>
+        <div style={{ fontSize: 12, color: 'var(--warn)' }}>Showing up to 5,000 alerts and panel records in this range. Pick a shorter range to see them all.</div>
       )}
 
       {loading && !model ? <PageLoader /> : !model ? null : (

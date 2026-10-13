@@ -4,28 +4,28 @@ import { Check, X, Minus, ImageOff, LoaderCircle, Maximize2, RotateCcw } from 'l
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { mediaUrl } from '@/lib/format';
 import { buildLatestPanelState, pointReplayPhase } from './latestPanelState.js';
+import SnapshotCell from './SnapshotCell';
 
 const buttonStyle = { width: 30, height: 30, flexShrink: 0, padding: 0, display: 'grid', placeItems: 'center', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' };
 
-function PanelSnapshot({ image, panelId }) {
+function PanelSnapshot({ image, panelId, latest = true }) {
   const [failed, setFailed] = useState(false);
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ aspectRatio: '16 / 9', borderRadius: 10, overflow: 'hidden', background: 'var(--bg2)', border: '1px solid var(--bd)', display: 'grid', placeItems: 'center' }}>
         {image && !failed ? (
-          <a href={image} target="_blank" rel="noreferrer" title="Open latest panel snapshot" style={{ display: 'block', width: '100%', height: '100%' }}>
-            <img src={image} alt={`Latest panel ${panelId} snapshot`} onError={() => setFailed(true)} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} />
-          </a>
+          <SnapshotCell value={image} label={`Open panel ${panelId} snapshot`} previewZIndex={10002} onImageError={() => setFailed(true)}
+            triggerStyle={{ display: 'block', width: '100%', height: '100%' }} imageStyle={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', border: 'none', borderRadius: 0 }} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--tx3)', fontSize: 11 }}><ImageOff size={24} />{failed ? 'Snapshot could not be loaded' : 'No snapshot for this panel'}</div>
         )}
       </div>
-      <div style={{ marginTop: 6, color: 'var(--tx3)', fontSize: 10, overflowWrap: 'anywhere' }}>Latest event snapshot · {panelId}</div>
+      <div style={{ marginTop: 6, color: 'var(--tx3)', fontSize: 10, overflowWrap: 'anywhere' }}>{latest ? 'Latest event snapshot' : 'Panel snapshot'} · {panelId}</div>
     </div>
   );
 }
 
-function PanelResults({ panel, state, expanded = false }) {
+function PanelResults({ panel, state, expanded = false, heading = 'Latest panel event', animate = true }) {
   const { zones, done, total, requiredJoints, complete } = state;
   const [replay, setReplay] = useState(0);
   const [playback, setPlayback] = useState({ key: state.animationKey, replay: 0, step: 0 });
@@ -33,8 +33,8 @@ function PanelResults({ panel, state, expanded = false }) {
   const progress = total ? step / total * 100 : 0;
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setPlayback({ key: state.animationKey, replay, step: reduceMotion ? total : 0 });
-    if (reduceMotion || !total) return undefined;
+    setPlayback({ key: state.animationKey, replay, step: reduceMotion || !animate ? total : 0 });
+    if (reduceMotion || !animate || !total) return undefined;
     let revealed = 0;
     const timer = setInterval(() => {
       revealed += 1;
@@ -42,9 +42,9 @@ function PanelResults({ panel, state, expanded = false }) {
       if (revealed >= total) clearInterval(timer);
     }, 700);
     return () => clearInterval(timer);
-  }, [state.animationKey, total, replay]);
+  }, [state.animationKey, total, replay, animate]);
   return (
-    <section aria-label="Latest panel event" style={{ padding: expanded ? 22 : 14, containerType: 'inline-size', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+    <section aria-label={heading} style={{ padding: expanded ? 22 : 14, containerType: 'inline-size', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
       <style>{`
         @keyframes solder-event-enter { 0% { opacity: 0; transform: translateY(12px) scale(.82); } 70% { opacity: 1; transform: translateY(-2px) scale(1.03); } 100% { opacity: 1; transform: none; } }
         @keyframes solder-count-enter { 0% { opacity: 0; transform: scale(.4); } 70% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
@@ -71,12 +71,12 @@ function PanelResults({ panel, state, expanded = false }) {
       `}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, flex: '1 1 180px', minWidth: 0 }}>
-          <strong style={{ color: 'var(--tx)', fontSize: 13 }}>Latest panel event</strong>
+          <strong style={{ color: 'var(--tx)', fontSize: 13 }}>{heading}</strong>
           <span style={{ fontFamily: 'var(--mono)', color: 'var(--tx3)', fontSize: 11, overflowWrap: 'anywhere', minWidth: 0 }}>{panel.panelId}</span>
         </div>
         <div className="solder-latest-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginLeft: 'auto', maxWidth: '100%' }}>
         <span style={{ color: complete ? 'var(--ok)' : 'var(--warn)', border: '1px solid currentColor', borderRadius: 5, padding: '3px 7px', fontSize: 10, fontWeight: 700 }}>{done}/{requiredJoints} SOLDERED</span>
-        <button type="button" onClick={() => setReplay(value => value + 1)} style={buttonStyle} title="Replay point animation" aria-label="Replay point animation"><RotateCcw size={15} /></button>
+        {animate && <button type="button" onClick={() => setReplay(value => value + 1)} style={buttonStyle} title="Replay point animation" aria-label="Replay point animation"><RotateCcw size={15} /></button>}
         {expanded ? (
           <Dialog.Close asChild><button type="button" style={buttonStyle} title="Close latest panel view" aria-label="Close latest panel view"><X size={17} /></button></Dialog.Close>
         ) : (
@@ -85,7 +85,7 @@ function PanelResults({ panel, state, expanded = false }) {
         </div>
       </div>
       <div className="solder-latest-content">
-      <PanelSnapshot key={panel.Image || String(panel._id)} image={panel.Image ? mediaUrl(panel.Image) : ''} panelId={panel.panelId} />
+      <PanelSnapshot key={panel.Image || String(panel._id)} image={panel.Image ? mediaUrl(panel.Image) : ''} panelId={panel.panelId} latest={heading === 'Latest panel event'} />
       <div style={{ minWidth: 0 }}>
       <div className="solder-point-zones">
         {zones.map((zone, zoneIndex) => (
@@ -131,18 +131,18 @@ function PanelResults({ panel, state, expanded = false }) {
   );
 }
 
-export default function LatestPanel({ panel }) {
+export default function LatestPanel({ panel, heading = 'Latest panel event', animate = true }) {
   const [expanded, setExpanded] = useState(false);
   const state = useMemo(() => buildLatestPanelState(panel), [panel]);
   if (!state) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx3)', fontSize: 12 }}>Waiting for the latest panel event in this date range.</div>;
   return (
     <Dialog.Root open={expanded} onOpenChange={setExpanded}>
-      <PanelResults panel={panel} state={state} />
+      <PanelResults panel={panel} state={state} heading={heading} animate={animate} />
       <Dialog.Portal>
         <Dialog.Overlay style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)' }} />
         <Dialog.Content aria-describedby={undefined} style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(1440px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box', zIndex: 10001, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,.5)' }}>
-          <Dialog.Title style={{ position: 'absolute', width: 1, height: 1, padding: 0, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Latest panel event — {panel.panelId}</Dialog.Title>
-          <PanelResults panel={panel} state={state} expanded />
+          <Dialog.Title style={{ position: 'absolute', width: 1, height: 1, padding: 0, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>{heading} — {panel.panelId}</Dialog.Title>
+          <PanelResults panel={panel} state={state} expanded heading={heading} animate={animate} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -1,16 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
 import { clock, describeSolderAlert } from './solderLineData';
-import { BAD, WARN, mono, label, Panel, OpBadge, Chip, Waiting, SnapshotPreview } from './ui';
+import { BAD, WARN, OK, mono, label, Panel, OpBadge, Chip, Waiting, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
 import DownloadButton from './DownloadButton';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
+import SortButton, { useTableSort } from './TableSort';
 
 const TYPE_META = {
   absence: { label: 'ABSENCE', color: WARN },
   missed: { label: 'MISSED SOLDER', color: BAD },
+  soldered: { label: 'DONE SOLDER', color: OK },
 };
 
 function TypeTag({ type, style }) {
@@ -39,21 +41,25 @@ function ImageDownload({ row, style }) {
 
 export default function AlertLogs({ model, rows, range }) {
   const [type, setType] = useState('all');
-  const [op, setOp] = useState('all');
   const [grid, setGrid] = useState(true);
   const [openId, setOpenId] = useState(null);
 
-  const opCodes = useMemo(() => [...new Set(rows.map((r) => r.opCode))].sort(), [rows]);
-  const shown = rows.filter((r) => (type === 'all' || r.type === type)
-    && (op === 'all' || r.opCode === op));
-  const pagination = useSolderPagination(shown, JSON.stringify([type, op, range?.startDate, range?.endDate]));
+  const sorting = useTableSort(rows.filter(r => type === 'all' || r.type === type), JSON.stringify([type, range?.startDate, range?.endDate]), (row, key) => {
+    if (key === 'Type') return TYPE_META[row.type].label;
+    if (key === 'Operator') return row.opCode;
+    if (key === 'Time') return row.start;
+    if (key === 'Detail') { const description = describeSolderAlert(row); return `${description.title} ${description.detail}`; }
+    return row.image;
+  });
+  const shown = sorting.rows;
+  const pagination = useSolderPagination(shown, JSON.stringify([type, range?.startDate, range?.endDate, sorting.resetKey]));
   const { pageRows } = pagination;
   const when = (m) => (model.singleDay ? clock(m) : m.format('DD MMM HH:mm:ss'));
 
   const exportRows = () => shown.map((r) => {
     const d = describeSolderAlert(r);
     return {
-      Type: TYPE_META[r.type].label, Station: r.station.name, Operator: `${r.opCode} · ${r.zone}`,
+      Type: TYPE_META[r.type].label, Station: r.station.name,
       Time: r.start.format('YYYY-MM-DD HH:mm:ss'), Detail: `${d.title}${d.detail ? ` — ${d.detail}` : ''}`,
       Snapshot: r.image ? mediaUrl(r.image) : '',
     };
@@ -64,20 +70,16 @@ export default function AlertLogs({ model, rows, range }) {
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 20 }}>Solder Alert Logs</span>
-        <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Every absence and missed-solder alert, with the camera snapshot taken at that moment</span>
+        <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Absence alerts and panel results, with their camera snapshots</span>
       </div>
 
       <Panel style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '12px 14px' }}>
         <span style={label}>Type</span>
-        {[['all', 'ALL', '#475569'], ['absence', 'ABSENCE', '#b45309'], ['missed', 'MISSED SOLDER', '#dc2626']].map(([v, l, c]) => (
+        {[['all', 'ALL', '#475569'], ['absence', 'ABSENCE', '#b45309'], ['missed', 'MISSED SOLDER', '#dc2626'], ['soldered', 'DONE SOLDER', OK]].map(([v, l, c]) => (
           <Chip key={v} on={type === v} color={c} onClick={() => setType(v)}>
             {l}<span style={{ opacity: 0.7 }}>{rows.filter((r) => v === 'all' || r.type === v).length}</span>
           </Chip>
         ))}
-        <span style={{ width: 1, height: 22, background: 'var(--bd2)', margin: '0 4px' }} />
-        <span style={label}>Operator</span>
-        <Chip on={op === 'all'} onClick={() => setOp('all')}>ALL</Chip>
-        {opCodes.map((c) => <Chip key={c} on={op === c} color="var(--blue)" onClick={() => setOp(c)}>{c}</Chip>)}
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{shown.length} FILTERED</span>
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
@@ -89,7 +91,7 @@ export default function AlertLogs({ model, rows, range }) {
       </Panel>
 
       {!shown.length ? (
-        <Panel><Waiting title="No alerts" minH={200}>No absence or missed-solder alerts match these filters in this date range.</Waiting></Panel>
+        <Panel><Waiting title="No logs" minH={200}>No absence alerts or panel results match this type in the selected period.</Waiting></Panel>
       ) : grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
           {pageRows.map((r) => {
@@ -124,7 +126,7 @@ export default function AlertLogs({ model, rows, range }) {
                 if (!r) {
                   return (
                     <div key="head" style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-                      <span>SNAPSHOT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>DOWNLOAD IMAGE</span>
+                      {['Snapshot', 'Type', 'Operator', 'Time', 'Detail', 'Download image'].map(column => <span key={column} role="columnheader" aria-sort={sorting.directionFor(column)}><SortButton column={column} sorting={sorting}>{column.toUpperCase()}</SortButton></span>)}
                     </div>
                   );
                 }

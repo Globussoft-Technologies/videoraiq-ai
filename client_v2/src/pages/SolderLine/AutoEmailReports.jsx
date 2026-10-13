@@ -5,7 +5,8 @@ import { api, getApiErrorMessage } from '@/helpers/client';
 import { usePermissions } from '@/context/PermissionContext';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import MultiSelect from '@/components/MultiSelect';
-import SnapshotCell from './SnapshotCell';
+import ReportTable from './ReportTable';
+import TotalReport from './TotalReport';
 
 const endpoint = '/solder-auto-email-reports';
 const button = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 12px', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd2)', fontSize: 12, cursor: 'pointer' };
@@ -108,10 +109,8 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
           {preview && <section aria-label="Report preview" className="border border-[var(--bd)] rounded-lg p-3">
             <div className="text-sm font-semibold">{title} preview</div>
             <p className="text-xs text-[var(--tx3)] my-2">{preview.period} · {preview.total} rows{preview.total > preview.rows.length ? ` (showing first ${preview.rows.length})` : ''}</p>
-            {!preview.rows.length ? <p className="text-sm">No records for this period.</p> : <div className="max-h-60 overflow-auto">
-              <table className="text-xs w-full border-collapse"><thead><tr>{Object.keys(preview.rows[0]).map((key) => <th key={key} className="text-left p-2 border-b border-[var(--bd)] whitespace-nowrap">{key}</th>)}</tr></thead>
-                <tbody>{preview.rows.map((row, i) => <tr key={i}>{Object.keys(preview.rows[0]).map((key) => <td key={key} className="p-2 border-b border-[var(--bd)] whitespace-nowrap">{key === 'Snapshot' ? <SnapshotCell value={row[key]} /> : String(row[key] ?? '')}</td>)}</tr>)}</tbody>
-              </table>
+            {!preview.rows.length ? <p className="text-sm">No records for this period.</p> : reportType === 'total' ? <div className="max-h-60 overflow-auto"><TotalReport rows={preview.rows} /></div> : <div className="max-h-60 overflow-auto">
+              <ReportTable rows={preview.rows} label={`${title} email preview`} />
             </div>}
           </section>}
           <div className="flex justify-end gap-2">

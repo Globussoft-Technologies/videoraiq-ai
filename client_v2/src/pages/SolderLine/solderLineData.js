@@ -39,8 +39,8 @@ export function describeSolderAlert(row) {
     };
   }
   return {
-    title: `Soldering incomplete${row.panelId ? ` · ${row.panelId}` : ''}`,
-    detail: [`${row.completedJoints ?? '—'} joints completed`, `${row.missedJoints ?? '—'} missed`]
+    title: `${row.type === 'soldered' ? 'Soldering complete' : 'Soldering incomplete'}${row.panelId ? ` · ${row.panelId}` : ''}`,
+    detail: [`${row.completedJoints ?? '—'} joints soldered`, `${row.missedJoints ?? '—'} missed`]
       .filter(Boolean).join(' · '),
   };
 }
@@ -61,10 +61,14 @@ function buildStation(station, data, now) {
     ...data.absences.filter(mine).map((a) => a.zone),
     ...data.missed.filter(mine).flatMap((m) => (m.zones || []).map(z => z.zone)),
     ...data.hourly.filter(mine).flatMap((r) => r.zones.map((z) => z.zone)),
+    ...(data.panels || []).filter(mine).flatMap(panel => (panel.zones || []).map(zone => zone.zone)),
   ].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     .forEach(addZone);
   const pointsPerPanel = data.pointsPerPanel || DEFAULT_POINTS;
+  const panelsData = (data.panels || []).filter(mine).map(panel => ({ ...panel, ...panelCounts(panel),
+    start: utcToConfiguredTimezone(panel.time || panel.timeOfIncident), image: panel.Image,
+  }));
 
   const dayEnd = tzMoment(data.endDate).endOf('day');
   const liveEnd = moment.min(now, dayEnd);
@@ -177,7 +181,7 @@ function buildStation(station, data, now) {
   });
 
   return {
-    ...station, zones, ops, absences, missed, hours, hourly, pointRows, pointsPerPanel,
+    ...station, zones, ops, absences, missed, panels: panelsData, hours, hourly, pointRows, pointsPerPanel,
     windowStart, windowEnd, windowSec,
     sum: {
       panels, joints, missed: panelMissed, requiredJoints: sum(hourly.map(row => row.requiredJoints)),
@@ -219,6 +223,15 @@ export function buildSolderLine(data, now = moment.tz(getConfiguredTimezone())) 
 export function alertRows(model) {
   if (!model) return [];
   return model.stations
-    .flatMap((s) => [...s.absences, ...s.missed].map((a) => ({ ...a, station: s, opCode: a.op == null ? 'Panel' : `OP-${a.op + 1}` })))
+    .flatMap((s) => {
+      // One log per panel event, including successful panels. Point slots are
+      // still available separately for the coverage view.
+      const panels = s.panels?.length ? s.panels.map(panel => ({ ...panel,
+        _id: `panel:${panel._id || `${panel.panelId}:${panel.start.valueOf()}`}`,
+        id: panel.panelId, panelId: panel.panelId, op: null, zone: 'Panel total',
+        type: panel.missedJoints > 0 ? 'missed' : 'soldered',
+      })) : [...new Map(s.missed.map(row => [row.incidentId || `${row.panelId}:${row.start.valueOf()}`, row])).values()];
+      return [...s.absences, ...panels].map(row => ({ ...row, station: s, opCode: row.op == null ? 'Panel' : `OP-${row.op + 1}` }));
+    })
     .sort((a, b) => b.start.valueOf() - a.start.valueOf());
 }
