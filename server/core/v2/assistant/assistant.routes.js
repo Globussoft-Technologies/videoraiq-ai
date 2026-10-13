@@ -12,6 +12,8 @@ router.patch("/conversations/:conversationId", (req, res) => assistantController
 router.delete("/conversations/:conversationId", (req, res) => assistantController.remove(req, res));
 router.post("/transcribe", upload.single("audio"), (req, res) => assistantController.transcribe(req, res));
 router.post("/chat", (req, res) => assistantController.chat(req, res));
+router.get("/config-template/:kind.:extension", (req, res) => assistantController.configTemplate(req, res));
+router.post("/config-import", upload.single("file"), (req, res) => assistantController.configImport(req, res));
 router.post("/register-user/face",upload.fields([{ name: "file", maxCount: 1 }, { name: "files", maxCount: 3 }]),
   (req, res) => assistantController.uploadRegisterUserFace(req, res)
 );

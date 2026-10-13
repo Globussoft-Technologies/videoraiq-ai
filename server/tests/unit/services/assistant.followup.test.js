@@ -7,6 +7,25 @@ import { generateAssistantText } from "../../../core/v2/assistant/assistant.prov
 beforeEach(() => { vi.stubEnv("ASSISTANT_MCP_URL", "http://localhost:5003"); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 describe("assistant follow-up MCP bridge", () => {
+  it.each([
+    ["give me bulk upload template for location", "location"],
+    ["share the department bulk upload template", "department"],
+    ["download shift import template", "shift"],
+  ])("returns the %s template without waiting for MCP", async (message, kind) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await askAssistant({ message, history: [], req: { headers: { "x-access-token": "current-token" } } });
+    expect(result.ui).toMatchObject({ type: "config_import_template", resource: kind });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("returns multiple templates in one reply", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await askAssistant({ message: "Show location, department and shift formats", history: [], req: { headers: { "x-access-token": "current-token" } } });
+    expect(result.ui).toMatchObject({ type: "config_import_templates" });
+    expect(result.ui.templates.map((template) => template.resource)).toEqual(["location", "department", "shift"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("forwards a detection explanation unchanged", async () => {
     const question = "explain me about Gunny Bags/Materials Wrong Location Detection";
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ response: "This detection identifies misplaced materials." }));

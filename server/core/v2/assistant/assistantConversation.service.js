@@ -1,10 +1,31 @@
 import mongoose from "mongoose";
 import crypto from "node:crypto";
 import AssistantConversation from "./assistantConversation.model.js";
+import logger from "../../../utils/logger.js";
 
-const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const MODEL_HISTORY_TURNS = 40;
+export const MAX_RETAINED_CONVERSATIONS = 20;
+const ownerLocks = new Map();
+
+function ownerKey(owner) {
+  return `${owner.adminId}:${owner.ownerType}:${owner.ownerId}`;
+}
+
+async function withOwnerLock(owner, work) {
+  const key = ownerKey(owner);
+  const previous = ownerLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  ownerLocks.set(key, current);
+  await previous;
+  try { return await work(); }
+  finally {
+    release();
+    if (ownerLocks.get(key) === current) ownerLocks.delete(key);
+  }
+}
 
 function httpError(message, statusCode) {
   const error = new Error(message);
@@ -35,7 +56,49 @@ export function serializeConversation(conversation) {
     messageCount: conversation.messageCount || 0,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
+    lastActivityAt: conversation.lastActivityAt || conversation.updatedAt || conversation.createdAt,
   };
+}
+
+export async function enforceConversationLimit(owner, limit = MAX_RETAINED_CONVERSATIONS) {
+  const filter = { adminId: owner.adminId, ownerType: owner.ownerType, ownerId: owner.ownerId };
+  // Documents created before lastActivityAt was introduced remain eligible:
+  // seed their activity from the existing timestamp without loading them.
+  await AssistantConversation.updateMany(
+    { ...filter, $or: [{ lastActivityAt: { $exists: false } }, { lastActivityAt: null }] },
+    [{ $set: { lastActivityAt: { $ifNull: ["$updatedAt", "$createdAt"] } } }],
+  );
+  const keep = await AssistantConversation.find(filter)
+    .select("_id")
+    .sort({ lastActivityAt: -1, updatedAt: -1, _id: -1 })
+    .limit(limit)
+    .lean();
+  if (keep.length < limit) return { deletedCount: 0, keptCount: keep.length };
+  // Delete by the current boundary rather than by a stale `$nin` list. A
+  // conversation created by another API process between the read and delete
+  // is newer than this boundary and is therefore protected.
+  const boundary = keep.at(-1);
+  const result = await AssistantConversation.deleteMany({
+    ...filter,
+    $or: [
+      { lastActivityAt: { $lt: boundary.lastActivityAt } },
+      { lastActivityAt: boundary.lastActivityAt, updatedAt: { $lt: boundary.updatedAt } },
+      { lastActivityAt: boundary.lastActivityAt, updatedAt: boundary.updatedAt, _id: { $lt: boundary._id } },
+    ],
+  });
+  return { deletedCount: result.deletedCount || 0, keptCount: keep.length };
+}
+
+export async function cleanupAllConversationLimits() {
+  const owners = await AssistantConversation.aggregate([
+    { $group: { _id: { adminId: "$adminId", ownerType: "$ownerType", ownerId: "$ownerId" } } },
+  ]);
+  let deletedCount = 0;
+  for (const { _id: owner } of owners) {
+    const result = await withOwnerLock(owner, () => enforceConversationLimit(owner));
+    deletedCount += result.deletedCount;
+  }
+  return { owners: owners.length, deletedCount };
 }
 
 export function serializeMessage(message) {
@@ -76,13 +139,19 @@ export async function listConversations(req) {
     Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : DEFAULT_PAGE_SIZE,
   );
   const search = String(req.query?.search || '').trim().slice(0, 100);
-  const filter = ownerFilter(req);
+  const owner = conversationOwner(req);
+  try {
+    await withOwnerLock(owner, () => enforceConversationLimit(owner));
+  } catch (error) {
+    logger.error(`[ASSISTANT-RETENTION] request cleanup failed: ${error?.message || error}`);
+  }
+  const filter = { ...owner };
   if (search) filter.title = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
   const [total, conversations] = await Promise.all([
     AssistantConversation.countDocuments(filter),
     AssistantConversation.find(filter)
       .select("-messages")
-      .sort({ updatedAt: -1 })
+      .sort({ lastActivityAt: -1, updatedAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
@@ -122,18 +191,35 @@ export async function getConversation(req, conversationId) {
 
 export async function createConversation(req, title) {
   const owner = conversationOwner(req);
-  return AssistantConversation.create({
-    ...owner,
-    title: String(title || "New chat").trim().slice(0, 90) || "New chat",
+  return withOwnerLock(owner, async () => {
+    const conversation = await AssistantConversation.create({
+      ...owner,
+      title: String(title || "New chat").trim().slice(0, 90) || "New chat",
+      lastActivityAt: new Date(),
+    });
+    try {
+      await enforceConversationLimit(owner);
+    } catch (error) {
+      // The conversation is still usable; the scheduled idempotent sweep will
+      // retry a transient deletion failure.
+      logger.error(`[ASSISTANT-RETENTION] create cleanup failed: ${error?.message || error}`);
+    }
+    return conversation;
   });
 }
 
 export async function appendMessage(conversation, role, text, error = false, ui, attachments = []) {
-  conversation.messages.push({ role, text, error, ...(ui ? { ui } : {}), attachments: Array.isArray(attachments) ? attachments : [] });
-  conversation.messageCount = conversation.messages.length;
-  await conversation.save();
-  const message = conversation.messages.at(-1);
-  return message;
+  const owner = { adminId: conversation.adminId, ownerType: conversation.ownerType, ownerId: conversation.ownerId };
+  return withOwnerLock(owner, async () => {
+    const current = await AssistantConversation.findOne({ _id: conversation._id, ...owner });
+    if (!current) throw httpError("Conversation was not found.", 404);
+    current.messages.push({ role, text, error, ...(ui ? { ui } : {}), attachments: Array.isArray(attachments) ? attachments : [] });
+    current.messageCount = current.messages.length;
+    current.lastActivityAt = new Date();
+    await current.save();
+    conversation.set(current.toObject());
+    return current.messages.at(-1);
+  });
 }
 
 export async function setWorkflowState(conversation, workflowState) {
@@ -170,6 +256,8 @@ export default {
   appendMessage,
   createConversation,
   deleteConversation,
+  enforceConversationLimit,
+  cleanupAllConversationLimits,
   findOwnedConversation,
   getConversation,
   listConversations,

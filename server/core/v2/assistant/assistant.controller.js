@@ -3,12 +3,15 @@ import Response from "../../../utils/response.js";
 import conversationService from "./assistantConversation.service.js";
 import assistantService from "./assistant.service.js";
 import { transcribeAudio } from "./assistant.provider.js";
+import { importConfiguration, templatePdf, templateWorkbook } from "./assistantConfigImport.service.js";
 import authorizedUsersService from "../authorizedUsers/authorizedUsers.service.js";
 import path from "node:path";
 import crypto from "node:crypto";
+import mime from "mime-types";
 import { putMediaV2, readMediaV2, streamMediaV2 } from "../adminStorage/mediaStorage.v2.js";
 
 const MAX_MESSAGE_CHARS = 4_000;
+const MAX_INLINE_CONFIG_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const REGISTER_DETAIL_STEPS = ["firstName", "lastName", "designation", "department"];
 const registerExecutionLocks = new Set();
 
@@ -228,11 +231,25 @@ class AssistantController {
             : "";
           return candidate?.attachmentId === requestedId || legacyId === requestedId;
         });
+      if (attachment?.inlineData && attachment?.inlineEncoding === "base64") {
+        const body = Buffer.from(attachment.inlineData, "base64");
+        res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+        res.setHeader("Content-Length", String(body.length));
+        res.setHeader("Content-Disposition", `inline; filename="${String(attachment.fileName || "attachment").replace(/[\r\n"]/g, "_")}"`);
+        return res.status(200).end(body);
+      }
       const storageKey = attachment?.storageKey || attachment?.path;
       if (!storageKey) return res.status(404).json({ status: "failed", message: "Attachment was not found." });
       if (String(storageKey).startsWith("local://assistant/")) {
         return res.status(404).json({ status: "failed", message: "Attachment is stored in an unsupported local location." });
       }
+      const fileName = String(attachment.fileName || "attachment").replace(/[\r\n"]/g, "_");
+      const encodedFileName = encodeURIComponent(fileName).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+      // S3 returns the stored content type itself; NAS streams do not. Set
+      // both headers from the persisted attachment metadata so PDF previews
+      // render inline consistently across storage providers.
+      res.setHeader("Content-Type", attachment.mimeType || mime.lookup(fileName) || "application/octet-stream");
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodedFileName}`);
       return await streamMediaV2(storageKey, res);
     } catch (error) {
       if (!res.headersSent) return res.status(error?.statusCode || 404).json({ status: "failed", message: "Attachment was not found." });
@@ -506,6 +523,83 @@ class AssistantController {
           data: conversation ? { conversationId: String(conversation._id) } : undefined,
         },
       });
+    }
+  }
+
+  async configImport(req, res) {
+    const message = String(req.body?.message || "").trim();
+    if (!message || !req.file) return res.status(400).json(Response.validationFailResp("Attach one Excel file and tell me what to create.", "Validation failed."));
+    const requestedConversationId = String(req.body?.conversationId || "").trim();
+    let conversation;
+    try {
+      conversation = requestedConversationId
+        ? await conversationService.findOwnedConversation(req, requestedConversationId)
+        : await conversationService.createConversation(req, message);
+
+      let storageKey = null;
+      let inlineAttachment = null;
+      try {
+        storageKey = await putMediaV2({
+          adminId: req.verified?.userData?.adminId,
+          buffer: req.file.buffer,
+          mediaType: "report",
+          folderName: `assistant/${String(conversation._id)}`,
+          originalName: req.file.originalname || "assistant-upload",
+          fallbackToEnv: true,
+        });
+      } catch (error) {
+        logger.warn(`Assistant config attachment was not stored: ${error?.message || error}`);
+        if (req.file.buffer.length > MAX_INLINE_CONFIG_ATTACHMENT_BYTES) {
+          const storageError = new Error("The uploaded file could not be saved for chat history. Please retry after media storage is available.");
+          storageError.statusCode = 502;
+          throw storageError;
+        }
+        // Small configuration documents can safely live with the conversation
+        // when NAS/cloud storage is temporarily unavailable. The attachment
+        // endpoint streams this value without exposing it in conversation JSON.
+        inlineAttachment = {
+          inlineEncoding: "base64",
+          inlineData: req.file.buffer.toString("base64"),
+        };
+      }
+
+      const userMessage = await conversationService.appendMessage(conversation, "user", message, false, undefined, [{
+        attachmentId: `att_${crypto.randomUUID()}`,
+        type: "file",
+        fileName: req.file.originalname || "assistant-upload",
+        mimeType: req.file.mimetype || "application/octet-stream",
+        ...(storageKey ? { path: storageKey, storageKey } : {}),
+        ...(inlineAttachment || {}),
+      }]);
+      const result = await importConfiguration({ file: req.file, message, verified: req.verified });
+      const assistantMessage = await conversationService.appendMessage(conversation, "assistant", result.text, false, result.ui);
+      return res.status(result.ok ? 201 : 200).json(Response.userSuccessResp(result.text, {
+        reply: result.text,
+        text: result.text,
+        ui: result.ui,
+        conversation: conversationService.serializeConversation(conversation),
+        userMessage: conversationService.serializeMessage(userMessage),
+        assistantMessage: conversationService.serializeMessage(assistantMessage),
+      }));
+    } catch (error) {
+      logger.error(`Assistant config import failed: ${error?.stack || error?.message || error}`);
+      return res.status(Number(error?.statusCode) || 500).json({ status: "failed", message: "Failed to process the uploaded configuration file." });
+    }
+  }
+
+  async configTemplate(req, res) {
+    const kind = String(req.params.kind || "");
+    const extension = String(req.params.extension || "");
+    if (!["location", "department", "shift"].includes(kind)) return res.status(404).json({ status: "failed", message: "Template not found." });
+    if (!["xlsx", "pdf"].includes(extension)) return res.status(404).json({ status: "failed", message: "Template format not found." });
+    try {
+      const file = extension === "pdf" ? await templatePdf(kind) : await templateWorkbook(kind);
+      res.setHeader("Content-Type", extension === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${kind}-bulk-upload-template.${extension}"`);
+      return res.send(file);
+    } catch (error) {
+      logger.error(`Assistant template generation failed: ${error?.message || error}`);
+      return res.status(500).json({ status: "failed", message: "Failed to generate the template." });
     }
   }
 

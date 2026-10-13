@@ -2,6 +2,7 @@ import { getRequestTimezone } from "../../../utils/timezone.js";
 import logger from "../../../utils/logger.js";
 import config from "config";
 import { generateAssistantText } from "./assistant.provider.js";
+import { formatFor, templateRequestKinds } from "./assistantConfigImport.service.js";
 
 const MAX_HISTORY_TURNS = 40;
 const MAX_MESSAGE_CHARS = 4_000;
@@ -56,6 +57,14 @@ function normalizeAssistantResponse(value) {
 }
 
 export async function askAssistant({ message, history, req, workflowState, action, incidentContext, attachmentCount = 0, imageAttachments = [], conversationContext, conversationId }) {
+  const templateKinds = !action && !imageAttachments.length ? templateRequestKinds(message) : [];
+  if (templateKinds.length) {
+    const templates = templateKinds.map((kind) => {
+      const format = formatFor(kind);
+      return { ...format, type: "config_import_template", title: `${format.title.replace(/^Correct /, "").replace(/ format$/, "")} bulk upload template` };
+    });
+    return { text: `Here ${templates.length === 1 ? "is the" : "are the"} ${templateKinds.join(", ")} bulk upload ${templates.length === 1 ? "template" : "templates"}. Download the Excel or PDF format, replace the example row with your records, and upload it here.`, ui: templates.length === 1 ? templates[0] : { type: "config_import_templates", templates } };
+  }
   const startsRegisterWorkflow = /\b(?:register|create|add)\s+(?:(?:a|an|your|the)\s+)?(?:new\s+)?(?:user|users|employee|employees)\b/i.test(String(message || ""));
   const registrationHowTo = isRegistrationHowTo(message);
 

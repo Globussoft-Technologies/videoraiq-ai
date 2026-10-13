@@ -221,6 +221,44 @@ export async function generateAssistantText({ systemInstruction, messages, gener
   return text;
 }
 
+// Extract configuration tables from image-based PDFs when the PDF has no
+// embedded text layer. Gemini accepts PDF bytes directly and can read the
+// rendered table; callers still validate every value before importing it.
+export async function extractConfigurationPdf({ buffer, columns, required }) {
+  const settings = resolveProviderSettings();
+  if (settings.provider !== "gemini") {
+    throw new Error("This PDF is image-based. Configure Gemini or upload a text-based PDF/Excel file.");
+  }
+  requireSettings(settings);
+  const ai = new GoogleGenAI({
+    apiKey: settings.apiKey,
+    ...(settings.baseUrl ? { httpOptions: { baseUrl: settings.baseUrl, headers: { Authorization: `Bearer ${settings.apiKey}` } } } : {}),
+  });
+  const response = await ai.models.generateContent({
+    model: settings.model,
+    contents: [{ role: "user", parts: [
+      { text: `Read the configuration table in this PDF. Return JSON only as {"headers":[...],"rows":[[...]]}. Use only these exact recognized header names: ${JSON.stringify(columns)}. Include only headers visible in the PDF, in their displayed left-to-right order. Each row must have one value per returned header. Preserve cell text exactly; use an empty string for blank cells. Do not infer or invent values. Required headers are: ${JSON.stringify(required)}. If there is no readable table, return {"headers":[],"rows":[]}.` },
+      { inlineData: { mimeType: "application/pdf", data: buffer.toString("base64") } },
+    ] }],
+    config: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 4000 },
+  });
+  let parsed;
+  try { parsed = JSON.parse(String(response?.text || "")); } catch { throw new Error("The table in this PDF could not be read. Upload the Excel template or a clearer PDF."); }
+  const headers = Array.isArray(parsed?.headers) ? parsed.headers : [];
+  const rows = Array.isArray(parsed?.rows) ? parsed.rows : [];
+  if (!required.every((field) => headers.includes(field)) || !rows.length) {
+    throw new Error(`Missing required column: ${required.join(", ")}.`);
+  }
+  const positions = new Map(headers.map((header, index) => [header, index]));
+  return rows.filter(Array.isArray).map((cells, index) => ({
+    number: index + 2,
+    get: (header) => {
+      const position = positions.get(header);
+      return position === undefined ? "" : cells[position] ?? "";
+    },
+  }));
+}
+
 function parseTranscriptResponse(value) {
   const raw = clean(value).replace(/^```(?:json)?\s*|\s*```$/gi, "").trim();
   try {

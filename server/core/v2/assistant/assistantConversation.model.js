@@ -18,6 +18,8 @@ const assistantConversationSchema = new mongoose.Schema(
     ownerType: { type: String, enum: ["admin", "member"], required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, required: true },
     title: { type: String, required: true, trim: true, maxlength: 90 },
+    // Explicit activity ordering is independent of Mongo's updatedAt.
+    lastActivityAt: { type: Date, default: Date.now, index: true },
     messageCount: { type: Number, default: 0, min: 0 },
     messages: { type: [assistantMessageSchema], default: [] },
     // Stateful conversational workflows live here instead of relying only on
@@ -30,5 +32,6 @@ const assistantConversationSchema = new mongoose.Schema(
 );
 
 assistantConversationSchema.index({ adminId: 1, ownerType: 1, ownerId: 1, updatedAt: -1 });
+assistantConversationSchema.index({ adminId: 1, ownerType: 1, ownerId: 1, lastActivityAt: -1, updatedAt: -1, _id: -1 });
 
 export default mongoose.model("AssistantConversation", assistantConversationSchema);

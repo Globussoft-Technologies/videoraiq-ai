@@ -28,6 +28,7 @@ import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
 import { metricsHandler } from "./utils/prometheus.js";
 import { scheduleRetentionSweep } from "./services/retention.service.js";
+import { scheduleAssistantConversationCleanup } from "./services/assistantConversationRetention.service.js";
 import { scheduleEmpExitSync } from "./services/empExitSync.service.js";
 import DetectionSettingService from "./core/v1/detectionSettings/detectionSettings.service.js";
 import AttendanceAutoEmailReportService from "./core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
@@ -194,6 +195,7 @@ const startServer = async () => {
 
     // Data-retention sweeper (no-op unless DataRetention.enabled). Never throws.
     scheduleRetentionSweep();
+    scheduleAssistantConversationCleanup();
     // Suspends VideoRDB users whose EmpMonitor record shows they've exited. Never throws.
     scheduleEmpExitSync();
     DetectionSettingService.startDetectionScheduleRunner();
