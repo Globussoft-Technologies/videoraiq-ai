@@ -1653,6 +1653,7 @@ class AttendanceAutoEmailReportService {
       return res.json(Response.userSuccessResp(`${reportKind(report)} report sent`, { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, deliveryMode: details.deliveryMode || "links", files: details.files?.map((file) => ({ format: file.format, contentType: file.contentType, url: file.url })) }));
     } catch (error) {
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Send failed: ${error.message}`);
+      if (/unauthorized|not authorized to send mail/i.test(error.message)) return res.status(500).json({ ...Response.errorResp("Mail service authorization failed", "Mail service authorization failed"), code: "MAIL_AUTHORIZATION_FAILED" });
       return res.status(500).json(Response.errorResp("Failed to send auto email report", error.message));
     }
   }

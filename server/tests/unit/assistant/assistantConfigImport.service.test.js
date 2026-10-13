@@ -54,6 +54,8 @@ describe("assistant configuration import format", () => {
   });
 
   it("does not route an import instruction or ambiguous request as a template", () => {
+    expect(templateRequestKinds("Skip all optional fields")).toEqual([]);
+    expect(templateRequestKinds("skip description fields")).toEqual([]);
     expect(templateRequestKind("upload these locations")).toBeNull();
     expect(templateRequestKind("show templates for locations and shifts")).toBeNull();
     expect(templateRequestKinds("show templates for locations and shifts")).toEqual(["location", "shift"]);

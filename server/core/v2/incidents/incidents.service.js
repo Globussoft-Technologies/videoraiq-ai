@@ -1202,6 +1202,13 @@ class IncidentsService {
         // liveDemoData: true -> demo incidents only | false/omitted -> real incidents only
         liveDemoData: liveDemoData ? true : { $ne: true },
       };
+      // Detection-history questions include events without snapshots. Keep
+      // all ownership and member channel restrictions below unchanged.
+      if (req.body?.eventSource === "detection_history") {
+        delete matchStage.Image;
+        delete matchStage.incidentType;
+        delete matchStage.incidentName;
+      }
 
       // Filter: status (new / resolved). Defaults to
       // unresolved-only (previous hardcoded behavior) when nothing is selected.
@@ -1457,7 +1464,7 @@ class IncidentsService {
       //Default Incident Type Filter
       if (incidentTypeFilter?.length > 0) {
         matchStage.incidentType = {
-          $nin: ["countPersons", "lineCrossing"],
+          ...(matchStage.incidentType ?? {}),
           $in: incidentTypeFilter,
         };
       }
@@ -1621,6 +1628,33 @@ class IncidentsService {
       // Use the same authorized match and optional vehicle search stages as
       // the Incident Center grid. Grouping in Mongo avoids silently counting
       // only the first page of incidents in an AI breakdown.
+      if (req.body?.groupBy === "severity") {
+        const groups = await Incident.aggregate([
+          { $match: { ...matchStage } },
+          ...vehicleStages,
+          { $group: { _id: { $let: { vars: { severity: { $toLower: { $ifNull: ["$severity", "unknown"] } } }, in: { $cond: [{ $eq: ["$$severity", "medium"] }, "moderate", "$$severity"] } } }, count: { $sum: 1 } } },
+          { $project: { _id: 0, severity: "$_id", count: 1 } },
+          { $sort: { count: -1, severity: 1 } },
+        ]);
+        return res.status(200).json({ totalCount: groups.reduce((sum, group) => sum + group.count, 0), groups });
+      }
+      if (req.body?.groupBy === "channelId" || req.body?.groupBy === "location") {
+        const cameraGrouping = req.body.groupBy === "channelId";
+        const groups = await Incident.aggregate([
+          { $match: { ...matchStage } }, ...vehicleStages,
+          ...(cameraGrouping ? [
+            { $group: { _id: "$channelId", count: { $sum: 1 } } },
+            { $lookup: { from: "channels", localField: "_id", foreignField: "_id", as: "camera" } },
+            { $project: { _id: 0, channelId: "$_id", cameraName: { $arrayElemAt: ["$camera.name", 0] }, count: 1 } },
+          ] : [
+            { $lookup: { from: "nvrs", localField: "nvrId", foreignField: "_id", as: "nvr" } },
+            { $group: { _id: { $ifNull: [{ $arrayElemAt: ["$nvr.location", 0] }, "Unknown location"] }, count: { $sum: 1 } } },
+            { $project: { _id: 0, location: "$_id", count: 1 } },
+          ]),
+          { $sort: { count: -1 } },
+        ]);
+        return res.status(200).json({ totalCount: groups.reduce((sum, group) => sum + group.count, 0), groups });
+      }
       if (req.body?.groupBy === "incidentType") {
         const groups = await Incident.aggregate([
           { $match: { ...matchStage } },

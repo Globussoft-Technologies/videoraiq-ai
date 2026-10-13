@@ -110,6 +110,8 @@ export function formatFor(kind) {
 
 export function templateRequestKinds(message) {
   const text = String(message || "").toLowerCase();
+  // Form controls mention fields but do not request an import template.
+  if (/^\s*(?:skip|continue|cancel|confirm|save)\b/.test(text)) return [];
   const asksForShape = /\b(?:templates?|templetes?|formats?|structures?|strcures?|strctures?|samples?|examples?|columns?|headers?|layouts?|schemas?|fields?)\b/.test(text)
     || /\b(?:sheet|file|spreadsheet)\b[\s\S]{0,40}\blook like\b/.test(text);
   if (!asksForShape) return [];
