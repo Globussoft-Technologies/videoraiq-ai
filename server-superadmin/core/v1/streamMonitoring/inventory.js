@@ -12,7 +12,7 @@ export function publicAdmin(admin) {
 
 // Explicit projections keep recorder credentials and RTSP URLs out of monitoring.
 // Restrict channels to existing NVRs: deleted recorders can leave orphan channels.
-export async function readInventory(settings, adminId = null) {
+export async function readInventory(settings, adminId = null, includeInactive = false) {
   const filter = adminId ? { _id: adminId } : settings.adminIds.size ? { _id: { $in: [...settings.adminIds] } } : {};
   const admins = await Admin.find(filter).select(adminFields).lean();
   const byUser = new Map(admins.map(admin => [String(admin.user_id), admin]));
@@ -20,19 +20,21 @@ export async function readInventory(settings, adminId = null) {
     .select("_id userId nvrName domain").lean() : [];
   const byNvr = new Map(nvrs.map(nvr => [String(nvr._id), nvr]));
   const channels = nvrs.length ? await Channel.find({ userId: { $in: [...byUser.keys()] },
-    nvrId: { $in: nvrs.map(nvr => nvr._id) }, isAdded: true })
-    .select("_id userId nvrId name customName channelId localChannelId streamingPath").lean() : [];
+    nvrId: { $in: nvrs.map(nvr => nvr._id) }, ...(includeInactive ? {} : { isAdded: true }) })
+    .setOptions({ includeInactive })
+    .select("_id userId nvrId name customName channelId localChannelId streamingPath isAdded").lean() : [];
   const cameras = channels.flatMap(channel => {
     const nvr = byNvr.get(String(channel.nvrId));
     const admin = byUser.get(String(channel.userId));
     if (!nvr || !admin || String(nvr.userId) !== String(admin.user_id)) return [];
     return [{ adminId: admin._id, userId: String(admin.user_id), cameraId: channel._id,
+      enabled: channel.isAdded === true, adminName: publicAdmin(admin).name, email: admin.email,
       nvrId: nvr._id, nvrName: nvr.nvrName,
       name: channel.customName || channel.name || "Camera", channelId: channel.channelId || channel.localChannelId || null,
       ...statusIdentity(admin, nvr, channel, settings) }];
   });
   const sourceCounts = new Map();
-  for (const camera of cameras) if (camera.sourceKey) sourceCounts.set(camera.sourceKey, (sourceCounts.get(camera.sourceKey) || 0) + 1);
-  for (const camera of cameras) if (sourceCounts.get(camera.sourceKey) > 1) camera.mappingError = "Status ID is shared by multiple assigned cameras";
+  for (const camera of cameras) if (camera.enabled && camera.sourceKey) sourceCounts.set(camera.sourceKey, (sourceCounts.get(camera.sourceKey) || 0) + 1);
+  for (const camera of cameras) if (camera.enabled && sourceCounts.get(camera.sourceKey) > 1) camera.mappingError = "Status ID is shared by multiple assigned cameras";
   return { admins, nvrs, cameras };
 }

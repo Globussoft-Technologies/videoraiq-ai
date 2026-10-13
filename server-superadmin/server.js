@@ -121,7 +121,8 @@ const startServer = async () => {
     });
     startLoggedOutAutoDelete();
     startStaleOfflineAutoDelete();
-    startStreamMonitoring();
+    const stopMonitoring = startStreamMonitoring();
+    process.once("exit", stopMonitoring);
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

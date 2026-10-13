@@ -29,3 +29,16 @@ export const SuperAdminTelegramRecipient = mongoose.models.SuperAdminTelegramRec
   || mongoose.model("SuperAdminTelegramRecipient", recipientSchema);
 export const SuperAdminTelegramDelivery = mongoose.models.SuperAdminTelegramDelivery
   || mongoose.model("SuperAdminTelegramDelivery", deliverySchema);
+
+const eventSchema = new mongoose.Schema({
+  _id: String, type: String, cameraId: mongoose.Schema.Types.ObjectId, outageId: String, chatId: String,
+  ownerIds: [mongoose.Schema.Types.ObjectId], sequence: Number, status: { type: String, default: 'PENDING' },
+  payload: mongoose.Schema.Types.Mixed, attempts: { type: Number, default: 0 }, createdAt: Date,
+  nextAttemptAt: Date, sentAt: Date, messageId: Number, owner: String, leaseUntil: Date, errorCode: String,
+}, { ...options, collection: 'superadmintelegramoutbox' });
+eventSchema.index({ status: 1, nextAttemptAt: 1 });
+eventSchema.index({ status: 1, leaseUntil: 1 });
+eventSchema.index({ outageId: 1, chatId: 1, type: 1 });
+eventSchema.index({ outageId: 1, chatId: 1, status: 1, sentAt: -1 });
+export const TelegramOutbox = mongoose.models.SuperAdminTelegramOutbox
+  || mongoose.model('SuperAdminTelegramOutbox', eventSchema);

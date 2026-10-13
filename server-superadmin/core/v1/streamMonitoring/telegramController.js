@@ -6,7 +6,8 @@ import { telegramChannels, selectedTelegramChannels, telegramBotIdentity } from 
 
 const responseData = async recipient => ({ code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
   selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
-  botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: monitoringSettings().enabled });
+  botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: monitoringSettings().enabled,
+  reminderMs: monitoringSettings().reminderMs });
 
 function handler(action, message) {
   return async (req, res) => {

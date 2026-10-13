@@ -1,32 +1,41 @@
 import config from "config";
 
 const configured = (key, fallback = "") => config.has(key) ? config.get(key) : fallback;
-// JSON configuration is authoritative; retain environment fallback for existing deployments.
 const setting = (key, env, fallback) => configured(`StreamMonitoring.${key}`, process.env[env] ?? fallback);
-const number = (value, fallback, min, max) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && value !== undefined && value !== ""
-    ? Math.min(max, Math.max(min, Math.floor(parsed))) : fallback;
+const number = (key, env, fallback, min, max) => {
+  const raw = setting(key, env, fallback);
+  const value = Number(raw);
+  if (raw === "" || !Number.isInteger(value) || value < min || value > max)
+    throw new Error(`Invalid StreamMonitoring.${key}`);
+  return value;
 };
 
 export function monitoringSettings() {
-  const intervalMs = number(setting("intervalMs", "STREAM_MONITORING_INTERVAL_MS"), 10_000, 5_000, 300_000);
-  const timeoutMs = number(setting("timeoutMs", "STREAM_MONITORING_TIMEOUT_MS"), 8_000, 1_000, 60_000);
+  const intervalMs = number("intervalMs", "STREAM_MONITORING_INTERVAL_MS", 600_000, 5_000, 3_600_000);
+  const targetedRecheckMs = number("targetedRecheckMs", "STREAM_MONITORING_TARGETED_MS", 60_000, 5_000, 300_000);
   const enabled = setting("enabled", "STREAM_MONITORING_ENABLED", false);
   const statusMode = setting("statusMode", "STREAM_MONITORING_STATUS_MODE", "auto");
+  if (!["fixed", "per-nvr", "auto"].includes(statusMode)) throw new Error("Invalid StreamMonitoring.statusMode");
   const adminIds = setting("adminIds", "STREAM_MONITORING_ADMIN_IDS", []);
   return {
-    enabled: enabled === true || enabled === "true",
+    enabled: enabled === true || enabled === "true", statusMode,
     statusUrl: setting("statusUrl", "STREAM_MONITORING_STATUS_URL", ""),
-    statusMode: ["fixed", "per-nvr", "auto"].includes(statusMode) ? statusMode : "auto",
-    defaultHost: configured("RTSPStream.host"),
-    defaultAppEnv: configured("APP_ENV", "cloud"),
-    intervalMs,
-    timeoutMs,
-    staleAfterMs: number(setting("staleAfterMs", "STREAM_MONITORING_STALE_MS"),
-      Math.max(60_000, intervalMs * 3 + timeoutMs), intervalMs * 2 + timeoutMs, 3_600_000),
-    batchSize: number(setting("batchSize", "STREAM_MONITORING_BATCH_SIZE"), 200, 1, 500),
-    concurrency: number(setting("concurrency", "STREAM_MONITORING_CONCURRENCY"), 4, 1, 16),
-    adminIds: new Set((Array.isArray(adminIds) ? adminIds : String(adminIds).split(",")).map(id => String(id).trim()).filter(Boolean)),
+    defaultHost: configured("RTSPStream.host"), defaultAppEnv: configured("APP_ENV", "cloud"),
+    intervalMs, targetedRecheckMs,
+    inventoryIntervalMs: number("inventoryIntervalMs", "STREAM_MONITORING_INVENTORY_MS", 600_000, 10_000, 3_600_000),
+    timeoutMs: number("timeoutMs", "STREAM_MONITORING_TIMEOUT_MS", 5_000, 1_000, 30_000),
+    staleAfterMs: number("staleAfterMs", "STREAM_MONITORING_STALE_MS", Math.max(60_000, intervalMs * 2), 10_000, 7_200_000),
+    batchSize: number("batchSize", "STREAM_MONITORING_BATCH_SIZE", 200, 1, 500),
+    concurrency: number("concurrency", "STREAM_MONITORING_CONCURRENCY", 20, 1, 50),
+    hostConcurrency: number("hostConcurrency", "STREAM_MONITORING_HOST_CONCURRENCY", 4, 1, 20),
+    failureConfirmations: number("failureConfirmations", "STREAM_MONITORING_FAILURE_CONFIRMATIONS", 2, 2, 5),
+    recoveryConfirmations: number("recoveryConfirmations", "STREAM_MONITORING_RECOVERY_CONFIRMATIONS", 2, 2, 5),
+    reminderMs: number("reminderMs", "STREAM_MONITORING_REMINDER_MS", 300_000, 60_000, 3_600_000),
+    reminderWakeMs: number("reminderWakeMs", "STREAM_MONITORING_REMINDER_WAKE_MS", 30_000, 1_000, 60_000),
+    unknownWarningThreshold: number("unknownWarningThreshold", "STREAM_MONITORING_WARNING_THRESHOLD", 3, 1, 10),
+    warningCooldownMs: number("warningCooldownMs", "STREAM_MONITORING_WARNING_COOLDOWN_MS", 3_600_000, 3_600_000, 86_400_000),
+    maxDeliveryAttempts: number("maxDeliveryAttempts", "STREAM_MONITORING_DELIVERY_ATTEMPTS", 8, 1, 20),
+    opsChatId: String(setting("opsChatId", "STREAM_MONITORING_OPS_CHAT_ID", "")),
+    adminIds: new Set((Array.isArray(adminIds) ? adminIds : String(adminIds).split(",")).map(String).map(id => id.trim()).filter(Boolean)),
   };
 }

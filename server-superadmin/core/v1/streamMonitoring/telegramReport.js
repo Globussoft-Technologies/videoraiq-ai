@@ -1,47 +1,37 @@
-import { createHash } from "node:crypto";
-import { freshState } from "./stateMachine.js";
+const short = value => String(value ?? "?").replace(/[\r\n]+/g, " ").slice(0, 120);
 
-export const REMINDER_MS = 60_000;
-const short = value => String(value ?? "—").replace(/[\r\n]+/g, " ").slice(0, 120);
-const episodeKey = (camera, since) => createHash("sha256").update(JSON.stringify([
-  String(camera.adminId), String(camera.nvrId), String(camera.cameraId), camera.sourceKey, new Date(since).toISOString(),
-])).digest("hex");
-
-export function buildStreamReport(inventory, states, settings, now) {
-  const byState = new Map(states.map(state => [String(state._id), state]));
-  const byAdmin = new Map(inventory.admins.map(admin => [String(admin._id), admin]));
-  const items = [];
-  const ongoingEpisodes = new Set();
-  for (const camera of inventory.cameras) {
-    const state = byState.get(String(camera.cameraId));
-    const since = state?.telegramDownSince || state?.downSince;
-    if (!state || !since || state.sourceKey !== camera.sourceKey || camera.mappingError
-      || String(state.adminId) !== String(camera.adminId) || String(state.nvrId) !== String(camera.nvrId)) continue;
-    const episode = episodeKey(camera, since);
-    if (state.alive !== true) ongoingEpisodes.add(episode);
-    if (state.alive !== false || !freshState(state, camera, now, settings)) continue;
-    const admin = byAdmin.get(String(camera.adminId));
-    if (admin) items.push({ camera, admin, since, episode });
-  }
-  items.sort((a, b) => String(a.camera.adminId).localeCompare(String(b.camera.adminId))
-    || String(a.camera.nvrId).localeCompare(String(b.camera.nvrId)) || String(a.camera.cameraId).localeCompare(String(b.camera.cameraId)));
-  const header = `VideoraIQ — Streaming down\nDown streams: ${items.length}\nChecked at (UTC): ${new Date(now).toISOString()}`;
-  const bodies = [];
-  let body = "";
-  for (const { camera, admin, since } of items) {
-    const seconds = Math.max(0, Math.floor((now - new Date(since).getTime()) / 1000));
-    const name = `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login;
-    const block = `\n\nAdmin: ${short(name)}\nEmail: ${short(admin.email)}\nNVR: ${short(camera.nvrName)}\nCamera: ${short(camera.name)}\nCamera ID: ${camera.cameraId}\nChannel: ${short(camera.channelId)}\nDown since (UTC): ${new Date(since).toISOString()}\nDown for: ${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-    if (body && body.length + block.length > 3500) { bodies.push(body); body = ""; }
-    body += block;
-  }
-  if (body) bodies.push(body);
-  return { items, ongoingEpisodes, messages: bodies.map((part, index) =>
-    `${header}${bodies.length > 1 ? `\nPart ${index + 1}/${bodies.length}` : ""}${part}`) };
+export function formatDuration(start, end = Date.now()) {
+  const seconds = Math.max(0, Math.floor((Number(end) - new Date(start).getTime()) / 1000));
+  if (!Number.isFinite(seconds)) return 'Unknown';
+  const days = Math.floor(seconds / 86400), hours = Math.floor(seconds % 86400 / 3600), minutes = Math.floor(seconds % 3600 / 60);
+  return [days && days + 'd', hours && hours + 'h', minutes && minutes + 'm', seconds % 60 + 's'].filter(Boolean).join(' ');
+}
+const ist = value => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST' : 'Unknown';
+export function formatNotification(event, now) {
+  const payload = event.payload || {};
+  if (event.type === 'OPS_WARNING') return 'VideoraIQ ? Monitoring unavailable\nHost: ' + short(payload.host)
+    + '\nIssue: ' + short(payload.reason) + '\nLast conclusive check: ' + ist(payload.lastConclusiveAt)
+    + '\nReminders paused. Camera states retained.';
+  const title = { DOWN: 'Streaming down', REMINDER: 'Stream still down', RECOVERED: 'Stream recovered', COMBINED_RECOVERY: 'Stream was down, now recovered' }[event.type];
+  const snapshot = payload.snapshot || {};
+  return 'VideoraIQ ? ' + title + '\nAdmin: ' + short(snapshot.adminName) + '\nEmail: ' + short(snapshot.email)
+    + '\nNVR: ' + short(snapshot.nvrName) + '\nCamera: ' + short(snapshot.name) + ' | Channel: ' + short(snapshot.channelId)
+    + '\nCamera ID: ' + String(event.cameraId || payload.cameraId || '') + '\nReason: ' + short(payload.reason)
+    + '\nFirst detected down: ' + ist(payload.startedAt)
+    + (payload.closedAt ? '\nRecovery confirmed: ' + ist(payload.closedAt) : '\nChecked: ' + ist(now))
+    + '\nObserved duration: ' + formatDuration(payload.startedAt, payload.closedAt ? new Date(payload.closedAt).getTime() : now)
+    + '\nOutage: ' + short(event.outageId);
 }
 
-export function notificationDue(delivery, report, now) {
-  if (!report.items.length || new Date(delivery?.nextAttemptAt || 0).getTime() > now) return false;
-  return !delivery?.lastSentAt || now - new Date(delivery.lastSentAt).getTime() >= REMINDER_MS
-    || report.items.some(item => !(delivery.reportedEpisodes || []).includes(item.episode));
+export function formatNotifications(events, now) {
+  if (events.some(event => event.type === 'OPS_WARNING')) return events.map(event => formatNotification(event, now)).join('\n\n');
+  let text = '', previousGroup = null;
+  for (const event of events) {
+    const snapshot = event.payload?.snapshot || {};
+    const group = JSON.stringify([event.type, snapshot.adminName, snapshot.email, snapshot.nvrName]);
+    const lines = formatNotification(event, now).split('\n');
+    if (group === previousGroup) text += '\n\n' + lines.slice(4).join('\n');
+    else { text += (text ? '\n\n' : '') + lines.join('\n'); previousGroup = group; }
+  }
+  return text;
 }

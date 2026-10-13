@@ -110,7 +110,7 @@ class TelegramService {
     const channel = { chatId, title: chat.title || null, username: chat.username || null,
       chatType: chat.type, active: true, linkedAt: existing?.linkedAt || new Date(), disconnectedAt: null };
     if (!await this._postLinkMessage(chatId,
-      "This channel is now linked. Streaming-down alerts will arrive here every minute while streams remain down."))
+      "This channel is now linked. Confirmed streaming-down alerts and recovery notifications will arrive here. Idle feeds are not treated as outages."))
       return { ok: true, matched: false };
     const result = await SuperAdminTelegramRecipient.collection.updateOne(
       { _id: recipient._id, telegramLinkCode: code }, [{ $set: {

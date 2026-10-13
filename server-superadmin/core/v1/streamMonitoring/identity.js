@@ -26,10 +26,14 @@ export function statusIdentity(admin, nvr, camera, settings) {
   const statusId = local
     ? String(camera.localChannelId || parsedId || "")
     : `${nvr._id}-${camera._id}`;
+  // Preserve the existing mapping key so removing probes does not reset camera history.
+  const streamOrigin = httpBase(local ? nvr.domain || pathHost || admin.streamHost || settings.defaultHost
+    : admin.streamHost || settings.defaultHost);
+  const streamPath = local ? path : `stream/${nvr._id}-${camera._id}/playlist.m3u8`;
   return {
     host,
     statusId: statusId || null,
-    sourceKey: host && statusId ? hash(JSON.stringify([host, statusId, "stream"])) : null,
+    sourceKey: host && statusId ? hash(JSON.stringify([host, statusId, streamOrigin, streamPath, "stream"])) : null,
     mappingError: !host ? "Status host is not configured" : !statusId ? "Camera status ID is missing" : null,
   };
 }
