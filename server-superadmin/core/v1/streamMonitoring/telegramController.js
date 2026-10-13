@@ -4,10 +4,14 @@ import { monitoringSettings } from "./settings.js";
 import TelegramService from "../../../services/telegram.service.js";
 import { telegramChannels, selectedTelegramChannels, telegramBotIdentity } from "./telegramChannels.js";
 
-const responseData = async recipient => ({ code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
-  selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
-  botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: monitoringSettings().enabled,
-  reminderMs: monitoringSettings().reminderMs });
+const responseData = async recipient => {
+  const settings = monitoringSettings();
+  return { code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
+    selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
+    botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: settings.enabled,
+    reminderMs: settings.reminderMs, checkIntervalMs: settings.intervalMs,
+    confirmationDelayMs: settings.targetedRecheckMs, recoveryConfirmations: settings.recoveryConfirmations };
+};
 
 function handler(action, message) {
   return async (req, res) => {

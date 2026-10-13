@@ -24,7 +24,8 @@ export async function recordObservation(previous, camera, reading, settings) {
   delete next.alertsMuted; // policy is modified only by its authenticated handler
   try {
     const saved = await MonitoringState.updateOne(query, update, { upsert: !previous });
-    return saved.modifiedCount === 1 || saved.upsertedCount === 1 ? next : null;
+    return saved.modifiedCount === 1 || saved.upsertedCount === 1
+      ? { ...next, transitionTypes: transitions.map(transition => transition.type) } : null;
   } catch (error) { if (error.code === 11000) return null; throw error; }
 }
 
@@ -38,8 +39,9 @@ export async function closeForLifecycle(state, reason, now = new Date()) {
   await MonitoringState.updateOne({ _id: state._id, revision: state.revision || 0 }, update);
 }
 
-export async function flushTransitions(active = () => true) {
-  const rows = await MonitoringState.find({ "pendingTransitions.0": { $exists: true } }).limit(200).lean();
+export async function flushTransitions(active = () => true, onProjected = () => {}, cameraId = null) {
+  const rows = await MonitoringState.find({ "pendingTransitions.0": { $exists: true },
+    ...(cameraId ? { _id: String(cameraId) } : {}) }).limit(200).lean();
   for (const row of rows) {
     for (const transition of row.pendingTransitions || []) {
       if (!active()) return;
@@ -55,6 +57,7 @@ export async function flushTransitions(active = () => true) {
       }
       await projectTransition(transition);
       await MonitoringState.updateOne({ _id: row._id }, { $pull: { pendingTransitions: { id: transition.id } } });
+      onProjected(transition);
     }
   }
 }

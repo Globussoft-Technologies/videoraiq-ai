@@ -11,8 +11,8 @@ const number = (key, env, fallback, min, max) => {
 };
 
 export function monitoringSettings() {
-  const intervalMs = number("intervalMs", "STREAM_MONITORING_INTERVAL_MS", 600_000, 5_000, 3_600_000);
-  const targetedRecheckMs = number("targetedRecheckMs", "STREAM_MONITORING_TARGETED_MS", 60_000, 5_000, 300_000);
+  const intervalMs = number("intervalMs", "STREAM_MONITORING_INTERVAL_MS", 300_000, 5_000, 3_600_000);
+  const targetedRecheckMs = number("targetedRecheckMs", "STREAM_MONITORING_TARGETED_MS", 180_000, 5_000, 300_000);
   const enabled = setting("enabled", "STREAM_MONITORING_ENABLED", false);
   const statusMode = setting("statusMode", "STREAM_MONITORING_STATUS_MODE", "auto");
   if (!["fixed", "per-nvr", "auto"].includes(statusMode)) throw new Error("Invalid StreamMonitoring.statusMode");
@@ -22,16 +22,17 @@ export function monitoringSettings() {
     statusUrl: setting("statusUrl", "STREAM_MONITORING_STATUS_URL", ""),
     defaultHost: configured("RTSPStream.host"), defaultAppEnv: configured("APP_ENV", "cloud"),
     intervalMs, targetedRecheckMs,
-    inventoryIntervalMs: number("inventoryIntervalMs", "STREAM_MONITORING_INVENTORY_MS", 600_000, 10_000, 3_600_000),
+    inventoryIntervalMs: number("inventoryIntervalMs", "STREAM_MONITORING_INVENTORY_MS", 300_000, 10_000, 3_600_000),
     timeoutMs: number("timeoutMs", "STREAM_MONITORING_TIMEOUT_MS", 5_000, 1_000, 30_000),
-    staleAfterMs: number("staleAfterMs", "STREAM_MONITORING_STALE_MS", Math.max(60_000, intervalMs * 2), 10_000, 7_200_000),
+    staleAfterMs: number("staleAfterMs", "STREAM_MONITORING_STALE_MS", Math.max(420_000, intervalMs + 120_000), 10_000, 7_200_000),
     batchSize: number("batchSize", "STREAM_MONITORING_BATCH_SIZE", 200, 1, 500),
     concurrency: number("concurrency", "STREAM_MONITORING_CONCURRENCY", 20, 1, 50),
     hostConcurrency: number("hostConcurrency", "STREAM_MONITORING_HOST_CONCURRENCY", 4, 1, 20),
     failureConfirmations: number("failureConfirmations", "STREAM_MONITORING_FAILURE_CONFIRMATIONS", 2, 2, 5),
-    recoveryConfirmations: number("recoveryConfirmations", "STREAM_MONITORING_RECOVERY_CONFIRMATIONS", 2, 2, 5),
-    reminderMs: number("reminderMs", "STREAM_MONITORING_REMINDER_MS", 300_000, 60_000, 3_600_000),
-    reminderWakeMs: number("reminderWakeMs", "STREAM_MONITORING_REMINDER_WAKE_MS", 30_000, 1_000, 60_000),
+    recoveryConfirmations: number("recoveryConfirmations", "STREAM_MONITORING_RECOVERY_CONFIRMATIONS", 1, 1, 5),
+    initialHealthyConfirmations: number("initialHealthyConfirmations", "STREAM_MONITORING_INITIAL_CONFIRMATIONS", 2, 1, 5),
+    reminderMs: number("reminderMs", "STREAM_MONITORING_REMINDER_MS", 900_000, 60_000, 3_600_000),
+    reminderWakeMs: number("reminderWakeMs", "STREAM_MONITORING_REMINDER_WAKE_MS", 10_000, 1_000, 60_000),
     unknownWarningThreshold: number("unknownWarningThreshold", "STREAM_MONITORING_WARNING_THRESHOLD", 3, 1, 10),
     warningCooldownMs: number("warningCooldownMs", "STREAM_MONITORING_WARNING_COOLDOWN_MS", 3_600_000, 3_600_000, 86_400_000),
     maxDeliveryAttempts: number("maxDeliveryAttempts", "STREAM_MONITORING_DELIVERY_ATTEMPTS", 8, 1, 20),

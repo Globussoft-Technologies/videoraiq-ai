@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
 
+const checkDelay = (state, verdict, settings) => !["DEFERRED", "INCONCLUSIVE"].includes(verdict)
+  && (state === "SUSPECTED_DOWN" || state === "RECOVERING" || (state === "UNKNOWN" && verdict === "HEALTHY"))
+  ? settings.targetedRecheckMs : settings.intervalMs;
+
+export function scheduledCheckAt(state, settings) {
+  const observedAt = state?.observedAt ? new Date(state.observedAt).getTime() : NaN;
+  if (Number.isFinite(observedAt)) return new Date(observedAt + checkDelay(
+    state.state || (state.alive === true ? "ALIVE" : "UNKNOWN"), state.latestResult?.verdict, settings));
+  const scheduled = state?.nextCheckAt ? new Date(state.nextCheckAt) : null;
+  return scheduled && Number.isFinite(scheduled.getTime()) ? scheduled : null;
+}
+
 export function freshState(state, camera, now, settings) {
   const age = now - new Date(state?.observedAt).getTime();
   return !!state && state.sourceKey === camera.sourceKey && !camera.mappingError
@@ -11,7 +23,8 @@ export function nextState(previous, camera, reading, settings) {
   const same = previous?.sourceKey === camera.sourceKey && String(previous?.adminId) === String(camera.adminId)
     && String(previous?.nvrId) === String(camera.nvrId);
   // Legacy DOWN booleans are not proof of failure (they included normal idle).
-  const base = same ? previous || {} : {};
+  // Re-enabled cameras establish a fresh baseline; the closed outage remains in history.
+  const base = same && !previous?.lifecycleReason ? previous || {} : {};
   const state = base.state || (base.alive === true ? "ALIVE" : "UNKNOWN");
   const now = reading.observedAt;
   const next = {
@@ -25,7 +38,7 @@ export function nextState(previous, camera, reading, settings) {
     lastSuccessfulCheckAt: base.lastSuccessfulCheckAt || null, lastConclusiveAt: base.lastConclusiveAt || null,
     activeOutage: base.activeOutage || null, remindersPaused: base.remindersPaused || false,
     downSince: base.activeOutage?.startedAt || null, telegramDownSince: base.activeOutage?.startedAt || null,
-    nextCheckAt: new Date(now.getTime() + settings.targetedRecheckMs),
+    nextCheckAt: new Date(now.getTime() + settings.intervalMs),
   };
   const transitions = [];
   if (!same && previous?.activeOutage) transitions.push({
@@ -34,12 +47,20 @@ export function nextState(previous, camera, reading, settings) {
   if (reading.verdict === "DEFERRED") {
     // Idle/queued is expected on-demand behavior, not a check error.
     next.remindersPaused = true;
+    next.failureStreak = 0;
+    next.healthyStreak = 0;
+    next.inconclusiveStreak = 0;
+    if (!next.activeOutage) next.firstFailureAt = null;
     next.alive = next.activeOutage ? false : ["IDLE", "REPORTED_RUNNING"].includes(reading.availability) ? true : next.alive;
     return { next, transitions };
   }
   if (reading.verdict === "INCONCLUSIVE") {
+    // Keep the operational state, but interrupted observations cannot confirm a transition.
+    next.failureStreak = 0;
+    next.healthyStreak = 0;
+    if (!next.activeOutage) next.firstFailureAt = null;
     next.inconclusiveStreak++;
-    if (next.inconclusiveStreak >= settings.unknownWarningThreshold) next.remindersPaused = true;
+    next.remindersPaused = true;
     return { next, transitions };
   }
   next.inconclusiveStreak = 0;
@@ -75,13 +96,14 @@ export function nextState(previous, camera, reading, settings) {
         next.state = "ALIVE";
         next.remindersPaused = false;
       }
-    } else if (state === "SUSPECTED_DOWN" || state === "ALIVE" || next.healthyStreak >= settings.recoveryConfirmations) {
+    } else if (state === "SUSPECTED_DOWN" || state === "ALIVE" || next.healthyStreak >= settings.initialHealthyConfirmations) {
       next.state = "ALIVE";
     }
   }
   next.alive = next.state === "ALIVE" ? true : next.activeOutage ? false : null;
   next.downSince = next.activeOutage?.startedAt || null;
   next.telegramDownSince = next.downSince;
-  if (next.state === "ALIVE") next.nextCheckAt = new Date(now.getTime() + settings.intervalMs);
+  // Only unfinished confirmation needs the three-minute targeted check.
+  next.nextCheckAt = scheduledCheckAt(next, settings);
   return { next, transitions };
 }

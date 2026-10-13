@@ -6,7 +6,7 @@ import { MonitoringState, MonitoringOutage } from "./models.js";
 import { TelegramOutbox } from "./telegramModels.js";
 import { closeForLifecycle } from "./outageService.js";
 import { cancelOutage } from "./notificationOutbox.js";
-import { freshState } from "./stateMachine.js";
+import { freshState, scheduledCheckAt } from "./stateMachine.js";
 
 const invalid = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const id = value => /^[a-f\d]{24}$/i.test(String(value));
@@ -50,6 +50,7 @@ export async function listCameras(req, res) {
         nvrName: camera.nvrName, alive, downSince: state?.activeOutage?.startedAt || null,
         state: state?.state || "UNKNOWN", availability: state?.availability || null,
         reason: state?.latestResult?.reason || null, checkedAt: state?.observedAt || null,
+        nextCheckAt: state?.alertsMuted || state?.lifecycleReason ? null : scheduledCheckAt(state, settings),
         lastSuccessfulCheckAt: state?.lastSuccessfulCheckAt || null, remindersPaused: state?.remindersPaused || false,
         alertsMuted: state?.alertsMuted || false, statusUnavailable: !usable };
     });
@@ -83,6 +84,7 @@ export async function cameraDetails(req, res) {
   res.set('Cache-Control', 'no-store');
   try {
     const state = await ownedCamera(req);
+    const settings = monitoringSettings();
     const skip = pageNumber(req.query.skip, 0, 1000000), limit = Math.max(1, pageNumber(req.query.limit, 20, 100));
     const filter = { cameraId: state.cameraId, adminId: state.adminId };
     const outages = await MonitoringOutage.find(filter).sort({ startedAt: -1 }).skip(skip).limit(limit).lean();
@@ -96,14 +98,23 @@ export async function cameraDetails(req, res) {
       type: { $in: ['DOWN', 'REMINDER'] }, status: 'SENT' }).sort({ sentAt: -1 }).select('sentAt').lean() : null;
     return res.send(Response.SuccessResp('Stream details fetched', {
       state: state.state || 'UNKNOWN', latestResult: { verdict: state.latestResult?.verdict || null,
-        reason: state.latestResult?.reason || null, httpStatus: state.latestResult?.httpStatus || null },
+        reason: state.latestResult?.reason || null, httpStatus: state.latestResult?.httpStatus || null,
+        sourceStatusAgeMs: state.latestResult?.sourceStatusAgeMs ?? null,
+        sourceObserved: state.latestResult?.sourceObserved ?? null, outputFresh: state.latestResult?.outputFresh ?? null },
       lastSuccessfulCheckAt: state.lastSuccessfulCheckAt || null, lastConclusiveAt: state.lastConclusiveAt || null,
+      statusReceivedAt: state.observedAt || null,
+      nextCheckAt: state.alertsMuted || state.lifecycleReason ? null : scheduledCheckAt(state, settings),
+      checkIntervalMs: settings.intervalMs, confirmationDelayMs: settings.targetedRecheckMs,
+      reminderMs: settings.reminderMs, recoveryConfirmations: settings.recoveryConfirmations,
       remindersPaused: !!state.remindersPaused,
       alertsMuted: !!state.alertsMuted, outages, notifications,
       notificationTotal: await TelegramOutbox.countDocuments(notificationFilter),
       lastNotificationAt: lastDelivery?.sentAt || null,
-      nextReminderAt: lastDelivery?.sentAt && !state.remindersPaused && state.state === 'DOWN'
-        ? new Date(new Date(lastDelivery.sentAt).getTime() + monitoringSettings().reminderMs) : null,
+      nextReminderAt: lastDelivery?.sentAt && !state.remindersPaused && !state.alertsMuted && !state.lifecycleReason
+        && state.state === 'DOWN' && state.latestResult?.verdict === 'FAILED'
+        && Date.now() - new Date(state.observedAt).getTime() >= 0
+        && Date.now() - new Date(state.observedAt).getTime() <= settings.staleAfterMs
+        ? new Date(new Date(lastDelivery.sentAt).getTime() + settings.reminderMs) : null,
       totalCount: await MonitoringOutage.countDocuments(filter), skip, limit,
     }));
   } catch (error) { return fail(res, error); }
