@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bot, ArrowUpRight } from 'lucide-react';
-import { EMPTY_TITLE, EMPTY_SUB, SUGGESTED_PROMPTS } from './assistant.copy';
+import { EMPTY_TITLE, EMPTY_SUB, NEW_MODULE_TIP, SUGGESTED_PROMPTS } from './assistant.copy';
 
 function PromptChip({ text, onPick }) {
   const [hover, setHover] = useState(false);
@@ -95,6 +95,9 @@ export default function EmptyState({ onPick }) {
         }}
       >
         {EMPTY_SUB}
+      </p>
+      <p style={{ margin: '14px 0 0', maxWidth: 520, padding: '10px 14px', borderRadius: 10, background: 'rgba(99,102,241,.08)', border: '1px solid var(--bd2)', fontSize: 12, fontWeight: 700, lineHeight: 1.6, color: 'var(--tx)' }}>
+        {NEW_MODULE_TIP}
       </p>
 
       <div

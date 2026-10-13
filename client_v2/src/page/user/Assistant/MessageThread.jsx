@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isNvrWorkflowPrompt, isNvrConfirmationPrompt } from './nvrWorkflowUi.js';
 import { AlertTriangle, Check, Copy, Download, Eye, FileSpreadsheet, FileText, Sparkles, X } from 'lucide-react';
 import { detectionLabel } from '../../../lib/format';
 import { api, unwrap } from '@/helpers/client';
@@ -491,20 +492,6 @@ function isRegistrationUi(ui) {
 // The MCP NVR workflow can return a natural-language prompt without the
 // structured `ui` object used by the other workflow cards. Keep the action
 // controls available in that case as well.
-function isNvrWorkflowPrompt(value) {
-  const text = String(value || '');
-  return /\b(?:nvr|network recorder)\b/i.test(text)
-    && ( /\breply\s+["']?yes\b/i.test(text)
-      || /\bready to create\b/i.test(text)
-      || /\b(?:provide|enter|select|confirm|create|add)\b/i.test(text));
-}
-
-function isNvrConfirmationPrompt(value) {
-  const text = String(value || '');
-  return /\b(?:ready to create\b.*\b(?:nvr|network recorder)\b|(?:nvr|network recorder).*\bready to create\b)/i.test(text)
-    || /\breply\s+["']?yes\b/i.test(text);
-}
-
 function initials(value) {
   const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
   return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : parts[0]?.slice(0, 2) || '?').toUpperCase();

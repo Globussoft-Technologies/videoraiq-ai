@@ -1,3 +1,4 @@
+import { pendingConfirmation } from './confirmationUi.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, Maximize2, Minimize2, Plus, PanelLeft, PanelLeftClose, Sparkles, Trash2, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -535,6 +536,7 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
     navigate(destination, { state: { assistantClosed: true } });
   }, [location.state, navigate, onClose]);
 
+  const confirmation = pendingConfirmation(messages);
   const hasThread = messages.length > 0;
   const latestRegistrationUi = [...messages].reverse().find((message) => message.role === 'assistant' && message.ui?.workflow === 'register_new_user')?.ui;
   const activeRegistrationUi = latestRegistrationUi && !['cancelled', 'completed'].includes(latestRegistrationUi.status) && latestRegistrationUi.type !== 'success'
@@ -626,6 +628,8 @@ export default function AssistantPage({ mode = 'full', onModeChange, onClose }) 
         ><ArrowDown size={17} strokeWidth={2.2} /></button>}
 
         <Composer
+          confirmation={confirmation}
+          onConfirmationChoice={(choice) => choice === 'Yes' && confirmation?.ui?.workflow === 'register_new_user' ? handleRegisterSubmit() : handleSend(choice)}
           value={draft}
           onChange={handleDraftChange}
           onSend={handleSend}

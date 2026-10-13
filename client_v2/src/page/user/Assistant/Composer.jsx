@@ -2,7 +2,7 @@ import { flushSync } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { FileSpreadsheet, FileText, Mic, Paperclip, Plus, Send, Square, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { COMPOSER_PLACEHOLDER, COMPOSER_FOOTNOTE, MAX_ASSISTANT_MESSAGE_CHARS } from './assistant.copy';
+import { COMPOSER_PLACEHOLDER, COMPOSER_FOOTNOTE, NEW_MODULE_TIP, MAX_ASSISTANT_MESSAGE_CHARS } from './assistant.copy';
 import { transcribeAssistantAudio } from '@/helpers/assistant';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -14,7 +14,10 @@ const MAX_TEXTAREA_H = 168;
  *
  * Enter sends, Shift+Enter inserts a newline (the convention every chat UI uses).
  */
-export default function Composer({ value, onChange, onSend, onStop, conversationId, sending = false, uploading = false, autoFocus = true, registerStep, onRegisterUpload, onRegisterBatchUpload, onFilesPrepared, files = [], clearAttachmentsToken = 0 }) {
+export default function Composer({ confirmation, onConfirmationChoice, value, onChange, onSend, onStop, conversationId, sending = false, uploading = false, autoFocus = true, registerStep, onRegisterUpload, onRegisterBatchUpload, onFilesPrepared, files = [], clearAttachmentsToken = 0 }) {
+  const [confirmationChoice, setConfirmationChoice] = useState('');
+  const confirmationKey = confirmation?.id ?? confirmation?.at ?? confirmation?.text;
+  useEffect(() => setConfirmationChoice(''), [confirmationKey]);
   const taRef = useRef(null);
   const attachmentMenuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -352,6 +355,20 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
     onFilesPrepared?.([]);
   };
 
+  if (confirmation) return (
+    <div style={{ padding: '16px 22px', borderTop: '1px solid var(--bd)', background: 'var(--bg1)' }}>
+      <label htmlFor="assistant-operation-confirmation" style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Choose Yes to confirm this operation, or Cancel.</label>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <select id="assistant-operation-confirmation" value={confirmationChoice} disabled={sending || uploading} onChange={(event) => setConfirmationChoice(event.target.value)} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx)' }}>
+          <option value="" disabled>Choose an option</option>
+          <option value="Yes">Yes</option>
+          <option value="Cancel">Cancel</option>
+        </select>
+        <button type="button" disabled={!confirmationChoice || sending || uploading} onClick={() => onConfirmationChoice?.(confirmationChoice)} style={{ padding: '10px 16px', borderRadius: 8, border: 0, background: 'var(--blue)', color: '#fff', cursor: !confirmationChoice || sending || uploading ? 'not-allowed' : 'pointer' }}>{sending ? 'Processing?' : 'Submit'}</button>
+      </div>
+    </div>
+  );
+
   return (
     <div
       style={{
@@ -528,7 +545,10 @@ export default function Composer({ value, onChange, onSend, onStop, conversation
         </div>
 
         <div style={{ marginTop: 9, display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11, color: 'var(--tx3)' }}>
-          <span>{COMPOSER_FOOTNOTE}</span>
+          <span>
+            {COMPOSER_FOOTNOTE}
+            <span style={{ display: 'block', marginTop: 6, padding: '8px 10px', borderRadius: 8, background: 'rgba(99,102,241,.08)', border: '1px solid var(--bd2)', fontWeight: 700, lineHeight: 1.5, color: 'var(--tx)' }}>{NEW_MODULE_TIP}</span>
+          </span>
           <span aria-live="polite">{value.length}/{MAX_ASSISTANT_MESSAGE_CHARS}</span>
         </div>
         <AttachmentPreview attachment={previewImage} onClose={() => setPreviewImage(null)} />

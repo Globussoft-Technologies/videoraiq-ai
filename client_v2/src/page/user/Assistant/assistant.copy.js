@@ -8,6 +8,8 @@ export const ASSISTANT_SUB = 'Ask questions about your live operational data';
 export const EMPTY_TITLE = 'How can I help?';
 export const EMPTY_SUB =
   'Get quick answers from alerts, incidents, attendance, and camera data you have permission to view.';
+export const NEW_MODULE_TIP =
+  'Switching modules, such as from cameras or NVRs to detections? Start a new chat to keep the context focused and get better responses.';
 
 export const COMPOSER_PLACEHOLDER = 'Ask about alerts, cameras, attendance, or incidents…';
 export const MAX_ASSISTANT_MESSAGE_CHARS = 4000;
