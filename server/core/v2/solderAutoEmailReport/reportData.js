@@ -1,38 +1,54 @@
 import moment from 'moment-timezone';
 import { buildReportPdf, buildReportXlsx } from './reportLayout.js';
 
-export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity' };
+export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity', panels: 'Panels counted per hour' };
+
+export function resolveSnapshotUrl(image, baseUrl = '') {
+  if (typeof image !== 'string' || !image.trim()) return '';
+  image = image.trim();
+  if (/^https?:\/\//i.test(image)) return image;
+  if (!/^([a-z][a-z\d+.-]*:|\/\/)/i.test(image) && /^https?:\/\//i.test(baseUrl)) return `${baseUrl.replace(/\/+$/, '')}/${image.replace(/^\/+/, '')}`;
+  return '';
+}
 
 /** Exact report window; an overlapping absence contributes only time inside it. */
-export function buildReportRows(type, { channel, panels, absences, window, timezone }) {
+export function buildReportRows(type, { channel, panels, absences, window, timezone, snapshotBase = '' }) {
   const zones = (channel.detections?.deskSolarShoulderDetectionSettings?.id?.settings?.zone_configs || []).map((z) => z.name);
   [...new Set([...panels.flatMap((p) => (p.zones || []).map((z) => z.zone)), ...absences.map((a) => a.zone)].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach((z) => { if (!zones.includes(z)) zones.push(z); });
   const operator = (zone) => `OP-${zones.indexOf(zone) + 1} · ${zone || 'Unassigned'}`;
   const stamp = (date) => moment(date).tz(timezone).format('DD MMM YYYY HH:mm:ss');
-  const clipped = absences.map((a) => ({ ...a,
-    start: Math.max(new Date(a.timeOfIncident).getTime(), window.start.valueOf()),
-    end: Math.min(a.returnedAt ? new Date(a.returnedAt).getTime() : window.end.valueOf(), window.end.valueOf()),
-  })).filter((a) => a.end > a.start);
+  const clipped = absences.map((a) => {
+    const start = new Date(a.timeOfIncident).getTime();
+    const duration = a.durationSec == null || a.durationSec === '' ? NaN : Number(a.durationSec);
+    // Use the measured API duration; an open incident is not a live timer.
+    const end = Number.isFinite(duration) && duration >= 0 ? start + duration * 1000
+      : a.returnedAt ? new Date(a.returnedAt).getTime() : start;
+    return { ...a, start: Math.max(start, window.start.valueOf()), end: Math.min(end, window.end.valueOf()),
+      duration: Number.isFinite(duration) && duration >= 0 ? duration : a.returnedAt && Number.isFinite(end) ? Math.max(0, (end - start) / 1000) : null };
+  }).filter((a) => a.end > a.start || (new Date(a.timeOfIncident).getTime() >= window.start.valueOf() && new Date(a.timeOfIncident).getTime() < window.end.valueOf()));
   if (type === 'absence') return clipped.map((a) => ({
-    Operator: operator(a.zone), Started: stamp(a.timeOfIncident), Returned: a.returnedAt ? stamp(a.returnedAt) : 'Open at period end',
-    'Duration in period (s)': Math.round((a.end - a.start) / 1000), Condition: a.description || 'Desk empty',
+    Operator: operator(a.zone), Started: stamp(a.timeOfIncident), Condition: a.description || `${a.zone || 'Desk'} desk empty`,
+    Returned: a.returnedAt ? stamp(a.returnedAt) : 'Not returned',
+    Duration: a.duration == null ? '—' : `${a.duration} s`, Snapshot: resolveSnapshotUrl(a.Image, snapshotBase),
   }));
   if (type === 'missed') return panels.flatMap((p) => (p.zones || []).flatMap((z) => {
     const done = Math.min(3, Math.max(0, Math.round(z.done || 0)));
     return Array.from({ length: 3 - done }, (_, i) => ({
-      Time: stamp(p.time), Panel: p.panelId, Operator: operator(z.zone), Point: `P${zones.indexOf(z.zone) * 3 + done + i + 1}`,
+      Point: `P${zones.indexOf(z.zone) * 3 + done + i + 1}`, Panel: p.panelId, Operator: operator(z.zone),
+      Time: stamp(p.time), Snapshot: resolveSnapshotUrl(p.Image, snapshotBase),
     }));
   }));
-  if (type === 'hourly') {
+  if (type === 'hourly' || type === 'panels') {
     const buckets = new Map();
     for (const p of panels) {
       const hour = moment(p.time).tz(timezone).format('YYYY-MM-DD HH:00 Z');
       if (!buckets.has(hour)) buckets.set(hour, { Hour: hour, Panels: 0 });
       const row = buckets.get(hour); row.Panels++;
+      if (type === 'panels') continue;
       for (const zone of zones) {
         const z = (p.zones || []).find((v) => v.zone === zone);
-        for (const [metric, value] of [['joints', z?.done || 0], ['missed', z ? Math.max(0, 3 - (z.done || 0)) : 0], ['solder seconds', z?.presenceSec || 0]]) {
+        for (const [metric, value] of [['joints', z?.done || 0], ['missed', z ? Math.max(0, 3 - (z.done || 0)) : 0]]) {
           const key = `${operator(zone)} ${metric}`; row[key] = (row[key] || 0) + value;
         }
       }
@@ -43,20 +59,16 @@ export function buildReportRows(type, { channel, panels, absences, window, timez
     const intervals = clipped.filter((a) => a.zone === zone).sort((a, b) => a.start - b.start);
     // Merge overlapping absence intervals so presence cannot double-count gaps.
     const merged = [];
-    for (const a of intervals) {
+    for (const a of intervals.filter((interval) => interval.end > interval.start)) {
       const last = merged.at(-1);
       if (last && a.start <= last.end) last.end = Math.max(last.end, a.end);
       else merged.push({ start: a.start, end: a.end });
     }
     const away = merged.reduce((n, a) => n + (a.end - a.start) / 1000, 0);
     const samples = panels.flatMap((p) => (p.zones || []).filter((z) => z.zone === zone));
-    const joints = samples.reduce((n, z) => n + (z.done || 0), 0);
-    const solderSec = samples.reduce((n, z) => n + (z.presenceSec || 0), 0);
     return { Operator: operator(zone), 'Presence (%)': Number((100 * (1 - away / window.end.diff(window.start, 'seconds'))).toFixed(1)),
       'Absence alerts': intervals.length, 'Unavailable seconds': Math.round(away),
-      'Longest gap (s)': Math.round(Math.max(0, ...merged.map((a) => (a.end - a.start) / 1000))),
-      'Solder joints': joints, 'Missed points': samples.reduce((n, z) => n + Math.max(0, 3 - (z.done || 0)), 0),
-      'Avg seconds / joint': joints ? Number((solderSec / joints).toFixed(2)) : '', 'Active solder seconds': solderSec };
+      'Missed points': samples.reduce((n, z) => n + Math.max(0, 3 - (z.done || 0)), 0) };
   });
 }
 

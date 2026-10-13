@@ -5,6 +5,8 @@ const COLORS = { navy: '#163a8a', teal: '#0f766e', ink: '#1e293b', muted: '#6474
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const numberText = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 });
 export const displayValue = (value) => typeof value === 'number' ? (Number.isFinite(value) ? numberText.format(value) : '—') : String(value ?? '—');
+const snapshotLink = (value) => typeof value === 'string' && /^https?:\/\//i.test(value) ? value : null;
+const snapshotText = (value) => snapshotLink(value) ? 'View snapshot' : 'No snapshot';
 
 /** Comparison reads as metrics down the page, operators across the columns. */
 export function reportTable(rows) {
@@ -61,7 +63,7 @@ export function buildReportPdf(rows, title, subtitle) {
         const cellText = (value) => { const text = displayValue(value); return text.length > 300 ? `${text.slice(0, 297)}...` : text; };
         const drawRow = (values, header = false, rowIndex = 0) => {
           doc.font(header ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 9 : 8.5);
-          const texts = values.map(cellText);
+          const texts = values.map((value, i) => !header && table.headers[indices[i]] === 'Snapshot' ? snapshotText(value) : cellText(value));
           const height = Math.max(header ? 36 : 30, ...texts.map((text, i) => doc.heightOfString(text, { width: widths[i] - 16 }) + 18));
           if (!header && y + height > bottom) {
             doc.addPage(); banner(part); drawRow(indices.map((i) => table.headers[i]), true);
@@ -70,10 +72,11 @@ export function buildReportPdf(rows, title, subtitle) {
           texts.forEach((text, i) => {
             doc.rect(x, y, widths[i], height).fillAndStroke(header ? COLORS.navy : rowIndex % 2 ? COLORS.pale : '#ffffff', COLORS.border);
             const sourceHeader = table.headers[indices[i]];
+            const url = !header && sourceHeader === 'Snapshot' ? snapshotLink(values[i]) : null;
             const missed = !header && (sourceHeader === 'Missed points' || / missed$/.test(sourceHeader) || values[0] === 'Missed points') && Number(values[i]) > 0;
             doc.font(header || i === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 9 : 8.5)
-              .fillColor(header ? '#ffffff' : missed ? COLORS.red : COLORS.ink)
-              .text(text, x + 8, y + 9, { width: widths[i] - 16, height: height - 16, ellipsis: true });
+              .fillColor(header ? '#ffffff' : url ? COLORS.navy : missed ? COLORS.red : COLORS.ink)
+              .text(text, x + 8, y + 9, { width: widths[i] - 16, height: height - 16, ellipsis: true, ...(url ? { link: url, underline: true } : {}) });
             x += widths[i];
           });
           y += height;
@@ -116,10 +119,11 @@ export async function buildReportXlsx(rows, title, subtitle) {
       cell.alignment = { wrapText: true, vertical: 'middle' };
     });
     table.rows.forEach((values, index) => {
-      const row = sheet.addRow(values); row.height = 30;
+      const row = sheet.addRow(values.map((value, column) => table.headers[column] === 'Snapshot'
+        ? snapshotLink(value) ? { text: 'View snapshot', hyperlink: value } : 'No snapshot' : value)); row.height = 30;
       row.eachCell((cell) => {
         cell.alignment = { wrapText: true, vertical: 'middle' };
-        cell.font = { color: { argb: 'FF1E293B' }, size: 11 };
+        cell.font = { color: { argb: cell.value?.hyperlink ? 'FF163A8A' : 'FF1E293B' }, size: 11, ...(cell.value?.hyperlink ? { underline: true } : {}) };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: index % 2 ? 'FFF3F6FC' : 'FFFFFFFF' } };
         cell.border = { bottom: { style: 'thin', color: { argb: 'FFDCE3EF' } } };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0.##';
@@ -135,10 +139,17 @@ export async function buildReportXlsx(rows, title, subtitle) {
 export function buildEmailHtml(rows, title, subtitle, formats) {
   const table = reportTable(rows), preview = table.rows.slice(0, 10);
   const groups = columnGroups(table.headers, 4);
+  const cellHtml = (row, column) => {
+    if (table.headers[column] !== 'Snapshot') return escapeHtml(displayValue(row[column]));
+    const url = snapshotLink(row[column]);
+    if (!url) return 'No snapshot';
+    const escaped = escapeHtml(url);
+    return `<a href="${escaped}" aria-label="Open incident snapshot" style="color:${COLORS.navy};"><img src="${escaped}" alt="Incident snapshot" width="48" height="30" style="display:block;max-width:100%;object-fit:cover;border-radius:4px;"></a>`;
+  };
   const htmlTables = !preview.length ? '<p style="color:#64748b;">No records for this period.</p>' : groups.map((indices) => `
     <table aria-label="Report data" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px;table-layout:fixed;">
       <thead><tr>${indices.map((i) => `<th scope="col" bgcolor="${COLORS.navy}" style="padding:12px 10px;color:#ffffff;font-size:12px;text-align:left;word-wrap:break-word;border:1px solid ${COLORS.border};">${escapeHtml(table.headers[i])}</th>`).join('')}</tr></thead>
-      <tbody>${preview.map((row, index) => `<tr>${indices.map((i) => `<td bgcolor="${index % 2 ? COLORS.pale : '#ffffff'}" style="padding:11px 10px;border:1px solid ${COLORS.border};font-size:12px;color:${COLORS.ink};vertical-align:top;word-wrap:break-word;">${escapeHtml(displayValue(row[i]))}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${preview.map((row, index) => `<tr>${indices.map((i) => `<td bgcolor="${index % 2 ? COLORS.pale : '#ffffff'}" style="padding:11px 10px;border:1px solid ${COLORS.border};font-size:12px;color:${COLORS.ink};vertical-align:top;word-wrap:break-word;">${cellHtml(row, i)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`).join('');
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
   <body style="margin:0;padding:0;background:#eef2fa;font-family:Arial,Helvetica,sans-serif;">

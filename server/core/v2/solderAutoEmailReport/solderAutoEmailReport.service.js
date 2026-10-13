@@ -104,7 +104,17 @@ export async function fetchReportRows(report, window, timezone) {
       $or: [{ returnedAt: { $gt: window.start.toDate() } }, { returnedAt: null }],
     }).sort({ timeOfIncident: 1 }).lean(),
   ]);
-  return { channel, rows: buildReportRows(report.reportType, { channel, panels, absences, window, timezone }) };
+  if (report.reportType === 'missed' && panels.some((panel) => !panel.Image)) {
+    // Older panel samples stored their snapshot only on the matching incident.
+    const snapshots = await Incident.find({ ...scope, eventType: 'panel',
+      timeOfIncident: { $gte: window.start.toDate(), $lt: window.end.toDate() },
+    }).select('panelId timeOfIncident Image').lean();
+    const images = new Map(snapshots.filter((incident) => incident.Image)
+      .map((incident) => [`${incident.panelId}:${new Date(incident.timeOfIncident).getTime()}`, incident.Image]));
+    for (const panel of panels) if (!panel.Image) panel.Image = images.get(`${panel.panelId}:${new Date(panel.time).getTime()}`) || '';
+  }
+  const snapshotBase = config.has('ImageView') ? config.get('ImageView') : '';
+  return { channel, rows: buildReportRows(report.reportType, { channel, panels, absences, window, timezone, snapshotBase }) };
 }
 
 async function prepareEmail(report, window, timezone) {
