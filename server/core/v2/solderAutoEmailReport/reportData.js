@@ -1,5 +1,6 @@
 import moment from 'moment-timezone';
 import { buildReportPdf, buildReportXlsx } from './reportLayout.js';
+import { solderPanelCounts } from '../../../utils/solderPanelCounts.js';
 
 export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity', panels: 'Panels counted per hour' };
 
@@ -13,6 +14,8 @@ export function resolveSnapshotUrl(image, baseUrl = '') {
 
 /** Exact report window; an overlapping absence contributes only time inside it. */
 export function buildReportRows(type, { channel, panels, absences, window, timezone, snapshotBase = '' }) {
+  const countedPanels = panels.map(panel => ({ ...panel, ...solderPanelCounts(panel) }));
+  const totalMissed = countedPanels.reduce((sum, panel) => sum + panel.missedJoints, 0);
   const zones = (channel.detections?.deskSolarShoulderDetectionSettings?.id?.settings?.zone_configs || []).map((z) => z.name);
   [...new Set([...panels.flatMap((p) => (p.zones || []).map((z) => z.zone)), ...absences.map((a) => a.zone)].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach((z) => { if (!zones.includes(z)) zones.push(z); });
@@ -32,30 +35,29 @@ export function buildReportRows(type, { channel, panels, absences, window, timez
     Returned: a.returnedAt ? stamp(a.returnedAt) : 'Not returned',
     Duration: a.duration == null ? '—' : `${a.duration} s`, Snapshot: resolveSnapshotUrl(a.Image, snapshotBase),
   }));
-  if (type === 'missed') return panels.flatMap((p) => (p.zones || []).flatMap((z) => {
-    const done = Math.min(3, Math.max(0, Math.round(z.done || 0)));
-    return Array.from({ length: 3 - done }, (_, i) => ({
-      Point: `P${zones.indexOf(z.zone) * 3 + done + i + 1}`, Panel: p.panelId, Operator: operator(z.zone),
+  if (type === 'missed') return countedPanels.filter(panel => panel.missedJoints > 0).map((p) => ({
+      'Missed points': p.missedJoints, Panel: p.panelId, Operator: 'All workers',
       Time: stamp(p.time), Snapshot: resolveSnapshotUrl(p.Image, snapshotBase),
     }));
-  }));
   if (type === 'hourly' || type === 'panels') {
     const buckets = new Map();
-    for (const p of panels) {
+    for (const p of countedPanels) {
       const hour = moment(p.time).tz(timezone).format('YYYY-MM-DD HH:00 Z');
-      if (!buckets.has(hour)) buckets.set(hour, { Hour: hour, Panels: 0 });
+      if (!buckets.has(hour)) buckets.set(hour, { Hour: hour, Panels: 0, ...(type === 'panels' ? {} : { 'Completed joints': 0, 'Missed joints': 0 }) });
       const row = buckets.get(hour); row.Panels++;
       if (type === 'panels') continue;
+      row['Completed joints'] += p.completedJoints;
+      row['Missed joints'] += p.missedJoints;
       for (const zone of zones) {
         const z = (p.zones || []).find((v) => v.zone === zone);
-        for (const [metric, value] of [['joints', z?.done || 0], ['missed', z ? Math.max(0, 3 - (z.done || 0)) : 0]]) {
+        for (const [metric, value] of [['joints', z?.done || 0]]) {
           const key = `${operator(zone)} ${metric}`; row[key] = (row[key] || 0) + value;
         }
       }
     }
     return [...buckets.values()];
   }
-  return zones.map((zone) => {
+  return [...zones.map((zone) => {
     const intervals = clipped.filter((a) => a.zone === zone).sort((a, b) => a.start - b.start);
     // Merge overlapping absence intervals so presence cannot double-count gaps.
     const merged = [];
@@ -65,11 +67,10 @@ export function buildReportRows(type, { channel, panels, absences, window, timez
       else merged.push({ start: a.start, end: a.end });
     }
     const away = merged.reduce((n, a) => n + (a.end - a.start) / 1000, 0);
-    const samples = panels.flatMap((p) => (p.zones || []).filter((z) => z.zone === zone));
     return { Operator: operator(zone), 'Presence (%)': Number((100 * (1 - away / window.end.diff(window.start, 'seconds'))).toFixed(1)),
       'Absence alerts': intervals.length, 'Unavailable seconds': Math.round(away),
-      'Missed points': samples.reduce((n, z) => n + Math.max(0, 3 - (z.done || 0)), 0) };
-  });
+      'Missed points': totalMissed ? 'Not reported per worker' : 0 };
+  }), { Operator: 'Panel total (all workers)', 'Presence (%)': '—', 'Absence alerts': '—', 'Unavailable seconds': '—', 'Missed points': totalMissed }];
 }
 
 export async function buildAttachments(rows, title, subtitle, formats) {

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_REQUIRED_JOINTS } from '../../../utils/solderPanelCounts.js';
 
 // One panel that passed a solder-line camera (deskSolarShoulderDetection).
 // Not an incident: the throughput / solder-time samples the Solder Line pages
@@ -12,6 +13,9 @@ const solderPanelSchema = new mongoose.Schema(
     panelId: { type: String, required: true },
     time: { type: Date, required: true },
     Image: { type: String, default: "" },
+    requiredJoints: { type: Number, min: 1, default: DEFAULT_REQUIRED_JOINTS },
+    completedJoints: { type: Number, min: 0 },
+    missedJoints: { type: Number, min: 0 },
     // Per operator zone: seconds present at the desk for this panel, and
     // solder joints done (DS: presence_time, shoulderings_done).
     zones: [

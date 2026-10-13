@@ -74,6 +74,21 @@ beforeEach(async () => {
 });
 
 describe("detection history uses authorized events rather than the snapshot feed", () => {
+  it("groups severity over all matching events, merges legacy medium variants, and excludes foreign accounts", async () => {
+    await seed("2026-10-06T08:00:00Z", { severity: "high" });
+    await seed("2026-10-06T08:00:00Z", { severity: "moderate" });
+    await seed("2026-10-06T08:00:00Z", { severity: "low", resolved: true });
+    await seed("2026-10-06T08:00:00Z", { severity: "high", userId: "foreign-account" });
+    // Legacy documents bypass the current schema's lowercase severity enum.
+    await Incident.collection.insertOne({ incidentType: "motionDetection", userId: USER_ID, timeOfIncident: new Date("2026-10-06T08:00:00Z"), Image: "/uploads/x.jpg", severity: "Medium", resolved: false });
+    const ctx = centerCtx({ groupBy: "severity" });
+    await IncidentsServiceV2.getAllIncidents(ctx.req, ctx.res, ctx.next);
+    expect(ctx.next.calls).toEqual([]);
+    const result = payload(ctx.res);
+    expect(result.totalCount).toBe(4);
+    expect(result.groups).toEqual(expect.arrayContaining([{ severity: "high", count: 1 }, { severity: "moderate", count: 2 }, { severity: "low", count: 1 }]));
+    expect(result.groups).toHaveLength(3);
+  });
   it("includes snapshot-free count and crossing events while the default feed excludes them", async () => {
     await seed("2026-10-06T08:00:00Z", { incidentType: "countPersons", Image: null });
     await seed("2026-10-06T08:00:00Z", { incidentType: "lineCrossing", Image: null });

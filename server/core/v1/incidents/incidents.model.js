@@ -650,7 +650,7 @@ const BlurredCameraDetectionIncident = Incident.discriminator(
 //   threshold_sec, then posts again with the same eventId when the operator
 //   returns, which fills returnedAt/durationSec. returnedAt null = still absent.
 // - panel: DS's per-panel "Solar panel processing" payload, kept as an
-//   incident only when a zone left joints undone (missedJoints > 0); complete
+//   incident only when the panel total is incomplete (missedJoints > 0); complete
 //   panels are just throughput samples (SolderPanel). zones: per operator zone,
 //   seconds present and joints done (DS: presence_time, shoulderings_done).
 const DeskSolarShoulderDetectionSchema = new Schema({
@@ -662,6 +662,8 @@ const DeskSolarShoulderDetectionSchema = new Schema({
     default: undefined,
   },
   missedJoints: { type: Number, default: undefined, min: 0 },
+  requiredJoints: { type: Number, default: undefined, min: 1 },
+  completedJoints: { type: Number, default: undefined, min: 0 },
   personCount: { type: Number, default: null, min: 0 },
   capacity: { type: Number, default: null, min: 0 },
   thresholdSec: { type: Number, default: null, min: 0 },

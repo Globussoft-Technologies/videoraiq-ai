@@ -27,6 +27,7 @@ import {
 } from "../../../constants/detectionTypes.js";
 import { deleteMediaV2 as deleteMedia, mediaExistsV2 as mediaExists } from "../adminStorage/mediaStorage.v2.js";
 import { getRequestTimezone } from "../../../utils/timezone.js";
+import { solderPanelCounts } from "../../../utils/solderPanelCounts.js";
 
 import {
   Incident,
@@ -453,7 +454,7 @@ class IncidentsService {
         delete req.body.zones; // stored normalized below, not as DS's object
         if (!solderPanel.missedJoints) {
           return res.status(200).json(
-            Response.userSuccessResp("Panel recorded", { panelId: solderPanel.panelId, missedJoints: 0 }),
+            Response.userSuccessResp("Panel recorded", { panelId: solderPanel.panelId, zones: solderPanel.zones, requiredJoints: solderPanel.requiredJoints, completedJoints: solderPanel.completedJoints, missedJoints: 0 }),
           );
         }
         const retried = await Model.findOne({
@@ -814,6 +815,8 @@ class IncidentsService {
           newIncident.panelId = solderPanel.panelId;
           newIncident.zones = solderPanel.zones;
           newIncident.missedJoints = solderPanel.missedJoints;
+          newIncident.requiredJoints = solderPanel.requiredJoints;
+          newIncident.completedJoints = solderPanel.completedJoints;
         } else {
           // An absence: eventId, personCount, capacity, thresholdSec,
           // durationSec and returnedAt arrive under their own names via
@@ -1132,6 +1135,7 @@ class IncidentsService {
       // Name the registered user each detected plate belongs to, so a
       // deep-linked Vehicle Detection incident reads the same as the list.
       await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+      for (const incident of data) if (incident.incidentType === 'deskSolarShoulderDetection' && incident.eventType === 'panel') Object.assign(incident, solderPanelCounts(incident));
 
       // Get total count
       const totalCount = await Incident.countDocuments(filter);
@@ -1758,6 +1762,7 @@ class IncidentsService {
       // Vehicle Detection incidents carry only a plate; resolve who it
       // belongs to so the Incident Center can show plate + tagged user.
       await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+      for (const incident of data) if (incident.incidentType === 'deskSolarShoulderDetection' && incident.eventType === 'panel') Object.assign(incident, solderPanelCounts(incident));
 
       const [countStats = {}] = await Incident.aggregate([
         { $match: { ...matchStage } },

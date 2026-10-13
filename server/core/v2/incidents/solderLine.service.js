@@ -11,11 +11,9 @@ import logger from "../../../utils/logger.js";
 import AppError from "../../../utils/appError.js";
 import { getRequestTimezone } from "../../../utils/timezone.js";
 import { buildStreamingUrl } from "../../../utils/rtspStream.js";
+import { DEFAULT_REQUIRED_JOINTS, solderPanelCounts } from "../../../utils/solderPanelCounts.js";
 
 const SETTING = "deskSolarShoulderDetectionSettings";
-// ponytail: every operator zone owns 3 of the junction box's 6 solder points
-// (OP-1 P1–P3, OP-2 P4–P6). Make it per-zone config if a line differs.
-export const POINTS_PER_ZONE = 3;
 // ponytail: hard cap per request; a month of a busy line fits, page it if a
 // client ever outgrows it.
 const MAX_EVENTS = 5000;
@@ -35,23 +33,22 @@ const count = (value) => {
  * A retried post of the same panel is not counted twice.
  */
 export async function recordSolderPanel({ userId, channelId, body }) {
-  const zones = Object.entries(body.zones || {})
-    .slice(0, 20)
-    .map(([zone, value]) => ({
-      zone: String(zone).slice(0, 100),
-      presenceSec: count(value?.presence_time),
-      done: Math.round(count(value?.shoulderings_done)),
+  const source = Array.isArray(body.zones) ? body.zones.map(value => [value.zone, value]) : Object.entries(body.zones || {});
+  const zones = source.map(([zone, value]) => ({
+      zone: String(zone || 'Unassigned').slice(0, 100),
+      presenceSec: count(value?.presence_time ?? value?.presenceSec),
+      done: count(value?.shoulderings_done ?? value?.done),
     }));
+  const totals = solderPanelCounts({ zones, requiredJoints: body.requiredJoints });
   const time = body.timeOfIncident && !Number.isNaN(Date.parse(body.timeOfIncident)) ? new Date(body.timeOfIncident) : new Date();
   const panelId = String(body.panelId || `PNL-${time.getTime()}`).slice(0, 100);
 
   await SolderPanel.updateOne(
     { channelId, panelId, time },
-    { $set: { userId: String(userId), zones, ...(typeof body.Image === "string" && body.Image.trim() ? { Image: body.Image.trim() } : {}) } },
+    { $set: { userId: String(userId), zones, ...totals, ...(typeof body.Image === "string" && body.Image.trim() ? { Image: body.Image.trim() } : {}) } },
     { upsert: true, runValidators: true },
   );
-  const missedJoints = zones.reduce((sum, z) => sum + Math.max(0, POINTS_PER_ZONE - z.done), 0);
-  return { zones, panelId, time, missedJoints };
+  return { zones, panelId, time, ...totals };
 }
 
 class SolderLineService {
@@ -79,16 +76,19 @@ class SolderLineService {
           timeOfIncident: range,
           ...(scope && { channelId: scope }),
         })
-          .select("eventType zone zones panelId timeOfIncident returnedAt durationSec Image description channelId personCount capacity thresholdSec")
+          .select("eventType zone zones panelId requiredJoints timeOfIncident returnedAt durationSec Image description channelId personCount capacity thresholdSec")
           .sort({ timeOfIncident: 1 })
           .limit(MAX_EVENTS)
           .lean(),
         SolderPanel.aggregate([
           { $match: { userId, time: range, ...(scope && { channelId: scope }) } },
-          { $set: { hour: { $dateToString: { format: "%Y-%m-%dT%H", date: "$time", timezone } } } },
+          { $set: { hour: { $dateToString: { format: "%Y-%m-%dT%H", date: "$time", timezone } },
+            panelRequired: { $ifNull: ["$requiredJoints", DEFAULT_REQUIRED_JOINTS] },
+            panelMissed: { $max: [0, { $subtract: [{ $ifNull: ["$requiredJoints", DEFAULT_REQUIRED_JOINTS] }, { $sum: "$zones.done" }] }] },
+          } },
           {
             $facet: {
-              panels: [{ $group: { _id: { channelId: "$channelId", hour: "$hour" }, panels: { $sum: 1 } } }],
+              panels: [{ $group: { _id: { channelId: "$channelId", hour: "$hour" }, panels: { $sum: 1 }, missedJoints: { $sum: "$panelMissed" }, requiredJoints: { $sum: "$panelRequired" } } }],
               zones: [
                 { $unwind: "$zones" },
                 {
@@ -96,7 +96,6 @@ class SolderLineService {
                     _id: { channelId: "$channelId", hour: "$hour", zone: "$zones.zone" },
                     joints: { $sum: "$zones.done" },
                     solderSec: { $sum: "$zones.presenceSec" },
-                    missed: { $sum: { $max: [0, { $subtract: [POINTS_PER_ZONE, "$zones.done"] }] } },
                   },
                 },
               ],
@@ -124,10 +123,10 @@ class SolderLineService {
             ],
             as: "snapshot",
           } },
-          { $project: { _id: 1, "panel._id": 1, "panel.panelId": 1, "panel.time": 1, "panel.zones": 1, "panel.Image": 1, incidentImage: { $arrayElemAt: ["$snapshot.Image", 0] } } },
+          { $project: { _id: 1, "panel._id": 1, "panel.panelId": 1, "panel.time": 1, "panel.zones": 1, "panel.Image": 1, "panel.requiredJoints": 1, incidentImage: { $arrayElemAt: ["$snapshot.Image", 0] } } },
         ]),
       ]);
-      const latestPanelByChannel = new Map(latestPanels.map(({ _id, panel, incidentImage }) => [String(_id), { ...panel, Image: panel.Image || incidentImage || "" }]));
+      const latestPanelByChannel = new Map(latestPanels.map(({ _id, panel, incidentImage }) => [String(_id), { ...panel, ...solderPanelCounts(panel), Image: panel.Image || incidentImage || "" }]));
 
       const hourly = new Map();
       const row = ({ channelId, hour }) => {
@@ -135,28 +134,25 @@ class SolderLineService {
         if (!hourly.has(key)) hourly.set(key, { channelId: String(channelId), hour, panels: 0, zones: [] });
         return hourly.get(key);
       };
-      throughput[0].panels.forEach(({ _id, panels }) => { row(_id).panels = panels; });
-      throughput[0].zones.forEach(({ _id, joints, solderSec, missed }) => {
-        row(_id).zones.push({ zone: _id.zone || "", joints, solderSec, missed });
+      throughput[0].panels.forEach(({ _id, panels, missedJoints, requiredJoints }) => { Object.assign(row(_id), { panels, missedJoints, requiredJoints }); });
+      throughput[0].zones.forEach(({ _id, joints, solderSec }) => {
+        row(_id).zones.push({ zone: _id.zone || "", joints, solderSec });
       });
 
       const absences = events.filter((e) => e.eventType !== "panel" && e.eventType !== "missedSolder");
-      // One entry per zone that left joints undone on a panel; the page numbers
-      // the missing points from the zone's position.
+      // The payload identifies panel misses, not which worker missed a joint.
       const missed = events
         .filter((e) => e.eventType === "panel")
-        .flatMap((e) => (e.zones || [])
-          .filter((z) => z.done < POINTS_PER_ZONE)
-          .map((z) => ({
-            _id: `${e._id}:${z.zone}`,
+        .map((e) => ({
+            _id: String(e._id),
             incidentId: e._id,
             channelId: e.channelId,
             panelId: e.panelId,
             timeOfIncident: e.timeOfIncident,
             Image: e.Image,
-            zone: z.zone,
-            done: z.done,
-          })));
+            zones: e.zones,
+            ...solderPanelCounts(e),
+          })).filter((e) => e.missedJoints > 0);
 
       // Cameras with the detection on, plus any camera that has data in the
       // range even if the detection was switched off since.
@@ -207,7 +203,7 @@ class SolderLineService {
           timezone,
           startDate,
           endDate,
-          pointsPerZone: POINTS_PER_ZONE,
+          pointsPerPanel: DEFAULT_REQUIRED_JOINTS,
           stations,
           absences,
           missed,
