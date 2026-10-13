@@ -1,6 +1,6 @@
+import config from "config";
 import path from "path";
 import { createHash } from "crypto";
-import net from "net";
 import axios from "axios";
 import MeasurementCapture from "./measurementCapture.model.js";
 import {
@@ -15,7 +15,6 @@ import {
 } from "../measurementMedia/measurementMedia.service.js";
 
 const MAX_CAPTURE_BYTES = 15 * 1024 * 1024;
-const DS_PORT = 8000;
 const DS_TIMEOUT_MS = 25_000;
 const MEASUREMENT_DIAGNOSTIC_EVENTS = new Set([
   "request",
@@ -48,13 +47,10 @@ function isJpeg(buffer) {
     buffer[buffer.length - 1] === 0xd9;
 }
 
-function measurementDsUrl(ip, route) {
-  const value = String(ip || "").trim();
-  if (!net.isIP(value)) {
-    throw Object.assign(new Error("The approved station has an invalid IP address"), { statusCode: 422 });
-  }
-  const host = net.isIPv6(value) ? `[${value}]` : value;
-  return `http://${host}:${DS_PORT}${route}`;
+function measurementDsUrl(_ip, route) {
+  const configuredUrl = config.has("MattressDsApiUrl") ? config.get("MattressDsApiUrl") : "";
+  const baseUrl = (String(configuredUrl || "").trim() || process.env.MATTRESS_DS_API_URL?.trim() || "https://mattress-api-dev.videoraiq.com").replace(/\/+$/, "");
+  return `${baseUrl}${route}`;
 }
 
 function measurementPayload(body = {}) {
@@ -182,10 +178,10 @@ class MeasurementsService {
     const message = safeLogValue(req.body?.message);
     const dimensions = req.body?.dimensions && typeof req.body.dimensions === "object"
       ? {
-          length: Number(req.body.dimensions.length) || null,
-          width: Number(req.body.dimensions.width) || null,
-          height: Number(req.body.dimensions.height) || null,
-        }
+        length: Number(req.body.dimensions.length) || null,
+        width: Number(req.body.dimensions.width) || null,
+        height: Number(req.body.dimensions.height) || null,
+      }
       : null;
     const details = [
       `event=${event}`,
@@ -307,7 +303,7 @@ class MeasurementsService {
           reference: storagePath,
           sourceReference: filename,
         }).catch(() => false);
-        if (!handled) await deleteMedia(storagePath).catch(() => {});
+        if (!handled) await deleteMedia(storagePath).catch(() => { });
       }
       logger.error(`[MEASUREMENT_CAPTURE] Upload failed station=${stationId} camera=${cameraId}: ${error.message}`);
       return res.status(500).json({ ok: false, message: "Failed to store measurement capture" });

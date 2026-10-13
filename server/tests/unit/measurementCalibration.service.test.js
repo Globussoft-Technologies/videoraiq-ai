@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import config from "config";
 import {
   calibrationDsUrl,
   dsError,
@@ -15,15 +16,41 @@ const triangle = [
 ];
 
 describe("measurement calibration v2 proxy", () => {
-  it("builds DS calibration URLs from a registered station IP", () => {
-    expect(calibrationDsUrl("192.168.1.20", "frame.jpg"))
-      .toBe("http://192.168.1.20:8000/v1/calibration/frame.jpg");
-    expect(calibrationDsUrl("fd00::20", "status"))
-      .toBe("http://[fd00::20]:8000/v1/calibration/status");
+  it("prefers the configured DS domain over the environment", () => {
+    const hasConfig = vi.spyOn(config, "has").mockReturnValue(true);
+    const getConfig = vi.spyOn(config, "get").mockReturnValue("https://configured-ds.example.com/");
+    try {
+      expect(calibrationDsUrl("192.168.1.20", "status"))
+        .toBe("https://configured-ds.example.com/v1/calibration/status");
+    } finally {
+      hasConfig.mockRestore();
+      getConfig.mockRestore();
+    }
   });
 
-  it("rejects non-IP station targets", () => {
-    expect(() => calibrationDsUrl("example.com", "status")).toThrow("invalid IP address");
+  it("uses the backend DS environment override and removes trailing slashes", () => {
+    const hasConfig = vi.spyOn(config, "has").mockReturnValue(false);
+    const previous = process.env.MATTRESS_DS_API_URL;
+    try {
+      process.env.MATTRESS_DS_API_URL = "https://ds.example.com/";
+      expect(calibrationDsUrl("192.168.1.20", "status"))
+        .toBe("https://ds.example.com/v1/calibration/status");
+    } finally {
+      hasConfig.mockRestore();
+      if (previous === undefined) delete process.env.MATTRESS_DS_API_URL;
+      else process.env.MATTRESS_DS_API_URL = previous;
+    }
+  });
+
+  it("builds calibration URLs on the DS domain", () => {
+    expect(calibrationDsUrl("192.168.1.20", "frame.jpg"))
+      .toBe("https://mattress-api-dev.videoraiq.com/v1/calibration/frame.jpg");
+    expect(calibrationDsUrl("fd00::20", "status"))
+      .toBe("https://mattress-api-dev.videoraiq.com/v1/calibration/status");
+  });
+
+  it("uses the DS domain regardless of the station address", () => {
+    expect(calibrationDsUrl("example.com", "status")).toBe("https://mattress-api-dev.videoraiq.com/v1/calibration/status");
   });
 
   it("preserves actionable DS HTTP failures", () => {

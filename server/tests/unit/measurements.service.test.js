@@ -104,7 +104,7 @@ describe("measurement capture upload", () => {
     }), res);
 
     expect(mocks.axiosPost).toHaveBeenCalledWith(
-      "http://192.168.0.177:8000/v1/dimensions/measure",
+      "https://mattress-api-dev.videoraiq.com/v1/dimensions/measure",
       { sku: "G_OK8478", length: 78, width: 72, height: 6 },
       expect.objectContaining({ timeout: 25000, maxRedirects: 0 }),
     );
@@ -140,7 +140,7 @@ describe("measurement capture upload", () => {
     }), res);
 
     expect(mocks.axiosPost).toHaveBeenCalledWith(
-      "http://192.168.0.177:8000/v1/qr/extract-dimensions",
+      "https://mattress-api-dev.videoraiq.com/v1/qr/extract-dimensions",
       expect.any(FormData),
       expect.objectContaining({ timeout: 25000, maxRedirects: 0 }),
     );
@@ -160,7 +160,7 @@ describe("measurement capture upload", () => {
     expect(res.payload.message).toBe("Unable to reach the station measurement service");
   });
 
-  it("does not proxy to a non-IP value stored on a station", async () => {
+  it("uses the fixed DS domain even when a station has a hostname", async () => {
     const res = responseDouble();
 
     await service.startMeasurement(request({
@@ -168,9 +168,11 @@ describe("measurement capture upload", () => {
       stationDevice: { ip: "example.com" },
     }), res);
 
-    expect(res.statusCode).toBe(422);
-    expect(res.payload.message).toContain("invalid IP address");
-    expect(mocks.axiosPost).not.toHaveBeenCalled();
+    expect(mocks.axiosPost).toHaveBeenCalledWith(
+      "https://mattress-api-dev.videoraiq.com/v1/dimensions/measure",
+      expect.any(Object),
+      expect.any(Object),
+    );
   });
 
   it("preserves actionable DS validation errors", async () => {
@@ -195,7 +197,7 @@ describe("measurement capture upload", () => {
     await service.createDiagnostic(request({
       body: {
         event: "unreachable",
-        endpoint: "http://192.168.0.177:8000/v1/dimensions/measure",
+        endpoint: "https://mattress-api-dev.videoraiq.com/v1/dimensions/measure",
         sku: "AGK7872",
         dimensions: { length: 78, width: 72, height: 6 },
         durationMs: 2031,
@@ -208,7 +210,7 @@ describe("measurement capture upload", () => {
       "[MEASUREMENT_DS] event=unreachable station=aa:bb:cc:dd:ee:ff",
     ));
     expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining(
-      "endpoint=http://192.168.0.177:8000/v1/dimensions/measure",
+      "endpoint=https://mattress-api-dev.videoraiq.com/v1/dimensions/measure",
     ));
   });
 

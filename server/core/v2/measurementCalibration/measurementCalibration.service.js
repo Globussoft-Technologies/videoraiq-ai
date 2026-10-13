@@ -1,4 +1,4 @@
-import net from "net";
+import config from "config";
 import axios from "axios";
 import mongoose from "mongoose";
 import RaspberryPiDevice from "../raspberryPi/raspberryPi.model.js";
@@ -6,7 +6,6 @@ import MeasurementCalibration from "./measurementCalibration.model.js";
 import { calibrationRequestSchema, calibrationZoneSchema } from "./measurementCalibration.validation.js";
 import logger from "../../../utils/logger.js";
 
-const DS_PORT = 8000;
 const DS_ROOT = "/v1/calibration";
 
 function adminIdFrom(req) {
@@ -15,15 +14,11 @@ function adminIdFrom(req) {
   return String(user.adminId);
 }
 
-function dsHost(ip) {
-  const value = String(ip || "").trim();
-  if (!net.isIP(value)) throw Object.assign(new Error("The station has an invalid IP address"), { status: 422 });
-  return net.isIPv6(value) ? `[${value}]` : value;
-}
-
-export function calibrationDsUrl(ip, suffix = "") {
+export function calibrationDsUrl(_ip, suffix = "") {
+  const configuredUrl = config.has("MattressDsApiUrl") ? config.get("MattressDsApiUrl") : "";
+  const baseUrl = (String(configuredUrl || "").trim() || process.env.MATTRESS_DS_API_URL?.trim() || "https://mattress-api-dev.videoraiq.com").replace(/\/+$/, "");
   const path = suffix ? `/${String(suffix).replace(/^\/+/, "")}` : "";
-  return `http://${dsHost(ip)}:${DS_PORT}${DS_ROOT}${path}`;
+  return `${baseUrl}${DS_ROOT}${path}`;
 }
 
 function dsError(error, action) {
@@ -71,7 +66,6 @@ async function approvedStation(req) {
   if (!device) {
     throw Object.assign(new Error("Approved Raspberry Pi station was not found"), { status: 404 });
   }
-  dsHost(device.ip);
   return device;
 }
 
