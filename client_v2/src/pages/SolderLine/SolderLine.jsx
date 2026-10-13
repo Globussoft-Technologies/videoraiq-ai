@@ -10,7 +10,7 @@ import { getConfiguredTimezone } from '@/utils/timezone';
 import { fetchSolderLine } from './api';
 import { alertRows, buildSolderLine } from './solderLineData';
 import { mono, BAD, OK } from './ui';
-import Overview from './Overview';
+import Overview, { CameraStations } from './Overview';
 import AlertLogs from './AlertLogs';
 import Reports from './Reports';
 import SolderSummary from './SolderSummary';
@@ -121,7 +121,9 @@ export default function SolderLine() {
 
       {loading && !model ? <PageLoader /> : !model ? null : (
         <>
-          <SolderSummary model={model} selected={selected} onSelect={setSelected} />
+          <SolderSummary model={model} selected={selected} onSelect={setSelected}>
+            {view === 'overview' && <CameraStations model={model} sel={selected} setSel={setSelected} />}
+          </SolderSummary>
           {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} range={range} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
           {view === 'logs' && <AlertLogs model={model} rows={rows} range={range} />}
           {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={setRange} />}

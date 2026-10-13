@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ImageOff, LayoutGrid, Rows3 } from 'lucide-react';
+import { ImageOff, LayoutGrid, Rows3, X } from 'lucide-react';
 import CameraStream from '@/components/CameraStream';
 import { mediaUrl } from '@/lib/format';
-import { clock, dur, opColor } from './solderLineData';
+import { clock, dur, opColor, describeSolderAlert } from './solderLineData';
 import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
   OpBadge, StatusPill, Chip, Waiting, SnapshotPreview, fmt,
@@ -37,7 +37,7 @@ function Snap({ image, children, onOpen, ratio = '16 / 9' }) {
 
 // ---------------------------------------------------------------- line + stations
 
-function LineSection({ model, sel, setSel }) {
+export function CameraStations({ model, sel, setSel }) {
   const [matrix, setMatrix] = useState(false);
   const { stations } = model;
   return (
@@ -66,11 +66,6 @@ function LineSection({ model, sel, setSel }) {
 function StationCard({ s, selected, onClick }) {
   const [status, color] = stationStatus(s);
   const latest = [...s.absences, ...s.missed].filter((a) => a.image).sort((a, b) => b.start - a.start)[0];
-  const spark = s.hourly.map((r) => {
-    const j = r.ops.reduce((a, o) => a + o.joints, 0);
-    return j ? r.ops.reduce((a, o) => a + o.solderSec, 0) / j : 0;
-  });
-  const spMax = Math.max(...spark, 0.01);
   return (
     <div onClick={onClick} style={{
       cursor: 'pointer', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column',
@@ -98,12 +93,10 @@ function StationCard({ s, selected, onClick }) {
             </div>
           </div>
         ))}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6, paddingTop: 9, borderTop: '1px solid var(--bd)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, paddingTop: 9, borderTop: '1px solid var(--bd)' }}>
           {[
             ['PANELS', s.sum.hasThroughput ? s.sum.panels : '—'],
-            ['COVER', s.sum.coverage == null ? '—' : `${s.sum.coverage.toFixed(1)}%`, OK],
             ['MISSED', s.sum.missed, s.sum.missed ? '#ff6b6b' : OK],
-            ['S/JOINT', fmt(s.sum.avgJoint, 2)],
           ].map(([l, v, c]) => (
             <div key={l} style={{ minWidth: 0 }}>
               <div style={{ ...mono, fontSize: 8, letterSpacing: '.06em', color: 'var(--tx3)' }}>{l}</div>
@@ -111,13 +104,6 @@ function StationCard({ s, selected, onClick }) {
             </div>
           ))}
         </div>
-        {spark.some(Boolean) && (
-          <div style={{ height: 28, display: 'flex', alignItems: 'flex-end', gap: 3 }}>
-            {spark.map((v, k) => (
-              <span key={k} style={{ flex: 1, height: `${18 + (v / spMax) * 82}%`, borderRadius: '2px 2px 0 0', background: k === spark.length - 1 ? CY : 'var(--bd2)' }} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -249,14 +235,11 @@ function PresenceCard({ o }) {
 }
 
 function AbsenceSection({ s, model, onOpenLogs, preview }) {
-  const [opFilter, setOpFilter] = useState('all');
   const latest = s.absences[s.absences.length - 1];
-  const rows = [...s.absences].reverse().filter((a) => opFilter === 'all' || a.op === Number(opFilter));
   const total = s.absences.reduce((a, b) => a + b.durSec, 0);
   const span = s.windowStart && s.windowEnd ? s.windowEnd.diff(s.windowStart, 'seconds') : 0;
   const ticks = [];
   if (span) for (let m = s.windowStart.clone().startOf('hour'); m.isSameOrBefore(s.windowEnd); m.add(1, 'hour')) ticks.push(m.format('HH:mm'));
-  const grid = { display: 'grid', gridTemplateColumns: '70px 110px 92px minmax(0, 1fr) 92px 92px 100px', gap: 12 };
 
   return (
     <>
@@ -279,29 +262,29 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
           <LatestPanel panel={s.latestPanel} pointsPerZone={s.pointsPerZone} />
         </Panel>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, alignSelf: 'start' }}>
           {s.ops.length ? s.ops.map((o) => <PresenceCard key={o.i} o={o} />) : <Waiting title="No zones configured">Draw the operator zones on this camera's Desk Solar Shoulder detection.</Waiting>}
-          <Panel pad={false} style={{ flex: 1 }}>
+          <Panel pad={false}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: BAD }} />
               <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>Latest absence snapshot</span>
               {latest && <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)' }}>{latest.id}</span>}
             </div>
             {!latest ? <div style={{ padding: 16 }}><Waiting title="No absences" minH={120}>Nobody has left a desk empty in this range.</Waiting></div> : (
-              <div style={{ display: 'flex', gap: 14, padding: '14px 16px', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+              <div style={{ display: 'flex', gap: 12, padding: '12px 14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <div style={{ flex: '0 1 260px', width: 260, minWidth: 0, maxWidth: '100%' }}>
                   <Snap image={latest.image} onOpen={() => preview(latest._id)}>
                     <span style={{ position: 'absolute', left: 8, bottom: 8, ...mono, fontSize: 9.5, color: '#fff', background: 'rgba(6,8,13,.75)', borderRadius: 5, padding: '3px 7px' }}>{clock(latest.start)}</span>
                   </Snap>
                 </div>
-                <div style={{ flex: '1 1 170px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <div style={{ flex: '1 1 180px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><OpBadge op={latest.op} /><StatusPill active={latest.active} /></div>
                   <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15, lineHeight: 1.25 }}>{latest.description || `${latest.zone} desk empty`}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div><div style={{ ...label, fontSize: 8.5 }}>Started</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2 }}>{clock(latest.start)}</div></div>
                     <div><div style={{ ...label, fontSize: 8.5 }}>Duration</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 2, color: '#ff6b6b' }}>{dur(latest.durSec)}</div></div>
                   </div>
-                  <div style={{ marginTop: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {latest.image && <DownloadButton action={() => downloadSnapshot({ ...latest, station: s })} description="image" style={btnPrimary}>Image</DownloadButton>}
                     {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnGhost}>All alert logs →</button>}
                   </div>
@@ -341,32 +324,51 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Absence alert log</span>
           <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#ff6b6b', border: `1px solid ${BAD}73`, borderRadius: 5, padding: '2px 8px' }}>{s.absences.length} ALERTS</span>
           <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>TOTAL UNAVAILABLE {dur(total)}</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <Chip on={opFilter === 'all'} onClick={() => setOpFilter('all')}>ALL</Chip>
-            {s.ops.map((o) => <Chip key={o.i} on={opFilter === String(o.i)} color={o.color} onClick={() => setOpFilter(String(o.i))}>{o.code}</Chip>)}
-            {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnPrimary}>Logs with snapshots →</button>}
-          </span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 720 }}>
-            <div style={{ ...grid, padding: '9px 18px', ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
-              <span>ALERT</span><span>OPERATOR</span><span>ALERT TIME</span><span>CONDITION</span><span>RETURNED</span><span>DURATION</span><span>STATUS</span>
-            </div>
-            <div style={{ maxHeight: 312, overflowY: 'auto' }}>
-              {!rows.length && <div style={{ padding: 18, fontSize: 12.5, color: 'var(--tx3)' }}>No absence alerts in this range.</div>}
-              {rows.map((r) => (
-                <div key={r._id} style={{ ...grid, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)', fontSize: 12.5 }}>
-                  <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>{r.id}</span>
-                  <OpBadge op={r.op} />
-                  <span style={{ ...mono, fontWeight: 600 }}>{clock(r.start)}</span>
-                  <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.description || `${r.zone} desk empty`}</span>
-                  <span style={{ ...mono, fontSize: 12, color: 'var(--tx2)' }}>{r.end ? clock(r.end) : 'Not returned'}</span>
-                  <span style={{ ...mono, fontWeight: 700 }}>{dur(r.durSec)}</span>
-                  <StatusPill active={r.active} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 650px), 1fr))', gap: 16, padding: 16 }}>
+          {!s.ops.length && <div style={{ padding: 12, fontSize: 12.5, color: 'var(--tx3)' }}>No operator zones configured.</div>}
+          {s.ops.map((o) => {
+            const rows = [...s.absences].reverse().filter((a) => a.op === o.i);
+            return (
+              <div key={o.i} style={{ border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
+                  <OpBadge op={o.i} code={o.code} />
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{o.zone}</span>
+                  <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)' }}>{rows.length} alerts · {dur(o.away)} unavailable</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div style={{ overflow: 'auto', maxHeight: 360 }}>
+                  <table aria-label={`${o.code} absence alert log`} style={{ width: '100%', minWidth: 650, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg1solid)' }}>
+                      <tr style={{ ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
+                        {['Operator', 'Alert time', 'Condition', 'Returned', 'Duration', 'Image'].map((heading) => (
+                          <th key={heading} scope="col" style={{ padding: '10px', fontWeight: 500, whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!rows.length && <tr><td colSpan={6} style={{ padding: 18, color: 'var(--tx3)' }}>No absence alerts for {o.code} in this range.</td></tr>}
+                      {rows.map((r) => (
+                        <tr key={r._id} style={{ borderBottom: '1px solid var(--bd)' }}>
+                          <td style={{ padding: '10px' }}><OpBadge op={r.op} /></td>
+                          <td style={{ padding: '10px', ...mono, fontWeight: 600, whiteSpace: 'nowrap' }}>{model.singleDay ? clock(r.start) : r.start.format('DD MMM HH:mm:ss')}</td>
+                          <td style={{ padding: '10px', color: 'var(--tx2)' }}>{r.description || `${r.zone} desk empty`}</td>
+                          <td style={{ padding: '10px', ...mono, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{r.end ? (model.singleDay ? clock(r.end) : r.end.format('DD MMM HH:mm:ss')) : 'Not returned'}</td>
+                          <td style={{ padding: '10px', ...mono, fontWeight: 700, whiteSpace: 'nowrap' }}>{dur(r.durSec)}</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {r.image ? (
+                              <button type="button" onClick={() => preview(r._id)} aria-label={`View snapshot for ${o.code} at ${clock(r.start)}`} title="View image" style={{ display: 'block', width: 64, height: 40, padding: 0, border: '1px solid var(--bd2)', borderRadius: 5, overflow: 'hidden', background: 'var(--bg2)', cursor: 'zoom-in' }}>
+                                <img src={mediaUrl(r.image)} alt={`${o.zone} absence snapshot`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </button>
+                            ) : <span style={{ color: 'var(--tx3)', fontSize: 11 }}>No image</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Panel>
     </>
@@ -465,18 +467,21 @@ function SolderSection({ s, preview }) {
             <span style={{ marginLeft: 'auto', ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{s.ops.map((o) => `${o.code} ${o.missed}`).join(' · ')}</span>
           </div>
           <div style={{ flex: 1, maxHeight: 268, overflowY: 'auto' }}>
-            {!s.missed.length && <div style={{ padding: 16 }}>{anyMissedData ? <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No missed points in this range.</span> : <Waiting minH={120}>{NO_MISSED}</Waiting>}</div>}
-            {[...s.missed].reverse().map((m) => (
+            {!s.missed.length && <div style={{ padding: 16 }}>{anyMissedData ? <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No missed solder alerts in this range.</span> : <Waiting minH={120}>{NO_MISSED}</Waiting>}</div>}
+            {[...s.missed].reverse().map((m) => {
+              const description = describeSolderAlert(m);
+              return (
               <div key={m._id} onClick={m.image ? () => preview(m._id) : undefined} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 18px', borderBottom: '1px solid var(--bd)', cursor: m.image ? 'pointer' : 'default' }}>
-                <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 8, background: 'rgba(255,77,77,.12)', border: `1px solid ${BAD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...mono, fontSize: 10.5, fontWeight: 700, color: '#ff6b6b' }}>P{m.point ?? '?'}</span>
+                <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 8, background: 'rgba(255,77,77,.12)', border: `1px solid ${BAD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b6b' }}><X size={16} aria-hidden="true" /></span>
                 <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>Point {m.point ?? '?'} not soldered{m.panelId ? ` · ${m.panelId}` : ''}</span>
-                  <span style={{ display: 'block', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{m.zone}{m.image ? ' · snapshot saved' : ''}</span>
+                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{description.title}</span>
+                  <span style={{ display: 'block', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{description.detail}{m.image ? ' · snapshot saved' : ''}</span>
                 </span>
                 <OpBadge op={m.op} />
                 <span style={{ ...mono, fontSize: 11.5, color: 'var(--tx2)' }}>{clock(m.start)}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </Panel>
       </div>
@@ -516,7 +521,7 @@ function HourSection({ s, model, range }) {
       Panels: r.panels,
       ...Object.fromEntries(s.ops.flatMap((o) => {
         const c = r.ops[o.i];
-        return [[`${o.code} joints`, c.joints], [`${o.code} missed`, c.missed], [`${o.code} s/joint`, perJoint(c)?.toFixed(2) ?? ''], [`${o.code} active`, dur(c.solderSec)]];
+        return [[`${o.code} joints`, c.joints], [`${o.code} missed`, c.missed], [`${o.code} active`, dur(c.solderSec)]];
       })),
     })),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
@@ -589,11 +594,11 @@ function HourSection({ s, model, range }) {
               <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</DownloadButton>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
+              <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
                 <thead>
                   <tr style={{ fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', textAlign: 'left' }}>
                     <th style={th}>HOUR</th><th style={th}>PANELS</th>
-                    {s.ops.flatMap((o) => ['JOINTS', 'MISSED', 'AVG / JOINT', 'ACTIVE TIME'].map((c) => <th key={`${o.i}${c}`} style={{ ...th, color: o.color }}>{c === 'JOINTS' ? `${o.code} ${c}` : c}</th>))}
+                    {s.ops.flatMap((o) => ['JOINTS', 'MISSED', 'ACTIVE TIME'].map((c) => <th key={`${o.i}${c}`} style={{ ...th, color: o.color }}>{c === 'JOINTS' ? `${o.code} ${c}` : c}</th>))}
                   </tr>
                 </thead>
                 <tbody>
@@ -603,7 +608,6 @@ function HourSection({ s, model, range }) {
                       {r.ops.flatMap((c, i) => [
                         <td key={`${i}j`} style={td}>{c.joints}</td>,
                         <td key={`${i}m`} style={{ ...td, color: c.missed ? BAD : 'var(--tx3)', fontWeight: c.missed ? 700 : 400 }}>{c.missed}</td>,
-                        <td key={`${i}a`} style={td}>{fmt(perJoint(c), 1)} s</td>,
                         <td key={`${i}t`} style={{ ...td, color: 'var(--tx2)' }}>{dur(c.solderSec)}</td>,
                       ])}
                     </tr>
@@ -613,7 +617,6 @@ function HourSection({ s, model, range }) {
                     {s.ops.flatMap((o) => [
                       <td key={`${o.i}j`} style={td}>{o.joints}</td>,
                       <td key={`${o.i}m`} style={{ ...td, color: '#ff6b6b' }}>{o.missed}</td>,
-                      <td key={`${o.i}a`} style={td}>{fmt(o.avgJoint, 2)} s</td>,
                       <td key={`${o.i}t`} style={td}>{dur(o.solderSec)}</td>,
                     ])}
                   </tr>
@@ -659,7 +662,6 @@ export default function Overview({ model, onOpenLogs, selected, onSelect, range 
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>{absentOp.zone} desk empty on {s.name}</span>
         </div>
       )}
-      <LineSection model={model} sel={selected} setSel={onSelect} />
       <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} />
       <SolderSection s={s} preview={setOpenId} />
       <HourSection s={s} model={model} range={range} />

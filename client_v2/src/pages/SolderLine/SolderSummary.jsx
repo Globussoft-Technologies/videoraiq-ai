@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dur } from './solderLineData';
-import { BAD, OK, WARN, CY, mono, label, Kpi, KpiGrid, OpBadge, Chip, fmt } from './ui';
+import { BAD, OK, WARN, CY, mono, label, Kpi, KpiGrid, OpBadge, Chip } from './ui';
 
 const stationStatus = (station) => {
   if (station.sum.absentNow) return BAD;
@@ -8,7 +8,7 @@ const stationStatus = (station) => {
   return lastHour?.ops.some((operator) => operator.missed) ? WARN : OK;
 };
 
-export default function SolderSummary({ model, selected, onSelect }) {
+export default function SolderSummary({ model, selected, onSelect, children }) {
   const { line, stations } = model;
   if (!stations.length) return null;
 
@@ -16,7 +16,6 @@ export default function SolderSummary({ model, selected, onSelect }) {
   const station = stations[index];
   const totals = station.sum;
   const worst = [...stations].sort((a, b) => b.sum.missed - a.sum.missed)[0];
-  const fastest = stations.filter((s) => s.sum.avgJoint != null).sort((a, b) => a.sum.avgJoint - b.sum.avgJoint)[0];
   const step = (amount) => onSelect((index + amount + stations.length) % stations.length);
 
   return (
@@ -28,13 +27,11 @@ export default function SolderSummary({ model, selected, onSelect }) {
       </div>
       <KpiGrid>
         <Kpi label="Panels · line" value={line.hasThroughput ? line.panels.toLocaleString('en-IN') : '—'} sub={`${stations.length} stations`} color={CY} />
-        <Kpi label="Coverage · line" value={fmt(line.coverage, 2)} unit={line.coverage != null ? '%' : ''} sub={line.hasThroughput ? `${line.joints.toLocaleString('en-IN')} joints done` : 'Waiting for panel data'} color={OK} valueColor={OK} />
         <Kpi label="Missed · line" value={line.missed} sub={worst?.sum.missed ? `Most at ${worst.name} (${worst.sum.missed})` : 'No missed points'} color={BAD} valueColor={BAD} />
         <Kpi label="Absence alerts" value={line.absences} sub={`${line.absentNow} desk${line.absentNow === 1 ? '' : 's'} empty right now`} color={WARN} valueColor={WARN} />
         <Kpi label="Unavailable time" value={dur(line.away)} sub={`All ${line.operators} operators`} color="#a855f7" />
-        <Kpi label="Avg / joint · line" value={fmt(line.avgJoint, 2)} unit={line.avgJoint != null ? 's' : ''} sub={fastest ? `Fastest ${fastest.name} · ${fastest.sum.avgJoint.toFixed(2)} s` : 'Waiting for panel data'} color="#94a3b8" />
-        <Kpi label="At desk now" value={`${line.operators - line.absentNow} / ${line.operators}`} sub="Operators present on line" color={OK} />
       </KpiGrid>
+      {children}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 14, background: 'linear-gradient(90deg, rgba(59,130,246,.16), rgba(168,85,247,.07) 55%, transparent)', border: '1px solid rgba(59,130,246,.38)' }}>
         {stations.length > 1 && <button type="button" aria-label="Previous station" onClick={() => step(-1)} style={arrowStyle}><ChevronLeft size={15} /></button>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -53,11 +50,9 @@ export default function SolderSummary({ model, selected, onSelect }) {
       <KpiGrid>
         <Kpi label="Panels counted" value={totals.hasThroughput ? totals.panels.toLocaleString('en-IN') : '—'} sub="Conveyor count" color={CY} />
         <Kpi label="Solder joints" value={totals.hasThroughput ? totals.joints.toLocaleString('en-IN') : '—'} unit={totals.hasThroughput ? `/ ${(totals.panels * station.pointsPerPanel).toLocaleString('en-IN')}` : ''} sub={`${station.pointsPerPanel} points per panel`} color="#3b82f6" />
-        <Kpi label="Coverage" value={fmt(totals.coverage, 2)} unit={totals.coverage != null ? '%' : ''} sub="Joints done ÷ joints required" color={OK} valueColor={OK} />
         <Kpi label="Missed solders" value={totals.missed} sub={station.ops.map((o) => `${o.code} ${o.missed}`).join(' · ')} color={BAD} valueColor={BAD} />
         <Kpi label="Absence alerts" value={totals.absences} sub={station.ops.map((o) => `${o.code} ${o.alerts}`).join(' · ')} color={WARN} valueColor={WARN} />
         <Kpi label="Unavailable time" value={dur(totals.away)} sub="All desks combined" color="#a855f7" />
-        <Kpi label="Avg / joint" value={fmt(totals.avgJoint, 2)} unit={totals.avgJoint != null ? 's' : ''} sub={station.ops.map((o) => `${o.code} ${fmt(o.avgJoint, 2)}`).join(' · ')} color="#94a3b8" />
       </KpiGrid>
     </>
   );

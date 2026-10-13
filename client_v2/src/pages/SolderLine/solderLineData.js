@@ -25,6 +25,26 @@ export function dur(sec) {
 
 export const clock = (m) => (m ? m.format('HH:mm:ss') : '—');
 
+/** Describe the recorded zone event without claiming a specific missing point. */
+export function describeSolderAlert(row) {
+  if (row.type === 'absence') {
+    return {
+      title: `${row.zone} desk empty — ${row.opCode} away`,
+      detail: [
+        row.description,
+        row.end ? `Returned ${clock(row.end)}` : 'Not returned',
+        row.durSec != null ? `Duration ${dur(row.durSec)}` : null,
+      ].filter(Boolean).join(' · '),
+    };
+  }
+  const zone = row.incident?.zones?.find((entry) => entry.zone === row.zone);
+  return {
+    title: `Soldering incomplete${row.panelId ? ` · ${row.panelId}` : ''}`,
+    detail: [row.zone, zone?.done != null ? `${zone.done} joint${Number(zone.done) === 1 ? '' : 's'} completed` : null]
+      .filter(Boolean).join(' · '),
+  };
+}
+
 function buildStation(station, data, now) {
   const id = station._id;
   const mine = (row) => String(row.channelId) === id;

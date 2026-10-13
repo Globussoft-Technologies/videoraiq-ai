@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
-import { clock, dur } from './solderLineData';
-import { BAD, WARN, mono, label, Panel, OpBadge, StatusPill, Chip, Waiting, SnapshotPreview } from './ui';
+import { clock, describeSolderAlert } from './solderLineData';
+import { BAD, WARN, mono, label, Panel, OpBadge, Chip, Waiting, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
 import DownloadButton from './DownloadButton';
@@ -12,10 +12,6 @@ const TYPE_META = {
   absence: { label: 'ABSENCE', color: WARN },
   missed: { label: 'MISSED SOLDER', color: BAD },
 };
-
-const describe = (r) => (r.type === 'absence'
-  ? { title: `${r.zone} desk empty — ${r.opCode} away`, detail: [r.description, r.end ? `Returned ${clock(r.end)}` : 'Not returned'].filter(Boolean).join(' · '), metric: dur(r.durSec), metricLabel: 'DURATION' }
-  : { title: `Point P${r.point ?? '?'} not soldered${r.panelId ? ` · ${r.panelId}` : ''}`, detail: r.zone, metric: `P${r.point ?? '?'}`, metricLabel: 'POINT' });
 
 function TypeTag({ type, style }) {
   const m = TYPE_META[type];
@@ -41,8 +37,6 @@ function ImageDownload({ row, style }) {
   return <DownloadButton disabled={!row.image} action={() => downloadSnapshot(row)} description="image" title={row.image ? 'Download this image' : 'No snapshot available'} aria-label={`Download image for ${row.id}`} style={style}>Image</DownloadButton>;
 }
 
-const status = (r) => (r.type === 'missed' ? <StatusPill text="LOGGED" color={WARN} /> : <StatusPill active={r.active} />);
-
 export default function AlertLogs({ model, rows, range }) {
   const [type, setType] = useState('all');
   const [op, setOp] = useState('all');
@@ -57,12 +51,10 @@ export default function AlertLogs({ model, rows, range }) {
   const when = (m) => (model.singleDay ? clock(m) : m.format('DD MMM HH:mm:ss'));
 
   const exportRows = () => shown.map((r) => {
-    const d = describe(r);
+    const d = describeSolderAlert(r);
     return {
-      Alert: r.id, Type: TYPE_META[r.type].label, Station: r.station.name, Operator: `${r.opCode} · ${r.zone}`,
+      Type: TYPE_META[r.type].label, Station: r.station.name, Operator: `${r.opCode} · ${r.zone}`,
       Time: r.start.format('YYYY-MM-DD HH:mm:ss'), Detail: `${d.title}${d.detail ? ` — ${d.detail}` : ''}`,
-      [d.metricLabel === 'DURATION' ? 'Duration' : 'Point']: d.metric,
-      Status: r.type === 'missed' ? 'LOGGED' : r.active ? 'ACTIVE' : 'RESOLVED',
       Snapshot: r.image ? mediaUrl(r.image) : '',
     };
   });
@@ -101,7 +93,7 @@ export default function AlertLogs({ model, rows, range }) {
       ) : grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
           {pageRows.map((r) => {
-            const d = describe(r);
+            const d = describeSolderAlert(r);
             return (
               <Panel key={r._id} pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ position: 'relative' }}>
@@ -112,14 +104,10 @@ export default function AlertLogs({ model, rows, range }) {
                 <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <OpBadge op={r.op} code={r.opCode} />
-                    <span style={{ ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{r.id}</span>
-                    <span style={{ marginLeft: 'auto' }}>{status(r)}</span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13.5 }}>{d.title}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{d.detail}</div>
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, borderTop: '1px solid var(--bd)' }}>
-                    <span style={{ ...label, fontSize: 9 }}>{d.metricLabel}</span>
-                    <span style={{ ...mono, fontSize: 13, fontWeight: 700 }}>{d.metric}</span>
                     <ImageDownload row={r} style={{ marginLeft: 'auto' }} />
                   </div>
                 </div>
@@ -130,30 +118,27 @@ export default function AlertLogs({ model, rows, range }) {
       ) : (
         <Panel pad={false}>
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 1170 }}>
+            <div style={{ minWidth: 900 }}>
               {[null, ...pageRows].map((r) => {
-                const cols = { display: 'grid', gridTemplateColumns: '168px 76px 116px 90px 110px minmax(0, 1fr) 92px 96px 118px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
+                const cols = { display: 'grid', gridTemplateColumns: '168px 116px 90px 110px minmax(0, 1fr) 118px', gap: 12, padding: '10px 18px', alignItems: 'center', borderBottom: '1px solid var(--bd)' };
                 if (!r) {
                   return (
                     <div key="head" style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-                      <span>SNAPSHOT</span><span>ALERT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>METRIC</span><span>STATUS</span><span>DOWNLOAD IMAGE</span>
+                      <span>SNAPSHOT</span><span>TYPE</span><span>OPERATOR</span><span>TIME</span><span>DETAIL</span><span>DOWNLOAD IMAGE</span>
                     </div>
                   );
                 }
-                const d = describe(r);
+                const d = describeSolderAlert(r);
                 return (
                   <div key={r._id} style={{ ...cols, fontSize: 12.5 }}>
                     <Thumb r={r} width={168} onOpen={() => setOpenId(r._id)} />
-                    <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>{r.id}</span>
                     <TypeTag type={r.type} />
                     <OpBadge op={r.op} code={r.opCode} />
                     <span style={{ ...mono, fontWeight: 600 }}>{when(r.start)}</span>
                     <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.title}</span>
-                      <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.detail}</span>
+                      <span style={{ display: 'block', fontWeight: 600, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{d.title}</span>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{d.detail}</span>
                     </span>
-                    <span style={{ ...mono, fontWeight: 700 }}>{d.metric}</span>
-                    {status(r)}
                     <ImageDownload row={r} style={{ justifySelf: 'start' }} />
                   </div>
                 );
