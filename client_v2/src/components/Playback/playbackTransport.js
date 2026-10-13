@@ -4,6 +4,8 @@ export function createPlaybackTransport(video, {
   onBuffering = () => {},
   onReady = () => {},
   onError = () => {},
+  onRecoveryNeeded = () => false,
+  stallRecoveryMs = 20000,
 } = {}) {
   let wantsPlayback = false;
   let active = false;
@@ -13,15 +15,21 @@ export function createPlaybackTransport(video, {
   let pendingPlay = null;
   let recoveryTimer = null;
   let recoveryAttempts = 0;
+  let stallTimer = null;
 
   const clearRecovery = () => {
     if (recoveryTimer !== null) clearTimeout(recoveryTimer);
     recoveryTimer = null;
   };
+  const clearStallRecovery = () => {
+    if (stallTimer !== null) clearTimeout(stallTimer);
+    stallTimer = null;
+  };
   const invalidate = () => {
     generation += 1;
     pendingPlay = null;
     clearRecovery();
+    clearStallRecovery();
     recoveryAttempts = 0;
   };
   const scheduleRecovery = () => {
@@ -44,6 +52,27 @@ export function createPlaybackTransport(video, {
     onBuffering(false);
     onError(error);
   };
+  const requestSourceRecovery = (error) => {
+    if (disposed || !active || !wantsPlayback) return false;
+    clearStallRecovery();
+    try {
+      if (onRecoveryNeeded(error) === true) return true;
+    } catch (recoveryError) {
+      fail(recoveryError);
+      return false;
+    }
+    fail(error);
+    return false;
+  };
+  const scheduleStallRecovery = () => {
+    if (disposed || !active || !wantsPlayback || stallTimer !== null || stallRecoveryMs <= 0) return;
+    const attempt = generation;
+    stallTimer = setTimeout(() => {
+      stallTimer = null;
+      if (attempt !== generation || disposed || !active || !wantsPlayback) return;
+      requestSourceRecovery(new Error('Playback stalled while waiting for media data'));
+    }, stallRecoveryMs);
+  };
 
   const resume = () => {
     if (disposed || !active || !wantsPlayback || video.ended || video.readyState < 2) return;
@@ -57,18 +86,19 @@ export function createPlaybackTransport(video, {
         if (disposed || attempt !== generation || !wantsPlayback) return;
         // A new source or fullscreen transition can interrupt a pending play().
         if (error?.name === 'AbortError') scheduleRecovery();
-        else fail(error);
+        else requestSourceRecovery(error);
       }).finally(() => {
         if (pendingPlay === attempt) pendingPlay = null;
       });
     } catch (error) {
       pendingPlay = null;
-      fail(error);
+      requestSourceRecovery(error);
     }
   };
 
   const ready = () => {
     if (disposed || !active || video.readyState < 2) return;
+    if (video.readyState >= 3) clearStallRecovery();
     video.playbackRate = playbackRate;
     onReady();
     onBuffering(wantsPlayback && video.readyState < 3);
@@ -78,6 +108,7 @@ export function createPlaybackTransport(video, {
     if (disposed || !active || video.paused) return;
     if (!wantsPlayback) { video.pause(); return; }
     clearRecovery();
+    clearStallRecovery();
     recoveryAttempts = 0;
     onPlaying(true);
     onBuffering(false);
@@ -93,6 +124,7 @@ export function createPlaybackTransport(video, {
     if (disposed || !active || !wantsPlayback) return;
     onPlaying(false);
     onBuffering(true);
+    scheduleStallRecovery();
   };
   const ended = () => {
     if (disposed || !active) return;
@@ -109,7 +141,7 @@ export function createPlaybackTransport(video, {
     waiting,
     stalled: () => { if (video.readyState < 3) waiting(); },
     ended,
-    error: () => { if (active && video.error) fail(video.error); },
+    error: () => { if (active && video.error) requestSourceRecovery(video.error); },
   };
   Object.entries(listeners).forEach(([event, handler]) => video.addEventListener(event, handler));
 

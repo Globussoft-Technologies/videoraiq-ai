@@ -35,7 +35,7 @@ class Video extends EventTarget {
 const settled = () => new Promise((resolve) => setImmediate(resolve));
 const recovered = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-function setup() {
+function setup(options = {}) {
   const video = new Video();
   const state = { playing: false, buffering: false, ready: false, error: null };
   const transport = createPlaybackTransport(video, {
@@ -43,6 +43,7 @@ function setup() {
     onBuffering: (value) => { state.buffering = value; },
     onReady: () => { state.ready = true; },
     onError: (error) => { state.error = error || true; },
+    ...options,
   });
   return { video, state, transport };
 }
@@ -166,6 +167,88 @@ test('buffering reports actual state without discarding play intent', async () =
   video.dispatchEvent(new Event('playing'));
   assert.equal(state.playing, true);
   assert.equal(state.buffering, false);
+  transport.destroy();
+});
+
+test('prolonged buffering requests source recovery without discarding play intent', async () => {
+  let recoveries = 0;
+  const { video, state, transport } = setup({
+    stallRecoveryMs: 5,
+    onRecoveryNeeded: () => { recoveries += 1; return true; },
+  });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  video.ready();
+  await settled();
+  video.readyState = 2;
+  video.dispatchEvent(new Event('waiting'));
+  await recovered();
+  assert.equal(recoveries, 1);
+  assert.equal(transport.wantsPlayback, true);
+  assert.equal(state.error, null);
+  transport.destroy();
+});
+
+test('buffering watchdog is cancelled when playback resumes', async () => {
+  let recoveries = 0;
+  const { video, transport } = setup({
+    stallRecoveryMs: 10,
+    onRecoveryNeeded: () => { recoveries += 1; return true; },
+  });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  video.ready();
+  await settled();
+  video.readyState = 2;
+  video.dispatchEvent(new Event('waiting'));
+  video.dispatchEvent(new Event('playing'));
+  await recovered();
+  assert.equal(recoveries, 0);
+  transport.destroy();
+});
+
+test('explicit pause cancels the buffering watchdog', async () => {
+  let recoveries = 0;
+  const { video, transport } = setup({
+    stallRecoveryMs: 10,
+    onRecoveryNeeded: () => { recoveries += 1; return true; },
+  });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  video.ready();
+  await settled();
+  video.readyState = 2;
+  video.dispatchEvent(new Event('waiting'));
+  transport.pause();
+  await recovered();
+  assert.equal(recoveries, 0);
+  assert.equal(transport.wantsPlayback, false);
+  transport.destroy();
+});
+
+test('native media errors request source recovery before becoming terminal', () => {
+  let recoveries = 0;
+  const { video, state, transport } = setup({
+    onRecoveryNeeded: () => { recoveries += 1; return true; },
+  });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  video.error = new Error('Media decode failed');
+  video.dispatchEvent(new Event('error'));
+  assert.equal(recoveries, 1);
+  assert.equal(transport.wantsPlayback, true);
+  assert.equal(state.error, null);
+  transport.destroy();
+});
+
+test('unrecoverable native media errors retain the terminal error behavior', () => {
+  const { video, state, transport } = setup({ onRecoveryNeeded: () => false });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  video.error = new Error('Media decode failed');
+  video.dispatchEvent(new Event('error'));
+  assert.equal(transport.wantsPlayback, false);
+  assert.equal(state.error.message, 'Media decode failed');
   transport.destroy();
 });
 

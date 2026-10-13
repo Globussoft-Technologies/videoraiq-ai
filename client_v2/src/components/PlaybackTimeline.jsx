@@ -33,6 +33,10 @@ const SECURUS_RECOVERY_LIMIT = 3;
 const DAHUA_MANIFEST_RETRY_LIMIT = 4;
 const DAHUA_RECOVERY_DELAY_MS = 500;
 const DAHUA_RECOVERY_LIMIT = 3;
+const GENERIC_HLS_RECOVERY_DELAY_MS = 500;
+const GENERIC_HLS_RECOVERY_LIMIT = 3;
+const DASH_RECOVERY_DELAY_MS = 500;
+const DASH_RECOVERY_LIMIT = 2;
 const PLAYBACK_PREVIEW_CACHE_LIMIT = 100;
 const PLAYBACK_PREVIEW_WINDOW_MS = 5 * 1000;
 const HONEYWELL_MUTEX_RETRY_MS = 5000;
@@ -113,6 +117,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   const fragmentAnchorsRef = useRef([]);
   const playlistClockRef = useRef(null);
   const playbackProgressRef = useRef({ playing: false, buffering: false });
+  const playbackRecoveryRef = useRef(null);
   // Honeywell/TVT serves one static DASH manifest covering [loadedAt, end of
   // day] per session, but only transcodes segments in order from loadedAt —
   // so only a seek into the already-buffered part can reuse the session
@@ -131,6 +136,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   // still serving the recording. Recreate that session transparently before
   // asking the user to press Play.
   const dahuaRecoveriesRef = useRef(0);
+  // Other stream-server-backed HLS brands (Hikvision, Prama, Hanwha and
+  // compatible recorders) need the same bounded session replacement when a
+  // playlist or media segment stops progressing.
+  const genericHlsRecoveriesRef = useRef(0);
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
@@ -138,6 +147,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         if (value) dashRecoveriesRef.current = 0;
         if (value) securusRecoveriesRef.current = 0;
         if (value) dahuaRecoveriesRef.current = 0;
+        if (value) genericHlsRecoveriesRef.current = 0;
         playbackProgressRef.current.playing = value;
         setPlaying(value);
       },
@@ -147,6 +157,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       },
       onReady: () => setVideoState('ready'),
       onError: () => setVideoState('error'),
+      onRecoveryNeeded: (error) => playbackRecoveryRef.current?.(error) === true,
     });
     transportRef.current = transport;
     return () => {
@@ -169,8 +180,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     hoverThumbnailCacheRef.current.clear();
     setThumbnailCache(new Map());
     loadedRangeMsRef.current = null;
+    dashRecoveriesRef.current = 0;
     securusRecoveriesRef.current = 0;
     dahuaRecoveriesRef.current = 0;
+    genericHlsRecoveriesRef.current = 0;
   }, [channelId, +day]);
 
   useEffect(() => () => {
@@ -377,9 +390,11 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     let attempts = 0;
     let resumePosition = null;
     let failed = false;
+    let recoveryScheduled = false;
     const seekToken = seekTokenRef.current;
     const startAtIncident = incidentStartRef.current;
     const isSecurusPlayback = /\/securus-playback\//i.test(videoUrl);
+    const isDashPlayback = /\.mpd(\?|$)/i.test(videoUrl);
     const isCurrent = () => !cancelled && !failed && seekToken === seekTokenRef.current;
     const failPlayback = (error) => {
       if (!isCurrent()) return;
@@ -404,6 +419,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
       );
       securusRecoveriesRef.current += 1;
+      recoveryScheduled = true;
       failed = true;
       if (retryTimer) clearTimeout(retryTimer);
       playbackProgressRef.current = { playing: false, buffering: true };
@@ -433,6 +449,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
       );
       dahuaRecoveriesRef.current += 1;
+      recoveryScheduled = true;
       failed = true;
       if (retryTimer) clearTimeout(retryTimer);
       playbackProgressRef.current = { playing: false, buffering: true };
@@ -447,6 +464,67 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       }, DAHUA_RECOVERY_DELAY_MS);
       return true;
     };
+    const recoverGenericHlsPlayback = () => {
+      if (isDashPlayback || isSecurusPlayback || isDahuaProtocolNvr || !isCurrent() ||
+          !transportRef.current?.wantsPlayback ||
+          genericHlsRecoveriesRef.current >= GENERIC_HLS_RECOVERY_LIMIT) {
+        return false;
+      }
+
+      const resumeAtMs = Math.min(
+        DAY_MS - 1,
+        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
+      );
+      genericHlsRecoveriesRef.current += 1;
+      recoveryScheduled = true;
+      failed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      playbackProgressRef.current = { playing: false, buffering: true };
+      setPlaying(false);
+      setBuffering(true);
+      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      retryTimer = setTimeout(() => {
+        if (!cancelled && seekToken === seekTokenRef.current &&
+            transportRef.current?.wantsPlayback) {
+          loadAtRef.current?.(resumeAtMs);
+        }
+      }, GENERIC_HLS_RECOVERY_DELAY_MS);
+      return true;
+    };
+    const recoverDashPlayback = () => {
+      if (!isDashPlayback || !isCurrent() ||
+          !transportRef.current?.wantsPlayback || dashRecoveriesRef.current >= DASH_RECOVERY_LIMIT) {
+        return false;
+      }
+
+      const resumeAtMs = Math.min(
+        DAY_MS - 1,
+        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
+      );
+      dashRecoveriesRef.current += 1;
+      recoveryScheduled = true;
+      failed = true;
+      playbackProgressRef.current = { playing: false, buffering: true };
+      setPlaying(false);
+      setBuffering(true);
+      if (dash) { try { dash.destroy(); } catch { /* noop */ } }
+      retryTimer = setTimeout(() => {
+        if (!cancelled && seekToken === seekTokenRef.current &&
+            transportRef.current?.wantsPlayback) {
+          loadAtRef.current?.(resumeAtMs);
+        }
+      }, DASH_RECOVERY_DELAY_MS);
+      return true;
+    };
+    const recoverCurrentPlayback = () => {
+      // Destroying an HLS/DASH instance can emit one last native media error.
+      // The replacement is already queued, so keep that teardown event from
+      // converting the accepted recovery into a terminal player failure.
+      if (recoveryScheduled) return true;
+      if (isDashPlayback) return recoverDashPlayback();
+      return recoverSecurusPlayback() || recoverDahuaPlayback() || recoverGenericHlsPlayback();
+    };
+    playbackRecoveryRef.current = recoverCurrentPlayback;
 
     // Honeywell/TVT NVRs serve recordings as DASH (.mpd), not HLS — a static,
     // finite manifest (no live edge), so dash.js's own timeline is already
@@ -454,7 +532,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     // anchoring below. No scrub-retry loop either: mediaPresentationDuration
     // covers the requested range as one file, so there's no 404-while-encoding
     // race like a live HLS playlist has.
-    if (/\.mpd(\?|$)/i.test(videoUrl)) {
+    if (isDashPlayback) {
       import('dashjs').then(({ default: dashjs }) => {
         if (!isCurrent()) return;
         // DASH media time maps 1:1 onto the requested start — let the clock advance.
@@ -468,11 +546,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
           console.error('DASH playback error', event);
           // A segment the NVR couldn't produce: reopen a session at the current
           // point and keep playing, as pressing Play would.
-          if (transportRef.current?.wantsPlayback && dashRecoveriesRef.current < 2) {
-            dashRecoveriesRef.current += 1;
-            loadAtRef.current?.(streamStartMsRef.current + Math.max(0, video.currentTime) * 1000);
-            return;
-          }
+          if (recoverDashPlayback()) return;
           failPlayback(event?.error);
         });
       }).catch((error) => {
@@ -480,6 +554,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       });
       return () => {
         cancelled = true;
+        if (playbackRecoveryRef.current === recoverCurrentPlayback) playbackRecoveryRef.current = null;
+        if (retryTimer) clearTimeout(retryTimer);
         if (dash) { try { dash.destroy(); } catch { /* noop */ } }
         else { video.removeAttribute('src'); video.load(); }
       };
@@ -550,6 +626,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
           }
           if (recoverSecurusPlayback()) return;
           if (recoverDahuaPlayback()) return;
+          if (recoverGenericHlsPlayback()) return;
           failPlayback();
         });
       };
@@ -560,6 +637,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
 
     return () => {
       cancelled = true;
+      if (playbackRecoveryRef.current === recoverCurrentPlayback) playbackRecoveryRef.current = null;
       if (retryTimer) clearTimeout(retryTimer);
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
       else { video.removeAttribute('src'); video.load(); }
