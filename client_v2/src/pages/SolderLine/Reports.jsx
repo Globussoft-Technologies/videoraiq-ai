@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { clock, dur } from './solderLineData';
+import { dur } from './solderLineData';
+import { mediaUrl } from '@/lib/format';
+import { REPORT_METRICS as METRICS, buildSolderReportRows } from './reportRows.js';
+import SnapshotCell from './SnapshotCell';
 import { mono, label, Panel, OpBadge, Chip, Waiting } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import DownloadButton from './DownloadButton';
@@ -9,10 +12,11 @@ import AutoEmailReports from './AutoEmailReports';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
 const TYPES = [
-  { v: 'compare', t: 'Operator comparison', d: 'Presence, soldering and speed, operator by operator' },
+  { v: 'compare', t: 'Operator comparison', d: 'Presence and absence, operator by operator' },
   { v: 'absence', t: 'Absence report', d: 'Every desk-empty alert with duration' },
   { v: 'missed', t: 'Missed solder report', d: 'Skipped points by operator and panel' },
-  { v: 'hourly', t: 'Hourly activity', d: 'Panels, joints and time per hour' },
+  { v: 'hourly', t: 'Hourly activity', d: 'Panels, joints and misses per hour' },
+  { v: 'panels', t: 'Panels counted per hour', d: 'Hourly panel counts in a table' },
 ];
 
 function periods(today) {
@@ -24,48 +28,6 @@ function periods(today) {
     ['Last 7 days', d(t.clone().subtract(6, 'days')), today],
     ['This month', d(t.clone().startOf('month')), today],
   ];
-}
-
-// [label, hint, value(op), better ('high' | 'low'), format]
-const METRICS = [
-  ['Presence', '% of the range at desk', (o) => o.presence, 'high', (v) => `${v.toFixed(1)}%`],
-  ['Absence alerts', 'desk empty past threshold', (o) => o.alerts, 'low', String],
-  ['Unavailable time', 'total time away', (o) => o.away, 'low', dur],
-  ['Longest gap', 'single absence', (o) => o.longest, 'low', dur],
-  ['Solder joints', 'points completed', (o) => o.joints, 'high', String],
-  ['Missed points', 'skipped joints', (o) => o.missed, 'low', String],
-  ['Avg time / joint', 'weighted by joints', (o) => o.avgJoint, 'low', (v) => `${v.toFixed(2)} s`],
-  ['Active solder time', 'time spent soldering', (o) => o.solderSec, 'high', dur],
-];
-
-/** Plain rows for the preview table and both downloads. */
-function reportRows(type, s) {
-  if (type === 'compare') {
-    return METRICS.map(([l, , get, , f]) => ({
-      Metric: l,
-      ...Object.fromEntries(s.ops.map((o) => [`${o.code} · ${o.zone}`, get(o) == null ? '—' : f(get(o))])),
-    }));
-  }
-  if (type === 'absence') {
-    return [...s.absences].reverse().map((a) => ({
-      Alert: a.id, Operator: `OP-${a.op + 1} · ${a.zone}`, Started: a.start.format('DD MMM HH:mm:ss'),
-      Condition: a.description || `${a.zone} desk empty`, Returned: a.end ? clock(a.end) : 'Not returned',
-      Duration: dur(a.durSec), Status: a.active ? 'ACTIVE' : 'RESOLVED',
-    }));
-  }
-  if (type === 'missed') {
-    return [...s.missed].reverse().map((m) => ({
-      Alert: m.id, Point: `P${m.point ?? '?'}`, Panel: m.panelId || '—', Operator: `OP-${m.op + 1} · ${m.zone}`, Time: m.start.format('DD MMM HH:mm:ss'),
-    }));
-  }
-  return s.hourly.map((r) => ({
-    Hour: `${r.h}:00`,
-    Panels: r.panels,
-    ...Object.fromEntries(s.ops.flatMap((o) => {
-      const c = r.ops[o.i];
-      return [[`${o.code} joints`, c.joints], [`${o.code} missed`, c.missed], [`${o.code} s/joint`, c.joints ? (c.solderSec / c.joints).toFixed(2) : '—']];
-    })),
-  }));
 }
 
 function Compare({ s }) {
@@ -111,9 +73,9 @@ function Compare({ s }) {
           </div>
         ))}
       </div>
-      {a?.avgJoint != null && b?.avgJoint != null && (
+      {a?.away != null && b?.away != null && a.away !== b.away && (
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5 }}>
-          {a.avgJoint <= b.avgJoint ? a.code : b.code} is {Math.abs(b.avgJoint - a.avgJoint).toFixed(2)} s faster per joint, and {a.away <= b.away ? a.code : b.code} spent {dur(Math.abs(b.away - a.away))} less time away from the desk.
+          {a.away <= b.away ? a.code : b.code} spent {dur(Math.abs(b.away - a.away))} less time away from the desk.
         </div>
       )}
     </div>
@@ -130,7 +92,7 @@ function Table({ rows }) {
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} style={{ borderBottom: '1px solid var(--bd)' }}>
-              {head.map((h) => <td key={h} style={{ padding: '9px 6px', ...(typeof r[h] === 'number' ? mono : {}) }}>{r[h]}</td>)}
+              {head.map((h) => <td key={h} style={{ padding: '9px 6px', ...(typeof r[h] === 'number' ? mono : {}) }}>{h === 'Snapshot' ? <SnapshotCell value={r[h]} /> : r[h]}</td>)}
             </tr>
           ))}
         </tbody>
@@ -145,7 +107,7 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
   const typeMeta = TYPES.find((t) => t.v === type);
   const period = periods(today).find(([, a, b]) => a === range.startDate && b === range.endDate);
   const periodLabel = period ? period[0] : `${range.startDate} → ${range.endDate}`;
-  const rows = s ? reportRows(type, s) : [];
+  const rows = s ? buildSolderReportRows(type, s, mediaUrl) : [];
   const pagination = useSolderPagination(rows, JSON.stringify([type, s?._id, range.startDate, range.endDate]));
   const fileName = s ? `solder-line_${s.name}_${type}_${range.startDate}_${range.endDate}`.replace(/\s+/g, '-') : 'solder-line';
   const subtitle = s ? `${s.name} · ${s.zones.join(' & ')} · ${periodLabel}` : periodLabel;
@@ -199,7 +161,7 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 22px', borderBottom: '1px solid var(--bd)', background: 'linear-gradient(135deg, rgba(59,130,246,.1), rgba(168,85,247,.06))', flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ ...label, fontSize: 9.5 }}>Preview · Solder line</div>
-              <div style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 22, marginTop: 4 }}>{typeMeta.t} Report</div>
+              <div style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 22, marginTop: 4 }}>{typeMeta.t}</div>
               <div style={{ ...mono, fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>{subtitle}</div>
             </div>
             <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd2)', borderRadius: 6, padding: '4px 9px' }}>GENERATED {moment.tz(getConfiguredTimezone()).format('HH:mm')}</span>
