@@ -34,6 +34,10 @@ export default function MonitoringDetails({ adminId, camera, onClose, onChanged 
         <dl className="grid grid-cols-2 gap-3 text-xs">
           {[['Last confirmed state', data.state], ['Latest result', data.latestResult?.reason || '?'],
             ['Last healthy status report', time(data.lastSuccessfulCheckAt)],
+            ['Status received', time(data.statusReceivedAt)], ['Next status check', time(data.nextCheckAt)],
+            ['Source report age', typeof data.latestResult?.sourceStatusAgeMs === 'number' ? Math.round(data.latestResult.sourceStatusAgeMs / 1000) + ' seconds' : 'Not supplied'],
+            ['Source observed', data.latestResult?.sourceObserved === true ? 'Yes' : data.latestResult?.sourceObserved === false ? 'No' : 'Not supplied'],
+            ['Fresh output reported', data.latestResult?.outputFresh === true ? 'Yes' : data.latestResult?.outputFresh === false ? 'No' : 'Not supplied'],
             ['Last conclusive check', time(data.lastConclusiveAt)], ['Reminders', data.remindersPaused ? 'Paused' : 'Enabled'],
             ['Last notification', time(data.lastNotificationAt)], ['Next reminder', time(data.nextReminderAt)]]
             .map(([label, value]) => <div key={label}><dt className="text-gray-500">{label}</dt><dd className="mt-1">{value}</dd></div>)}
