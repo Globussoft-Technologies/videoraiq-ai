@@ -5,7 +5,7 @@ import { BAD, OK, WARN, CY, mono, label, Kpi, KpiGrid, OpBadge, Chip } from './u
 const stationStatus = (station) => {
   if (station.sum.absentNow) return BAD;
   const lastHour = station.hourly[station.hourly.length - 1];
-  return lastHour?.ops.some((operator) => operator.missed) ? WARN : OK;
+  return lastHour?.missedJoints ? WARN : OK;
 };
 
 export default function SolderSummary({ model, selected, onSelect, children }) {
@@ -49,8 +49,8 @@ export default function SolderSummary({ model, selected, onSelect, children }) {
       </div>
       <KpiGrid>
         <Kpi label="Panels counted" value={totals.hasThroughput ? totals.panels.toLocaleString('en-IN') : '—'} sub="Conveyor count" color={CY} />
-        <Kpi label="Solder joints" value={totals.hasThroughput ? totals.joints.toLocaleString('en-IN') : '—'} unit={totals.hasThroughput ? `/ ${(totals.panels * station.pointsPerPanel).toLocaleString('en-IN')}` : ''} sub={`${station.pointsPerPanel} points per panel`} color="#3b82f6" />
-        <Kpi label="Missed solders" value={totals.missed} sub={station.ops.map((o) => `${o.code} ${o.missed}`).join(' · ')} color={BAD} valueColor={BAD} />
+        <Kpi label="Solder joints" value={totals.hasThroughput ? totals.joints.toLocaleString('en-IN') : '—'} unit={totals.hasThroughput ? `/ ${totals.requiredJoints.toLocaleString('en-IN')}` : ''} sub="Actual joints completed by all workers" color="#3b82f6" />
+        <Kpi label="Missed solders" value={totals.missed} sub="Panel total across all workers" color={BAD} valueColor={BAD} />
         <Kpi label="Absence alerts" value={totals.absences} sub={station.ops.map((o) => `${o.code} ${o.alerts}`).join(' · ')} color={WARN} valueColor={WARN} />
         <Kpi label="Unavailable time" value={dur(totals.away)} sub="All desks combined" color="#a855f7" />
       </KpiGrid>

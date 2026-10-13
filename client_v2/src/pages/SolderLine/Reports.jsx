@@ -14,7 +14,7 @@ import SolderPagination, { useSolderPagination } from './SolderPagination';
 const TYPES = [
   { v: 'compare', t: 'Operator comparison', d: 'Presence and absence, operator by operator' },
   { v: 'absence', t: 'Absence report', d: 'Every desk-empty alert with duration' },
-  { v: 'missed', t: 'Missed solder report', d: 'Skipped points by operator and panel' },
+  { v: 'missed', t: 'Missed solder report', d: 'Missed joint counts by panel' },
   { v: 'hourly', t: 'Hourly activity', d: 'Panels, joints and misses per hour' },
   { v: 'panels', t: 'Panels counted per hour', d: 'Hourly panel counts in a table' },
 ];
@@ -52,7 +52,7 @@ function Compare({ s }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><OpBadge op={o.i} /><span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{o.zone}</span></div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 10 }}>
               <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 34, lineHeight: 1 }}>{wins[o.i]}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>of {METRICS.length} metrics better</span>
+              <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>of {METRICS.length - 1} worker metrics better</span>
             </div>
           </div>
         ))}
@@ -61,7 +61,7 @@ function Compare({ s }) {
         {rows.map((r, k) => (
           <div key={r.l} style={{ display: 'grid', gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${s.ops.length}, minmax(110px, 1fr)) 92px`, gap: 12, padding: '10px 16px', alignItems: 'center', borderTop: k ? '1px solid var(--bd)' : 'none' }}>
             <span><span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{r.l}</span><span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>{r.hint}</span></span>
-            {r.vals.map((v, i) => (
+            {r.l === 'Missed points' ? <span style={{ gridColumn: '2 / -1', ...mono, fontSize: 14, fontWeight: 700 }}>{s.sum.missed} · All workers</span> : <>{r.vals.map((v, i) => (
               <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: r.win === i ? 'var(--tx)' : 'var(--tx2)' }}>{v == null ? '—' : r.f(v)}</span>
                 <span style={{ height: 5, borderRadius: 3, background: 'var(--track)', overflow: 'hidden' }}>
@@ -70,6 +70,7 @@ function Compare({ s }) {
               </span>
             ))}
             <span style={{ ...mono, fontSize: 10, fontWeight: 700, justifySelf: 'start', padding: '3px 9px', borderRadius: 5, color: '#fff', background: r.win == null ? '#64748b' : s.ops[r.win].color }}>{r.win == null ? 'EVEN' : `OP-${r.win + 1}`}</span>
+            </>}
           </div>
         ))}
       </div>

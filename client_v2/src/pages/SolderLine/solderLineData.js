@@ -1,5 +1,6 @@
 import moment from 'moment-timezone';
 import { getConfiguredTimezone, utcToConfiguredTimezone } from '../../utils/timezone.js';
+import { DEFAULT_REQUIRED_JOINTS, panelCounts } from './panelCounts.js';
 
 /*
  * Turns GET /incidents/solder-line into what the Solder Line pages draw.
@@ -9,8 +10,8 @@ import { getConfiguredTimezone, utcToConfiguredTimezone } from '../../utils/time
  */
 
 export const OP_COLORS = ['#3b82f6', '#a855f7', '#22d3ee', '#f5a623'];
-export const opColor = (i) => OP_COLORS[i % OP_COLORS.length];
-const DEFAULT_POINTS = 6;
+export const opColor = (i) => i == null ? '#64748b' : OP_COLORS[i % OP_COLORS.length];
+const DEFAULT_POINTS = DEFAULT_REQUIRED_JOINTS;
 
 const tzMoment = (value) => moment.tz(value, getConfiguredTimezone());
 const sum = (list) => list.reduce((a, b) => a + b, 0);
@@ -37,10 +38,9 @@ export function describeSolderAlert(row) {
       ].filter(Boolean).join(' · '),
     };
   }
-  const zone = row.incident?.zones?.find((entry) => entry.zone === row.zone);
   return {
     title: `Soldering incomplete${row.panelId ? ` · ${row.panelId}` : ''}`,
-    detail: [row.zone, zone?.done != null ? `${zone.done} joint${Number(zone.done) === 1 ? '' : 's'} completed` : null]
+    detail: [`${row.completedJoints ?? '—'} joints completed`, `${row.missedJoints ?? '—'} missed`]
       .filter(Boolean).join(' · '),
   };
 }
@@ -59,12 +59,12 @@ function buildStation(station, data, now) {
   // numbers don't depend on which event happened to arrive first.
   [...new Set([
     ...data.absences.filter(mine).map((a) => a.zone),
-    ...data.missed.filter(mine).map((m) => m.zone),
+    ...data.missed.filter(mine).flatMap((m) => (m.zones || []).map(z => z.zone)),
     ...data.hourly.filter(mine).flatMap((r) => r.zones.map((z) => z.zone)),
   ].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     .forEach(addZone);
-  const perZone = data.pointsPerZone || DEFAULT_POINTS / 2;
+  const pointsPerPanel = data.pointsPerPanel || DEFAULT_POINTS;
 
   const dayEnd = tzMoment(data.endDate).endOf('day');
   const liveEnd = moment.min(now, dayEnd);
@@ -88,22 +88,19 @@ function buildStation(station, data, now) {
       };
     });
 
-  // The server sends one entry per zone that left joints undone on a panel
-  // (`done` of perZone). DS reports counts, not which points, so the missing
-  // ones are taken as the zone's last points: OP-1 owns P1–P3, OP-2 P4–P6.
-  // ponytail: positional guess; use DS's point list if it ever sends one.
+  // Label the uncompleted panel slots without inventing a worker allocation.
   const missed = data.missed
     .filter(mine)
     .flatMap((m) => {
-      const op = addZone(m.zone);
-      return Array.from({ length: Math.max(0, perZone - (m.done || 0)) }, (_, k) => ({
-        _id: `${m._id}:${k}`, type: 'missed',
-        op, zone: m.zone || 'Unassigned',
-        point: op * perZone + (m.done || 0) + k + 1,
+      const totals = panelCounts(m);
+      return Array.from({ length: totals.missedJoints }, (_, k) => ({
+        _id: `${m._id}:${k}`, incidentId: m.incidentId || m._id, type: 'missed',
+        op: null, zone: 'Panel total', ...totals,
+        point: totals.completedJoints + k + 1,
         panelId: m.panelId, start: tzMoment(m.timeOfIncident), image: m.Image,
         incident: {
           incidentType: 'deskSolarShoulderDetection', eventType: 'panel', panelId: m.panelId,
-          zones: [{ zone: m.zone, done: m.done, presenceSec: m.presenceSec }],
+          zones: m.zones, ...totals,
         },
       }));
     })
@@ -112,7 +109,7 @@ function buildStation(station, data, now) {
   // Hour-of-day buckets ("06".."23"), summed across days for multi-day ranges.
   const buckets = new Map();
   const bucket = (hh) => {
-    if (!buckets.has(hh)) buckets.set(hh, { h: hh, panels: 0, ops: [] });
+    if (!buckets.has(hh)) buckets.set(hh, { h: hh, panels: 0, missedJoints: 0, requiredJoints: 0, ops: [] });
     return buckets.get(hh);
   };
   const opCell = (b, op) => {
@@ -122,11 +119,12 @@ function buildStation(station, data, now) {
   data.hourly.filter((r) => r.channelId === id).forEach((r) => {
     const b = bucket(r.hour.slice(11, 13));
     b.panels += r.panels;
+    b.missedJoints += r.missedJoints || 0;
+    b.requiredJoints += r.requiredJoints ?? r.panels * pointsPerPanel;
     r.zones.forEach((z) => {
       const c = opCell(b, addZone(z.zone));
       c.joints += z.joints;
       c.solderSec += z.solderSec;
-      c.missed += z.missed || 0;
     });
   });
   missed.forEach((m) => bucket(m.start.format('HH')));
@@ -137,8 +135,8 @@ function buildStation(station, data, now) {
     ? Array.from({ length: Math.max(...present) - Math.min(...present) + 1 }, (_, k) => String(Math.min(...present) + k).padStart(2, '0'))
     : [];
   const hourly = hours.map((h) => {
-    const b = buckets.get(h) || { h, panels: 0, ops: [] };
-    return { h, panels: b.panels, ops: zones.map((_, i) => b.ops[i] || { joints: 0, solderSec: 0, missed: 0 }) };
+    const b = buckets.get(h) || { h, panels: 0, missedJoints: 0, requiredJoints: 0, ops: [] };
+    return { h, panels: b.panels, missedJoints: b.missedJoints, requiredJoints: b.requiredJoints, ops: zones.map((_, i) => ({ ...(b.ops[i] || { joints: 0, solderSec: 0 }), missed: b.missedJoints ? null : 0 })) };
   });
 
   // Presence window: first activity of the range until now (today) or the last activity.
@@ -148,13 +146,12 @@ function buildStation(station, data, now) {
   const windowEnd = now.isBefore(dayEnd) ? now : (hours.length ? tzMoment(data.endDate).startOf('day').hour(Number(hours[hours.length - 1]) + 1) : (ends.length ? moment.max(ends) : null));
   const windowSec = windowStart && windowEnd ? Math.max(1, windowEnd.diff(windowStart, 'seconds')) : 0;
 
-  const pointsPerPanel = zones.length ? perZone * zones.length : DEFAULT_POINTS;
+  const panelMissed = data.hourly.some(mine) ? sum(hourly.map(row => row.missedJoints)) : missed.length;
   const ops = zones.map((zone, i) => {
     const ev = absences.filter((a) => a.op === i);
     const away = sum(ev.map((a) => a.durSec));
     const joints = sum(hourly.map((r) => r.ops[i].joints));
     const solderSec = sum(hourly.map((r) => r.ops[i].solderSec));
-    const missedN = missed.filter((m) => m.op === i).length;
     const config = station.zones.find((z) => z.name === zone);
     return {
       i, code: `OP-${i + 1}`, zone, color: opColor(i),
@@ -162,7 +159,7 @@ function buildStation(station, data, now) {
       alerts: ev.length, away, longest: ev.length ? Math.max(...ev.map((a) => a.durSec)) : 0,
       presence: windowSec ? Math.max(0, 1 - away / windowSec) * 100 : null,
       absentNow: ev.some((a) => a.active),
-      joints, missed: missedN, solderSec, avgJoint: joints ? solderSec / joints : null,
+      joints, missed: panelMissed ? null : 0, solderSec, avgJoint: joints ? solderSec / joints : null,
       points: [...new Set(missed.filter((m) => m.op === i).map((m) => m.point))].sort((a, b) => a - b),
     };
   });
@@ -172,20 +169,19 @@ function buildStation(station, data, now) {
   const solderSec = sum(ops.map((o) => o.solderSec));
   const pointRows = Array.from({ length: pointsPerPanel }, (_, k) => {
     const point = k + 1;
-    const owner = ops.find((o) => o.points.includes(point));
     return {
       point,
-      op: owner ? owner.i : Math.min(zones.length - 1, Math.floor(k / Math.ceil(pointsPerPanel / Math.max(1, zones.length)))),
+      op: null,
       cells: hours.map((h) => missed.filter((m) => m.point === point && m.start.format('HH') === h).length),
     };
   });
 
   return {
-    ...station, zones, ops, absences, missed, hours, hourly, pointRows, pointsPerPanel, pointsPerZone: perZone,
+    ...station, zones, ops, absences, missed, hours, hourly, pointRows, pointsPerPanel,
     windowStart, windowEnd, windowSec,
     sum: {
-      panels, joints, missed: missed.length,
-      coverage: panels ? (joints / (panels * pointsPerPanel)) * 100 : null,
+      panels, joints, missed: panelMissed, requiredJoints: sum(hourly.map(row => row.requiredJoints)),
+      coverage: panels ? (joints / sum(hourly.map(row => row.requiredJoints))) * 100 : null,
       avgJoint: joints ? solderSec / joints : null,
       absences: absences.length, away: sum(absences.map((a) => a.durSec)),
       absentNow: ops.filter((o) => o.absentNow).length,
@@ -202,7 +198,7 @@ export function buildSolderLine(data, now = moment.tz(getConfiguredTimezone())) 
   const panels = sumOf('panels');
   const joints = sumOf('joints');
   const solderSec = sum(stations.map((s) => sum(s.ops.map((o) => o.solderSec))));
-  const ppp = Math.max(DEFAULT_POINTS, ...stations.map((s) => s.pointsPerPanel));
+  const requiredJoints = sumOf('requiredJoints');
   return {
     stations,
     singleDay: data.startDate === data.endDate,
@@ -210,7 +206,7 @@ export function buildSolderLine(data, now = moment.tz(getConfiguredTimezone())) 
     truncated: data.truncated,
     line: {
       panels, joints, missed: sumOf('missed'), absences: sumOf('absences'), away: sumOf('away'),
-      coverage: panels ? (joints / (panels * ppp)) * 100 : null,
+      requiredJoints, coverage: requiredJoints ? (joints / requiredJoints) * 100 : null,
       avgJoint: joints ? solderSec / joints : null,
       operators: sum(stations.map((s) => s.zones.length)),
       absentNow: sumOf('absentNow'),
@@ -223,6 +219,6 @@ export function buildSolderLine(data, now = moment.tz(getConfiguredTimezone())) 
 export function alertRows(model) {
   if (!model) return [];
   return model.stations
-    .flatMap((s) => [...s.absences, ...s.missed].map((a) => ({ ...a, station: s, opCode: `OP-${a.op + 1}` })))
+    .flatMap((s) => [...s.absences, ...s.missed].map((a) => ({ ...a, station: s, opCode: a.op == null ? 'Panel' : `OP-${a.op + 1}` })))
     .sort((a, b) => b.start.valueOf() - a.start.valueOf());
 }

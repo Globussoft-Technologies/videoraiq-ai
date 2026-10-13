@@ -5,21 +5,23 @@ import { mediaUrl } from '@/lib/format';
 import { clock, dur, opColor, describeSolderAlert } from './solderLineData';
 import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
-  OpBadge, StatusPill, Chip, Waiting, SnapshotPreview, fmt,
+  OpBadge, StatusPill, Chip, Waiting, SnapshotPreview,
 } from './ui';
 import { downloadXlsx } from './exports';
+import { buildSolderReportRows } from './reportRows.js';
 import { downloadSnapshot } from './snapshots';
 import DownloadButton from './DownloadButton';
 import LatestPanel from './LatestPanel';
+import SnapshotCell from './SnapshotCell';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
-const NO_THROUGHPUT = 'Panel counts and solder times appear here once DS posts its per-panel "Solar panel processing" events.';
-const NO_MISSED = 'Missed-solder alerts appear here when a panel event reports a zone with joints left undone.';
+const NO_THROUGHPUT = 'Panel counts and completed joints appear here once DS posts its per-panel "Solar panel processing" events.';
+const NO_MISSED = 'Missed-solder alerts appear here when a panel has fewer completed joints than required.';
 
 function stationStatus(s) {
   if (s.sum.absentNow) return ['ABSENCE', BAD];
   const lastHour = s.hourly[s.hourly.length - 1];
-  if (lastHour && lastHour.ops.some((o) => o.missed)) return ['MISSED', WARN];
+  if (lastHour?.missedJoints) return ['MISSED', WARN];
   return ['OK', OK];
 }
 
@@ -117,29 +119,23 @@ function CompareTable({ stations, sel, setSel }) {
   // [label, value, better direction (1 = higher is better), format]
   const cols = [
     ['PANELS', (s) => (s.sum.hasThroughput ? s.sum.panels : null), 1, (v) => String(v)],
-    ['COVERAGE', (s) => s.sum.coverage, 1, (v) => `${v.toFixed(2)}%`],
     ['MISSED', (s) => s.sum.missed, -1, (v) => String(v)],
     ['ABSENCES', (s) => s.sum.absences, -1, (v) => String(v)],
-    ['AWAY TIME', (s) => s.sum.away, -1, (v) => dur(v)],
-    ['OP-1 S/J', (s) => s.ops[0]?.avgJoint ?? null, -1, (v) => `${v.toFixed(2)} s`],
-    ['OP-2 S/J', (s) => s.ops[1]?.avgJoint ?? null, -1, (v) => `${v.toFixed(2)} s`],
     ['PRESENCE', presence, 1, (v) => `${v.toFixed(1)}%`],
   ];
   const ranges = cols.map(([, get]) => {
     const vals = stations.map(get).filter((v) => v != null);
     return vals.length ? [Math.min(...vals), Math.max(...vals)] : [0, 0];
   });
-  const grid = { display: 'grid', gridTemplateColumns: `minmax(200px, 1.4fr) repeat(${cols.length}, minmax(80px, 1fr)) 96px` };
+  const grid = { display: 'grid', gridTemplateColumns: `minmax(200px, 1.4fr) repeat(${cols.length}, minmax(80px, 1fr))` };
   return (
     <div style={{ borderRadius: 12, border: '1px solid var(--bd)', overflowX: 'auto' }}>
-      <div style={{ minWidth: 1000 }}>
+      <div style={{ minWidth: 200 + cols.length * 80 }}>
         <div style={{ ...grid, ...mono, fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)' }}>
           <span style={{ padding: '10px 14px' }}>STATION · OPERATORS</span>
           {cols.map(([l]) => <span key={l} style={{ padding: '10px 8px' }}>{l}</span>)}
-          <span style={{ padding: '10px 8px' }}>STATUS</span>
         </div>
         {stations.map((s, i) => {
-          const [status, color] = stationStatus(s);
           return (
             <div key={s._id} onClick={() => setSel(i)} style={{ ...grid, cursor: 'pointer', borderBottom: '1px solid var(--bd)', background: i === sel ? 'rgba(59,130,246,.1)' : 'transparent', boxShadow: i === sel ? 'inset 3px 0 0 var(--blue)' : 'none' }}>
               <span style={{ padding: '10px 14px', minWidth: 0 }}>
@@ -154,7 +150,6 @@ function CompareTable({ stations, sel, setSel }) {
                 const bg = v == null ? 'transparent' : g >= 0.5 ? `rgba(34,197,94,${((g - 0.5) * 0.56).toFixed(2)})` : `rgba(255,77,77,${((0.5 - g) * 0.56).toFixed(2)})`;
                 return <span key={l} style={{ padding: '10px 8px', display: 'flex', alignItems: 'center', ...mono, fontSize: 12.5, fontWeight: 700, background: bg }}>{v == null ? '—' : f(v)}</span>;
               })}
-              <span style={{ padding: '10px 8px', display: 'flex', alignItems: 'center' }}><StatusPill text={status} color={color} active={status === 'ABSENCE'} /></span>
             </div>
           );
         })}
@@ -259,7 +254,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
             </span>
           </div>
           <LiveCamera s={s} />
-          <LatestPanel panel={s.latestPanel} pointsPerZone={s.pointsPerZone} />
+          <LatestPanel panel={s.latestPanel} />
         </Panel>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, alignSelf: 'start' }}>
@@ -390,14 +385,19 @@ function Bars({ hourly, render, height = 200 }) {
   );
 }
 
-function SolderSection({ s, preview }) {
+function SolderSection({ s }) {
+  const [jointHover, setJointHover] = useState(null);
   const has = s.sum.hasThroughput;
   const pMax = Math.max(1, ...s.hourly.map((r) => r.panels));
   const jMax = Math.max(1, ...s.hourly.flatMap((r) => r.ops.map((o) => o.joints)));
   const anyMissedData = has || s.missed.length > 0;
+  const hoverHour = s.hourly.find(hour => hour.h === jointHover?.hour);
+  const hoverOperator = jointHover?.operator == null ? null : s.ops[jointHover.operator];
+  const hoverCounts = hoverOperator ? hoverHour?.ops[hoverOperator.i] : null;
+  const tooltipId = `solder-joints-${s._id}-tooltip`;
   return (
     <>
-      <SectionHead n="02" color="#a855f7" title="Conveyor Count & Soldering Activity" sub={`${s.pointsPerPanel} solder points per panel — any miss raises an alert against the operator`} />
+      <SectionHead n="02" color="#a855f7" title="Conveyor Count & Soldering Activity" sub={`${s.pointsPerPanel} solder joints required per panel · workers share the work`} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
         <Panel>
           <PanelHead title="Panels counted per hour" right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, s.hourly.filter((r) => r.panels).length)).toFixed(1)} / HR</span>} />
@@ -410,7 +410,7 @@ function SolderSection({ s, preview }) {
             )} />
           )}
         </Panel>
-        <Panel>
+        <Panel style={{ position: 'relative' }}>
           <PanelHead title="Solder joints per hour" right={(
             <span style={{ display: 'flex', gap: 12, ...mono, fontSize: 10, color: 'var(--tx3)' }}>
               {s.ops.map((o) => <span key={o.i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: o.color }} />{o.code}</span>)}
@@ -419,21 +419,31 @@ function SolderSection({ s, preview }) {
           )} />
           {!has ? <Waiting>{NO_THROUGHPUT}</Waiting> : (
             <Bars hourly={s.hourly} render={(r) => (
-              <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
+              <div onMouseEnter={() => setJointHover({ hour: r.h, operator: null })} onMouseLeave={() => setJointHover(null)} style={{ position: 'relative', flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
+                {r.missedJoints > 0 && <span style={{ position: 'absolute', top: 0, color: BAD, ...mono, fontSize: 10 }}>{r.missedJoints} missed</span>}
                 {r.ops.map((o, i) => (
-                  <div key={i} style={{ position: 'relative', flex: 1, maxWidth: 22, height: `${(o.joints / jMax) * 86}%`, borderRadius: '5px 5px 2px 2px', background: `linear-gradient(180deg, ${opColor(i)}, ${opColor(i)}66)` }}>
-                    {o.missed > 0 && <span style={{ position: 'absolute', left: '50%', top: -20, transform: 'translateX(-50%)', minWidth: 18, height: 16, padding: '0 4px', borderRadius: 8, background: BAD, color: '#fff', ...mono, fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−{o.missed}</span>}
-                  </div>
+                  <button key={i} type="button" aria-label={`${s.ops[i].code} · ${s.ops[i].zone}: ${o.joints} soldered joints at ${r.h}:00`} aria-describedby={jointHover?.hour === r.h && jointHover.operator === i ? tooltipId : undefined}
+                    onMouseEnter={() => setJointHover({ hour: r.h, operator: i })} onMouseLeave={() => setJointHover({ hour: r.h, operator: null })}
+                    onFocus={() => setJointHover({ hour: r.h, operator: i })} onBlur={() => setJointHover(null)} onClick={() => setJointHover({ hour: r.h, operator: i })}
+                    onKeyDown={event => { if (event.key === 'Escape') setJointHover(null); }}
+                    style={{ position: 'relative', flex: 1, maxWidth: 22, minHeight: 4, height: `${(o.joints / jMax) * 86}%`, padding: 0, border: 'none', cursor: 'pointer', borderRadius: '5px 5px 2px 2px', background: `linear-gradient(180deg, ${opColor(i)}, ${opColor(i)}66)` }} />
                 ))}
               </div>
             )} />
           )}
+          {hoverHour && <div id={tooltipId} role="tooltip" style={{ position: 'absolute', zIndex: 10, bottom: 24, right: 12, width: 250, maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9, background: 'var(--bg1solid)', color: 'var(--tx)', border: '1px solid var(--bd2)', boxShadow: '0 4px 18px rgba(0,0,0,.16)', pointerEvents: 'none', fontSize: 11, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
+            <strong>{hoverOperator ? `${hoverOperator.code} · ${hoverOperator.zone}` : 'All workers'}</strong>
+            <div style={{ color: 'var(--tx3)', ...mono }}>{hoverHour.h}:00-{String(Number(hoverHour.h) + 1).padStart(2, '0')}:00</div>
+            <div>Soldered joints: <strong>{hoverCounts ? hoverCounts.joints : hoverHour.ops.reduce((sum, operator) => sum + operator.joints, 0)}</strong></div>
+            {hoverOperator && <div>Operator missed joints: <strong>{hoverCounts?.missed ?? 'Not reported'}</strong></div>}
+            <div style={{ color: BAD }}>Missed joints (all workers): <strong>{hoverHour.missedJoints ?? 0}</strong></div>
+          </div>}
         </Panel>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
         <Panel>
-          <PanelHead title="Solder point coverage" sub="Each cell: point × hour" right={s.sum.coverage != null && <span style={{ ...mono, fontSize: 11, color: OK }}>{s.sum.coverage.toFixed(2)}% COVERED</span>} />
+          <PanelHead title="Solder joint coverage" sub="Labels represent panel slots; exact positions are not reported" right={s.sum.coverage != null && <span style={{ ...mono, fontSize: 11, color: OK }}>{s.sum.coverage.toFixed(2)}% COVERED</span>} />
           {!anyMissedData ? <Waiting>{NO_MISSED}</Waiting> : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: `78px repeat(${s.hours.length}, minmax(34px, 1fr))`, gap: 5, minWidth: 78 + s.hours.length * 39 }}>
@@ -443,7 +453,7 @@ function SolderSection({ s, preview }) {
                   <div key={row.point} style={{ display: 'contents' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 7, ...mono, fontSize: 11, fontWeight: 700 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: opColor(row.op) }} />P{row.point}
-                      <span style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--tx3)' }}>OP-{row.op + 1}</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--tx3)' }}>Panel</span>
                     </span>
                     {row.cells.map((m, k) => {
                       const c = m === 0 ? OK : m === 1 ? WARN : BAD;
@@ -464,24 +474,34 @@ function SolderSection({ s, preview }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Missed solder alerts</span>
             <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#ff6b6b', border: `1px solid ${BAD}73`, borderRadius: 5, padding: '2px 8px' }}>{s.missed.length}</span>
-            <span style={{ marginLeft: 'auto', ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>{s.ops.map((o) => `${o.code} ${o.missed}`).join(' · ')}</span>
+            <span style={{ marginLeft: 'auto', ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>Across all workers</span>
           </div>
-          <div style={{ flex: 1, maxHeight: 268, overflowY: 'auto' }}>
+          <div style={{ flex: 1, maxHeight: 268, overflow: 'auto' }}>
             {!s.missed.length && <div style={{ padding: 16 }}>{anyMissedData ? <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No missed solder alerts in this range.</span> : <Waiting minH={120}>{NO_MISSED}</Waiting>}</div>}
-            {[...s.missed].reverse().map((m) => {
+            {!!s.missed.length && <table aria-label="Missed solder alerts" style={{ width: '100%', minWidth: 440, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <thead><tr style={{ ...mono, fontSize: 9, color: 'var(--tx3)', textAlign: 'left' }}>
+                <th scope="col" style={{ padding: '8px 12px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>DETAILS</th>
+                <th scope="col" style={{ width: 64, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>SCOPE</th>
+                <th scope="col" style={{ width: 76, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>TIME</th>
+                <th scope="col" style={{ width: 68, padding: '8px 6px', fontWeight: 500, position: 'sticky', top: 0, background: 'var(--bg1solid)', zIndex: 1 }}>IMAGE</th>
+              </tr></thead>
+              <tbody>{[...s.missed].reverse().map((m) => {
               const description = describeSolderAlert(m);
               return (
-              <div key={m._id} onClick={m.image ? () => preview(m._id) : undefined} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 18px', borderBottom: '1px solid var(--bd)', cursor: m.image ? 'pointer' : 'default' }}>
+              <tr key={m._id} style={{ borderBottom: '1px solid var(--bd)' }}>
+                <td style={{ padding: '9px 12px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 8, background: 'rgba(255,77,77,.12)', border: `1px solid ${BAD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b6b' }}><X size={16} aria-hidden="true" /></span>
-                <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
                   <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{description.title}</span>
-                  <span style={{ display: 'block', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{description.detail}{m.image ? ' · snapshot saved' : ''}</span>
+                  <span style={{ display: 'block', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{description.detail}</span>
                 </span>
-                <OpBadge op={m.op} />
-                <span style={{ ...mono, fontSize: 11.5, color: 'var(--tx2)' }}>{clock(m.start)}</span>
-              </div>
+                </div></td>
+                <td style={{ padding: '9px 6px' }}><OpBadge op={m.op} /></td>
+                <td style={{ padding: '9px 6px', ...mono, fontSize: 11.5, color: 'var(--tx2)' }}>{clock(m.start)}</td>
+                <td style={{ padding: '9px 6px' }}><SnapshotCell value={mediaUrl(m.image)} /></td>
+              </tr>
               );
-            })}
+            })}</tbody></table>}
           </div>
         </Panel>
       </div>
@@ -493,143 +513,45 @@ function SolderSection({ s, preview }) {
 
 function HourSection({ s, model, range }) {
   const pagination = useSolderPagination(s.hourly, JSON.stringify([s._id, range?.startDate, range?.endDate]));
-  const has = s.sum.hasThroughput;
-  const perJoint = (o) => (o.joints ? o.solderSec / o.joints : null);
-  const series = s.ops.map((o) => s.hourly.map((r) => perJoint(r.ops[o.i])));
-  const vals = series.flat().filter((v) => v != null);
-  const lo = vals.length ? Math.min(...vals) - 0.2 : 0;
-  const hi = vals.length ? Math.max(...vals) + 0.2 : 1;
-  const W = 640, H = 220, P = 14, n = s.hourly.length;
-  const X = (i) => (n > 1 ? P + (i * (W - 2 * P)) / (n - 1) : W / 2);
-  const Y = (v) => P + ((hi - v) / (hi - lo || 1)) * (H - 2 * P);
-  const path = (list) => list.map((v, i) => (v == null ? null : `${X(i).toFixed(1)} ${Y(v).toFixed(1)}`)).filter(Boolean).map((p, i) => `${i ? 'L' : 'M'}${p}`).join(' ');
-  const [a, b] = s.ops;
-  const gaps = a && b ? s.hourly.map((r) => {
-    const x = perJoint(r.ops[a.i]); const y = perJoint(r.ops[b.i]);
-    return { h: r.h, d: x != null && y != null ? y - x : null };
-  }) : [];
-  const dMax = Math.max(0.1, ...gaps.map((g) => Math.abs(g.d || 0)));
-  const widest = gaps.filter((g) => g.d != null).sort((p, q) => Math.abs(q.d) - Math.abs(p.d))[0];
-  const insight = a?.avgJoint != null && b?.avgJoint != null
-    ? `${a.avgJoint <= b.avgJoint ? a.code : b.code} is ${Math.abs(b.avgJoint - a.avgJoint).toFixed(2)} s faster per joint over the range.${widest ? ` Widest gap at ${widest.h}:00 (${widest.d > 0 ? '+' : ''}${widest.d.toFixed(1)} s).` : ''}`
-    : null;
-
-  const rangeLabel = (h) => `${h}:00–${String(Number(h) + 1).padStart(2, '0')}:00`;
+  const rangeLabel = (h) => `${h}:00-${String(Number(h) + 1).padStart(2, '0')}:00`;
   const exportHourly = () => downloadXlsx(
-    s.hourly.map((r) => ({
-      Hour: rangeLabel(r.h),
-      Panels: r.panels,
-      ...Object.fromEntries(s.ops.flatMap((o) => {
-        const c = r.ops[o.i];
-        return [[`${o.code} joints`, c.joints], [`${o.code} missed`, c.missed], [`${o.code} active`, dur(c.solderSec)]];
-      })),
-    })),
+    buildSolderReportRows('hourly', s).map((row, index) => ({ ...row, Hour: rangeLabel(s.hourly[index].h) })),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
   );
-
+  if (!s.sum.hasThroughput) return <Panel><Waiting>{NO_THROUGHPUT}</Waiting></Panel>;
   return (
-    <>
-      <SectionHead n="03" color={CY} title="Hour-by-Hour Soldering Activity" sub={`Average solder time per joint · ${s.ops.map((o) => o.code).join(' vs ')}`} />
-      {!has ? <Panel><Waiting>{NO_THROUGHPUT}</Waiting></Panel> : (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
-            <Panel>
-              <PanelHead title="Avg soldering time per joint" right={(
-                <span style={{ display: 'flex', gap: 12, ...mono, fontSize: 10, color: 'var(--tx3)' }}>
-                  {s.ops.map((o) => <span key={o.i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 16, height: 3, borderRadius: 2, background: o.color }} />{o.code} {fmt(o.avgJoint, 2)}s</span>)}
-                </span>
-              )} />
-              <div style={{ position: 'relative', height: H }}>
-                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}>
-                  {[0, 0.25, 0.5, 0.75, 1].map((t) => <line key={t} x1="0" x2={W} y1={P + t * (H - 2 * P)} y2={P + t * (H - 2 * P)} stroke="var(--grid)" vectorEffect="non-scaling-stroke" />)}
-                  {series.map((list, i) => <path key={i} d={path(list)} stroke={opColor(i)} strokeWidth="2.6" fill="none" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
-                </svg>
-                {series.flatMap((list, i) => list.map((v, k) => v == null ? null : (
-                  <span key={`${i}-${k}`} title={`OP-${i + 1} · ${s.hourly[k].h}:00 · ${v.toFixed(1)} s/joint`} style={{ position: 'absolute', left: `${(X(k) / W) * 100}%`, top: `${(Y(v) / H) * 100}%`, width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%, -50%)', background: 'var(--bg1)', border: `2.5px solid ${opColor(i)}` }} />
-                )))}
-                <span style={{ position: 'absolute', left: 0, top: 0, ...mono, fontSize: 9.5, color: 'var(--tx3)' }}>{hi.toFixed(1)}s</span>
-                <span style={{ position: 'absolute', left: 0, bottom: 0, ...mono, fontSize: 9.5, color: 'var(--tx3)' }}>{lo.toFixed(1)}s</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 6 }}>{s.hourly.map((r) => <span key={r.h}>{r.h}</span>)}</div>
-            </Panel>
-
-            <Panel style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <PanelHead title={a && b ? `${a.code} vs ${b.code} · hourly gap` : 'Shift averages'} right={<span style={{ ...mono, fontSize: 10, color: 'var(--tx3)' }}>SEC / JOINT</span>} />
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(2, s.ops.length) || 1}, minmax(0, 1fr))`, gap: 10 }}>
-                {s.ops.map((o) => (
-                  <div key={o.i} style={{ padding: '12px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${o.color}1f, transparent 70%)`, border: `1px solid ${o.color}55` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><OpBadge op={o.i} /><span style={{ ...label, fontSize: 9 }}>Range avg</span></div>
-                    <div style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 28, marginTop: 6 }}>{fmt(o.avgJoint, 2)}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx3)', marginLeft: 4 }}>s</span></div>
-                    <div style={{ ...mono, fontSize: 10, color: 'var(--tx3)', marginTop: 3 }}>{o.joints} joints · {dur(o.solderSec)} active</div>
-                  </div>
-                ))}
-              </div>
-              {gaps.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '34px minmax(0, 1fr) 1px minmax(0, 1fr) 50px', gap: 8, ...mono, fontSize: 8.5, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-                    <span /><span style={{ textAlign: 'right' }}>{a.code} SLOWER</span><span /><span>{b.code} SLOWER</span><span style={{ textAlign: 'right' }}>Δ</span>
-                  </div>
-                  {gaps.map((g) => {
-                    const w = g.d == null ? '0%' : `${Math.min(100, (Math.abs(g.d) / dMax) * 100)}%`;
-                    return (
-                      <div key={g.h} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0, 1fr) 1px minmax(0, 1fr) 50px', gap: 8, alignItems: 'center' }}>
-                        <span style={{ ...mono, fontSize: 10, color: 'var(--tx3)' }}>{g.h}</span>
-                        <div style={{ height: 12, display: 'flex', justifyContent: 'flex-end' }}><div style={{ height: '100%', width: g.d < 0 ? w : '0%', borderRadius: '4px 0 0 4px', background: `linear-gradient(270deg, ${a.color}, ${a.color}55)` }} /></div>
-                        <span style={{ height: 16, background: 'var(--bd2)' }} />
-                        <div style={{ height: 12, display: 'flex' }}><div style={{ height: '100%', width: g.d > 0 ? w : '0%', borderRadius: '0 4px 4px 0', background: `linear-gradient(90deg, ${b.color}, ${b.color}55)` }} /></div>
-                        <span style={{ ...mono, fontSize: 10.5, fontWeight: 700, textAlign: 'right', color: g.d > 0 ? b.color : a.color }}>{g.d == null ? '—' : `${g.d > 0 ? '+' : ''}${g.d.toFixed(1)}s`}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {insight && <div style={{ marginTop: 'auto', padding: '10px 12px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12 }}>{insight}</div>}
-            </Panel>
-          </div>
-
-          <Panel pad={false}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)' }}>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Hourly activity log</span>
-              <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Panels, joints, misses and solder time per operator</span>
-              <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</DownloadButton>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
-                <thead>
-                  <tr style={{ fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', textAlign: 'left' }}>
-                    <th style={th}>HOUR</th><th style={th}>PANELS</th>
-                    {s.ops.flatMap((o) => ['JOINTS', 'MISSED', 'ACTIVE TIME'].map((c) => <th key={`${o.i}${c}`} style={{ ...th, color: o.color }}>{c === 'JOINTS' ? `${o.code} ${c}` : c}</th>))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagination.pageRows.map((r) => (
-                    <tr key={r.h} style={{ borderTop: '1px solid var(--bd)' }}>
-                      <td style={td}>{rangeLabel(r.h)}</td><td style={{ ...td, fontWeight: 700 }}>{r.panels}</td>
-                      {r.ops.flatMap((c, i) => [
-                        <td key={`${i}j`} style={td}>{c.joints}</td>,
-                        <td key={`${i}m`} style={{ ...td, color: c.missed ? BAD : 'var(--tx3)', fontWeight: c.missed ? 700 : 400 }}>{c.missed}</td>,
-                        <td key={`${i}t`} style={{ ...td, color: 'var(--tx2)' }}>{dur(c.solderSec)}</td>,
-                      ])}
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: '1px solid var(--bd)', background: 'var(--bg2)', fontWeight: 700 }}>
-                    <td style={td}>TOTAL</td><td style={td}>{s.sum.panels}</td>
-                    {s.ops.flatMap((o) => [
-                      <td key={`${o.i}j`} style={td}>{o.joints}</td>,
-                      <td key={`${o.i}m`} style={{ ...td, color: '#ff6b6b' }}>{o.missed}</td>,
-                      <td key={`${o.i}t`} style={td}>{dur(o.solderSec)}</td>,
-                    ])}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div style={{ padding: '0 18px' }}>
-              <SolderPagination pagination={pagination} label="Hourly activity log" />
-            </div>
-          </Panel>
-        </>
-      )}
-    </>
+    <Panel pad={false}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)' }}>
+        <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Hourly activity log</span>
+        <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Panel counts, completed joints and missed joints per hour</span>
+        <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</DownloadButton>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>
+          <thead>
+            <tr style={{ fontSize: 9, letterSpacing: '.07em', color: 'var(--tx3)', textAlign: 'left' }}>
+              <th style={th}>HOUR</th><th style={th}>PANELS</th><th style={th}>COMPLETED JOINTS</th><th style={th}>MISSED JOINTS</th>
+              {s.ops.map(operator => <th key={operator.i} style={{ ...th, color: operator.color }}>{operator.code} JOINTS</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {pagination.pageRows.map(row => (
+              <tr key={row.h} style={{ borderTop: '1px solid var(--bd)' }}>
+                <td style={td}>{rangeLabel(row.h)}</td><td style={{ ...td, fontWeight: 700 }}>{row.panels}</td>
+                <td style={td}>{row.ops.reduce((sum, operator) => sum + operator.joints, 0)}</td><td style={{ ...td, color: BAD }}>{row.missedJoints}</td>
+                {row.ops.map((operator, index) => <td key={index} style={td}>{operator.joints}</td>)}
+              </tr>
+            ))}
+            <tr style={{ borderTop: '1px solid var(--bd)', background: 'var(--bg2)', fontWeight: 700 }}>
+              <td style={td}>TOTAL</td><td style={td}>{s.sum.panels}</td>
+              <td style={td}>{s.sum.joints}</td><td style={{ ...td, color: BAD }}>{s.sum.missed}</td>
+              {s.ops.map(operator => <td key={operator.i} style={td}>{operator.joints}</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: '0 18px' }}><SolderPagination pagination={pagination} label="Hourly activity log" /></div>
+    </Panel>
   );
 }
 
@@ -663,7 +585,7 @@ export default function Overview({ model, onOpenLogs, selected, onSelect, range 
         </div>
       )}
       <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} />
-      <SolderSection s={s} preview={setOpenId} />
+      <SolderSection s={s} />
       <HourSection s={s} model={model} range={range} />
       <SnapshotPreview items={[...s.absences, ...s.missed]} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
     </>

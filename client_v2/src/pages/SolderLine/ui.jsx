@@ -91,7 +91,7 @@ export const KpiGrid = ({ children }) => (
 export function OpBadge({ op, code }) {
   return (
     <span style={{ ...mono, fontSize: 10.5, fontWeight: 700, color: '#fff', background: opColor(op), borderRadius: 6, padding: '3px 8px', whiteSpace: 'nowrap', justifySelf: 'start' }}>
-      {code || `OP-${op + 1}`}
+      {code || (op == null ? 'Panel' : `OP-${op + 1}`)}
     </span>
   );
 }
