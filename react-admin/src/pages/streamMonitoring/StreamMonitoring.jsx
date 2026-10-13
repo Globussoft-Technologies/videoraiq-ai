@@ -8,13 +8,22 @@ import Pagination from '../clients/components/Pagination'
 import { getApiMessage } from '../../utils/apiError'
 import { getMonitoringCameras } from './api'
 import AdminPicker from './AdminPicker'
+import MonitoringDetails from './MonitoringDetails'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/8 dark:bg-[#0b0d13]'
 const formatTime = value => value ? new Date(value).toLocaleString('en-GB', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short',
+  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata', timeZoneName: 'short',
 }) : '—'
 
-function StreamBadge({ alive }) {
+function StreamBadge({ alive, camera }) {
+  if (camera.alertsMuted) return <span className="text-xs text-gray-400">Muted</span>
+  if (camera.state === 'RECOVERING' && camera.availability !== 'STARTING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming recovery</span>
+  if (camera.state === 'UNKNOWN' && camera.availability === 'REPORTED_RUNNING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming availability</span>
+  if (camera.availability === 'REPORTED_RUNNING') return <span title="The streaming service reports running; direct HLS availability has not been verified" className="text-xs text-emerald-600 dark:text-emerald-300">{camera.downSince ? 'Reported running · outage unverified' : 'Alive · status reported'}</span>
+  if (camera.availability === 'IDLE') return <span title="RTSP is online; HLS playback is intentionally idle and was not requested" className="text-xs text-emerald-600 dark:text-emerald-300">{camera.downSince ? 'Idle · outage unverified' : 'Available / Idle'}</span>
+  if (camera.availability === 'STARTING') return <span className="text-xs text-amber-600 dark:text-amber-300">Starting / Queued</span>
+  if (camera.state === 'SUSPECTED_DOWN') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming failure</span>
+  if (camera.state === 'RECOVERING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming recovery</span>
   if (alive === null) return <span title="Stream status is unavailable" className="text-xs text-gray-400">—</span>
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${alive
     ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'
@@ -41,6 +50,7 @@ function ClientStreams({ adminId, onAdminChange }) {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
   const [reload, setReload] = useState(0)
+  const [details, setDetails] = useState(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -75,6 +85,7 @@ function ClientStreams({ adminId, onAdminChange }) {
         <StreamCount label="Streaming alive" value={error ? '—' : data.counts.alive} alive active={status === 'alive'} onClick={() => selectStatus('alive')} />
         <StreamCount label="Streaming down" value={error ? '—' : data.counts.down} alive={false} active={status === 'down'} onClick={() => selectStatus('down')} />
       </div>
+      <p className="mb-3 text-xs text-gray-400">The alive count includes available idle and status-reported feeds. These do not establish verified video playback.</p>
       {status && <button type="button" onClick={() => selectStatus('')} className="mb-3 text-xs font-semibold text-purple-600 dark:text-purple-300">Show all streams</button>}
       {(!data.enabled || data.statusUnavailable) && <p className="mb-4 text-xs text-gray-400 dark:text-gray-500">{!data.enabled ? 'Stream monitoring is not enabled.' : 'Some stream statuses are unavailable and are excluded from the counts.'}</p>}
       <div className={`${panel} overflow-hidden`} aria-busy={loading}>
@@ -83,13 +94,14 @@ function ClientStreams({ adminId, onAdminChange }) {
           <tbody>{!data.cameras.length ? <tr><td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-400">No streams match this selection.</td></tr> : data.cameras.map(camera => <tr key={camera.cameraId} className="border-b border-gray-100 last:border-b-0 dark:border-white/5">
             <td className="px-5 py-4"><p className="text-sm font-semibold text-gray-900 dark:text-white">{camera.name}</p><p className="mt-1 font-mono text-[10px] text-gray-400">{camera.channelId || '—'}</p></td>
             <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{camera.nvrName}</td>
-            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} /></td>
-            <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400" title="First observed non-running stream">{formatTime(!error && camera.alive === false ? camera.downSince : null)}</td>
+            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} camera={error ? {} : camera} /><button onClick={() => setDetails(camera)} className="mt-1 block text-[10px] text-purple-600 dark:text-purple-300">Details</button>{camera.remindersPaused && <span className="mt-1 block text-[10px] text-gray-400">Reminders paused</span>}</td>
+            <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400" title="First detected failure in this outage">{formatTime(!error ? camera.downSince : null)}</td>
           </tr>)}</tbody>
         </table></div>
       </div>
       <Pagination page={page} pageSize={pageSize} total={data.totalCount} onPageChange={setPage} onPageSizeChange={value => { setPageSize(value); setPage(0) }} />
     </>}
+    {details && <MonitoringDetails adminId={adminId} camera={details} onClose={() => setDetails(null)} onChanged={() => setReload(value => value + 1)} />}
   </>
 }
 
