@@ -1,8 +1,8 @@
 import moment from 'moment-timezone';
 import { buildReportPdf, buildReportXlsx } from './reportLayout.js';
-import { solderPanelCounts } from '../../../utils/solderPanelCounts.js';
+import { solderPanelCounts, solderPanelReportFields } from '../../../utils/solderPanelCounts.js';
 
-export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity', panels: 'Panels counted per hour' };
+export const REPORT_TITLES = { compare: 'Operator comparison', absence: 'Absence report', missed: 'Missed solder report', hourly: 'Hourly activity', panels: 'Panels counted per hour', total: 'Total reports' };
 
 export function resolveSnapshotUrl(image, baseUrl = '') {
   if (typeof image !== 'string' || !image.trim()) return '';
@@ -36,14 +36,22 @@ export function buildReportRows(type, { channel, panels, absences, window, timez
     Duration: a.duration == null ? '—' : `${a.duration} s`, Snapshot: resolveSnapshotUrl(a.Image, snapshotBase),
   }));
   if (type === 'missed') return countedPanels.filter(panel => panel.missedJoints > 0).map((p) => ({
-      'Missed points': p.missedJoints, Panel: p.panelId, Operator: 'All workers',
+      'Missed points': p.missedJoints, Panel: p.panelId,
       Time: stamp(p.time), Snapshot: resolveSnapshotUrl(p.Image, snapshotBase),
     }));
+  if (type === 'total') {
+    const pointCount = Math.max(0, ...countedPanels.map(panel => Math.max(panel.requiredJoints, panel.completedJoints)));
+    return countedPanels.map(panel => ({ Panel: panel.panelId, Time: stamp(panel.time),
+      ...solderPanelReportFields(panel, pointCount), Snapshot: resolveSnapshotUrl(panel.Image, snapshotBase),
+    }));
+  }
   if (type === 'hourly' || type === 'panels') {
     const buckets = new Map();
     for (const p of countedPanels) {
       const hour = moment(p.time).tz(timezone).format('YYYY-MM-DD HH:00 Z');
-      if (!buckets.has(hour)) buckets.set(hour, { Hour: hour, Panels: 0, ...(type === 'panels' ? {} : { 'Completed joints': 0, 'Missed joints': 0 }) });
+      const start = moment(p.time).tz(timezone).startOf('hour');
+      const hourLabel = `${start.format('DD MMM YYYY HH:mm')}-${start.clone().add(1, 'hour').format('DD MMM YYYY HH:mm')} (${start.format('Z')})`;
+      if (!buckets.has(hour)) buckets.set(hour, { Hour: hourLabel, Panels: 0, ...(type === 'panels' ? {} : { 'Completed joints': 0, 'Missed joints': 0 }) });
       const row = buckets.get(hour); row.Panels++;
       if (type === 'panels') continue;
       row['Completed joints'] += p.completedJoints;

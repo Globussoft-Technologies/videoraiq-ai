@@ -74,9 +74,18 @@ export function buildReportPdf(rows, title, subtitle) {
             const sourceHeader = table.headers[indices[i]];
             const url = !header && sourceHeader === 'Snapshot' ? snapshotLink(values[i]) : null;
             const missed = !header && (sourceHeader === 'Missed points' || / missed$/.test(sourceHeader) || values[0] === 'Missed points') && Number(values[i]) > 0;
+            const point = !header && /^P\d+$/.test(sourceHeader) && ['Soldered', 'Missed'].includes(values[i]);
+            if (point) {
+              const done = values[i] === 'Soldered', px = x + 9, py = y + 11;
+              doc.roundedRect(x + 4, y + 4, widths[i] - 8, height - 8, 4).fill(done ? '#e6faf1' : '#ffefef');
+              doc.save().strokeColor(done ? COLORS.teal : COLORS.red).lineWidth(1.5);
+              if (done) doc.moveTo(px, py + 3).lineTo(px + 3, py + 6).lineTo(px + 8, py).stroke();
+              else { doc.moveTo(px, py).lineTo(px + 6, py + 6).stroke(); doc.moveTo(px + 6, py).lineTo(px, py + 6).stroke(); }
+              doc.restore();
+            }
             doc.font(header || i === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 9 : 8.5)
-              .fillColor(header ? '#ffffff' : url ? COLORS.navy : missed ? COLORS.red : COLORS.ink)
-              .text(text, x + 8, y + 9, { width: widths[i] - 16, height: height - 16, ellipsis: true, ...(url ? { link: url, underline: true } : {}) });
+              .fillColor(header ? '#ffffff' : point ? values[i] === 'Soldered' ? COLORS.teal : COLORS.red : url ? COLORS.navy : missed ? COLORS.red : COLORS.ink)
+              .text(text, x + (point ? 23 : 8), y + 9, { width: widths[i] - (point ? 31 : 16), height: height - 16, ellipsis: true, ...(url ? { link: url, underline: true } : {}) });
             x += widths[i];
           });
           y += height;
@@ -120,12 +129,19 @@ export async function buildReportXlsx(rows, title, subtitle) {
     });
     table.rows.forEach((values, index) => {
       const row = sheet.addRow(values.map((value, column) => table.headers[column] === 'Snapshot'
-        ? snapshotLink(value) ? { text: 'View snapshot', hyperlink: value } : 'No snapshot' : value)); row.height = 30;
-      row.eachCell((cell) => {
+        ? snapshotLink(value) ? { text: 'View snapshot', hyperlink: value } : 'No snapshot'
+        : /^P\d+$/.test(table.headers[column]) && ['Soldered', 'Missed'].includes(value) ? `${value === 'Soldered' ? '\u2713' : '\u2715'} ${value}` : value));
+      row.height = Math.max(30, ...values.map(value => String(value ?? '').split('\n').length * 16 + 12));
+      row.eachCell((cell, column) => {
         cell.alignment = { wrapText: true, vertical: 'middle' };
         cell.font = { color: { argb: cell.value?.hyperlink ? 'FF163A8A' : 'FF1E293B' }, size: 11, ...(cell.value?.hyperlink ? { underline: true } : {}) };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: index % 2 ? 'FFF3F6FC' : 'FFFFFFFF' } };
         cell.border = { bottom: { style: 'thin', color: { argb: 'FFDCE3EF' } } };
+        if (/^P\d+$/.test(table.headers[column - 1]) && ['Soldered', 'Missed'].includes(values[column - 1])) {
+          const done = values[column - 1] === 'Soldered';
+          cell.font.color = { argb: done ? 'FF0F766E' : 'FFB91C1C' };
+          cell.fill.fgColor = { argb: done ? 'FFE6FAF1' : 'FFFFEFEF' };
+        }
         if (typeof cell.value === 'number') cell.numFmt = '#,##0.##';
       });
     });
@@ -140,7 +156,11 @@ export function buildEmailHtml(rows, title, subtitle, formats) {
   const table = reportTable(rows), preview = table.rows.slice(0, 10);
   const groups = columnGroups(table.headers, 4);
   const cellHtml = (row, column) => {
-    if (table.headers[column] !== 'Snapshot') return escapeHtml(displayValue(row[column]));
+    if (/^P\d+$/.test(table.headers[column]) && ['Soldered', 'Missed'].includes(row[column])) {
+      const done = row[column] === 'Soldered';
+      return `<span style="display:inline-block;padding:6px 10px;border-radius:5px;background:${done ? '#e6faf1' : '#ffefef'};color:${done ? COLORS.teal : COLORS.red};">${done ? '&#10003;' : '&#10005;'} ${row[column]}</span>`;
+    }
+    if (table.headers[column] !== 'Snapshot') return escapeHtml(displayValue(row[column])).replace(/\n/g, '<br>');
     const url = snapshotLink(row[column]);
     if (!url) return 'No snapshot';
     const escaped = escapeHtml(url);

@@ -104,7 +104,7 @@ export async function fetchReportRows(report, window, timezone) {
       $or: [{ returnedAt: { $gt: window.start.toDate() } }, { returnedAt: null }],
     }).sort({ timeOfIncident: 1 }).lean(),
   ]);
-  if (report.reportType === 'missed' && panels.some((panel) => !panel.Image)) {
+  if (['missed', 'total'].includes(report.reportType) && panels.some((panel) => !panel.Image)) {
     // Older panel samples stored their snapshot only on the matching incident.
     const snapshots = await Incident.find({ ...scope, eventType: 'panel',
       timeOfIncident: { $gte: window.start.toDate(), $lt: window.end.toDate() },

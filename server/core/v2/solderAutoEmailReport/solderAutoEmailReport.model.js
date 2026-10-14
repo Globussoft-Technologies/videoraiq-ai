@@ -16,7 +16,7 @@ const schema = new mongoose.Schema({
     }, { _id: false }),
     required: true,
   },
-  reportType: { type: String, enum: ['compare', 'absence', 'missed', 'hourly', 'panels'], required: true },
+  reportType: { type: String, enum: ['compare', 'absence', 'missed', 'hourly', 'panels', 'total'], required: true },
   recipients: [{ type: String, lowercase: true, trim: true }],
   formats: [{ type: String, enum: ['pdf', 'xlsx'] }],
   enabled: { type: Boolean, default: true },

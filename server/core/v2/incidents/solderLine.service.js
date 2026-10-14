@@ -70,7 +70,7 @@ class SolderLineService {
       const authorized = req?.verified?.authorizedChannel?.channels;
       const scope = Array.isArray(authorized) ? { $in: toObjectIds(authorized) } : null;
 
-      const [events, throughput, latestPanels] = await Promise.all([
+      const [events, throughput, latestPanels, panelRecords] = await Promise.all([
         DeskSolarShoulderDetectionIncident.find({
           userId,
           timeOfIncident: range,
@@ -125,7 +125,15 @@ class SolderLineService {
           } },
           { $project: { _id: 1, "panel._id": 1, "panel.panelId": 1, "panel.time": 1, "panel.zones": 1, "panel.Image": 1, "panel.requiredJoints": 1, incidentImage: { $arrayElemAt: ["$snapshot.Image", 0] } } },
         ]),
+        SolderPanel.find({ userId, time: range, ...(scope && { channelId: scope }) })
+          .select('channelId panelId time zones Image requiredJoints')
+          .sort({ time: 1, _id: 1 }).limit(MAX_EVENTS + 1).lean(),
       ]);
+      const incidentImages = new Map(events.filter(event => event.eventType === 'panel' && event.Image)
+        .map(event => [`${event.channelId}:${event.panelId}:${new Date(event.timeOfIncident).getTime()}`, event.Image]));
+      const panels = panelRecords.slice(0, MAX_EVENTS).map(panel => ({ ...panel, ...solderPanelCounts(panel),
+        Image: panel.Image || incidentImages.get(`${panel.channelId}:${panel.panelId}:${new Date(panel.time).getTime()}`) || '',
+      }));
       const latestPanelByChannel = new Map(latestPanels.map(({ _id, panel, incidentImage }) => [String(_id), { ...panel, ...solderPanelCounts(panel), Image: panel.Image || incidentImage || "" }]));
 
       const hourly = new Map();
@@ -207,8 +215,9 @@ class SolderLineService {
           stations,
           absences,
           missed,
+          panels,
           hourly: [...hourly.values()].sort((a, b) => a.hour.localeCompare(b.hour)),
-          truncated: events.length >= MAX_EVENTS,
+          truncated: events.length >= MAX_EVENTS || panelRecords.length > MAX_EVENTS,
         }),
       );
     } catch (error) {
