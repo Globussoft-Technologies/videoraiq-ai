@@ -1,6 +1,7 @@
 import moment from 'moment-timezone';
 import { getConfiguredTimezone, utcToConfiguredTimezone } from '../../utils/timezone.js';
 import { DEFAULT_REQUIRED_JOINTS, panelCounts } from './panelCounts.js';
+import { buildChartSeries } from './chartData.js';
 
 /*
  * Turns GET /incidents/solder-line into what the Solder Line pages draw.
@@ -142,6 +143,9 @@ function buildStation(station, data, now) {
     const b = buckets.get(h) || { h, panels: 0, missedJoints: 0, requiredJoints: 0, ops: [] };
     return { h, panels: b.panels, missedJoints: b.missedJoints, requiredJoints: b.requiredJoints, ops: zones.map((_, i) => ({ ...(b.ops[i] || { joints: 0, solderSec: 0 }), missed: b.missedJoints ? null : 0 })) };
   });
+  const chart = buildChartSeries({ startDate: data.startDate, endDate: data.endDate,
+    timezone: data.timezone || getConfiguredTimezone(), records: data.hourly.filter(mine), hourly, zones, pointsPerPanel,
+  });
 
   // Presence window: first activity of the range until now (today) or the last activity.
   const starts = [...absences.map((a) => a.start), ...missed.map((m) => m.start)];
@@ -181,7 +185,7 @@ function buildStation(station, data, now) {
   });
 
   return {
-    ...station, zones, ops, absences, missed, panels: panelsData, hours, hourly, pointRows, pointsPerPanel,
+    ...station, zones, ops, absences, missed, panels: panelsData, hours, hourly, chart, pointRows, pointsPerPanel,
     windowStart, windowEnd, windowSec,
     sum: {
       panels, joints, missed: panelMissed, requiredJoints: sum(hourly.map(row => row.requiredJoints)),

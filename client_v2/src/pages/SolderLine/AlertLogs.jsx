@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
 import { clock, describeSolderAlert } from './solderLineData';
-import { BAD, WARN, OK, mono, label, Panel, OpBadge, Chip, Waiting, SnapshotPreview } from './ui';
+import { BAD, WARN, OK, mono, label, Panel, OpBadge, Chip, NoPeriodData, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
 import DownloadButton from './DownloadButton';
@@ -91,7 +91,7 @@ export default function AlertLogs({ model, rows, range }) {
       </Panel>
 
       {!shown.length ? (
-        <Panel><Waiting title="No logs" minH={200}>No absence alerts or panel results match this type in the selected period.</Waiting></Panel>
+        <Panel><NoPeriodData minH={200} /></Panel>
       ) : grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
           {pageRows.map((r) => {

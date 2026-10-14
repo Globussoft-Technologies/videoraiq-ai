@@ -1,6 +1,6 @@
 import { Check, X, Minus } from 'lucide-react';
 import SnapshotCell from './SnapshotCell';
-import { mono, Waiting } from './ui';
+import { mono, NoPeriodData } from './ui';
 import SortButton, { useTableSort } from './TableSort';
 
 function PointResult({ point, value }) {
@@ -18,7 +18,7 @@ export default function TotalReport({ rows = [], sorting: suppliedSort }) {
   const localSort = useTableSort(rows);
   const sorting = suppliedSort || localSort;
   const shown = suppliedSort ? rows : localSort.rows;
-  if (!rows.length) return <Waiting title="Nothing to report" minH={200}>No panel events in the selected period.</Waiting>;
+  if (!rows.length) return <NoPeriodData minH={200} />;
   const headers = Object.keys(rows[0]);
   return <div style={{ overflowX: 'auto', minWidth: 0 }}>
     <table aria-label="Total reports" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

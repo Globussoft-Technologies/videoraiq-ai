@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
@@ -9,7 +9,7 @@ import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { fetchSolderLine } from './api';
 import { alertRows, buildSolderLine } from './solderLineData';
-import { mono, BAD, OK } from './ui';
+import { mono, BAD, OK, DataLoader, NoPeriodData } from './ui';
 import Overview, { CameraStations } from './Overview';
 import AlertLogs from './AlertLogs';
 import Reports from './Reports';
@@ -41,6 +41,7 @@ export default function SolderLine() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(0);
+  const requestRef = useRef(null);
 
   const logs = permissions?.logs;
   const canView = typeof logs?.deskSolarShoulderLogs?.view === 'boolean'
@@ -48,19 +49,41 @@ export default function SolderLine() {
     : typeof logs?.global?.view === 'boolean' ? logs.global.view : Boolean(logs?.view);
 
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
+    // Refreshes must not cancel a date-filter request that is still loading.
+    if (quiet && requestRef.current) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    if (!quiet) { setLoading(true); setError(null); }
     try {
-      const res = await fetchSolderLine(range);
+      const res = await fetchSolderLine(range, { signal: controller.signal });
+      if (controller.signal.aborted || requestRef.current !== controller) return;
       setRaw(res?.data?.body?.data || null);
       setError(null);
     } catch (err) {
+      if (controller.signal.aborted || requestRef.current !== controller) return;
       setError(err?.response?.data?.body?.message || 'Could not load the solder line.');
+      if (!quiet) setRaw(null);
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
     }
   }, [range]);
 
-  useEffect(() => { load(); }, [load]);
+  const changeRange = useCallback((nextRange) => {
+    if (nextRange.startDate === range.startDate && nextRange.endDate === range.endDate) return;
+    requestRef.current?.abort();
+    setLoading(true);
+    setError(null);
+    setRange(nextRange);
+  }, [range]);
+
+  useEffect(() => {
+    load();
+    return () => requestRef.current?.abort();
+  }, [load]);
   // Live while the range includes today: new alerts and closed absences show up.
   useEffect(() => {
     if (range.endDate < today) return undefined;
@@ -74,7 +97,7 @@ export default function SolderLine() {
   if (permissionsLoading) return <PageLoader />;
   if (!canView) return <AccessDenied message="You do not have permission to view the solder line." onBack={() => navigate(-1)} />;
 
-  const live = model?.isToday;
+  const live = !loading && model?.isToday;
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 22px', position: 'sticky', top: 0, zIndex: 40, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)' }}>
@@ -85,7 +108,7 @@ export default function SolderLine() {
             borderBottom: `2px solid ${isActive ? 'var(--blue)' : 'transparent'}`,
           })}>
             {t.label}
-            {t.view === 'logs' && rows.length > 0 && (
+            {t.view === 'logs' && !loading && rows.length > 0 && (
               <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#fff', background: BAD, borderRadius: 8, padding: '1px 6px' }}>{rows.length}</span>
             )}
           </NavLink>
@@ -103,32 +126,36 @@ export default function SolderLine() {
             maxDate={today}
             onRangeChange={({ start, end }) => {
               const startDate = start ? moment(start).format('YYYY-MM-DD') : today;
-              setRange({ startDate, endDate: end ? moment(end).format('YYYY-MM-DD') : startDate });
+              changeRange({ startDate, endDate: end ? moment(end).format('YYYY-MM-DD') : startDate });
             }}
           />
         </div>
       </div>
 
-      <div style={{ padding: '22px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      <div aria-busy={loading} style={{ padding: '22px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {error && (
         <div style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${BAD}66`, color: BAD, fontSize: 12.5 }}>
           {error} <button type="button" onClick={() => load()} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>Retry</button>
         </div>
       )}
-      {model?.truncated && (
+      {!loading && model?.truncated && (
         <div style={{ fontSize: 12, color: 'var(--warn)' }}>Showing up to 5,000 alerts and panel records in this range. Pick a shorter range to see them all.</div>
       )}
 
-      {loading && !model ? <PageLoader /> : !model ? null : (
+      {loading && <DataLoader />}
+      {/* Keep report controls mounted so changing periods preserves the report type. */}
+      <div hidden={loading} style={!loading ? { display: 'flex', flexDirection: 'column', gap: 18 } : undefined}>
+      {!model ? !error && <NoPeriodData /> : (
         <>
           <SolderSummary model={model} selected={selected} onSelect={setSelected}>
             {view === 'overview' && <CameraStations model={model} sel={selected} setSel={setSelected} />}
           </SolderSummary>
           {view === 'overview' && <Overview model={model} selected={selected} onSelect={setSelected} range={range} onOpenLogs={canOpenLogs ? () => navigate('/solder-line/logs') : null} />}
           {view === 'logs' && <AlertLogs model={model} rows={rows} range={range} />}
-          {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={setRange} />}
+          {view === 'reports' && <Reports model={model} selected={selected} onSelect={setSelected} range={range} today={today} onRangeChange={changeRange} />}
         </>
       )}
+      </div>
       </div>
     </div>
   );

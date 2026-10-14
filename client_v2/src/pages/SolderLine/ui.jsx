@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Hourglass } from 'lucide-react';
+import { Hourglass, LoaderCircle } from 'lucide-react';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import { mediaUrl } from '@/lib/format';
 import { opColor } from './solderLineData';
@@ -117,7 +117,18 @@ export function Chip({ on, color = '#475569', onClick, children }) {
   );
 }
 
-/** Shown where a section needs data DS does not send yet. */
+export function DataLoader() {
+  return <div role="status" aria-label="Loading solder-line data" style={{ minHeight: 280, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--tx3)' }}>
+    <LoaderCircle size={32} className="animate-spin" aria-hidden="true" />
+    <span style={{ fontSize: 13 }}>Loading data...</span>
+  </div>;
+}
+
+export function NoPeriodData({ minH = 160 }) {
+  return <div style={{ minHeight: minH, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>No data for the selected period</div>;
+}
+
+/** Configuration details for sections that cannot run yet. */
 export function Waiting({ title = 'Waiting for data', children, minH = 160 }) {
   return (
     <div style={{ minHeight: minH, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center', padding: 18, borderRadius: 12, border: '1px dashed var(--bd2)', color: 'var(--tx3)' }}>

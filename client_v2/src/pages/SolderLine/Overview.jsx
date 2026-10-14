@@ -6,7 +6,7 @@ import { mediaUrl } from '@/lib/format';
 import { clock, dur, opColor } from './solderLineData';
 import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
-  OpBadge, StatusPill, Chip, Waiting, SnapshotPreview,
+  OpBadge, StatusPill, Chip, Waiting, NoPeriodData, SnapshotPreview,
 } from './ui';
 import { downloadXlsx } from './exports';
 import { buildSolderReportRows } from './reportRows.js';
@@ -17,9 +17,9 @@ import SortButton, { useTableSort } from './TableSort';
 import { sortRows } from './sorting.js';
 import MissedSolderAlerts from './MissedSolderAlerts';
 import AbsenceLogTable from './AbsenceLogTable';
+import ChartTooltip from './ChartTooltip';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
 
-const NO_THROUGHPUT = 'Panel counts and completed joints appear here once DS posts its per-panel "Solar panel processing" events.';
 
 function stationStatus(s) {
   if (s.sum.absentNow) return ['ABSENCE', BAD];
@@ -282,9 +282,6 @@ function PresenceCard({ o }) {
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>
-          {[o.capacity != null && `Capacity ${o.capacity}`, o.thresholdSec != null && `alert after ${o.thresholdSec}s empty`, o.points.length && `solders ${o.points.map((p) => `P${p}`).join(', ')}`].filter(Boolean).join(' · ') || 'Zone from the detection settings'}
-        </div>
       </div>
     </div>
   );
@@ -326,7 +323,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
               <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>Latest absence snapshot</span>
               {latest && <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)' }}>{latest.id}</span>}
             </div>
-            {!latest ? <div style={{ padding: 16 }}><Waiting title="No absences" minH={120}>Nobody has left a desk empty in this range.</Waiting></div> : (
+            {!latest ? <div style={{ padding: 16 }}><NoPeriodData minH={120} /></div> : (
               <div style={{ display: 'flex', gap: 12, padding: '12px 14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                 <div style={{ flex: '0 1 260px', width: 260, minWidth: 0, maxWidth: '100%' }}>
                   <Snap image={latest.image} onOpen={() => preview(latest._id)}>
@@ -392,15 +389,17 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
 
 // ---------------------------------------------------------------- 02 · conveyor & soldering
 
-function Bars({ hourly, render, height = 200 }) {
+function Bars({ rows, render, height = 200, minColumnWidth = 36, label }) {
   return (
-    <div style={{ height, marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-      {hourly.map((r, i) => (
-        <div key={r.h} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+    <div role="region" aria-label={label} tabIndex={0} style={{ overflowX: 'auto', marginTop: 16, maxWidth: '100%' }}>
+    <div style={{ height, width: '100%', minWidth: rows.length * minColumnWidth + Math.max(0, rows.length - 1) * 10, display: 'grid', gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))`, alignItems: 'end', gap: 10 }}>
+      {rows.map((r, i) => (
+        <div key={r.key} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
           {render(r, i)}
-          <span style={{ ...mono, fontSize: 10, color: 'var(--tx3)' }}>{r.h}</span>
+          <span title={r.tooltipLabel} style={{ ...mono, fontSize: 10, color: 'var(--tx3)', textAlign: 'center', whiteSpace: 'nowrap' }}>{r.label}{r.labelDetail && <span style={{ display: 'block', fontSize: 9 }}>{r.labelDetail}</span>}</span>
         </div>
       ))}
+    </div>
     </div>
   );
 }
@@ -408,10 +407,19 @@ function Bars({ hourly, render, height = 200 }) {
 function SolderSection({ s }) {
   const [jointHover, setJointHover] = useState(null);
   const has = s.sum.hasThroughput;
-  const pMax = Math.max(1, ...s.hourly.map((r) => r.panels));
-  const jMax = Math.max(1, ...s.hourly.flatMap((r) => r.ops.map((o) => o.joints)));
-  const anyMissedData = has || s.missed.length > 0;
-  const hoverHour = s.hourly.find(hour => hour.h === jointHover?.hour);
+  const chart = s.chart;
+  const chartRows = chart.rows;
+  const panelTitle = `Panels counted per ${chart.unit}`;
+  const jointTitle = `Solder joints per ${chart.unit}`;
+  const chartScope = `${s._id}:${chart.scope}:${chart.unit}`;
+  const averagePeriods = chart.unit === 'hour' ? chartRows.filter(row => row.panels).length : chartRows.length;
+  const axisWidth = Math.max(0, ...chartRows.map(row => Math.max(row.label.length * 6, (row.labelDetail || '').length * 6) + 12));
+  const pMax = Math.max(1, ...chartRows.map((r) => r.panels));
+  const jMax = Math.max(1, ...chartRows.flatMap((r) => r.ops.map((o) => o.joints)));
+  const panelColumnWidth = Math.max(36, axisWidth, ...chartRows.map(row => String(row.panels).length * 7 + 12));
+  const jointColumnWidth = Math.max(52, axisWidth, s.ops.length * 10 + Math.max(0, s.ops.length - 1) * 3 + 8,
+    ...chartRows.map(row => String(row.missedJoints || 0).length * 6 + 12));
+  const hoverHour = jointHover?.scope === chartScope ? chartRows.find(row => row.key === jointHover.bucket) : null;
   const hoverOperator = jointHover?.operator == null ? null : s.ops[jointHover.operator];
   const hoverCounts = hoverOperator ? hoverHour?.ops[hoverOperator.i] : null;
   const tooltipId = `solder-joints-${s._id}-tooltip`;
@@ -420,47 +428,51 @@ function SolderSection({ s }) {
       <SectionHead n="02" color="#a855f7" title="Conveyor Count & Soldering Activity" sub={`${s.pointsPerPanel} solder joints required per panel · workers share the work`} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
         <Panel>
-          <PanelHead title="Panels counted per hour" right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, s.hourly.filter((r) => r.panels).length)).toFixed(1)} / HR</span>} />
-          {!has ? <Waiting>{NO_THROUGHPUT}</Waiting> : (
-            <Bars hourly={s.hourly} render={(r) => (
+          <PanelHead title={panelTitle} right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, averagePeriods)).toFixed(1)} / {chart.unit === 'hour' ? 'HR' : chart.unit === 'week' ? 'WK' : 'MO'}</span>} />
+          {!has ? <NoPeriodData /> : (
+            <Bars rows={chartRows} label={`${panelTitle} chart`} minColumnWidth={panelColumnWidth} render={(r) => (
               <>
-                <span style={{ ...mono, fontSize: 11, fontWeight: 700 }}>{r.panels}</span>
+                <span title={`${r.tooltipLabel}: ${r.panels} panels`} style={{ ...mono, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.panels}</span>
                 <div style={{ width: '100%', maxWidth: 46, height: `${(r.panels / pMax) * 82}%`, borderRadius: '7px 7px 3px 3px', background: 'linear-gradient(180deg, #22d3ee, #0e7490)' }} />
               </>
             )} />
           )}
         </Panel>
         <Panel style={{ position: 'relative' }}>
-          <PanelHead title="Solder joints per hour" right={(
-            <span style={{ display: 'flex', gap: 12, ...mono, fontSize: 10, color: 'var(--tx3)' }}>
+          <PanelHead title={jointTitle} right={(
+            <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12, ...mono, fontSize: 10, color: 'var(--tx3)' }}>
               {s.ops.map((o) => <span key={o.i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: o.color }} />{o.code}</span>)}
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: BAD }} />MISSED</span>
             </span>
           )} />
-          {!has ? <Waiting>{NO_THROUGHPUT}</Waiting> : (
-            <Bars hourly={s.hourly} render={(r) => (
-              <div onMouseEnter={() => setJointHover({ hour: r.h, operator: null })} onMouseLeave={() => setJointHover(null)} style={{ position: 'relative', flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
-                {r.missedJoints > 0 && <span style={{ position: 'absolute', top: 0, color: BAD, ...mono, fontSize: 10 }}>{r.missedJoints} missed</span>}
+          {!has ? <NoPeriodData /> : (
+            <Bars rows={chartRows} label={`${jointTitle} chart`} minColumnWidth={jointColumnWidth} render={(r) => (
+              <div onMouseEnter={event => setJointHover({ scope: chartScope, bucket: r.key, operator: null, anchor: event.currentTarget })} onMouseLeave={() => setJointHover(null)} style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ height: 30, flexShrink: 0, textAlign: 'center', color: BAD, ...mono, fontSize: 10, lineHeight: '12px', whiteSpace: 'nowrap' }}>
+                  {r.missedJoints > 0 && <><span style={{ display: 'block' }}>{r.missedJoints}</span><span style={{ display: 'block' }}>missed</span></>}
+                </div>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
                 {r.ops.map((o, i) => (
-                  <button key={i} type="button" aria-label={`${s.ops[i].code} · ${s.ops[i].zone}: ${o.joints} soldered joints at ${r.h}:00`} aria-describedby={jointHover?.hour === r.h && jointHover.operator === i ? tooltipId : undefined}
-                    onMouseEnter={() => setJointHover({ hour: r.h, operator: i })} onMouseLeave={() => setJointHover({ hour: r.h, operator: null })}
-                    onFocus={() => setJointHover({ hour: r.h, operator: i })} onBlur={() => setJointHover(null)} onClick={() => setJointHover({ hour: r.h, operator: i })}
+                  <button key={i} type="button" aria-label={`${s.ops[i].code} · ${s.ops[i].zone}: ${o.joints} soldered joints during ${r.tooltipLabel}`} aria-describedby={jointHover?.scope === chartScope && jointHover.bucket === r.key && jointHover.operator === i ? tooltipId : undefined}
+                    onMouseEnter={event => setJointHover({ scope: chartScope, bucket: r.key, operator: i, anchor: event.currentTarget })} onMouseLeave={event => setJointHover({ scope: chartScope, bucket: r.key, operator: null, anchor: event.currentTarget.parentElement.parentElement })}
+                    onFocus={event => setJointHover({ scope: chartScope, bucket: r.key, operator: i, anchor: event.currentTarget })} onBlur={() => setJointHover(null)} onClick={event => setJointHover({ scope: chartScope, bucket: r.key, operator: i, anchor: event.currentTarget })}
                     onKeyDown={event => { if (event.key === 'Escape') setJointHover(null); }}
-                    style={{ position: 'relative', flex: 1, maxWidth: 22, minHeight: 4, height: `${(o.joints / jMax) * 86}%`, padding: 0, border: 'none', cursor: 'pointer', borderRadius: '5px 5px 2px 2px', background: `linear-gradient(180deg, ${opColor(i)}, ${opColor(i)}66)` }} />
+                    style={{ position: 'relative', flex: 1, maxWidth: 22, minHeight: 4, height: `${(o.joints / jMax) * 100}%`, padding: 0, border: 'none', cursor: 'pointer', borderRadius: '5px 5px 2px 2px', background: `linear-gradient(180deg, ${opColor(i)}, ${opColor(i)}66)` }} />
                 ))}
+                </div>
               </div>
             )} />
           )}
-          {hoverHour && <div id={tooltipId} role="tooltip" style={{ position: 'absolute', zIndex: 10, bottom: 24, right: 12, width: 250, maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9, background: 'var(--bg1solid)', color: 'var(--tx)', border: '1px solid var(--bd2)', boxShadow: '0 4px 18px rgba(0,0,0,.16)', pointerEvents: 'none', fontSize: 11, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
+          {hoverHour && <ChartTooltip anchor={jointHover.anchor} id={tooltipId}>
             <strong>{hoverOperator ? `${hoverOperator.code} · ${hoverOperator.zone}` : 'All workers'}</strong>
-            <div style={{ color: 'var(--tx3)', ...mono }}>{hoverHour.h}:00-{String(Number(hoverHour.h) + 1).padStart(2, '0')}:00</div>
+            <div style={{ color: 'var(--tx3)', ...mono }}>{hoverHour.tooltipLabel}</div>
             <div>Soldered joints: <strong>{hoverCounts ? hoverCounts.joints : hoverHour.ops.reduce((sum, operator) => sum + operator.joints, 0)}</strong></div>
             <div style={{ color: BAD }}>Missed joints (all workers): <strong>{hoverHour.missedJoints ?? 0}</strong></div>
-          </div>}
+          </ChartTooltip>}
         </Panel>
       </div>
 
-      <MissedSolderAlerts station={s} hasData={anyMissedData} />
+      <MissedSolderAlerts station={s} />
     </>
   );
 }
@@ -481,7 +493,7 @@ function HourSection({ s, model, range }) {
     sortRows(buildSolderReportRows('hourly', s), sorting.sort),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
   );
-  if (!s.sum.hasThroughput) return <Panel><Waiting>{NO_THROUGHPUT}</Waiting></Panel>;
+  if (!s.sum.hasThroughput) return <Panel><NoPeriodData /></Panel>;
   return (
     <Panel pad={false}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)' }}>

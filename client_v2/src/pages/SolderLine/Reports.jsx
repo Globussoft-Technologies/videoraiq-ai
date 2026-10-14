@@ -7,7 +7,7 @@ import { REPORT_METRICS as METRICS, buildSolderReportRows } from './reportRows.j
 import ReportTable from './ReportTable';
 import SortButton, { useTableSort } from './TableSort';
 import TotalReport from './TotalReport';
-import { mono, label, Panel, OpBadge, Chip, Waiting } from './ui';
+import { mono, label, Panel, OpBadge, Chip, NoPeriodData } from './ui';
 import { downloadPdf, downloadXlsx } from './exports';
 import DownloadButton from './DownloadButton';
 import AutoEmailReports from './AutoEmailReports';
@@ -161,14 +161,11 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
             <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd2)', borderRadius: 6, padding: '4px 9px' }}>GENERATED {moment.tz(getConfiguredTimezone()).format('HH:mm')}</span>
           </div>
           <div style={{ padding: '18px 22px' }}>
-            {!s ? <Waiting title="No solder-line cameras" minH={200}>Turn on the Desk Solar Shoulder detection on a camera first.</Waiting>
+            {!s ? <NoPeriodData minH={200} />
               : type === 'compare' ? <Compare s={s} />
                 : type === 'total' ? <TotalReport rows={pagination.pageRows} sorting={sorting} />
                   : <ReportTable rows={pagination.pageRows} sorting={sorting} label={typeMeta.t} />}
             {s && type !== 'compare' && <SolderPagination pagination={pagination} label={typeMeta.t} />}
-            {s && type !== 'absence' && !s.sum.hasThroughput && (
-              <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx3)' }}>Joint, panel and solder-time figures fill in once DS posts per-panel events.</div>
-            )}
           </div>
         </Panel>
       </div>
