@@ -3,14 +3,18 @@ import logger from "../../../utils/logger.js";
 import { monitoringSettings } from "./settings.js";
 import TelegramService from "../../../services/telegram.service.js";
 import { telegramChannels, selectedTelegramChannels, telegramBotIdentity } from "./telegramChannels.js";
+import { readMonitoringControl } from "./control.js";
 
 const responseData = async recipient => {
   const settings = monitoringSettings();
+  const control = await readMonitoringControl(settings);
   return { code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
     selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
-    botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: settings.enabled,
+    botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: control.enabled,
     reminderMs: settings.reminderMs, checkIntervalMs: settings.intervalMs,
-    confirmationDelayMs: settings.targetedRecheckMs, recoveryConfirmations: settings.recoveryConfirmations };
+    confirmationDelayMs: settings.intervalMs, recoveryConfirmations: settings.recoveryConfirmations,
+    cycleMs: settings.cycleMs, aliveIntervalMs: settings.aliveIntervalMs,
+    individualIntervalMs: settings.individualIntervalMs, verificationWindowMs: settings.verificationWindowMs };
 };
 
 function handler(action, message) {

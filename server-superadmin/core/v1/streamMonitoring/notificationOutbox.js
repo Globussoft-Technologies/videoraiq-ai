@@ -20,10 +20,11 @@ export async function deliveryTargets() {
 
 export async function enqueue(type, outage, target, sequence = 0, payload = {}) {
   const key = hash(JSON.stringify([target.chatId, outage.id, type, sequence]));
+  const reportAt = new Date(payload.reportAt || outage.reportAt || 0).getTime();
   await TelegramOutbox.updateOne({ _id: key }, { $setOnInsert: {
     type, cameraId: outage.cameraId, outageId: outage.id, chatId: target.chatId, ownerIds: target.ownerIds || [],
     sequence, payload: { ...outage, ...payload }, status: "PENDING", attempts: 0,
-    createdAt: new Date(), nextAttemptAt: new Date(),
+    createdAt: new Date(), nextAttemptAt: new Date(Math.max(Date.now(), Number.isFinite(reportAt) ? reportAt : 0)),
   } }, { upsert: true });
   return key;
 }
