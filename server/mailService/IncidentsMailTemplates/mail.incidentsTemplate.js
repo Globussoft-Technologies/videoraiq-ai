@@ -4595,6 +4595,25 @@ export const vehicleLogTemplate = (entryData, nvrData, channelData) => {
 </html>`;
 };
 
+// Box packing details (box, packer, per-zone box number and time); "" for other types.
+const boxPackingSection = ({ incidentType, boxId, completedBy, zones, confirmationReason }) => {
+  if (incidentType !== "boxPackingDetection") return "";
+  const row = (label, value) =>
+    `<tr><td style="padding-bottom:6px;"><strong>${label}:</strong> ${value ?? "N/A"}</td></tr>`;
+  const zoneRows = (zones || [])
+    .map((z) => row(z.zone, `Box ${z.boxNumber ?? "N/A"}, ${z.timeTakenSec ?? "N/A"}s`))
+    .join("");
+  return `
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">Box Packing Details</h3>
+              <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                ${row("Box ID", boxId)}${row("Completed By", completedBy)}${zoneRows}${confirmationReason ? row("Confirmation", confirmationReason) : ""}
+              </table>
+            </td>
+          </tr>`;
+};
+
 const industrialEquipmentTemplate = (
   equipmentLabel,
   incidentData,
@@ -4613,6 +4632,8 @@ const industrialEquipmentTemplate = (
 
   const getSeverityStyles = (level = "low") => {
     switch (level) {
+      case "info":
+        return { bg: "#F1F5F9", text: "#334155", label: "Info" };
       case "high":
         return { bg: "#FDECEA", text: "#B42318", label: "High" };
       case "moderate":
@@ -4721,6 +4742,7 @@ const industrialEquipmentTemplate = (
             </td>
           </tr>
 
+${boxPackingSection(incidentData)}
           <tr>
             <td style="padding:0 24px 20px;">
               <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">Incident Snapshot</h3>

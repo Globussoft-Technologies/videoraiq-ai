@@ -22,7 +22,8 @@ const incidentSchema = new Schema({
   channelId:{type:mongoose.Schema.Types.ObjectId,ref:"Channel",required: function () { return !this.liveDemoData; }},
   userId:{type:String,required:true},
   zone: String,
-  severity: { type: String, enum: ['low', 'moderate', 'high'] },
+  // 'info' = a record, not an alert (e.g. box packing productivity).
+  severity: { type: String, enum: ['info', 'low', 'moderate', 'high'] },
   // Optional model confidence (0-100) sent by the detection trigger. Lives on
   // the base schema so every incident type accepts it, and every alert channel
   // can read it, without touching 25 discriminators.
@@ -676,11 +677,29 @@ const DeskSolarShoulderDetectionIncident = Incident.discriminator(
   DeskSolarShoulderDetectionSchema,
 );
 
-// Box packing: generic industrial incident (count / alertThreshold /
-// triggerNotification); zone, Image and timeOfIncident are base fields.
+// Box packing: one incident per completed box, on top of the generic industrial
+// fields (count / alertThreshold / triggerNotification). DS sends zones keyed by
+// zone name — { "W1 bottom-left": { box_number, time_taken } } — stored as an
+// array like the solder zones so it can be queried and aggregated.
+const BoxPackingDetectionSchema = OilLeakageDetectionSchema.clone();
+BoxPackingDetectionSchema.add({
+  boxId: { type: String, default: null },
+  completedBy: { type: String, default: null },
+  zones: {
+    type: [{ _id: false, zone: String, boxNumber: Number, timeTakenSec: Number }],
+    default: undefined,
+    set: (v) =>
+      v && typeof v === "object" && !Array.isArray(v)
+        ? Object.entries(v).map(([zone, z]) => ({ zone, boxNumber: z?.box_number, timeTakenSec: z?.time_taken }))
+        : v,
+  },
+  endTimeSource: { type: String, default: null },
+  detectedVia: { type: String, default: null },
+  confirmationReason: { type: String, default: null },
+});
 const BoxPackingDetectionIncident = Incident.discriminator(
   "boxPackingDetection",
-  OilLeakageDetectionSchema.clone(),
+  BoxPackingDetectionSchema,
 );
 
 // Cylinder Stack Height Detection

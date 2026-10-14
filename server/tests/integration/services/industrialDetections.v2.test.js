@@ -25,6 +25,12 @@ const settingsModels = await import(
   "../../../core/v2/detectionSettings/detectionSettings.model.js"
 );
 const incidentModels = await import("../../../core/v2/incidents/incidents.model.js");
+const { buildIncidentTelegramMessage, buildIncidentWhatsAppMessage } = await import(
+  "../../../messagingService/message.helper.js"
+);
+const { industrialDetectionTemplate } = await import(
+  "../../../mailService/IncidentsMailTemplates/mail.incidentsTemplate.js"
+);
 
 const CASES = [
   {
@@ -111,6 +117,20 @@ const CASES = [
     SettingModel: settingsModels.BoxPackingDetectionSetting,
     IncidentModel: incidentModels.BoxPackingDetectionIncident,
     // No dedicated logs page; shows in the Incident Center.
+    // Shape DS sends when a box is accepted.
+    incidentFields: {
+      boxId: "W1-0014",
+      completedBy: "W1 bottom-left",
+      zones: {
+        "W1 bottom-left": { box_number: 14, time_taken: 110 },
+        "W2 top-right": { box_number: 11, time_taken: 170 },
+      },
+      severity: "info",
+      triggerNotification: false,
+      endTimeSource: "CONFIRMED",
+      detectedVia: "idle",
+      confirmationReason: "The filled container has been removed from the workstation.",
+    },
   },
 ];
 
@@ -363,6 +383,25 @@ describe("v2 industrial detection incidents and logs", () => {
       const saved = await IncidentModel.findOne({ incidentType });
       expect(saved.timeOfIncident.toISOString()).toBe("2026-09-21T12:30:45.000Z");
       expect(saved.alertThreshold).toBe(400);
+      if (incidentType === "boxPackingDetection") {
+        const box = saved.toObject();
+        expect(box).toMatchObject({
+          boxId: "W1-0014",
+          completedBy: "W1 bottom-left",
+          severity: "info",
+          endTimeSource: "CONFIRMED",
+          detectedVia: "idle",
+          zones: [
+            { zone: "W1 bottom-left", boxNumber: 14, timeTakenSec: 110 },
+            { zone: "W2 top-right", boxNumber: 11, timeTakenSec: 170 },
+          ],
+        });
+        expect(buildIncidentWhatsAppMessage(box)).toContain("*W2 top-right:* Box 11, 170s");
+        expect(buildIncidentTelegramMessage(box)).toContain("*Box ID:* W1\\-0014");
+        const html = industrialDetectionTemplate(box, {}, {}, "UTC");
+        expect(html).toContain("Box Packing Details");
+        expect(html).toContain("Severity: Info");
+      }
       if (settingType === "loadingUnloadingStockCountingSettings") {
         const savedSetting = await SettingModel.findOne({ settingType });
         expect(savedSetting.settings.mode).toBe("loading");

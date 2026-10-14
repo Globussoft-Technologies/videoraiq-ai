@@ -102,6 +102,11 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
     ConfidenceScoreInPercentage != null ? `*Confidence:* ${ConfidenceScoreInPercentage}%` : null,
     vehicleNumber ? `*Vehicle Number:* ${text(vehicleNumber)}` : null,
     vehicleType ? `*Vehicle Type:* ${text(vehicleType)}` : null,
+    incident.boxId ? `*Box ID:* ${text(incident.boxId)}` : null,
+    incident.completedBy ? `*Completed By:* ${text(incident.completedBy)}` : null,
+    ...(incidentType === "boxPackingDetection" && Array.isArray(incident.zones)
+      ? incident.zones.map((z) => `*${text(z.zone)}:* Box ${z.boxNumber ?? "N/A"}, ${z.timeTakenSec ?? "N/A"}s`)
+      : []),
     `*Camera:* ${text(cameraName)}`,
     `*NVR:* ${text(nvrName)}`,
     zone ? `*Zone:* ${text(zone)}` : null,
@@ -178,6 +183,11 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
       ? `*Direction:* ${up(incident.checkin ? "Check-In" : "Check-Out")}`
       : null,
     vehicleType ? `*Vehicle Type:* ${up(vehicleType)}` : null,
+    incident.boxId ? `*Box ID:* ${up(incident.boxId)}` : null,
+    incident.completedBy ? `*Completed By:* ${up(incident.completedBy)}` : null,
+    ...(incidentType === "boxPackingDetection" && Array.isArray(incident.zones)
+      ? incident.zones.map((z) => `*${escapeMdV2(z.zone)}:* ${up(`Box ${z.boxNumber ?? "N/A"}, ${z.timeTakenSec ?? "N/A"}s`)}`)
+      : []),
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,
     zone ? `*Zone:* ${up(zone)}` : null,
