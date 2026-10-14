@@ -1,5 +1,6 @@
 import express from "express";
 import verifyToken from "../../middlewares/verifyToken.js";
+import apiKeyRoutes from '../../core/v2/apiKeys/apiKey.routes.js';
 import allowCrossOriginResource from "../../middlewares/allowCrossOriginResource.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ router.get("/health", allowCrossOriginResource, (_req, res) => {
 // v2-specific behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use("/auth", authRoutes);
+router.use('/api-keys', apiKeyRoutes);
 router.use("/integrations/amember", amemberIntegrationRoutes);
 router.use("/auth/raspberry-pi", raspberryPiRoutes);
 router.use("/uploads", uploadRoutes);

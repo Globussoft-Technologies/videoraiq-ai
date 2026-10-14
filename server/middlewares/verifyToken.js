@@ -11,6 +11,7 @@ import { checkActivePlan } from "./checkActivePlan.js";
 import { getEmpAuthInfo } from "../utils/helperFunctions.js";
 import sessionsService from "../core/v2/sessions/sessions.service.js";
 import { DEFAULT_ADMIN_TIMEZONE, validTimezone } from "../utils/timezone.js";
+import { checkKeyOwnership } from '../core/v2/apiKeys/apiKey.ownership.js';
 
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
@@ -25,6 +26,12 @@ export const isRegistrationLinkActive = (decoded, registrationLink, now = Date.n
 
 async function verifyToken(req, res, next) {
   try {
+    if (req.verified?.apiKey && req.verified?.userData?.tokenType === 'api-key') {
+      try { await checkKeyOwnership(req, { _id: req.verified.userData.adminId, user_id: req.verified.userData.user_id }); }
+      catch { return res.status(403).json(Response.accessDeniedResp('Resource access is not allowed for this admin')); }
+      req.mainRoute = `${req.baseUrl}${req.path}`.replace(/\/[0-9a-fA-F]{24}(?=\/|$)/g, ':id');
+      return next();
+    }
     // <video>/dash.js/hls.js fetch fragments directly and can't attach custom
     // headers, so the header stays authoritative and this is only a fallback
     // for those media requests — same convention the frontend already uses

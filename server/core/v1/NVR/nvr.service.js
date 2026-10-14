@@ -935,9 +935,10 @@ class NVRService {
     }
   }
 
-  async allNvrs(_req, res, _next) {
+  async allNvrs(req, res, _next) {
     try {
-      const nvrs = await NVR.find().select("_id");
+      const filter = req.verified?.apiKey ? { userId: String(req.verified.userData.user_id) } : {};
+      const nvrs = await NVR.find(filter).select("_id");
 
       let total = 0;
       if (nvrs.length > 0) total = nvrs.length;

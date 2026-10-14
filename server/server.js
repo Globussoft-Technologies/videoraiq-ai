@@ -88,6 +88,7 @@ app.use(
       "x-captured-at",
       "x-idempotency-key",
       "x-access-token",
+      "x-api-key",
       "x-device-id",
       "x-session-id",
       "x-browser",
