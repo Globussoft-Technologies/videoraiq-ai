@@ -47,6 +47,7 @@ const LOG_SUBMODULES = [
   'deskSolarShoulderLogs',
   'equipmentOilLeakageLogs', 'vehicleFuelOilLeakageLogs',
   'wasteDisposalLogs', 'animalEntryLogs', 'messyAreaLogs',
+  'boxPackingLogs',
 ];
 
 const MODULE_LABELS = {
@@ -84,6 +85,7 @@ const MODULE_LABELS = {
   wasteDisposalLogs: 'Sand, Dust, Waste & Scrap Disposal Logs',
   animalEntryLogs: 'Unauthorized Animal Entry Logs',
   messyAreaLogs: 'Spills, Dirty or Messy Areas Logs',
+  boxPackingLogs: 'Box Packing Logs',
 };
 
 const LEGACY_MODULES_BY_ROLE = {

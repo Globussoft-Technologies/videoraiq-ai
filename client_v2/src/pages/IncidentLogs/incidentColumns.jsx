@@ -5,6 +5,7 @@ import { getConfiguredTimezone } from '@/utils/timezone';
 import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
+import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
 const severityClass = (severity) => {
@@ -265,6 +266,15 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showBoxPackingFields) {
+    cols.push(...BOX_PACKING_FIELDS.map(field => ({
+      id: field.key,
+      accessorFn: field.value,
+      header: sortableHeader(field.label, field.key, onSort, sortable),
+      cell: ({ row }) => <span className={`${styles.text} block whitespace-pre-line min-w-[90px] max-w-[260px] break-words`}>{field.value(row.original)}</span>,
+    })));
+  }
+
   if (config.showStockCountingFields) {
     cols.push(
       {
@@ -425,6 +435,23 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             })}
             <IncidentCardRow icon={Activity} label="Total Boxes" value={row.boxCount ?? 0} />
             <IncidentCardRow icon={Activity} label="Events" value={row.eventCount ?? 0} />
+          </>
+        )}
+        {config.showBoxPackingFields && (
+          <>
+            <IncidentCardRow icon={Activity} label="Box ID" value={row.boxId ?? '--'} />
+            <IncidentCardRow icon={Users} label="Completed by" value={row.completedBy ?? '--'} />
+            <div className="space-y-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5">
+              {packingZones(row.zones).length ? packingZones(row.zones).map((zone, index) => (
+                <div key={`${zone.zone}-${index}`} className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                  <span className="min-w-0 break-words text-[var(--tx)]">{zone.zone ?? '--'}</span>
+                  <span className="text-[var(--tx2)]">Box {zone.boxNumber ?? '--'} · {packingSeconds(zone.timeTakenSec)}</span>
+                </div>
+              )) : <span className="text-xs text-[var(--tx3)]">No zone details</span>}
+            </div>
+            <IncidentCardRow icon={Activity} label="End time source" value={row.endTimeSource ?? '--'} />
+            <IncidentCardRow icon={Activity} label="Detected via" value={row.detectedVia ?? '--'} />
+            <div className="text-xs leading-relaxed text-[var(--tx2)]"><span className="text-[var(--tx3)]">Confirmation: </span>{row.confirmationReason ?? '--'}</div>
           </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />

@@ -54,6 +54,7 @@ import {
   BrushCleaning,
   Grid3x3,
   FileChartColumn,
+  Package,
 } from 'lucide-react';
 
 import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
@@ -101,6 +102,7 @@ const stevinrockLogItems = [
   { key: 'waste-disposal', label: 'Sand, Dust, Waste & Scrap Disposal Logs', path: 'logs/waste-disposal', icon: Trash2, permissionKey: 'logs', permissionSubKey: 'wasteDisposalLogs', logsConfigKey: 'wasteDisposalLogs' },
   { key: 'animal-entry', label: 'Unauthorized Animal Entry Logs', path: 'logs/animal-entry', icon: PawPrint, permissionKey: 'logs', permissionSubKey: 'animalEntryLogs', logsConfigKey: 'animalEntryLogs' },
   { key: 'messy-area', label: 'Messy Area Logs', path: 'logs/messy-area', icon: BrushCleaning, permissionKey: 'logs', permissionSubKey: 'messyAreaLogs', logsConfigKey: 'messyAreaLogs' },
+  { key: 'box-packing', label: 'Box Packing Logs', path: 'logs/box-packing', icon: Package, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
   {
     key: 'stock-counting',
     label: 'Loading/Unloading Stock Logs',

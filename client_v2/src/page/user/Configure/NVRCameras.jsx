@@ -23,6 +23,7 @@ import { encrypt, decrypt } from '../../../helpers/decryptNvr';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import HScrollHint from '../../../components/HScrollHint';
+import { Popover, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import { usePermissions } from '@/context/PermissionContext';
 import { isLocalSetup } from '@/utils/jwt';
 import * as XLSX from 'xlsx';
@@ -2003,14 +2004,6 @@ export default function NVRCameras() {
   const [siteFilter, setSiteFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const nvrPickerRef = useRef(null);
-
-  useEffect(() => {
-    if (!nvrPickerOpen) return;
-    const h = (e) => { if (nvrPickerRef.current && !nvrPickerRef.current.contains(e.target)) setNvrPickerOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [nvrPickerOpen]);
 
   const nvrsApi     = useApi(() => getNvrs(0, 100), []);
   const channelsApi = useApi(
@@ -2131,7 +2124,7 @@ export default function NVRCameras() {
       setManageCamerasNvr(nvrs[0]);
       return;
     }
-    setNvrPickerOpen(true);
+    setNvrPickerOpen(open => !open);
   }
 
   return (
@@ -2212,39 +2205,42 @@ export default function NVRCameras() {
               {camFiltered.length} of {channels.length} cameras
             </span>
           )}
-          <div ref={nvrPickerRef} style={{ marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {SHOW_NVR_ACTIONS && canViewChannels && !permissionsLoading && (
-              <button
-                onClick={handleManageCamerasClick}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
-                  background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
-                }}
-              >
-                <ListVideo size={13} /> Manage Cameras
-              </button>
-            )}
-            {nvrPickerOpen && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
-                minWidth: 200, background: 'var(--bg1solid)', border: '1px solid var(--bd)',
-                borderRadius: 10, boxShadow: '0 10px 32px rgba(0,0,0,.3)', overflow: 'hidden',
-              }}>
-                {nvrs.map(n => (
-                  <div
-                    key={n._id || n.id}
-                    onClick={() => { setManageCamerasNvr(n); setNvrPickerOpen(false); }}
-                    style={{ padding: '9px 14px', fontSize: 12.5, color: 'var(--tx)', cursor: 'pointer', borderBottom: '1px solid var(--bd)' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    {n.name || n.nvrName || 'Unknown NVR'}
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Popover open={nvrPickerOpen} onOpenChange={setNvrPickerOpen}>
+              {SHOW_NVR_ACTIONS && canViewChannels && !permissionsLoading && (
+                <button
+                  type="button"
+                  aria-expanded={nvrPickerOpen}
+                  aria-controls={nvrPickerOpen ? 'manage-cameras-nvr-picker' : undefined}
+                  onClick={handleManageCamerasClick}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
+                    background: 'var(--bg2)', border: '1px solid var(--bd)',
+                    borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                  }}
+                >
+                  <ListVideo size={13} /> Manage Cameras
+                </button>
+              )}
+              {/* Portal escapes the inventory clipping; long lists scroll within the viewport. */}
+              <PopoverContent align="end" sideOffset={6} className="w-[280px] max-h-[min(320px,calc(100dvh-32px))] overflow-y-auto overscroll-contain vq-scroll">
+                <div id="manage-cameras-nvr-picker" aria-label="Select NVR to manage cameras">
+                  {nvrs.map(n => (
+                    <button
+                      type="button"
+                      key={n._id || n.id}
+                      onClick={() => { setManageCamerasNvr(n); setNvrPickerOpen(false); }}
+                      style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12.5, color: 'var(--tx)', cursor: 'pointer', border: 0, borderBottom: '1px solid var(--bd)', background: 'transparent', textAlign: 'left', overflowWrap: 'anywhere' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {n.name || n.nvrName || 'Unknown NVR'}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 

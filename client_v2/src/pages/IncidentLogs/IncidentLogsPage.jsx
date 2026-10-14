@@ -17,6 +17,7 @@ import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentC
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
+import { packingExportValues } from './boxPacking';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -268,6 +269,7 @@ const IncidentLogsPage = ({ config }) => {
 
       const mapped = list.map((item) => ({
         ...item,
+        ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
         id: item._id,
         _id: item._id,
         incidentName: item.incidentName || '--',
@@ -680,7 +682,7 @@ const IncidentLogsPage = ({ config }) => {
         onPageChange={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         limit={limit}
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
-        searchKeys={['incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
+        searchKeys={config.showBoxPackingFields ? ['boxId', 'completedBy', 'packingZone', 'endTimeSource', 'detectedVia', 'confirmationReason', 'nvrName', 'channelName', 'createdAt'] : ['incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
         searchQuery={searchInput}
         onSearchChange={(v) => dispatch({ type: 'SET_SEARCH_INPUT', value: v })}
         startDate={startDate}

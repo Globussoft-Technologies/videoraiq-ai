@@ -291,3 +291,23 @@ export const BLURRED_CAMERA_CONFIG = {
   showIndustrialFields: false,
   showBlurredCameraFields: true,
 };
+
+export const BOX_PACKING_CONFIG = {
+  endpoint: '/incidents/logs/box-packing-detection',
+  title: 'Box Packing Logs',
+  fileName: 'box_packing_logs',
+  sheetName: 'Box Packing Logs',
+  storagePrefix: 'box_packing',
+  permissionKey: 'boxPackingLogs',
+  accessDenied: "You don't have permission to view Box Packing Logs.",
+  showBoxPackingFields: true,
+  showIncidentName: false,
+  showStatus: false,
+  showSeverity: false,
+  showSeverityFilter: false,
+  showStats: false,
+  sortable: true,
+  gridVariant: 'details',
+  enableViewExports: false,
+  datePickerVariant: 'preset',
+};

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { fetchIncidentLogs } from './Api';
 import { formatStatus } from './incidentColumns';
 import { boxSplitLabel } from './stockMovement';
+import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
 
 const resolveIncidentImageUrl = (value) => {
@@ -48,6 +49,7 @@ const fetchAllForExport = async (config, params) => {
       evidenceScoreStr = Number.isNaN(n) ? String(item.evidenceScore) : n <= 1 ? `${Math.round(n * 100)}%` : `${Math.round(n)}%`;
     }
     return {
+      ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -87,9 +89,10 @@ const buildExportColumns = (config) => {
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });
   cols.push(
     { key: 'nvrName', label: 'NVR Name' },
-    { key: 'channelName', label: 'Camera Name' },
-    { key: 'severity', label: 'Severity' }
+    { key: 'channelName', label: 'Camera Name' }
   );
+  if (config.showSeverity !== false) cols.push({ key: 'severity', label: 'Severity' });
+  if (config.showBoxPackingFields) cols.push(...BOX_PACKING_FIELDS.map(({ key, label }) => ({ key, label })));
 
   if (config.showFireSmokeFields) {
     cols.push(
