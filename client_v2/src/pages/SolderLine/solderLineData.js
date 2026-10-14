@@ -114,16 +114,22 @@ function buildStation(station, data, now) {
   // Hour-of-day buckets ("06".."23"), summed across days for multi-day ranges.
   const buckets = new Map();
   const bucket = (hh) => {
-    if (!buckets.has(hh)) buckets.set(hh, { h: hh, panels: 0, missedJoints: 0, requiredJoints: 0, ops: [] });
+    if (!buckets.has(hh)) buckets.set(hh, { h: hh, panels: 0, completedJoints: 0, missedJoints: 0, requiredJoints: 0, ops: [] });
     return buckets.get(hh);
   };
   const opCell = (b, op) => {
     while (b.ops.length <= op) b.ops.push({ joints: 0, solderSec: 0, missed: 0 });
     return b.ops[op];
   };
+  const reportedHours = new Set();
   data.hourly.filter((r) => r.channelId === id).forEach((r) => {
-    const b = bucket(r.hour.slice(11, 13));
+    const hour = r.hour.slice(11, 13);
+    reportedHours.add(hour);
+    const b = bucket(hour);
     b.panels += r.panels;
+    b.completedJoints += Number.isFinite(Number(r.completedJoints))
+      ? Number(r.completedJoints)
+      : sum((r.zones || []).map(z => Number(z.joints) || 0));
     b.missedJoints += r.missedJoints || 0;
     b.requiredJoints += r.requiredJoints ?? r.panels * pointsPerPanel;
     r.zones.forEach((z) => {
@@ -132,16 +138,12 @@ function buildStation(station, data, now) {
       c.solderSec += z.solderSec;
     });
   });
-  missed.forEach((m) => bucket(m.start.format('HH')));
-  absences.forEach((a) => bucket(a.start.format('HH')));
-
-  const present = [...buckets.keys()].map(Number);
-  const hours = present.length
-    ? Array.from({ length: Math.max(...present) - Math.min(...present) + 1 }, (_, k) => String(Math.min(...present) + k).padStart(2, '0'))
-    : [];
+  // Render only the time buckets supplied by the hourly API. Filling every
+  // gap between the first and last record fabricated zero-value log rows.
+  const hours = [...reportedHours].sort((a, b) => Number(a) - Number(b));
   const hourly = hours.map((h) => {
-    const b = buckets.get(h) || { h, panels: 0, missedJoints: 0, requiredJoints: 0, ops: [] };
-    return { h, panels: b.panels, missedJoints: b.missedJoints, requiredJoints: b.requiredJoints, ops: zones.map((_, i) => ({ ...(b.ops[i] || { joints: 0, solderSec: 0 }), missed: b.missedJoints ? null : 0 })) };
+    const b = buckets.get(h) || { h, panels: 0, completedJoints: 0, missedJoints: 0, requiredJoints: 0, ops: [] };
+    return { h, panels: b.panels, completedJoints: b.completedJoints, missedJoints: b.missedJoints, requiredJoints: b.requiredJoints, ops: zones.map((_, i) => ({ ...(b.ops[i] || { joints: 0, solderSec: 0 }), missed: b.missedJoints ? null : 0 })) };
   });
   const chart = buildChartSeries({ startDate: data.startDate, endDate: data.endDate,
     timezone: data.timezone || getConfiguredTimezone(), records: data.hourly.filter(mine), hourly, zones, pointsPerPanel,
@@ -173,7 +175,7 @@ function buildStation(station, data, now) {
   });
 
   const panels = sum(hourly.map((r) => r.panels));
-  const joints = sum(ops.map((o) => o.joints));
+  const joints = sum(hourly.map((r) => r.completedJoints));
   const solderSec = sum(ops.map((o) => o.solderSec));
   const pointRows = Array.from({ length: pointsPerPanel }, (_, k) => {
     const point = k + 1;

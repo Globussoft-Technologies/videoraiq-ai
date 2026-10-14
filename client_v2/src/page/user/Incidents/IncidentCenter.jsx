@@ -1088,26 +1088,26 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               maxWidth: carModel ? '100%' : undefined,
             }}
           >
-            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || isSolder ? 20 : 40, padding: carModel || isSolder ? '18px 30px 20px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : isSolder ? 'min(760px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(isSolder ? { maxHeight: '50vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
+            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || isSolder ? 20 : 40, padding: carModel || isSolder ? '10px 18px 12px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : isSolder ? 'min(580px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(isSolder ? { maxHeight: '36vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
               {/* Title block */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: carModel || isSolder ? '100%' : undefined }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: isSolder ? 2 : 4, minWidth: 0, width: carModel || isSolder ? '100%' : undefined }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
                   Security Feed
                 </span>
-                <h1 style={{ margin: 0, fontSize: carModel ? 22 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
+                <h1 style={{ margin: 0, fontSize: carModel ? 22 : isSolder ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.incidentName || det}
                 </h1>
-                <p style={{ margin: 0, fontSize: carModel ? 13 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
+                <p style={{ margin: 0, fontSize: carModel ? 13 : isSolder ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.description || [cam, site].filter(Boolean).join(' · ')}
                 </p>
-                <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 2 }}>
-                  {shortDateTime(item.timeOfIncident)}{!itemRemoved && ` · ${index + 1} / ${items.length}`}
+                <span style={{ fontFamily: 'monospace', fontSize: isSolder ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: isSolder ? 0 : 2 }}>
+                  {shortDateTime(item.timeOfIncident)}{!isSolder && !itemRemoved && ` · ${index + 1} / ${items.length}`}
                 </span>
                 <CarModelDetails item={item} />
-                <IncidentZoneDetails item={item} variant="lightbox" />
+                <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
-                <div style={{ marginTop: carModel ? 6 : 8 }}>
+                <div style={{ marginTop: carModel ? 6 : isSolder ? 3 : 8 }}>
                   <VehicleTagStrip
                     item={item}
                     onTagUser={onTagUser}
@@ -1132,7 +1132,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   top: carModel ? 26 : undefined,
                   right: carModel ? 250 : undefined,
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
+                  padding: isSolder ? '6px 14px' : '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
                   fontFamily: 'inherit',
                   border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
                   background: saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)') : 'rgba(255,255,255,.05)',
@@ -1169,7 +1169,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   top: carModel ? 26 : undefined,
                   right: carModel ? 56 : undefined,
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 20px', cursor: 'pointer',
+                  padding: isSolder ? '6px 14px' : '8px 20px', cursor: 'pointer',
                   border: '1px solid rgba(59,130,246,.5)',
                   background: 'rgba(59,130,246,.2)',
                   color: '#60a5fa', transition: 'background .15s', whiteSpace: 'nowrap',

@@ -1,6 +1,6 @@
 import { solderAbsenceFields } from '../../../helpers/solderIncidentDetails.js';
 
-export default function IncidentZoneDetails({ item, variant = 'card' }) {
+export default function IncidentZoneDetails({ item, variant = 'card', compact = false }) {
   if (item.incidentType !== 'deskSolarShoulderDetection') return null;
   const dark = variant === 'lightbox';
   const colors = dark ? { '--tx2': 'rgba(255,255,255,.9)', '--tx3': 'rgba(255,255,255,.65)', '--bd': 'rgba(255,255,255,.2)' } : {};
@@ -21,20 +21,20 @@ export default function IncidentZoneDetails({ item, variant = 'card' }) {
   }
 
   return (
-    <div style={{ ...colors, display: 'grid', gap: 6, color: 'var(--tx2)', fontSize: dark ? 12 : 11 }}>
+    <div style={{ ...colors, display: 'grid', gap: compact ? 3 : 6, color: 'var(--tx2)', fontSize: compact ? 11 : dark ? 12 : 11 }}>
       {(item.panelId || item.missedJoints != null || item.point != null) && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: compact ? 8 : 12, flexWrap: 'wrap' }}>
           {item.panelId && <span>Panel: <strong>{item.panelId}</strong></span>}
           {item.missedJoints != null && <span>Missed joints: <strong>{item.missedJoints}</strong></span>}
           {item.point != null && <span>Missing point: <strong>P{item.point}</strong></span>}
         </div>
       )}
-    {zones.length > 0 && <table aria-label="Zone soldering details" style={{ width: '100%', borderCollapse: 'collapse', fontSize: dark ? 12 : 11, color: 'var(--tx2)', tableLayout: 'fixed' }}>
+    {zones.length > 0 && <table aria-label="Zone soldering details" style={{ width: '100%', borderCollapse: 'collapse', fontSize: compact ? 11 : dark ? 12 : 11, color: 'var(--tx2)', tableLayout: 'fixed' }}>
       <thead>
         <tr style={{ color: 'var(--tx3)' }}>
-          <th scope="col" style={{ textAlign: 'left', padding: '4px 4px 4px 0', width: '40%' }}>Zone</th>
-          <th scope="col" title="presenceSec" style={{ textAlign: 'right', padding: '4px' }}>Presence (s)</th>
-          <th scope="col" style={{ textAlign: 'right', padding: '4px 0 4px 4px', width: '20%' }}>Done</th>
+          <th scope="col" style={{ textAlign: 'left', padding: compact ? '2px 4px 2px 0' : '4px 4px 4px 0', width: '40%' }}>Zone</th>
+          <th scope="col" title="presenceSec" style={{ textAlign: 'right', padding: compact ? '2px 4px' : '4px' }}>Presence (s)</th>
+          <th scope="col" style={{ textAlign: 'right', padding: compact ? '2px 0 2px 4px' : '4px 0 4px 4px', width: '20%' }}>Done</th>
         </tr>
       </thead>
       <tbody>

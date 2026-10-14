@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImageOff, LayoutGrid, Maximize2, Rows3, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ImageOff, Info, LayoutGrid, Maximize2, Rows3, X } from 'lucide-react';
 import CameraStream from '@/components/CameraStream';
 import FullscreenZoomSurface from '@/components/FullscreenZoomSurface';
 import { mediaUrl } from '@/lib/format';
@@ -404,6 +405,53 @@ function Bars({ rows, render, height = 200, minColumnWidth = 36, label }) {
   );
 }
 
+function InfoHint({ title, lines }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const [position, setPosition] = useState(null);
+  const tooltipId = `solder-info-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+  useEffect(() => {
+    if (!open || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setPosition({
+      top: rect.bottom + 8,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 296)),
+    });
+  }, [open]);
+
+  return (
+    <span ref={ref} style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <button
+        type="button"
+        aria-label={`About ${title}`}
+        aria-describedby={open ? tooltipId : undefined}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}
+        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, padding: 0, color: 'var(--tx3)', background: 'transparent', border: 'none', borderRadius: '50%',  }}
+      >
+        <Info size={13} strokeWidth={2} aria-hidden="true" />
+      </button>
+      {open && position && createPortal(
+        <div id={tooltipId} role="tooltip" style={{ position: 'fixed', zIndex: 90, top: position.top, left: position.left, width: 272, maxWidth: 'calc(100vw - 24px)', boxSizing: 'border-box', padding: '11px 13px', borderRadius: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', boxShadow: '0 10px 24px rgba(0,0,0,.18)', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx)' }}>{title}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 5 }}>
+            {lines.map((line) => <div key={line} style={{ fontSize: 10, lineHeight: 1.45, color: 'var(--tx)' }}>{line}</div>)}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
+function ChartTitle({ title, lines }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{title}<InfoHint title={title} lines={lines} /></span>;
+}
+
 function SolderSection({ s }) {
   const [jointHover, setJointHover] = useState(null);
   const has = s.sum.hasThroughput;
@@ -428,7 +476,14 @@ function SolderSection({ s }) {
       <SectionHead n="02" color="#a855f7" title="Conveyor Count & Soldering Activity" sub={`${s.pointsPerPanel} solder joints required per panel · workers share the work`} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
         <Panel>
-          <PanelHead title={panelTitle} right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, averagePeriods)).toFixed(1)} / {chart.unit === 'hour' ? 'HR' : chart.unit === 'week' ? 'WK' : 'MO'}</span>} />
+          <PanelHead
+            title={<ChartTitle title={panelTitle} lines={[
+              `Displays the number of panels processed at this station for each recorded ${chart.unit} in the selected date range.`,
+              `Each bar represents one recorded ${chart.unit}. Periods with no activity are not shown.`,
+              `The value above each bar is the panel count. The average uses the displayed ${chart.unit} periods.`,
+            ]} />}
+            right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, averagePeriods)).toFixed(1)} / {chart.unit === 'hour' ? 'HR' : chart.unit === 'week' ? 'WK' : 'MO'}</span>}
+          />
           {!has ? <NoPeriodData /> : (
             <Bars rows={chartRows} label={`${panelTitle} chart`} minColumnWidth={panelColumnWidth} render={(r) => (
               <>
@@ -439,7 +494,11 @@ function SolderSection({ s }) {
           )}
         </Panel>
         <Panel style={{ position: 'relative' }}>
-          <PanelHead title={jointTitle} right={(
+          <PanelHead title={<ChartTitle title={jointTitle} lines={[
+            `Displays completed solder joints for each operator during every recorded ${chart.unit} in the selected date range.`,
+            `Each coloured bar represents an operator. The red value above a group shows the total missed joints across all workers for that ${chart.unit}.`,
+            `Only ${chart.unit} periods with recorded activity are shown. Hover or focus a bar to view its operator and period details.`,
+          ]} />} right={(
             <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 12, ...mono, fontSize: 10, color: 'var(--tx3)' }}>
               {s.ops.map((o) => <span key={o.i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: o.color }} />{o.code}</span>)}
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: BAD }} />MISSED</span>
@@ -483,7 +542,7 @@ function HourSection({ s, model, range }) {
   const sorting = useTableSort(s.hourly, JSON.stringify([s._id, range?.startDate, range?.endDate]), (row, key) => {
     if (key === 'Hour') return Number(row.h);
     if (key === 'Panels') return row.panels;
-    if (key === 'Completed joints') return row.ops.reduce((sum, operator) => sum + operator.joints, 0);
+    if (key === 'Completed joints') return row.completedJoints;
     if (key === 'Missed joints') return row.missedJoints;
     return row.ops[s.ops.findIndex(operator => `${operator.code} joints` === key)]?.joints;
   });
@@ -513,7 +572,7 @@ function HourSection({ s, model, range }) {
             {pagination.pageRows.map(row => (
               <tr key={row.h} style={{ borderTop: '1px solid var(--bd)' }}>
                 <td style={td}>{rangeLabel(row.h)}</td><td style={{ ...td, fontWeight: 700 }}>{row.panels}</td>
-                <td style={td}>{row.ops.reduce((sum, operator) => sum + operator.joints, 0)}</td><td style={{ ...td, color: BAD }}>{row.missedJoints}</td>
+                <td style={td}>{row.completedJoints}</td><td style={{ ...td, color: BAD }}>{row.missedJoints}</td>
                 {row.ops.map((operator, index) => <td key={index} style={td}>{operator.joints}</td>)}
               </tr>
             ))}

@@ -12,11 +12,14 @@ const valueFor = (row, key) => ({ Panel: row.panelId, 'Soldered joints': row.com
 export default function MissedSolderAlerts({ station }) {
   const rows = useMemo(() => alertRows({ stations: [station] }).filter(row => row.type === 'missed'), [station]);
   const sorting = useTableSort(rows, station._id, valueFor);
-  const missed = rows.reduce((sum, row) => sum + row.missedJoints, 0);
+  // Each row is a panel-level missed-solder alert. `missedJoints` is the
+  // severity of that alert, not another alert record, so summing it makes the
+  // badge report joints rather than alerts (e.g. 391 rows × 6 joints = 2,346).
+  const alertCount = rows.length;
   return <Panel pad={false} style={{ minWidth: 0 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
       <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Missed solder alerts</span>
-      <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: BAD, border: `1px solid ${BAD}73`, borderRadius: 5, padding: '2px 8px' }}>{missed}</span>
+      <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: BAD, border: `1px solid ${BAD}73`, borderRadius: 5, padding: '2px 8px' }}>{alertCount}</span>
       <span style={{ marginLeft: 'auto', ...mono, fontSize: 10.5, color: 'var(--tx3)' }}>Across all workers</span>
     </div>
     <div style={{ maxHeight: 320, overflow: 'auto' }}>

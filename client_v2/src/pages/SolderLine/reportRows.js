@@ -49,7 +49,7 @@ export function buildSolderReportRows(type, station, snapshotUrl = value => valu
   }
   return station.hourly.map(hour => ({
     Hour: `${hour.h}:00-${String(Number(hour.h) + 1).padStart(2, '0')}:00`, Panels: hour.panels,
-    ...(type === 'panels' ? {} : { 'Completed joints': hour.ops.reduce((sum, operator) => sum + operator.joints, 0), 'Missed joints': hour.missedJoints ?? 0, ...Object.fromEntries(station.ops.flatMap(operator => {
+    ...(type === 'panels' ? {} : { 'Completed joints': hour.completedJoints, 'Missed joints': hour.missedJoints ?? 0, ...Object.fromEntries(station.ops.flatMap(operator => {
       const cell = hour.ops[operator.i];
       return [[`${operator.code} joints`, cell.joints]];
     })) }),
