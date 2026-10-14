@@ -1,5 +1,5 @@
 import moment from 'moment-timezone';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
@@ -29,6 +29,13 @@ const statusOf = (item) => {
   if (item?.resolved) return 'Resolved';
   if (item?.report?.status === true) return 'Reported';
   return 'New';
+};
+
+// The API stores the Medium severity under the `moderate` key. Keep exports
+// consistent with the Incident Center's user-facing severity label.
+const severityLabel = (severity) => {
+  const value = text(severity);
+  return value.toLowerCase() === 'moderate' ? 'Medium' : value;
 };
 
 const fetchAllFilteredIncidents = async (filter) => {
@@ -67,7 +74,7 @@ const mapRow = (item, index) => {
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
-    Severity: text(item?.severity),
+    Severity: severityLabel(item?.severity),
     Status: statusOf(item),
     'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, 'DD/MM/YYYY hh:mm A'),
     'Vehicle Number': text(item?.vehicleNumber),
@@ -83,7 +90,9 @@ const exportExcel = (rows, showVehicleNumber) => {
     : rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'Vehicle Number')));
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
   worksheet['!cols'] = Object.keys(exportRows[0]).map((key) => ({
-    wch: Math.min(42, Math.max(key.length + 2, ...exportRows.map((row) => String(row[key] ?? '').length + 2))),
+    wch: key === 'Image'
+      ? 20
+      : Math.min(42, Math.max(key.length + 2, ...exportRows.map((row) => String(row[key] ?? '').length + 2))),
   }));
 
   const imageColumn = Object.keys(exportRows[0]).indexOf('Image');
@@ -91,7 +100,14 @@ const exportExcel = (rows, showVehicleNumber) => {
     const url = row.Image;
     if (!url || url === '--') return;
     const address = XLSX.utils.encode_cell({ r: index + 1, c: imageColumn });
-    if (worksheet[address]) worksheet[address].l = { Target: url, Tooltip: 'Open incident image' };
+    if (worksheet[address]) {
+      worksheet[address] = {
+        t: 's',
+        v: 'View image',
+        l: { Target: url, Tooltip: 'Open incident image' },
+        s: { font: { color: { rgb: '000080' } } },
+      };
+    }
   });
 
   const workbook = XLSX.utils.book_new();
@@ -134,6 +150,13 @@ const exportListPdf = (rows, showVehicleNumber) => {
     styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak', valign: 'middle' },
     headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
     columnStyles: Object.fromEntries(columns.map((column, index) => [index, { cellWidth: columnWidths[column] }])),
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.column.index !== imageColumn) return;
+      const url = rows[data.row.index]?.Image;
+      if (url && url !== '--') {
+        data.cell.styles.textColor = [0, 0, 128];
+      }
+    },
     didDrawCell: (data) => {
       if (data.section !== 'body' || data.column.index !== imageColumn) return;
       const url = rows[data.row.index]?.Image;
