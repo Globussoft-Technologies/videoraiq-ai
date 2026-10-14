@@ -9,6 +9,7 @@ import { getApiMessage } from '../../utils/apiError'
 import { getMonitoringCameras } from './api'
 import AdminPicker from './AdminPicker'
 import MonitoringDetails from './MonitoringDetails'
+import MonitoringToggle from './MonitoringToggle'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/8 dark:bg-[#0b0d13]'
 const formatTime = value => value ? new Date(value).toLocaleString('en-GB', {
@@ -16,6 +17,7 @@ const formatTime = value => value ? new Date(value).toLocaleString('en-GB', {
 }) : '—'
 
 function StreamBadge({ alive, camera }) {
+  if (camera.monitoringPaused) return <span className="text-xs text-gray-400">Monitoring paused</span>
   if (camera.alertsMuted) return <span className="text-xs text-gray-400">Muted</span>
   if (camera.state === 'RECOVERING' && camera.availability !== 'STARTING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming recovery</span>
   if (camera.state === 'UNKNOWN' && camera.availability === 'REPORTED_RUNNING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming availability</span>
@@ -41,7 +43,7 @@ function StreamCount({ label, value, alive, active, onClick }) {
   </button>
 }
 
-function ClientStreams({ adminId, onAdminChange }) {
+function ClientStreams({ adminId, onAdminChange, monitoringEnabled }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -70,7 +72,7 @@ function ClientStreams({ adminId, onAdminChange }) {
     }
     load()
     return () => { stopped = true; clearTimeout(timer); controller.abort() }
-  }, [adminId, nvrId, status, page, pageSize, reload])
+  }, [adminId, nvrId, status, page, pageSize, reload, monitoringEnabled])
 
   const selectStatus = value => { setStatus(value === status ? '' : value); setPage(0) }
   return <>
@@ -82,19 +84,19 @@ function ClientStreams({ adminId, onAdminChange }) {
     {error && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-300">{error} <button type="button" onClick={() => setReload(value => value + 1)} className="underline">Retry</button></p>}
     {loading && !data ? <LoadingState message="Loading streams…" /> : data && <>
       <div className="mb-5 grid grid-cols-2 gap-4">
-        <StreamCount label="Streaming alive" value={error ? '—' : data.counts.alive} alive active={status === 'alive'} onClick={() => selectStatus('alive')} />
-        <StreamCount label="Streaming down" value={error ? '—' : data.counts.down} alive={false} active={status === 'down'} onClick={() => selectStatus('down')} />
+        <StreamCount label="Streaming alive" value={error || monitoringEnabled === false || !data.enabled ? '—' : data.counts.alive} alive active={status === 'alive'} onClick={() => selectStatus('alive')} />
+        <StreamCount label="Streaming down" value={error || monitoringEnabled === false || !data.enabled ? '—' : data.counts.down} alive={false} active={status === 'down'} onClick={() => selectStatus('down')} />
       </div>
       <p className="mb-3 text-xs text-gray-400">The alive count includes available idle and status-reported feeds. These do not establish verified video playback.</p>
       {status && <button type="button" onClick={() => selectStatus('')} className="mb-3 text-xs font-semibold text-purple-600 dark:text-purple-300">Show all streams</button>}
-      {(!data.enabled || data.statusUnavailable) && <p className="mb-4 text-xs text-gray-400 dark:text-gray-500">{!data.enabled ? 'Stream monitoring is not enabled.' : 'Some stream statuses are unavailable and are excluded from the counts.'}</p>}
+      {(!data.enabled || monitoringEnabled === false || data.statusUnavailable) && <p className="mb-4 text-xs text-gray-400 dark:text-gray-500">{!data.enabled || monitoringEnabled === false ? 'Stream monitoring and Telegram alerts are paused.' : 'Some stream statuses are unavailable and are excluded from the counts.'}</p>}
       <div className={`${panel} overflow-hidden`} aria-busy={loading}>
         <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left">
           <thead><tr className="border-b border-gray-200 dark:border-white/8">{['Camera', 'NVR', 'Streaming', 'Down since'].map(heading => <th key={heading} scope="col" className="px-5 py-3 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">{heading}</th>)}</tr></thead>
           <tbody>{!data.cameras.length ? <tr><td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-400">No streams match this selection.</td></tr> : data.cameras.map(camera => <tr key={camera.cameraId} className="border-b border-gray-100 last:border-b-0 dark:border-white/5">
             <td className="px-5 py-4"><p className="text-sm font-semibold text-gray-900 dark:text-white">{camera.name}</p><p className="mt-1 font-mono text-[10px] text-gray-400">{camera.channelId || '—'}</p></td>
             <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{camera.nvrName}</td>
-            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} camera={error ? {} : camera} /><button onClick={() => setDetails(camera)} className="mt-1 block text-[10px] text-purple-600 dark:text-purple-300">Details</button>{camera.remindersPaused && <span className="mt-1 block text-[10px] text-gray-400">Reminders paused</span>}</td>
+            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} camera={monitoringEnabled === false ? { monitoringPaused: true } : error ? {} : camera} /><button onClick={() => setDetails(camera)} className="mt-1 block text-[10px] text-purple-600 dark:text-purple-300">Details</button>{camera.remindersPaused && <span className="mt-1 block text-[10px] text-gray-400">Reminders paused</span>}</td>
             <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400" title="First detected failure in this outage">{formatTime(!error ? camera.downSince : null)}</td>
           </tr>)}</tbody>
         </table></div>
@@ -106,12 +108,13 @@ function ClientStreams({ adminId, onAdminChange }) {
 }
 
 export default function StreamMonitoring() {
+  const [monitoringEnabled, setMonitoringEnabled] = useState(null)
   const { adminId } = useParams()
   const navigate = useNavigate()
   const chooseAdmin = value => navigate(value ? `/stream-monitoring/${value}` : '/stream-monitoring')
   return <>
     <Topbar eyebrow="PLATFORM · OPERATIONS" title="Stream Monitoring" showRegionStatus={false} />
-    <div className="px-4 py-6 sm:px-8">{adminId ? <ClientStreams key={adminId} adminId={adminId} onAdminChange={chooseAdmin} /> : <>
+    <div className="px-4 py-6 sm:px-8"><MonitoringToggle onChanged={setMonitoringEnabled} />{adminId ? <ClientStreams key={adminId} adminId={adminId} onAdminChange={chooseAdmin} monitoringEnabled={monitoringEnabled} /> : <>
       <AdminPicker onChange={chooseAdmin} />
       <div className={`${panel} px-6 py-14 text-center`}><Activity size={28} className="mx-auto mb-3 text-purple-500" /><p className="text-sm text-gray-500 dark:text-gray-400">Select an admin to view streaming alive, streaming down, and down times.</p></div>
     </>}</div>

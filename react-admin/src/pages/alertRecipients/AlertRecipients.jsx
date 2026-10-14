@@ -7,6 +7,7 @@ import CustomSelect from '../../components/UI/CustomSelect'
 import Pagination from '../clients/components/Pagination'
 import { getApiMessage } from '../../utils/apiError'
 import { getTelegramSettings, selectTelegramChannel, unlinkTelegramChannel } from './api'
+import MonitoringToggle from '../streamMonitoring/MonitoringToggle'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/8 dark:bg-[#0b0d13]'
 const button = 'inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50'
@@ -34,6 +35,7 @@ function DisconnectDialog({ channel, busy, onClose, onConfirm }) {
 
 export default function AlertRecipients() {
   const [data, setData] = useState(null)
+  const [monitoringEnabled, setMonitoringEnabled] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
@@ -129,6 +131,7 @@ export default function AlertRecipients() {
   return <>
     <Topbar eyebrow="PLATFORM · SETTINGS" title="Alert Recipients" showRegionStatus={false} />
     <div className="px-4 py-6 sm:px-8">
+      <MonitoringToggle onChanged={setMonitoringEnabled} />
       {error && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-300">{error} <button type="button" onClick={refreshChannels} className="underline">Retry</button></p>}
       {loading && !data ? <LoadingState message="Loading Telegram alerts…" /> : data && <>
         <div className="mb-5 inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-white/8 dark:bg-white/5"><span className="rounded-lg bg-linear-to-r from-blue-600 to-purple-600 px-5 py-2 text-xs font-semibold text-white">Telegram</span></div>
@@ -151,8 +154,8 @@ export default function AlertRecipients() {
                 <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">Send stream alerts to</p>
                 <CustomSelect value={data.selectedChatId} options={channels.map(channel => ({ value: channel.chatId, label: channel.channelName }))} onChange={selectChannel} disabled={busy || loading || !!error} />
               </div>}
-              <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Connecting a channel selects it and activates alerts automatically. Cameras are checked every {Math.round((data.checkIntervalMs || 300000) / 60000)} minutes. A suspected failure is checked again after {Math.round((data.confirmationDelayMs || 180000) / 60000)} minutes before the first Down alert. Confirmed outages receive reminders every {Math.round((data.reminderMs || 900000) / 60000)} minutes after successful delivery. Recovery is reported as soon as {data.recoveryConfirmations > 1 ? `${data.recoveryConfirmations} healthy reports confirm it` : 'the first healthy report confirms it'}. Idle and queued feeds do not trigger Down alerts.</p>
-              {!data.collectorEnabled && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Stream monitoring is disabled in the superadmin backend configuration.</p>}
+              <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Connecting a channel selects it for alerts when monitoring is On. Due cameras are checked in batches, with a second check after {Math.round((data.checkIntervalMs || 300000) / 60000)} minutes. Suspects are then checked individually every {Math.round((data.individualIntervalMs || 30000) / 1000)} seconds for {Math.round((data.verificationWindowMs || 300000) / 60000)} minutes. Down alerts require a final individual check before delivery. Healthy cameras are not checked again for {Math.round((data.aliveIntervalMs || 900000) / 60000)} minutes. Down and recovery reports are released at {Math.round((data.cycleMs || 900000) / 60000)}-minute cycle boundaries, grouped by admin and NVR. Reminders remain at least {Math.round((data.reminderMs || 900000) / 60000)} minutes apart after successful delivery. Idle and queued feeds do not trigger Down alerts.</p>
+              {(monitoringEnabled ?? data.collectorEnabled) === false && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Monitoring and Telegram alerts are paused.</p>}
               {!data.botConfigured && <p className="mt-3 text-xs text-red-600 dark:text-red-300">The Telegram bot is not configured in the superadmin backend.</p>}
             </div>
           </div>
@@ -165,7 +168,7 @@ export default function AlertRecipients() {
             <tbody>{filtered.length ? filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(channel => <tr key={channel.chatId} className="border-b border-gray-100 last:border-b-0 dark:border-white/5">
               <td className="px-5 py-4 text-xs font-semibold">{channel.channelName}</td>
               <td className="px-5 py-4 font-mono text-[11px] text-gray-500 dark:text-gray-400">{channel.chatId}</td>
-              <td className="px-5 py-4"><span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300">{channel.chatId === data.selectedChatId ? 'Receiving alerts' : 'Connected'}</span></td>
+              <td className="px-5 py-4"><span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300">{channel.chatId === data.selectedChatId ? ((monitoringEnabled ?? data.collectorEnabled) ? 'Receiving alerts' : 'Alerts paused') : 'Connected'}</span></td>
               <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">{date(channel.linkedAt)}</td>
               <td className="px-5 py-4"><button type="button" disabled={busy || !!error} onClick={() => setDisconnect(channel)} className={`${button} border border-red-500/30 text-red-600 dark:text-red-400`}>Disconnect</button></td>
             </tr>) : <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-400">{search ? 'No channels match this search.' : 'No Telegram channels connected yet.'}</td></tr>}</tbody>

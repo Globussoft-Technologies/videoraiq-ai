@@ -4,6 +4,7 @@ import { getMonitoringDetails, setMonitoringMuted } from './api'
 import { getApiMessage } from '../../utils/apiError'
 
 const time = value => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) + ' IST' : '?'
+const verificationLabels = { BATCH_RECHECK: 'Waiting for second batch check', INDIVIDUAL: 'Individual failure verification', READY: 'Waiting for report boundary', FINAL: 'Final delivery checks' }
 
 export default function MonitoringDetails({ adminId, camera, onClose, onChanged }) {
   const [data, setData] = useState(null)
@@ -35,6 +36,8 @@ export default function MonitoringDetails({ adminId, camera, onClose, onChanged 
           {[['Last confirmed state', data.state], ['Latest result', data.latestResult?.reason || '?'],
             ['Last healthy status report', time(data.lastSuccessfulCheckAt)],
             ['Status received', time(data.statusReceivedAt)], ['Next status check', time(data.nextCheckAt)],
+            ['Verification phase', verificationLabels[data.verification?.phase] || 'Routine batch / healthy cooldown'],
+            ['Report boundary', time(data.verification?.reportAt)],
             ['Source report age', typeof data.latestResult?.sourceStatusAgeMs === 'number' ? Math.round(data.latestResult.sourceStatusAgeMs / 1000) + ' seconds' : 'Not supplied'],
             ['Source observed', data.latestResult?.sourceObserved === true ? 'Yes' : data.latestResult?.sourceObserved === false ? 'No' : 'Not supplied'],
             ['Fresh output reported', data.latestResult?.outputFresh === true ? 'Yes' : data.latestResult?.outputFresh === false ? 'No' : 'Not supplied'],

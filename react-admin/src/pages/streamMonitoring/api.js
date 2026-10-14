@@ -1,6 +1,18 @@
 import axios from 'axios'
 import { waitForToken } from '../../utils/waitForToken'
 
+async function monitoringControlRequest(method, data, signal) {
+  const token = await waitForToken()
+  const response = await axios({ method, data, signal,
+    url: `${import.meta.env.VITE_BACKEND}/api/v1/stream-monitoring/control`,
+    headers: { 'x-access-token': token },
+  })
+  if (response.data?.body?.status === 'failed') throw new Error(response.data.body.message)
+  return response.data?.body?.data ?? response.data?.data ?? {}
+}
+export const getMonitoringControl = signal => monitoringControlRequest('get', undefined, signal)
+export const setMonitoringEnabled = enabled => monitoringControlRequest('put', { enabled })
+
 export async function getMonitoringCameras(adminId, params, signal) {
   const token = await waitForToken()
   const response = await axios.get(
