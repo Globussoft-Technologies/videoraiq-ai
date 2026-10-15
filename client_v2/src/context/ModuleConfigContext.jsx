@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import getAccessToken from '@/utils/getAccessToken';
+import { IS_LICENSING_ENABLED } from '@/helpers/license';
 
 const ModuleConfigContext = createContext({ modules: null, loading: true });
 
@@ -29,9 +30,14 @@ export function ModuleConfigProvider({ children }) {
   const { socket, connected } = useSocket() || {};
   const adminId = user?.adminId;
   const [modules, setModules] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(IS_LICENSING_ENABLED);
 
   useEffect(() => {
+    if (!IS_LICENSING_ENABLED) {
+      setModules(null);
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     let receivedLiveUpdate = false;
     if (!user) {

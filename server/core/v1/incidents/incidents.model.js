@@ -683,6 +683,7 @@ const DeskSolarShoulderDetectionIncident = Incident.discriminator(
 // array like the solder zones so it can be queried and aggregated.
 const BoxPackingDetectionSchema = OilLeakageDetectionSchema.clone();
 BoxPackingDetectionSchema.add({
+  adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
   boxId: { type: String, default: null },
   completedBy: { type: String, default: null },
   zones: {

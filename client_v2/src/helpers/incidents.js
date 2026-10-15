@@ -1,7 +1,10 @@
 import axios from 'axios';
 import getAccessToken from '@/utils/getAccessToken';
+import { getSessionId } from '@/utils/sessionIdentity';
+import { createPendingRead } from '../utils/pendingRead';
 
 const Api_url = import.meta.env.VITE_BACKEND;
+const pendingDashboardRead = createPendingRead();
 
 const unwrap = (res) => {
   const body = res?.data?.body;
@@ -10,14 +13,18 @@ const unwrap = (res) => {
   return body;
 };
 
-export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {}) => {
+export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {}, { sharePending = false } = {}) => {
   const token = getAccessToken();
-  const res = await axios.post(
-    `${Api_url}/incidents?skip=${skip}&limit=${limit}`,
+  const url = `${Api_url}/incidents?skip=${skip}&limit=${limit}`;
+  const read = async () => (await axios.post(
+    url,
     filter,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
-  );
-  const d = res?.data || {};
+  ))?.data;
+  const responseData = sharePending
+    ? await pendingDashboardRead(JSON.stringify([url, token, getSessionId(), filter]), read)
+    : await read();
+  const d = responseData || {};
   const body = d.body || {};
   const bodyData = body.data || {};
   const items =

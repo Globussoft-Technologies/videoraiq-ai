@@ -384,7 +384,7 @@ function Shell() {
       </main>
       <AppTour />
       {/* chatbot */}
-      <AssistantLauncher />
+      {/* <AssistantLauncher /> */}
     </div>
   );
 }

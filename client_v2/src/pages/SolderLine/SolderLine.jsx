@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import { useModuleConfig } from '@/context/ModuleConfigContext';
+import { isModuleAllowed } from '@/lib/navVisibility';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
@@ -33,8 +34,8 @@ export default function SolderLine() {
   const view = TABS.find((t) => t.view !== 'overview' && pathname.startsWith(t.to))?.view || 'overview';
   const { permissions, loading: permissionsLoading } = usePermissions();
   const { modules } = useModuleConfig();
-  const visibleTabs = TABS.filter((tab) => modules?.solarLineQc?.[tab.modulePageKey] === true);
-  const canOpenLogs = modules?.solarLineQc?.solderAlertLogs === true;
+  const visibleTabs = TABS.filter((tab) => isModuleAllowed({ moduleKey: 'solarLineQc', modulePageKey: tab.modulePageKey }, modules));
+  const canOpenLogs = isModuleAllowed({ moduleKey: 'solarLineQc', modulePageKey: 'solderAlertLogs' }, modules);
   const today = moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD');
   const [range, setRange] = useState({ startDate: today, endDate: today });
   const [raw, setRaw] = useState(null);

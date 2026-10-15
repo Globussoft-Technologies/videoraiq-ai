@@ -32,9 +32,12 @@ function severityFilterValue(value) {
   return value;
 }
 
+const fetchDashboardCountIncidents = (pagination, filters) =>
+  fetchIncidents(pagination, filters, { sharePending: true });
+
 async function getDashboardIncidentCounts(filters = {}) {
   const baseFilter = { ...filters, statusFilter: ALL_STATUS_FILTER };
-  const result = await fetchIncidents({ skip: 0, limit: 1 }, baseFilter);
+  const result = await fetchDashboardCountIncidents({ skip: 0, limit: 1 }, baseFilter);
   const counts = result.counts || {};
 
   if (counts.severity && counts.status) {
@@ -55,10 +58,10 @@ async function getDashboardIncidentCounts(filters = {}) {
   }
 
   const [high, active, resolved, reported] = await Promise.all([
-    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
-    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'new' }),
-    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'resolved' }),
-    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'reported' }),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'new' }),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'resolved' }),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'reported' }),
   ]);
 
   return {
@@ -101,8 +104,8 @@ async function getDashboardDailyComparison(filters = {}, today, previousDay) {
   });
 
   const [todayResult, previousResult] = await Promise.all([
-    fetchIncidents({ skip: 0, limit: 1 }, dailyFilter(today)),
-    fetchIncidents({ skip: 0, limit: 1 }, dailyFilter(previousDay)),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, dailyFilter(today)),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, dailyFilter(previousDay)),
   ]);
 
   return {

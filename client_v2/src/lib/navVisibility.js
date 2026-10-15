@@ -1,10 +1,12 @@
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from '@/layout/nav.config';
 import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
+import { IS_LICENSING_ENABLED } from '@/helpers/license';
 import { hasLiveDemoPlan } from '@/utils/jwt';
 
 export const LOGS_TOUR_KEY = 'logs-records';
 
 export function isModuleAllowed(item, modules) {
+  if (!IS_LICENSING_ENABLED) return true;
   if (!item?.moduleKey) return true;
   if (!modules) return false;
   const grants = modules[item.moduleKey] || {};
@@ -17,12 +19,14 @@ export function isModuleAllowed(item, modules) {
 // routable, but Flo Mattress builds do not advertise them in navigation,
 // header search, or the guided tour.
 export function isClientNavItemVisible(item) {
+  if (!IS_FLO_MATTRESS && item?.requiresFloMattress === true) return false;
   if (IS_FLO_MATTRESS && item?.hideForFloMattress === true) return false;
   if (item?.requiresLiveDemoPlan === true && !hasLiveDemoPlan()) return false;
   return true;
 }
 
 export function isClientNavGroupVisible(group) {
+  if (!IS_FLO_MATTRESS && group?.requiresFloMattress === true) return false;
   return !(IS_FLO_MATTRESS && group?.hideForFloMattress === true);
 }
 
