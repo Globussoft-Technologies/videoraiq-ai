@@ -289,7 +289,7 @@ function PresenceCard({ o }) {
   );
 }
 
-function AbsenceSection({ s, model, onOpenLogs, preview }) {
+function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
   const latest = s.absences[s.absences.length - 1];
   const total = s.absences.reduce((a, b) => a + b.durSec, 0);
   const span = s.windowStart && s.windowEnd ? s.windowEnd.diff(s.windowStart, 'seconds') : 0;
@@ -347,7 +347,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
               </div>
             )}
           </Panel>
-          <LivePanelLog station={s} live={model.isToday} />
+          <LivePanelLog key={JSON.stringify([s._id, range?.startDate, range?.endDate])} station={s} live={model.isToday} />
         </div>
       </div>
 
@@ -620,7 +620,7 @@ export default function Overview({ model, onOpenLogs, selected, onSelect, range 
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>{absentOp.zone} desk empty on {s.name}</span>
         </div>
       )}
-      <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} />
+      <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} range={range} />
       <SolderSection s={s} />
       <HourSection s={s} model={model} range={range} />
       <SnapshotPreview items={[...s.absences, ...s.missed]} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
