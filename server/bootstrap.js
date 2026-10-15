@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import path from "path";
-import { execSync } from "child_process";
+import fs from "fs";
 import { decryptConfig } from "./scripts/decrypt.js";
 import { mustRunInsideContainer } from "./scripts/check.js";
 
@@ -23,14 +23,12 @@ process.env.NODE_CONFIG = JSON.stringify(decryptedConfig);
 
 console.log("🔓 Config decrypted and injected");
 
-// 3. Run Swagger generation BEFORE loading the rest of the app
-try {
-  console.log("📄 Generating Swagger documentation...");
-  execSync("npm run swagger:all", { stdio: "inherit" });
-  console.log("✅ Swagger generation completed");
-} catch (error) {
-  console.error("❌ Failed to generate Swagger docs:", error);
-  process.exit(1);
+// Swagger must be generated from source before obfuscation, never at startup.
+for (const name of ["swagger-api-view.json", "swagger-api-v2-view.json"]) {
+  const spec = JSON.parse(fs.readFileSync(path.join("views", name), "utf8"));
+  if (!Object.keys(spec.paths || {}).length) {
+    throw new Error(`Packaged Swagger spec ${name} has no API routes. Rebuild the image.`);
+  }
 }
 
 // 4. NOW start the app (ONLY AFTER config & swagger)

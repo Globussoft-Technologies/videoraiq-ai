@@ -58,6 +58,11 @@ if (isOnPrem) {
     delete spec.host;
     delete spec.schemes;
   }
+} else {
+  // Packaged docs may be built in a different environment than the deployment.
+  for (const spec of [swaggerFile, swaggerFileV2]) {
+    spec.host = config.get("swagger_host_url");
+  }
 }
 
 const app = express();

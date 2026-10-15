@@ -87,6 +87,26 @@
         "security": []
       }
     },
+    "/api/v2/auth/by-impersonation-token": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/auth/by-amember-sso-token": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/v2/auth/by-login/{username}": {
       "get": {
         "tags": [
@@ -143,17 +163,306 @@
         }
       }
     },
-    "/api/v2/uploads/debug/pool-stats": {
+    "/api/v2/auth/registration-link": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/auth/registration-link/validate": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/api-keys/options": {
       "get": {
         "description": "",
         "responses": {
           "200": {
             "description": "OK"
           },
-          "500": {
-            "description": "Internal Server Error"
+          "403": {
+            "description": "Forbidden"
           }
         }
+      }
+    },
+    "/api/v2/api-keys/": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/api-keys/{id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v2/integrations/amember/users/sync": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "Signed server-to-server aMember user provisioning webhook",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v2/auth/raspberry-pi/register": {
+      "post": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Register a Raspberry Pi and return its lifetime admin token.",
+        "parameters": [
+          {
+            "name": "x-raspberry-pi-data",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "description": "Encrypted Raspberry Pi identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing Raspberry Pi token returned"
+          },
+          "201": {
+            "description": "Raspberry Pi registered"
+          },
+          "400": {
+            "description": "Missing or invalid device header"
+          },
+          "404": {
+            "description": "Admin not found"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/raspberry-pi/deny": {
+      "post": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Reject and remove a Raspberry Pi pairing from the station that created it, allowing the Pi to start a fresh registration.",
+        "parameters": [
+          {
+            "name": "x-raspberry-pi-data",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "description": "Encrypted Raspberry Pi identifier used during registration"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registration rejected"
+          },
+          "400": {
+            "description": "Missing code, invalid decision, or invalid device header"
+          },
+          "404": {
+            "description": "Registration code not found for this station"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/raspberry-pi/status/{code}": {
+      "get": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Poll a Raspberry Pi registration code. Approved responses include the station token, station ID, login, user name and user email; the signed station token also carries those three user fields.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registration status returned"
+          },
+          "404": {
+            "description": "Registration code not found"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/raspberry-pi/heartbeat": {
+      "post": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Update Raspberry Pi connectivity status.",
+        "parameters": [
+          {
+            "name": "x-raspberry-pi-data",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "description": "Encrypted Raspberry Pi identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Heartbeat accepted"
+          },
+          "404": {
+            "description": "Raspberry Pi is not registered"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/raspberry-pi/registrations": {
+      "get": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "List this administrator’s paired Raspberry Pis or securely look up one six-digit pairing code.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/auth/raspberry-pi/registrations/{code}/status": {
+      "patch": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Approve or reject a Raspberry Pi pairing request.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/auth/raspberry-pi/registrations/{code}": {
+      "delete": {
+        "tags": [
+          "Raspberry Pi"
+        ],
+        "description": "Delete a Raspberry Pi connection and invalidate its station token.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
       }
     },
     "/api/v2/uploads/media": {
@@ -624,6 +933,10 @@
                       "type": "string",
                       "example": "Vehicle & Obstruction Detection"
                     },
+                    "unauthorizedParkingDetectionSettings": {
+                      "type": "string",
+                      "example": "Unauthorized Parking Detection"
+                    },
                     "deskAbsenceSettings": {
                       "type": "string",
                       "example": "Desk Absence Detection"
@@ -761,6 +1074,41 @@
         }
       }
     },
+    "/api/v2/admin/alert-switches/push": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Globally enable or disable incident push notifications (web, Android, iOS) for the authenticated admin",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pushAlertsEnabled": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Push alerts switch updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v2/admin/update-logs-sound": {
       "put": {
         "tags": [
@@ -804,17 +1152,88 @@
         }
       }
     },
+    "/api/v2/admin/onboarding": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Fetch the guided-tour onboarding state for the calling Admin or User",
+        "responses": {
+          "200": {
+            "description": "Onboarding state fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Update the guided-tour onboarding state for the calling Admin or User. Sent as true when the global tour is completed or globally skipped; skipping a single module does not call this.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "description": "onboarded boolean flag",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "onboarded": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Onboarding state updated successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/admin/tour-modules": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "List the guided-tour modules the caller may open, filtered by role permissions and the resolved logs configuration. Optional ?search= filters by module name or sidebar group.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string",
+            "description": "Case-insensitive substring filter, e.g. logs"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tour modules fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v2/admin/update-stream-host": {
       "put": {
         "tags": [
           "Admin"
         ],
-        "description": "Set or clear a target admin RTSP stream host override. Pass streamHost null or empty to revert to the global host.",
+        "description": "Set or clear target admin endpoint/appEnv overrides. Pass null or empty to revert a field to the global config.",
         "parameters": [
           {
             "name": "data",
             "in": "body",
-            "description": "Target admin user_id and streamHost",
+            "description": "Target admin user_id and any of streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl, appEnv",
             "required": true,
             "schema": {
               "$ref": "#/definitions/updateStreamHost"
@@ -823,7 +1242,7 @@
         ],
         "responses": {
           "200": {
-            "description": "streamHost updated successfully"
+            "description": "Admin override updated successfully"
           },
           "500": {
             "description": "Internal server error"
@@ -923,6 +1342,16 @@
         }
       }
     },
+    "/api/v2/admin/incident-preview": {
+      "put": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/v2/authorizedUsers/fetch": {
       "post": {
         "tags": [
@@ -952,13 +1381,6 @@
             "type": "Number"
           },
           {
-            "name": "verified",
-            "in": "query",
-            "description": "Provide verified status true or false",
-            "required": false,
-            "type": "boolean"
-          },
-          {
             "name": "search",
             "in": "query",
             "required": false,
@@ -968,7 +1390,7 @@
           {
             "name": "data",
             "in": "body",
-            "description": "Provide Filters",
+            "description": "Provide Filters including status and verified",
             "required": true,
             "schema": {
               "$ref": "#/definitions/fetchAuthUser"
@@ -1308,6 +1730,135 @@
           },
           "502": {
             "description": "AI service error"
+          }
+        }
+      }
+    },
+    "/api/v2/authorizedUsers/tag-vehicle": {
+      "patch": {
+        "tags": [
+          "AuthorizedUsers"
+        ],
+        "description": "Tag a detected vehicle number (from an ANPR log or a Vehicle Detection incident) onto a registered user. The plate is stored on the user, so every past and future detection of that plate resolves to this user.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "example": "664f1a2b3c4d5e6f7a8b9c0d"
+                },
+                "vehicleNumber": {
+                  "type": "string",
+                  "example": "KA02MP9657"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vehicle number tagged successfully"
+          },
+          "400": {
+            "description": "Validation error, or the plate already belongs to another user"
+          },
+          "404": {
+            "description": "Admin or authorized user not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/authorizedUsers/untag-vehicle": {
+      "patch": {
+        "tags": [
+          "AuthorizedUsers"
+        ],
+        "description": "Remove a vehicle number from the registered user it was tagged to. The plate then reads as untagged everywhere and Tag User becomes available again.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "example": "664f1a2b3c4d5e6f7a8b9c0d"
+                },
+                "vehicleNumber": {
+                  "type": "string",
+                  "example": "KA02MP9657"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vehicle number untagged successfully"
+          },
+          "400": {
+            "description": "Validation error, or the user is not tagged to that plate"
+          },
+          "404": {
+            "description": "Admin or authorized user not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/authorizedUsers/status": {
+      "patch": {
+        "tags": [
+          "AuthorizedUsers"
+        ],
+        "description": "Set an authorized user\\'s account status to active or suspended.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "description": "Authorized user _id to update",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "suspended"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized user status updated successfully"
+          },
+          "400": {
+            "description": "Validation error - missing userId or invalid status"
+          },
+          "404": {
+            "description": "Admin or authorized user not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -2147,6 +2698,40 @@
         ]
       }
     },
+    "/api/v2/nvr/direct": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/nvr/direct/{id}": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
     "/api/v2/nvr/add-cameras": {
       "post": {
         "tags": [
@@ -2372,6 +2957,7 @@
               "unauthorizedAccessSettings",
               "lineCrossingSettings",
               "fireSmokeDetectionSettings",
+              "personFallSickDetectionSettings",
               "weaponDetectionSettings",
               "unattendedBaggageDetectionSettings"
             ],
@@ -2619,6 +3205,286 @@
         "responses": {
           "200": {
             "description": "List of all channels"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/channel/nvr-camera-detections": {
+      "get": {
+        "tags": [
+          "Channel"
+        ],
+        "description": "Get running cameras grouped by NVR for a specific admin. Only cameras with at least one enabled detection and control=1 are returned.",
+        "parameters": [
+          {
+            "name": "adminId",
+            "in": "path",
+            "description": "Admin ID whose registered NVRs/cameras should be fetched",
+            "required": true,
+            "type": "string",
+            "example": "66b1f0c9d5e4a123456789ab"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grouped NVR camera detection data",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "success"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "NVR camera detections retrieved successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "totalNvrs": {
+                      "type": "number",
+                      "example": 2
+                    },
+                    "nvrs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "nvrId": {
+                            "type": "string",
+                            "example": "66b1f1a7d5e4a123456789af"
+                          },
+                          "nvrName": {
+                            "type": "string",
+                            "example": "NVR-B"
+                          },
+                          "cameras": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "cameraId": {
+                                  "type": "string",
+                                  "example": "66b1f1c8d5e4a123456789b0"
+                                },
+                                "cameraName": {
+                                  "type": "string",
+                                  "example": "Warehouse"
+                                },
+                                "detections": {
+                                  "type": "array",
+                                  "example": [
+                                    "Crowd Detection",
+                                    "Light Detection"
+                                  ],
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required adminId",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "failed"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Missing required adminId"
+                },
+                "error": {
+                  "type": "string",
+                  "example": "Missing required adminId"
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "404": {
+            "description": "Admin not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "failed"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Admin not found"
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/channel/nvr-camera-detections/{adminId}": {
+      "get": {
+        "tags": [
+          "Channel"
+        ],
+        "description": "Get running cameras grouped by NVR for a specific admin. Only cameras with at least one enabled detection and control=1 are returned.",
+        "parameters": [
+          {
+            "name": "adminId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Admin ID whose registered NVRs/cameras should be fetched",
+            "example": "66b1f0c9d5e4a123456789ab"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grouped NVR camera detection data",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "success"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "NVR camera detections retrieved successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "totalNvrs": {
+                      "type": "number",
+                      "example": 2
+                    },
+                    "nvrs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "nvrId": {
+                            "type": "string",
+                            "example": "66b1f1a7d5e4a123456789af"
+                          },
+                          "nvrName": {
+                            "type": "string",
+                            "example": "NVR-B"
+                          },
+                          "cameras": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "cameraId": {
+                                  "type": "string",
+                                  "example": "66b1f1c8d5e4a123456789b0"
+                                },
+                                "cameraName": {
+                                  "type": "string",
+                                  "example": "Warehouse"
+                                },
+                                "detections": {
+                                  "type": "array",
+                                  "example": [
+                                    "Crowd Detection",
+                                    "Light Detection"
+                                  ],
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required adminId",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "failed"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Missing required adminId"
+                },
+                "error": {
+                  "type": "string",
+                  "example": "Missing required adminId"
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "404": {
+            "description": "Admin not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "failed"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Admin not found"
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
           },
           "500": {
             "description": "Internal server error"
@@ -2957,6 +3823,16 @@
         ]
       }
     },
+    "/api/v2/channel/playback-thumbnail": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v2/channel/playBackFilters": {
       "post": {
         "tags": [
@@ -3055,6 +3931,88 @@
         ]
       }
     },
+    "/api/v2/channel/honeywell-playback/{proxyId}/stream.mpd": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "proxyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/channel/honeywell-playback/{proxyId}/{track}/{file}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "proxyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "track",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/channel/securus-playback/{sessionId}/{file}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/box-packing-detection": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v2/incidents/create": {
       "post": {
         "tags": [
@@ -3084,6 +4042,28 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/solder-line": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -3165,6 +4145,12 @@
             "in": "query",
             "type": "integer",
             "description": "limit"
+          },
+          {
+            "name": "liveDemoData",
+            "in": "query",
+            "type": "boolean",
+            "description": "true -> demo incidents only, false/omitted -> real incidents only (default)"
           }
         ],
         "responses": {
@@ -4007,6 +4993,465 @@
         ]
       }
     },
+    "/api/v2/incidents/logs/fire-smoke-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Fire and Smoke Detection logs. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "reportStatus",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fire and smoke detection logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/person-fall-sick-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Person Fall/Sick Detection logs. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string",
+            "description": "Comma-separated NVR IDs"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string",
+            "description": "Comma-separated channel IDs"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "reportStatus",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Person fall/sick detection logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/working-at-height-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Working at Height Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/oil-leakage-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Oil Leakage Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/equipment-oil-leakage-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Equipment Oil Leakage Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/vehicle-fuel-oil-leakage-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Vehicle Fuel/Oil Leakage Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/unauthorized-parking-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Unauthorized Parking Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/gunny-bags-materials-wrong-location-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Gunny Bags/Materials Wrong Location Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/sand-dust-waste-scrap-disposal-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Sand, Dust, Waste and Scrap Disposal Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/unauthorized-animal-entry-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Unauthorized Animal Entry Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/spills-dirty-messy-areas-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Spills, Dirty or Messy Areas Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/loading-unloading-stock-counting-detection/numbers": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Distinct vehicle numbers from loading/unloading stock-counting incidents. Supports search, date range, NVR and camera filters.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock-counting vehicle numbers fetched successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/loading-unloading-stock-counting-detection/box-types": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/loading-unloading-stock-counting-detection/analytics": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/loading-unloading-stock-counting-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Loading/Unloading Stock Counting Detection logs. direction filters individual movements before vehicle aggregation, pagination and summary totals.",
+        "parameters": [
+          {
+            "name": "direction",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "all",
+              "loading",
+              "unloading"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/blurred-camera-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Blurred Camera Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
     "/api/v2/incidents/logs/unauthorized-access": {
       "get": {
         "tags": [
@@ -4572,6 +6017,502 @@
           },
           "400": {
             "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/guard-sleeping": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Guard Sleeping (guardSleeping) incident logs, paginated, newest first. Each record is a single detection event with isSleeping, Image, timeOfIncident, plus nvrData and channelData.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "description": "Filter parameters. isSleeping (boolean, optional) filters to only sleeping / only awake events.",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/DeskAbsenceLogsFilter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guard sleeping logs fetched successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/car-model-detection": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Car Model Detection (carModelDetection) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, model_name, vehicleNumber, search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "reportStatus",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "model_name",
+            "in": "query",
+            "type": "string",
+            "description": "Partial match on detected model name"
+          },
+          {
+            "name": "vehicleNumber",
+            "in": "query",
+            "type": "string",
+            "description": "Case-insensitive partial match on vehicle number"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Car model detection logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/cylinder-detection": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Cylinder Detection logs. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, status, minCount, maxCount, minStackHeight, maxStackHeight and search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "reportStatus",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "minCount",
+            "in": "query",
+            "type": "number"
+          },
+          {
+            "name": "maxCount",
+            "in": "query",
+            "type": "number"
+          },
+          {
+            "name": "minStackHeight",
+            "in": "query",
+            "type": "number"
+          },
+          {
+            "name": "maxStackHeight",
+            "in": "query",
+            "type": "number"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cylinder detection logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/vehicle-check-in-out": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in in range, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. When startDate/endDate are given, only vehicles with a crossing inside that range are returned. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "custody",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "true = still on site (checked in, not checked back out). Omit for both."
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "vehicleCheckInOut logs fetched successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/vehicle-check-in-out/history": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Every crossing for one vehicle - the sub-rows behind an expanded row in the Vehicle Check-In / Check-Out log. Takes the vehicleKey returned by the list endpoint, so an unreadable-plate row expands to its own single event rather than to every other unreadable plate.",
+        "parameters": [
+          {
+            "name": "vehicleKey",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "description": "From the list response. Either a plate, or the literal __unknown__ joined to the incident id by a colon."
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "vehicleCheckInOut history fetched successfully"
+          },
+          "400": {
+            "description": "vehicleKey missing or malformed"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/vehicle-check-in-out/numbers": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Distinct vehicle numbers seen in Vehicle Check-In / Check-Out (vehicleCheckInOut) incidents - the option list behind the plate filter on that page. Separate from the Car Model Detection numbers endpoint. Honours the same nvrIds / channelIds / startDate / endDate filters as the log list. Optional search narrows the list server-side.",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "vehicleCheckInOut vehicle numbers fetched successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/car-model-detection/{id}": {
+      "patch": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Sync the reference image to the car model catalog service, then update local car model detection details.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "model_name": {
+                  "type": "string",
+                  "example": "City"
+                },
+                "company": {
+                  "type": "string",
+                  "example": "Honda"
+                },
+                "year": {
+                  "type": "number",
+                  "example": 2022
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Car model details updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Incident not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/car-model-detection/numbers": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get all distinct, non-empty vehicle numbers from carModelDetection incidents for the authenticated user. No date or channel filters are applied.",
+        "responses": {
+          "200": {
+            "description": "Car model vehicle numbers fetched successfully"
           },
           "500": {
             "description": "Internal server error"
@@ -5665,6 +7606,7 @@
               "unauthorizedAccessSettings",
               "lineCrossingSettings",
               "fireSmokeDetectionSettings",
+              "personFallSickDetectionSettings",
               "weaponDetectionSettings",
               "unattendedBaggageDetectionSettings",
               "conveyorDetectionSettings",
@@ -5783,6 +7725,15 @@
           "Detection Settings"
         ],
         "description": "Get available detection types",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive substring match against the detection type display name or its settingType key",
+            "required": false,
+            "type": "string"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Detection types fetched successfully"
@@ -6112,7 +8063,7 @@
         "tags": [
           "Detection Settings"
         ],
-        "description": "Reset one camera detection schedule back to always active",
+        "description": "Remove one camera detection schedule and disable the detection until it is manually started",
         "parameters": [
           {
             "name": "id",
@@ -6166,7 +8117,7 @@
                     },
                     "enabled": {
                       "type": "boolean",
-                      "example": true
+                      "example": false
                     },
                     "schedule": {
                       "type": "object",
@@ -6193,6 +8144,59 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/detection-settings/reset-thresholds/batch": {
+      "put": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Reset default confidence thresholds for multiple enabled detection settings on one camera. The backend makes one Detection Service reset-confidence call with all requested detectors and saves each returned default threshold set.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "channelId": {
+                  "type": "string",
+                  "example": "69ce7069d5b1b9d2ca500464"
+                },
+                "detectionSettingIds": {
+                  "type": "array",
+                  "example": [
+                    "69ce7069d5b1b9d2ca500465",
+                    "69ce7069d5b1b9d2ca500466"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thresholds reset successfully for the camera"
+          },
+          "400": {
+            "description": "Invalid input, unlinked/disabled setting, or missing saved thresholds"
+          },
+          "404": {
+            "description": "Channel or one or more detection settings not found"
+          },
+          "500": {
+            "description": "Detection Service reset failed"
           }
         },
         "security": [
@@ -6312,6 +8316,42 @@
         ]
       }
     },
+    "/api/v2/detection-settings/{id}/reset-thresholds": {
+      "put": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Reset saved detection thresholds for one detection setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "ID of the detection setting to reset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detection thresholds reset successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Detection setting not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
     "/api/v2/detection-settings/attach": {
       "post": {
         "tags": [
@@ -6382,64 +8422,47 @@
         ]
       }
     },
-    "/api/v2/storage/": {
+    "/api/v2/global-schedules/nvr/{nvrId}/cameras": {
       "get": {
         "tags": [
-          "Storage"
+          "Global Schedule"
         ],
-        "description": "Get all storages",
+        "description": "Get an NVR with its cameras split into configured (eligible for global detection scheduling) and non-configured",
         "parameters": [
           {
-            "name": "skip",
-            "in": "query",
-            "description": "Number of storages to skip",
-            "required": false,
-            "type": "integer",
-            "example": 0
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Number of storages to return",
-            "required": false,
-            "type": "integer",
-            "example": 10
-          },
-          {
-            "name": "sortField",
-            "in": "query",
-            "description": "keyword to be ordered",
-            "enum": [
-              "name",
-              "type",
-              "createdAt",
-              "status",
-              "note"
-            ],
+            "name": "nvrId",
+            "in": "path",
+            "required": true,
             "type": "string"
-          },
-          {
-            "name": "sortOrder",
-            "in": "query",
-            "description": "sorting parameters(asc or desc)",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "type": "string"
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "description": "Partial or full name of the storage to search",
-            "required": false,
-            "type": "string",
-            "example": "S3 storage"
           }
         ],
         "responses": {
           "200": {
-            "description": "List of storages retrieved successfully"
+            "description": "NVR cameras fetched successfully"
+          },
+          "404": {
+            "description": "NVR not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/global-schedules/": {
+      "get": {
+        "tags": [
+          "Global Schedule"
+        ],
+        "description": "List global detection schedules, optionally filtered by nvrId",
+        "responses": {
+          "200": {
+            "description": "Global schedules fetched successfully"
           },
           "500": {
             "description": "Internal server error"
@@ -6453,14 +8476,14 @@
       },
       "post": {
         "tags": [
-          "Storage"
+          "Global Schedule"
         ],
-        "description": "Add a new storage",
+        "description": "Create an NVR-level global detection schedule",
         "parameters": [
           {
             "name": "data",
             "in": "body",
-            "description": "Storage details",
+            "description": "Global schedule details",
             "required": true,
             "schema": {
               "type": "object",
@@ -6469,181 +8492,49 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "OK"
+          },
           "201": {
-            "description": "Storage added successfully"
+            "description": "Global schedule created successfully"
           },
           "400": {
-            "description": "Validation error or missing required fields"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "EncryptedAuthToken": []
-          }
-        ]
-      }
-    },
-    "/api/v2/storage/upload": {
-      "post": {
-        "tags": [
-          "Storage"
-        ],
-        "description": "Upload a file to storage",
-        "parameters": [
-          {
-            "name": "file",
-            "in": "formData",
-            "type": "file",
-            "required": true,
-            "description": "File to upload"
-          },
-          {
-            "name": "adminId",
-            "in": "formData",
-            "description": "ID of the user",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "folderName",
-            "in": "formData",
-            "description": "Name of the folder to upload the file to",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "File uploaded successfully"
-          },
-          "400": {
-            "description": "Validation error or missing required fields"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "EncryptedAuthToken": []
-          }
-        ]
-      }
-    },
-    "/api/v2/storage/activate": {
-      "put": {
-        "tags": [
-          "Storage"
-        ],
-        "description": "Activate a storage",
-        "parameters": [
-          {
-            "name": "data",
-            "in": "body",
-            "description": "Activation details",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/activateStorage"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Storage activated successfully"
-          },
-          "400": {
-            "description": "Validation error or missing required fields"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "EncryptedAuthToken": []
-          }
-        ]
-      }
-    },
-    "/api/v2/storage/get/{path(*)}": {
-      "get": {
-        "tags": [
-          "Storage"
-        ],
-        "description": "Smartly read a file from Global SFTP or Storage service",
-        "parameters": [
-          {
-            "name": "path(*)",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "File streamed successfully"
+            "description": "Validation error"
           },
           "404": {
-            "description": "File not found"
+            "description": "NVR not found"
           },
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
       }
     },
-    "/api/v2/storage/stream/{id}": {
+    "/api/v2/global-schedules/{id}": {
       "get": {
         "tags": [
-          "Storage"
+          "Global Schedule"
         ],
-        "description": "Stream a file from storage by ID",
+        "description": "Get one global detection schedule",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "ID of the file to stream"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "File streamed successfully"
-          },
-          "404": {
-            "description": "File not found"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/v2/storage/auth/google/callback": {
-      "get": {
-        "tags": [
-          "Storage"
-        ],
-        "description": "Google Drive authentication callback",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "description": "Authorization code from Google",
-            "required": true,
             "type": "string"
           }
         ],
         "responses": {
           "200": {
-            "description": "Google Drive authenticated successfully"
+            "description": "Global schedule fetched successfully"
           },
-          "400": {
-            "description": "Validation error or missing required fields"
+          "404": {
+            "description": "Global schedule not found"
           },
           "500": {
             "description": "Internal server error"
@@ -6654,41 +8545,39 @@
             "EncryptedAuthToken": []
           }
         ]
-      }
-    },
-    "/api/v2/storage/{id}": {
+      },
       "put": {
         "tags": [
-          "Storage"
+          "Global Schedule"
         ],
-        "description": "Update a storage by ID",
+        "description": "Update a global detection schedule. cameras[].enabled is enrolment, not runtime state",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "ID of the storage to update"
+            "type": "string"
           },
           {
             "name": "data",
             "in": "body",
-            "description": "Updated storage details",
+            "description": "Fields to update",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/updateStorage"
+              "type": "object",
+              "properties": {}
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Storage updated successfully"
+            "description": "Global schedule updated successfully"
           },
           "400": {
-            "description": "Validation error or missing required fields"
+            "description": "Validation error"
           },
           "404": {
-            "description": "Storage not found"
+            "description": "Global schedule not found"
           },
           "500": {
             "description": "Internal server error"
@@ -6702,24 +8591,26 @@
       },
       "delete": {
         "tags": [
-          "Storage"
+          "Global Schedule"
         ],
-        "description": "Delete a storage by ID",
+        "description": "Delete a global detection schedule; covered cameras revert to their camera-specific schedules",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "ID of the storage to delete"
+            "type": "string"
           }
         ],
         "responses": {
           "200": {
-            "description": "Storage deleted successfully"
+            "description": "Global schedule deleted successfully"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "404": {
-            "description": "Storage not found"
+            "description": "Global schedule not found"
           },
           "500": {
             "description": "Internal server error"
@@ -7222,6 +9113,20 @@
             "example": true
           },
           {
+            "name": "status",
+            "in": "query",
+            "description": "Filter logs by attendance status",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "present",
+              "half_day",
+              "absent",
+              "checked_in"
+            ],
+            "example": "present"
+          },
+          {
             "name": "data",
             "in": "body",
             "description": "Filter and pagination options",
@@ -7315,7 +9220,7 @@
       }
     },
     "/api/v2/attendance/export": {
-      "get": {
+      "post": {
         "tags": [
           "Attendance"
         ],
@@ -7702,6 +9607,34 @@
             "schema": {
               "$ref": "#/definitions/UpdateRoleName"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/roles/sync-defaults": {
+      "post": {
+        "tags": [
+          "Roles"
+        ],
+        "description": "Re-applies the canonical permission templates to the three default roles (admin/read/write). Use after a new module ships, since default roles are seeded once at provisioning and cannot be edited by hand.",
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "description": "When true, report what would change without writing anything.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "type": "string"
           }
         ],
         "responses": {
@@ -8477,6 +10410,418 @@
         }
       }
     },
+    "/api/v2/attendance-auto-email-reports/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/attendance-auto-email-reports/audience-options": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/attendance-auto-email-reports/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/attendance-auto-email-reports/{id}/preview": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/attendance-auto-email-reports/{id}/send-now": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-auto-email-reports/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-auto-email-reports/form-options": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-auto-email-reports/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-auto-email-reports/{id}/send-now": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/solder-auto-email-reports/form-options": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/solder-auto-email-reports/": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/solder-auto-email-reports/preview": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/solder-auto-email-reports/send-test": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/solder-auto-email-reports/{id}": {
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-logs/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-logs/analytics": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-logs/mismatch-by-sku": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v2/domain/register": {
       "post": {
         "tags": [
@@ -8607,12 +10952,11 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Get all shifts",
+        "description": "Paginated shifts for the current organisation, each with its assigned-employee count",
         "parameters": [
           {
             "name": "skip",
             "in": "query",
-            "description": "Number of shifts to skip",
             "required": false,
             "type": "integer",
             "example": 0
@@ -8620,7 +10964,6 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Number of shifts to return",
             "required": false,
             "type": "integer",
             "example": 10
@@ -8628,18 +10971,21 @@
           {
             "name": "name",
             "in": "query",
-            "description": "Partial or full name of the shift to search",
+            "description": "Case-insensitive name search",
             "required": false,
-            "type": "string",
-            "example": "User 1"
+            "type": "string"
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "description": "Filter by active state",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "responses": {
           "200": {
             "description": "Shifts retrieved successfully"
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -8652,7 +10998,7 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Add a new shift",
+        "description": "Create a shift: window, break, grace periods, max overtime and the working-day pattern",
         "parameters": [
           {
             "name": "data",
@@ -8669,10 +11015,10 @@
             "description": "OK"
           },
           "201": {
-            "description": "Shift added successfully"
+            "description": "Shift created successfully"
           },
           "400": {
-            "description": "Validation error or missing required fields"
+            "description": "Validation error or duplicate shift name"
           },
           "500": {
             "description": "Internal server error"
@@ -8690,13 +11036,396 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Get list of shifts for dropdown",
+        "description": "Lightweight active-shift list for dropdowns",
         "responses": {
           "200": {
             "description": "Shift list retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/schedule": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Monthly shift schedule grid: a page of employees, every day of the month, and the resolved shift for each cell",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "example": "2026-09"
           },
-          "500": {
-            "description": "Internal server error"
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Name, employee code or email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Monthly shift schedule grid: a page of employees, every day of the month, and the resolved shift for each cell",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "example": "2026-09"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Name, employee code or email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/schedule/designations": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Distinct employee designations, backing the schedule Role filter",
+        "responses": {
+          "200": {
+            "description": "Designations retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/schedule/day": {
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Assign, change or mark off one employee on one date",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/shiftScheduleAssign"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule updated successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Employee or shift not found"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/schedule/bulk": {
+      "put": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Assign a shift across a date range for many employees, optionally narrowed to certain weekdays",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/shiftScheduleBulkAssign"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule updated successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/schedule/clear": {
+      "patch": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Remove per-day overrides so those days inherit the employee standing shift again",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "employeeIds": {
+                  "type": "array",
+                  "example": [
+                    "6512f1c0a1b2c3d4e5f60718"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string",
+                  "example": "2026-09-01"
+                },
+                "to": {
+                  "type": "string",
+                  "example": "2026-09-30"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule cleared successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/assignments/preview": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Preview which employees a set of assignment filters matches. Read-only.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/shiftAssignmentFilters"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignment preview generated"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/assignments/unassign": {
+      "patch": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Clear the assigned shift on specific employees",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "employeeIds": {
+                  "type": "array",
+                  "example": [
+                    "6512f1c0a1b2c3d4e5f60718"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift unassigned successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/{id}/employees": {
+      "get": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Paginated roster of the employees currently on a shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "example": 10
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift employees retrieved successfully"
+          },
+          "404": {
+            "description": "Shift not found"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/shifts/{id}/assign": {
+      "post": {
+        "tags": [
+          "Shifts"
+        ],
+        "description": "Assign a shift to employees. Send employeeIds for individual assignment, or locations/departmentIds to bulk assign a group.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/shiftAssignmentFilters"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift assigned successfully"
+          },
+          "400": {
+            "description": "No target selected, or the shift is inactive"
+          },
+          "404": {
+            "description": "Shift not found"
           }
         },
         "security": [
@@ -8711,25 +11440,21 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Get shift by ID",
+        "description": "Get a single shift by id",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "Shift ID"
+            "type": "string"
           }
         ],
         "responses": {
           "200": {
-            "description": "Shift details retrieved successfully"
+            "description": "Shift retrieved successfully"
           },
           "404": {
             "description": "Shift not found"
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -8742,19 +11467,18 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Update shift by ID",
+        "description": "Update a shift. Any subset of fields may be sent.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "Shift ID"
+            "type": "string"
           },
           {
             "name": "data",
             "in": "body",
-            "description": "Updated shift details",
+            "description": "Fields to update",
             "required": true,
             "schema": {
               "$ref": "#/definitions/addShift"
@@ -8770,9 +11494,6 @@
           },
           "404": {
             "description": "Shift not found"
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -8785,14 +11506,13 @@
         "tags": [
           "Shifts"
         ],
-        "description": "Delete shift by ID",
+        "description": "Delete a shift. Employees holding it are unassigned first.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "string",
-            "description": "Shift ID"
+            "type": "string"
           }
         ],
         "responses": {
@@ -8804,9 +11524,6 @@
           },
           "404": {
             "description": "Shift not found"
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -9517,7 +12234,7 @@
         "tags": [
           "Analytics"
         ],
-        "description": "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded against the org's configured thresholds (see GET /attendance/settings): present = on site at least fullDayHours, halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. Analytics-only.",
+        "description": "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded on elapsed time between the day's first check-in and last check-out, against the org's configured thresholds (see GET /attendance/settings): present = a full day, at least fullDayHours (surfaced as the \\\"Full Day\\\" tile), halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. `rules` echoes back the thresholds the day was graded with. Any past date may be requested — nothing is precomputed, so every day is re-graded on read. Analytics-only.",
         "parameters": [
           {
             "name": "date",
@@ -9593,6 +12310,19 @@
                         "checkedIn": {
                           "type": "number",
                           "example": 1
+                        },
+                        "rules": {
+                          "type": "object",
+                          "properties": {
+                            "fullDayHours": {
+                              "type": "number",
+                              "example": 9
+                            },
+                            "halfDayHours": {
+                              "type": "number",
+                              "example": 4.5
+                            }
+                          }
                         }
                       }
                     }
@@ -11223,6 +13953,257 @@
         }
       }
     },
+    "/api/v2/assistant/conversations": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/conversations/{conversationId}/attachments/{attachmentId}": {
+      "get": {
+        "description": "",
+        "produces": [
+          "application/octet-stream"
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/conversations/{conversationId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/transcribe": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/chat": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "example": "any"
+                },
+                "req": {
+                  "example": "any"
+                },
+                "attachmentCount": {
+                  "example": "any"
+                },
+                "imageAttachments": {
+                  "example": "any"
+                },
+                "workflow": {
+                  "example": "any"
+                },
+                "step": {
+                  "example": "any"
+                },
+                "field": {
+                  "example": "any"
+                },
+                "value": {
+                  "example": "any"
+                },
+                "valueType": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/config-template/{kind.:extension}": {
+      "get": {
+        "description": "",
+        "produces": [
+          "pdf"
+        ],
+        "parameters": [
+          {
+            "name": "kind.:extension",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/config-import": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/assistant/register-user/face": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
     "/api/v2/faceImages/upload": {
       "post": {
         "tags": [
@@ -11692,8 +14673,19 @@
         "tags": [
           "FaceImages"
         ],
-        "description": "Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted it remains blank. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.",
+        "description": "Create an Authorized User and immediately tag the given dsId folder with it. Accepts multipart/form-data with up to 3 face photos under the `file` field - the same upload process as POST /authorizedUsers/create - or plain JSON with no photos. Only firstName, lastName and dsId are required; every other authorizedUsers field (email, departmentId, designation, branch, shiftId, numberPlate, vehicleNumber, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics, liveDemoData) is optional. liveDemoData is only true when explicitly sent as true, otherwise false. DS registration is blocking and happens BEFORE anything is written to our DB: uploaded photos are enrolled via DS /register and the dsId folder is linked via DS /onfly_registration. If DS rejects either call, no user is created, uploaded media is removed, and the DS-side registration is rolled back. verified is true only when photos were actually enrolled.",
+        "consumes": [
+          "multipart/form-data"
+        ],
         "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "type": "file",
+            "required": false,
+            "collectionFormat": "multi",
+            "description": "Up to 3 face photos. Optional - omit to rely solely on the dsId folder's already-captured faces."
+          },
           {
             "name": "data",
             "in": "body",
@@ -11854,6 +14846,38 @@
               }
             }
           },
+          "409": {
+            "description": "Email already in use, or DS reports this face is already registered. No user is created.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 409
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "failed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "This person already has a face registered in the system. Search for the existing user instead of creating a new one."
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Authorized user was not created."
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "schema": {
@@ -11877,6 +14901,38 @@
                     "error": {
                       "type": "string",
                       "example": "error details"
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "502": {
+            "description": "DS rejected the registration or was unreachable. Nothing is stored and uploaded media is cleaned up.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 502
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "failed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "We couldn't find a clear face in the photo you uploaded. Please use a well-lit, front-facing photo where the face isn't covered, then try again."
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Authorized user was not created."
                     }
                   }
                 }
@@ -12085,6 +15141,272 @@
         }
       }
     },
+    "/api/v2/client-config/account": {
+      "get": {
+        "tags": [
+          "Client Config"
+        ],
+        "description": "The calling client's own account row: name, email, plan, camera count, subscription expiry and status. The superadmin equivalent lists every client on the platform; this returns only the caller. The client is taken from the access token.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/client-config/cameras": {
+      "get": {
+        "tags": [
+          "Client Config"
+        ],
+        "description": "The calling client's cameras with the detections allocated to them and each detection's on/off state per camera. Read-only. The client is taken from the access token.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Filter by camera name / customName",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/client-config/license": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v2/client-config/": {
+      "get": {
+        "tags": [
+          "Client Config"
+        ],
+        "description": "The calling client's own configuration: camera stat cards (purchased / configured / non-configured / detections enabled) and the per-detection allocation table. Read-only — allocations are set by the superadmin. The client is taken from the access token; there is no adminId parameter.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/user": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/admin": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/blocked-devices": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/summary": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/devices/{deviceId}/unblock": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/bulk/delete": {
+      "delete": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/{sessionId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/{sessionId}/delete": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/{sessionId}/block-session": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/{sessionId}/unblock-session": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/sessions/{sessionId}/block-device": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/push-tokens/register": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/push-tokens/unregister": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/v2/email-monitoring/auth/login": {
       "post": {
         "description": "",
@@ -12198,6 +15520,1105 @@
           }
         }
       }
+    },
+    "/api/v2/logs-configuration/": {
+      "get": {
+        "tags": [
+          "LogsConfiguration"
+        ],
+        "description": "Get logs configuration for the current admin",
+        "responses": {
+          "200": {
+            "description": "Logs configuration fetched successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "attendanceLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "accessLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "taggedUsers": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "detectedUsers": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "personCountLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "deskAbsenceLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "anprLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "trackLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "visibilityLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "guardLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "sleepActivityLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "measurementLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "conveyorLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "vehicleObstructionLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "unauthorizedParkingLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "vehicleCountLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "carLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "vehicleCheckInOutLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "crusherLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "cylinderLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "lineCrossingLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "waterSpillLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "unauthorizedAccessLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "workingAtHeightLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "stockCountingLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "blurredCameraLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "oilLeakageLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "wrongLocationLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "wasteDisposalLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "animalEntryLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "messyAreaLogs": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "boxPackingLogs": {
+                  "type": "boolean",
+                  "example": true
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Missing adminId"
+          },
+          "404": {
+            "description": "Admin not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "LogsConfiguration"
+        ],
+        "description": "Update logs configuration for the current admin",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "logs": {
+                  "type": "object",
+                  "properties": {
+                    "attendanceLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accessLogs": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "workingAtHeightLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "stockCountingLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "blurredCameraLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "oilLeakageLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "wrongLocationLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "wasteDisposalLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "animalEntryLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "messyAreaLogs": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "boxPackingLogs": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs configuration updated successfully"
+          },
+          "400": {
+            "description": "Invalid request body"
+          },
+          "404": {
+            "description": "Admin not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/": {
+      "get": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "List video records for the session admin (newest first) with their videos, detections and sessionAnalytics. Pass id to fetch a single record.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Fetch one record by id",
+            "type": "string"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "description": "Pagination offset (default 0)",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (default 20)",
+            "type": "string"
+          },
+          {
+            "name": "detectionType",
+            "in": "query",
+            "required": false,
+            "description": "Filter to records with this detection enabled (settingType key, e.g. crowdDetectionSettings)",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "description": "Filter by createdAt from this date (YYYY-MM-DD, admin timezone); send with endDate",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "description": "Filter by createdAt up to this date (YYYY-MM-DD, admin timezone); send with startDate",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video records fetched successfully"
+          },
+          "400": {
+            "description": "Invalid id, or missing adminId in session"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Register a video with selected detections. adminId/userId/plan are all taken from the session (plan from the aMember subscription in the token), not the body.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "videos": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "videoUrl": {
+                        "type": "string",
+                        "example": "uploads/videos/abc123.mp4"
+                      }
+                    }
+                  }
+                },
+                "detections": {
+                  "type": "object",
+                  "properties": {
+                    "vehicleDetectionSettings": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video record created successfully"
+          },
+          "400": {
+            "description": "Missing required fields, or no active plan in session"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/{id}/analytics": {
+      "get": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Session analytics panel for one LiveDemo record: demosRun, eventsDetected, avgConfidence, detectionsTested, and the per-detection runs/events breakdown (only detections actually tested). Scoped to the session admin.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "LiveDemo record id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session analytics fetched successfully"
+          },
+          "400": {
+            "description": "Invalid id, or missing adminId in session"
+          },
+          "404": {
+            "description": "Video record not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/live-demo-analytics": {
+      "post": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Live Demo analytics for the session admin across all demo records, optionally narrowed to one or more detection types. POST because the detection filter is a list; it is a read, same as POST /incidents. Unlike /:id/analytics (which reads the sessionAnalytics counters DS writes onto a single record), these numbers are derived from the demo events themselves: incidents with liveDemoData=true for every detection, plus access-log sessions with liveDemoData=true for Face Recognition/attendance. Returns demosRun, eventsDetected, avgConfidence, detectionsTested and a per-detection runs/events breakdown, with the DS-reported counters alongside for comparison.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detectionTypes": {
+                  "type": "array",
+                  "example": [
+                    "attendanceSettings",
+                    "crowdDetectionSettings"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "search": {
+                  "type": "string",
+                  "example": "face"
+                },
+                "startDate": {
+                  "type": "string",
+                  "example": "2026-08-01"
+                },
+                "endDate": {
+                  "type": "string",
+                  "example": "2026-08-31"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live demo analytics fetched successfully"
+          },
+          "400": {
+            "description": "Missing/invalid adminId in session, or unknown detection type"
+          },
+          "404": {
+            "description": "Admin not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/{id}/process": {
+      "post": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Submit one clip of a LiveDemo record to the external video-process service. source_url is sent as a full URL (relative stored paths are prefixed with the configured media domain). Detectors default to the record enabled detections when not passed. Scoped to the session admin.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "LiveDemo record id"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "videoId": {
+                  "type": "string",
+                  "example": "68b3f1c2a9d345001ee326d4"
+                },
+                "detectors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "example": "countPersonsSettings"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job submitted; returns the video-process service response"
+          },
+          "400": {
+            "description": "Invalid id, unknown detectors, or no detectors selected"
+          },
+          "404": {
+            "description": "Record or targeted video not found"
+          },
+          "502": {
+            "description": "Video-process service unreachable or rejected the job"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/{id}/videos": {
+      "get": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Videos of one LiveDemo record for the test-clip player: each entry carries videoUrl (the upload) and dsVideoUrl (the processed clip, null until the DS team attaches it), plus the detections map. Called when a detection chip is selected. Scoped to the session admin.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "LiveDemo record id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Videos fetched successfully"
+          },
+          "400": {
+            "description": "Invalid id, or missing adminId in session"
+          },
+          "404": {
+            "description": "Video record not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/{id}": {
+      "patch": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Update a video record - e.g. DS team attaching dsVideoUrl, or changing detections/plan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "videoId": {
+                  "type": "string",
+                  "example": "664f89e8a9d345001ee326c2"
+                },
+                "dsVideoUrl": {
+                  "type": "string",
+                  "example": "https://ds.example.com/processed/abc123.mp4"
+                },
+                "detections": {
+                  "type": "object",
+                  "properties": {
+                    "vehicleDetectionSettings": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video record updated successfully"
+          },
+          "400": {
+            "description": "Nothing to update"
+          },
+          "404": {
+            "description": "Video record not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/video-records/videos/{videoId}": {
+      "patch": {
+        "tags": [
+          "VideoRecords"
+        ],
+        "description": "Update dsVideoUrl for a specific video by videoId alone (DS team use case). No record ownership check — DS service token can update any video.",
+        "parameters": [
+          {
+            "name": "videoId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Video id from the initial process response"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video updated successfully"
+          },
+          "400": {
+            "description": "Invalid videoId or missing dsVideoUrl"
+          },
+          "404": {
+            "description": "Video not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "dsVideoUrl": "https://ds.example.com/processed/abc123.mp4"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "dsVideoUrl": "https://ds.example.com/processed/abc123.mp4"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-incidents/": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-incidents/process": {
+      "post": {
+        "tags": [
+          "Measurement Incidents"
+        ],
+        "description": "Validate a measurement request, process it through DS, store QR metadata and measured data, then emit the measurement socket event.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/measurement-incidents/by-sku/{sku}/measurement": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-incidents/by-sku/{sku}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-incidents/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Measurement Incidents"
+        ],
+        "description": "Reset a measurement by deleting its document.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/measurement-incidents/{id}/measurement": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-incidents/{id}/status": {
+      "patch": {
+        "tags": [
+          "Measurement Incidents"
+        ],
+        "description": "Accept or reject a measurement incident.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/measurements/start": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurements/qr/extract": {
+      "post": {
+        "description": "",
+        "responses": {
+          "400": {
+            "description": "Bad Request"
+          },
+          "413": {
+            "description": "Payload Too Large"
+          }
+        }
+      }
+    },
+    "/api/v2/measurements/captures": {
+      "post": {
+        "tags": [
+          "Measurements"
+        ],
+        "description": "Upload a raw JPEG capture using an approved Raspberry Pi station token.",
+        "responses": {
+          "201": {
+            "description": "Capture stored"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Station token invalid or unapproved"
+          },
+          "413": {
+            "description": "Capture exceeds 15 MB"
+          }
+        }
+      }
+    },
+    "/api/v2/measurements/diagnostics": {
+      "post": {
+        "tags": [
+          "Measurements"
+        ],
+        "description": "Record station-side DS measurement API connectivity diagnostics.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurements/captures/{filename}": {
+      "get": {
+        "tags": [
+          "Measurements"
+        ],
+        "description": "Fetch a stored measurement capture by filename.",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/admin-storage/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/admin-storage/test": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-calibration/{deviceId}/status": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-calibration/{deviceId}/frame": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-calibration/{deviceId}/run": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-calibration/{deviceId}/zone": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-media/upload": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "mediaType",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "folderName",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "incidentId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "stationId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "idempotencyKey",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "413": {
+            "description": "Payload Too Large"
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-media/{assetId}": {
+      "get": {
+        "description": "",
+        "produces": [
+          "application/octet-stream"
+        ],
+        "parameters": [
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -12236,6 +16657,9 @@
           "type": "string",
           "example": "Banglore"
         }
+      },
+      "xml": {
+        "name": "registerNVR"
       }
     },
     "addNVR": {
@@ -12290,6 +16714,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "addNVR"
       }
     },
     "updateNVR": {
@@ -12319,6 +16746,9 @@
           "type": "string",
           "example": "4bdf1c25-1b37-4e24-8498-f32d07ae882d"
         }
+      },
+      "xml": {
+        "name": "updateNVR"
       }
     },
     "updateChannel": {
@@ -12428,6 +16858,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "updateChannel"
       }
     },
     "bulkUpdateChannels": {
@@ -12451,6 +16884,9 @@
           "type": "number",
           "example": 1
         }
+      },
+      "xml": {
+        "name": "bulkUpdateChannels"
       }
     },
     "getPlayBackUrl": {
@@ -12472,6 +16908,9 @@
           "type": "string",
           "example": "fnvioueghrweu"
         }
+      },
+      "xml": {
+        "name": "getPlayBackUrl"
       }
     },
     "rtspCreate": {
@@ -12481,6 +16920,9 @@
           "type": "string",
           "example": "rtsp://username:password@"
         }
+      },
+      "xml": {
+        "name": "rtspCreate"
       }
     },
     "channelCreate": {
@@ -12502,6 +16944,9 @@
           "type": "string",
           "example": "rtsp://username:password@"
         }
+      },
+      "xml": {
+        "name": "channelCreate"
       }
     },
     "getChannels": {
@@ -12515,6 +16960,9 @@
           "type": "string",
           "example": "nvrObjectId"
         }
+      },
+      "xml": {
+        "name": "getChannels"
       }
     },
     "channelUpdate": {
@@ -12548,6 +16996,9 @@
           "type": "boolean",
           "example": true
         }
+      },
+      "xml": {
+        "name": "channelUpdate"
       }
     },
     "deleteChannel": {
@@ -12561,6 +17012,9 @@
           "type": "string",
           "example": "nvrObjectId"
         }
+      },
+      "xml": {
+        "name": "deleteChannel"
       }
     },
     "decodeToken": {
@@ -12570,6 +17024,9 @@
           "type": "string",
           "example": "jhcbjdcvjk"
         }
+      },
+      "xml": {
+        "name": "decodeToken"
       }
     },
     "login": {
@@ -12583,6 +17040,9 @@
           "type": "string",
           "example": "12345"
         }
+      },
+      "xml": {
+        "name": "login"
       }
     },
     "getPlayBackTimeline": {
@@ -12608,6 +17068,9 @@
           "type": "string",
           "example": "2025-05-24T23:59:59Z"
         }
+      },
+      "xml": {
+        "name": "getPlayBackTimeline"
       }
     },
     "createIncidents": {
@@ -12661,7 +17124,14 @@
         "severity": {
           "type": "string",
           "example": "moderate"
+        },
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
         }
+      },
+      "xml": {
+        "name": "createIncidents"
       }
     },
     "updateIncident": {
@@ -12716,6 +17186,9 @@
           "type": "string",
           "example": "moderate"
         }
+      },
+      "xml": {
+        "name": "updateIncident"
       }
     },
     "rtspPlayBackVideo": {
@@ -12729,6 +17202,9 @@
           "type": "string",
           "example": "2023-10-01T01:00:00Z"
         }
+      },
+      "xml": {
+        "name": "rtspPlayBackVideo"
       }
     },
     "getIncidentsFilter": {
@@ -12872,7 +17348,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
         }
+      },
+      "xml": {
+        "name": "getIncidentsFilter"
       }
     },
     "updateChannelConfig": {
@@ -12946,6 +17429,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "updateChannelConfig"
       }
     },
     "createAlert": {
@@ -13003,6 +17489,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "createAlert"
       }
     },
     "updateAlert": {
@@ -13106,6 +17595,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "updateAlert"
       }
     },
     "createRecipients": {
@@ -13129,6 +17621,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "createRecipients"
       }
     },
     "updateRecipient": {
@@ -13144,6 +17639,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "updateRecipient"
       }
     },
     "recentMailOrSMS": {
@@ -13157,6 +17655,9 @@
           "type": "string",
           "example": "+919876543210"
         }
+      },
+      "xml": {
+        "name": "recentMailOrSMS"
       }
     },
     "adminSignup": {
@@ -13182,6 +17683,9 @@
           "type": "string",
           "example": "john.doe@example.com"
         }
+      },
+      "xml": {
+        "name": "adminSignup"
       }
     },
     "dashboardHeaderStats": {
@@ -13336,6 +17840,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "dashboardHeaderStats"
       }
     },
     "deleteRecipients": {
@@ -13349,6 +17856,9 @@
           "type": "string",
           "example": "+911234567890"
         }
+      },
+      "xml": {
+        "name": "deleteRecipients"
       }
     },
     "detectionGraphStats": {
@@ -13375,6 +17885,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "detectionGraphStats"
       }
     },
     "WeeklyComparisonChart": {
@@ -13401,6 +17914,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "WeeklyComparisonChart"
       }
     },
     "createAuthUser": {
@@ -13449,6 +17965,9 @@
           "type": "string",
           "example": "SecurePass123"
         }
+      },
+      "xml": {
+        "name": "createAuthUser"
       }
     },
     "createUser": {
@@ -13496,6 +18015,10 @@
           "type": "string",
           "example": "SecurePass123"
         },
+        "vehicleNumber": {
+          "type": "string",
+          "example": "KA01AB1234"
+        },
         "authorizedChannelsData": {
           "type": "object",
           "properties": {
@@ -13549,6 +18072,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "createUser"
       }
     },
     "createLocation": {
@@ -13562,6 +18088,9 @@
           "type": "string",
           "example": "BLR001"
         }
+      },
+      "xml": {
+        "name": "createLocation"
       }
     },
     "updateAuthUser": {
@@ -13606,6 +18135,9 @@
           "type": "string",
           "example": "68493b14b176a495112b6522"
         }
+      },
+      "xml": {
+        "name": "updateAuthUser"
       }
     },
     "updateUser": {
@@ -13635,6 +18167,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "vehicleNumber": {
+          "type": "string",
+          "example": "KA01AB1234"
         },
         "authorizedChannelsData": {
           "type": "object",
@@ -13689,6 +18225,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "updateUser"
       }
     },
     "updateSidebarConfig": {
@@ -13714,6 +18253,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "updateSidebarConfig"
       }
     },
     "createDetectionSettings": {
@@ -13822,6 +18364,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "createDetectionSettings"
       }
     },
     "updateDetectionSettings": {
@@ -13930,6 +18475,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "updateDetectionSettings"
       }
     },
     "updateDetectionSchedule": {
@@ -14034,6 +18582,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "updateDetectionSchedule"
       }
     },
     "getIncidentsDetails": {
@@ -14063,6 +18614,9 @@
           "type": "string",
           "example": "2025-05-30"
         }
+      },
+      "xml": {
+        "name": "getIncidentsDetails"
       }
     },
     "dashboardCriticalityStats": {
@@ -14089,6 +18643,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "dashboardCriticalityStats"
       }
     },
     "settingsAttach": {
@@ -14102,6 +18659,9 @@
           "type": "string",
           "example": "665abbeab80991a2a4b278f5"
         }
+      },
+      "xml": {
+        "name": "settingsAttach"
       }
     },
     "settingsDetach": {
@@ -14115,6 +18675,9 @@
           "type": "string",
           "example": "665abbeab80991a2a4b278f5"
         }
+      },
+      "xml": {
+        "name": "settingsDetach"
       }
     },
     "getDetections": {
@@ -14128,6 +18691,9 @@
           "type": "string",
           "example": "2025-06-30"
         }
+      },
+      "xml": {
+        "name": "getDetections"
       }
     },
     "activateStorage": {
@@ -14141,6 +18707,9 @@
           "type": "string",
           "example": "storageObjectId"
         }
+      },
+      "xml": {
+        "name": "activateStorage"
       }
     },
     "importEMPUsers": {
@@ -14300,6 +18869,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "importEMPUsers"
       }
     },
     "CreateRole": {
@@ -14309,6 +18881,9 @@
           "type": "string",
           "example": "Employee"
         }
+      },
+      "xml": {
+        "name": "CreateRole"
       }
     },
     "UpdateRole": {
@@ -14318,6 +18893,9 @@
           "type": "string",
           "example": "member"
         }
+      },
+      "xml": {
+        "name": "UpdateRole"
       }
     },
     "createDepartment": {
@@ -14351,6 +18929,9 @@
           "type": "boolean",
           "example": false
         }
+      },
+      "xml": {
+        "name": "createDepartment"
       }
     },
     "getDepartment": {
@@ -14368,6 +18949,9 @@
           "type": "string",
           "example": "Software Developers"
         }
+      },
+      "xml": {
+        "name": "getDepartment"
       }
     },
     "getRoles": {
@@ -14385,6 +18969,9 @@
           "type": "string",
           "example": "employee"
         }
+      },
+      "xml": {
+        "name": "getRoles"
       }
     },
     "updateDepartment": {
@@ -14414,6 +19001,9 @@
           "type": "boolean",
           "example": false
         }
+      },
+      "xml": {
+        "name": "updateDepartment"
       }
     },
     "fetchAuthUser": {
@@ -14442,6 +19032,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchAuthUser"
       }
     },
     "addProfile": {
@@ -14753,6 +19346,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "addProfile"
       }
     },
     "logAttendance": {
@@ -14799,6 +19395,9 @@
           "type": "number",
           "example": 95
         }
+      },
+      "xml": {
+        "name": "logAttendance"
       }
     },
     "createAccessLogs": {
@@ -14832,6 +19431,9 @@
           "type": "string",
           "example": "https://"
         }
+      },
+      "xml": {
+        "name": "createAccessLogs"
       }
     },
     "getAccessLogs": {
@@ -14910,6 +19512,10 @@
           "example": false
         },
         "tag": {},
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
+        },
         "skip": {
           "type": "number",
           "example": 0
@@ -14918,6 +19524,9 @@
           "type": "number",
           "example": 10
         }
+      },
+      "xml": {
+        "name": "getAccessLogs"
       }
     },
     "getAttendance": {
@@ -14933,6 +19542,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "getAttendance"
       }
     },
     "updateAdminPermissions": {
@@ -14946,6 +19558,9 @@
           "type": "object",
           "properties": {}
         }
+      },
+      "xml": {
+        "name": "updateAdminPermissions"
       }
     },
     "getUserLogs": {
@@ -14959,6 +19574,9 @@
           "type": "string",
           "example": "2025-06-01"
         }
+      },
+      "xml": {
+        "name": "getUserLogs"
       }
     },
     "getUserSessionReport": {
@@ -14975,7 +19593,14 @@
         "endDate": {
           "type": "string",
           "example": "2025-06-30"
+        },
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
         }
+      },
+      "xml": {
+        "name": "getUserSessionReport"
       }
     },
     "updateLogsSound": {
@@ -14985,6 +19610,9 @@
           "type": "boolean",
           "example": true
         }
+      },
+      "xml": {
+        "name": "updateLogsSound"
       }
     },
     "updateRetention": {
@@ -15022,6 +19650,9 @@
           "type": "number",
           "example": 24
         }
+      },
+      "xml": {
+        "name": "updateRetention"
       }
     },
     "bulkExportProfiles": {
@@ -15037,6 +19668,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "bulkExportProfiles"
       }
     },
     "fetchObjectTypes": {
@@ -15063,6 +19697,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchObjectTypes"
       }
     },
     "createAuthorizedObjects": {
@@ -15083,6 +19720,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "createAuthorizedObjects"
       }
     },
     "updateAuthorizedObjects": {
@@ -15108,6 +19748,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "updateAuthorizedObjects"
       }
     },
     "CreatePermissions": {
@@ -15311,6 +19954,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "CreatePermissions"
       }
     },
     "UpdatePermission": {
@@ -15493,6 +20139,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "UpdatePermission"
       }
     },
     "bulkDeletePermission": {
@@ -15510,6 +20159,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "bulkDeletePermission"
       }
     },
     "bulkUpdatePermission": {
@@ -15543,11 +20195,17 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "bulkUpdatePermission"
       }
     },
     "rolesPermissions": {
       "type": "object",
-      "properties": {}
+      "properties": {},
+      "xml": {
+        "name": "rolesPermissions"
+      }
     },
     "CreateRoles": {
       "type": "object",
@@ -15561,6 +20219,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "CreateRoles"
       }
     },
     "UpdateRoleName": {
@@ -15586,6 +20247,9 @@
           "type": "boolean",
           "example": true
         }
+      },
+      "xml": {
+        "name": "UpdateRoleName"
       }
     },
     "authUserLogin": {
@@ -15599,6 +20263,9 @@
           "type": "string",
           "example": "examplePassword"
         }
+      },
+      "xml": {
+        "name": "authUserLogin"
       }
     },
     "bulkDeleteUser": {
@@ -15614,6 +20281,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "bulkDeleteUser"
       }
     },
     "forgotPassword": {
@@ -15623,6 +20293,9 @@
           "type": "string",
           "example": "testuser@example.com"
         }
+      },
+      "xml": {
+        "name": "forgotPassword"
       }
     },
     "resetPassword": {
@@ -15640,6 +20313,9 @@
           "type": "string",
           "example": "MyNewPass@123"
         }
+      },
+      "xml": {
+        "name": "resetPassword"
       }
     },
     "changePassword": {
@@ -15657,6 +20333,9 @@
           "type": "string",
           "example": "NewPass@123"
         }
+      },
+      "xml": {
+        "name": "changePassword"
       }
     },
     "fetchAuthChannels": {
@@ -15700,6 +20379,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchAuthChannels"
       }
     },
     "createAccessLogRecord": {
@@ -15749,7 +20431,14 @@
         "confidenceScore": {
           "type": "number",
           "example": 92.5
+        },
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
         }
+      },
+      "xml": {
+        "name": "createAccessLogRecord"
       }
     },
     "fetchAllDepartments": {
@@ -15795,6 +20484,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchAllDepartments"
       }
     },
     "fetchAllNVRS": {
@@ -15830,6 +20522,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchAllNVRS"
       }
     },
     "fetchLocations": {
@@ -15865,6 +20560,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchLocations"
       }
     },
     "fetchChannels": {
@@ -15910,11 +20608,17 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "fetchChannels"
       }
     },
     "registerDomain": {
       "type": "object",
-      "properties": {}
+      "properties": {},
+      "xml": {
+        "name": "registerDomain"
+      }
     },
     "updateReportStatus": {
       "type": "object",
@@ -15931,6 +20635,9 @@
           "type": "string",
           "example": "Report has been reviewed and necessary actions taken."
         }
+      },
+      "xml": {
+        "name": "updateReportStatus"
       }
     },
     "startDetection": {
@@ -15948,6 +20655,9 @@
           "type": "boolean",
           "example": true
         }
+      },
+      "xml": {
+        "name": "startDetection"
       }
     },
     "addObjects": {
@@ -15967,6 +20677,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "addObjects"
       }
     },
     "deleteObjects": {
@@ -15986,6 +20699,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "deleteObjects"
       }
     },
     "addShift": {
@@ -15995,87 +20711,105 @@
           "type": "string",
           "example": "Night Shift"
         },
-        "color": {
+        "startTime": {
           "type": "string",
-          "example": "#3B82F6"
+          "example": "22:00"
         },
-        "timings": {
+        "endTime": {
+          "type": "string",
+          "example": "06:00"
+        },
+        "breakMinutes": {
+          "type": "number",
+          "example": 60
+        },
+        "graceLateMinutes": {
+          "type": "number",
+          "example": 15
+        },
+        "graceEarlyMinutes": {
+          "type": "number",
+          "example": 15
+        },
+        "maxOvertimeMinutes": {
+          "type": "number",
+          "example": 0
+        },
+        "isNightShift": {
+          "type": "boolean",
+          "example": true
+        },
+        "isDefault": {
+          "type": "boolean",
+          "example": false
+        },
+        "isActive": {
+          "type": "boolean",
+          "example": true
+        },
+        "workingDays": {
           "type": "object",
           "properties": {
+            "sunday": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "off"
+                }
+              }
+            },
             "monday": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": true
-                },
-                "start": {
+                "type": {
                   "type": "string",
-                  "example": "22:00"
-                },
-                "end": {
-                  "type": "string",
-                  "example": "06:00"
+                  "example": "full"
                 }
               }
             },
             "tuesday": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": true
-                },
-                "start": {
+                "type": {
                   "type": "string",
-                  "example": "22:00"
-                },
-                "end": {
-                  "type": "string",
-                  "example": "06:00"
+                  "example": "full"
                 }
               }
             },
             "wednesday": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": true
-                },
-                "start": {
+                "type": {
                   "type": "string",
-                  "example": "22:00"
-                },
-                "end": {
-                  "type": "string",
-                  "example": "06:00"
+                  "example": "full"
                 }
               }
             },
             "thursday": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": true
-                },
-                "start": {
+                "type": {
                   "type": "string",
-                  "example": "22:00"
-                },
-                "end": {
-                  "type": "string",
-                  "example": "06:00"
+                  "example": "full"
                 }
               }
             },
             "friday": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": true
+                "type": {
+                  "type": "string",
+                  "example": "full"
+                }
+              }
+            },
+            "saturday": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "half"
                 },
                 "start": {
                   "type": "string",
@@ -16083,56 +20817,9 @@
                 },
                 "end": {
                   "type": "string",
-                  "example": "06:00"
+                  "example": "02:00"
                 }
               }
-            },
-            "saturday": {
-              "type": "object",
-              "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": false
-                }
-              }
-            },
-            "sunday": {
-              "type": "object",
-              "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "example": false
-                }
-              }
-            }
-          }
-        },
-        "settings": {
-          "type": "object",
-          "properties": {
-            "lateLogin": {
-              "type": "number",
-              "example": 10
-            },
-            "earlyLogout": {
-              "type": "number",
-              "example": 15
-            },
-            "halfDay": {
-              "type": "string",
-              "example": "04:00"
-            },
-            "overTime": {
-              "type": "string",
-              "example": "01:00"
-            },
-            "halfDayProductiveTime": {
-              "type": "string",
-              "example": "04:30"
-            },
-            "fullDayProductiveTime": {
-              "type": "string",
-              "example": "08:30"
             }
           }
         },
@@ -16140,6 +20827,139 @@
           "type": "string",
           "example": "Night shift for security and operations team"
         }
+      },
+      "xml": {
+        "name": "addShift"
+      }
+    },
+    "shiftScheduleAssign": {
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string",
+          "example": "6512f1c0a1b2c3d4e5f60718"
+        },
+        "date": {
+          "type": "string",
+          "example": "2026-09-04"
+        },
+        "shiftId": {
+          "type": "string",
+          "example": "6512f1c0a1b2c3d4e5f60999"
+        },
+        "isOff": {
+          "type": "boolean",
+          "example": false
+        },
+        "dayType": {
+          "type": "string",
+          "example": "full"
+        },
+        "note": {
+          "type": "string",
+          "example": ""
+        }
+      },
+      "xml": {
+        "name": "shiftScheduleAssign"
+      }
+    },
+    "shiftScheduleBulkAssign": {
+      "type": "object",
+      "properties": {
+        "employeeIds": {
+          "type": "array",
+          "example": [
+            "6512f1c0a1b2c3d4e5f60718"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "shiftId": {
+          "type": "string",
+          "example": "6512f1c0a1b2c3d4e5f60999"
+        },
+        "isOff": {
+          "type": "boolean",
+          "example": false
+        },
+        "dayType": {
+          "type": "string",
+          "example": "full"
+        },
+        "from": {
+          "type": "string",
+          "example": "2026-09-01"
+        },
+        "to": {
+          "type": "string",
+          "example": "2026-09-30"
+        },
+        "weekdays": {
+          "type": "array",
+          "example": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "xml": {
+        "name": "shiftScheduleBulkAssign"
+      }
+    },
+    "shiftAssignmentFilters": {
+      "type": "object",
+      "properties": {
+        "employeeIds": {
+          "type": "array",
+          "example": [
+            "6512f1c0a1b2c3d4e5f60718"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "type": "array",
+          "example": [
+            "Bangalore",
+            "Chennai"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "departmentIds": {
+          "type": "array",
+          "example": [
+            "68493b14b176a495112b6522"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "allEmployees": {
+          "type": "boolean",
+          "example": false
+        },
+        "overwriteExisting": {
+          "type": "boolean",
+          "example": true
+        },
+        "includeSuspended": {
+          "type": "boolean",
+          "example": false
+        }
+      },
+      "xml": {
+        "name": "shiftAssignmentFilters"
       }
     },
     "autoEmailReportCreate": {
@@ -16259,6 +21079,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "autoEmailReportCreate"
       }
     },
     "mockJobs": {
@@ -16268,6 +21091,9 @@
           "type": "string",
           "example": "6745720f4e154ebc760ab43d"
         }
+      },
+      "xml": {
+        "name": "mockJobs"
       }
     },
     "deleteIncidentsByIds": {
@@ -16283,6 +21109,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "deleteIncidentsByIds"
       }
     },
     "updateAdmin": {
@@ -16304,6 +21133,9 @@
           "type": "string",
           "example": "Doe"
         }
+      },
+      "xml": {
+        "name": "updateAdmin"
       }
     },
     "RegisterEntryUser": {
@@ -16330,6 +21162,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "RegisterEntryUser"
       }
     },
     "LogEntry": {
@@ -16372,6 +21207,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "LogEntry"
       }
     },
     "VehicleLog": {
@@ -16402,6 +21240,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "VehicleLog"
       }
     },
     "bulkImportAuthUser": {
@@ -16431,6 +21272,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "bulkImportAuthUser"
       }
     },
     "deskAbsenceData": {
@@ -16440,6 +21284,9 @@
           "type": "string",
           "example": "2025-06-10"
         }
+      },
+      "xml": {
+        "name": "deskAbsenceData"
       }
     },
     "guardAbsenceData": {
@@ -16467,6 +21314,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "guardAbsenceData"
       }
     },
     "addEMPEmails": {
@@ -16482,6 +21332,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "addEMPEmails"
       }
     },
     "updateEMPEmail": {
@@ -16495,6 +21348,9 @@
           "type": "string",
           "example": "example2@gmail.com"
         }
+      },
+      "xml": {
+        "name": "updateEMPEmail"
       }
     },
     "deleteEMPEmail": {
@@ -16504,6 +21360,9 @@
           "type": "string",
           "example": "example1@gmail.com"
         }
+      },
+      "xml": {
+        "name": "deleteEMPEmail"
       }
     },
     "updateLocation": {
@@ -16517,6 +21376,9 @@
           "type": "string",
           "example": "BLR001"
         }
+      },
+      "xml": {
+        "name": "updateLocation"
       }
     },
     "allOrgEmployee": {
@@ -16542,6 +21404,9 @@
           "type": "string",
           "example": "385"
         }
+      },
+      "xml": {
+        "name": "allOrgEmployee"
       }
     },
     "editIncidentDetails": {
@@ -16607,6 +21472,9 @@
           "type": "number",
           "example": 1
         }
+      },
+      "xml": {
+        "name": "editIncidentDetails"
       }
     },
     "uploadFaceImages": {
@@ -16626,6 +21494,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "uploadFaceImages"
       }
     },
     "tagFolder": {
@@ -16639,6 +21510,9 @@
           "type": "string",
           "example": "665f2b1c8e4a9d0012ab34cd"
         }
+      },
+      "xml": {
+        "name": "tagFolder"
       }
     },
     "quickCreateUser": {
@@ -16677,6 +21551,10 @@
           "example": "665f2b1c8e4a9d0012ab3422"
         },
         "numberPlate": {
+          "type": "string",
+          "example": "KA01AB1234"
+        },
+        "vehicleNumber": {
           "type": "string",
           "example": "KA01AB1234"
         },
@@ -16720,7 +21598,14 @@
           "type": "array",
           "example": [],
           "items": {}
+        },
+        "liveDemoData": {
+          "type": "boolean",
+          "example": false
         }
+      },
+      "xml": {
+        "name": "quickCreateUser"
       }
     },
     "deleteFaceImages": {
@@ -16736,6 +21621,9 @@
             "type": "string"
           }
         }
+      },
+      "xml": {
+        "name": "deleteFaceImages"
       }
     },
     "importEmpUsers": {
@@ -16895,6 +21783,9 @@
             }
           }
         }
+      },
+      "xml": {
+        "name": "importEmpUsers"
       }
     },
     "deleteIncidentsByAdminAndDateRange": {
@@ -16908,6 +21799,9 @@
           "type": "string",
           "example": "2026-01-31"
         }
+      },
+      "xml": {
+        "name": "deleteIncidentsByAdminAndDateRange"
       }
     },
     "DeskAbsenceLogsFilter": {
@@ -16937,6 +21831,9 @@
           "type": "number",
           "example": 10
         }
+      },
+      "xml": {
+        "name": "DeskAbsenceLogsFilter"
       }
     },
     "updateStorage": {
@@ -16953,7 +21850,10 @@
       },
       "required": [
         "name"
-      ]
+      ],
+      "xml": {
+        "name": "updateStorage"
+      }
     }
   },
   "security": [
