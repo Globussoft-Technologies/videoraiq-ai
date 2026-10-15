@@ -299,7 +299,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
   return (
     <>
       <SectionHead n="01" color="#3b82f6" title="Desk / Zone Absence Monitoring" sub="Alert when an operator's desk stays empty past its threshold" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 520px), 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 520px), 1fr))', gap: 16, alignItems: 'start' }}>
         <Panel pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: BAD, animation: 'vq-blink 1.2s ease-in-out infinite' }} />

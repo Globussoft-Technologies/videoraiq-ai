@@ -32,7 +32,7 @@ export default function LivePanelLog({ station, live }) {
           ? 'Refreshes every 30 seconds · green: soldered, red: missed'
           : 'Panels in the selected period · green: soldered, red: missed'} />
       </div>
-      <div onScroll={loadOnScroll} style={{ padding: '0 14px 12px', maxHeight: 320, overflowY: 'auto' }}>
+      <div onScroll={loadOnScroll} style={{ padding: '0 14px 12px', maxHeight: 230, overflowY: 'auto' }}>
         <TotalReport rows={rows} animate />
         {hasMore && <div style={{ padding: '8px 0', fontSize: 11, color: 'var(--tx3)', textAlign: 'center' }}>Scroll for more logs</div>}
       </div>
