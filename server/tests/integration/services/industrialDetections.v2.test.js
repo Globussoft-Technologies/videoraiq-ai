@@ -295,6 +295,70 @@ describe("stock-counting vehicle aggregation", () => {
       boxCount: 8,
     });
   });
+  it("groups UNKNOWN1, UNKNOWN2... like plates, including after a PATCH, but keeps bare UNKNOWN apart", async () => {
+    const nvr = await NVR.create({
+      userId: admin.user_id,
+      nvrName: "Stock NVR",
+      brand: "hikvision",
+      domain: "http://stock-nvr.test",
+      location: "loading bay",
+      localNvrId: "stock-unknown-nvr",
+    });
+    const channel = await Channel.create({
+      userId: admin.user_id,
+      nvrId: nvr._id,
+      localChannelId: "1",
+      name: "Stock Camera",
+      streamingPath: "/Streaming/Channels/101",
+      isAdded: true,
+    });
+    const common = {
+      nvrId: nvr._id,
+      channelId: channel._id,
+      userId: admin.user_id,
+      incidentName: "Stock Movement Detected",
+      direction: "loading",
+      boxType: "brown",
+    };
+    const [renamed] = await incidentModels.LoadingUnloadingStockCountingIncident.create([
+      { ...common, timeOfIncident: new Date("2026-09-30T11:00:00Z"), eventId: "u-1", vehicleNumber: "UNKNOWN", boxCount: 2 },
+      { ...common, timeOfIncident: new Date("2026-09-30T11:05:00Z"), eventId: "u-2", vehicleNumber: "UNKNOWN3", boxCount: 3 },
+      { ...common, timeOfIncident: new Date("2026-09-30T11:10:00Z"), eventId: "u-3", vehicleNumber: "UNKNOWN", boxCount: 1 },
+      { ...common, timeOfIncident: new Date("2026-09-30T11:15:00Z"), eventId: "u-4", vehicleNumber: "", boxCount: 4 },
+    ]);
+
+    // DS later recognises the first truck as its UNKNOWN3 and PATCHes it.
+    const edit = serviceCtx({
+      user_id: admin.user_id,
+      adminId: admin._id,
+      params: { id: String(renamed._id) },
+      body: { vehicleNumber: "UNKNOWN3" },
+    });
+    await IncidentsService.editIncidentDetails(edit.req, edit.res, edit.next);
+    expect(edit.res.statusCode).toBe(200);
+    const stored = await incidentModels.LoadingUnloadingStockCountingIncident.findById(renamed._id).lean();
+    expect(stored.vehicleNumber).toBe("UNKNOWN3");
+
+    const logsContext = serviceCtx({
+      user_id: admin.user_id,
+      adminId: admin._id,
+      query: { skip: "0", limit: "10", startDate: "2026-09-30", endDate: "2026-09-30" },
+    });
+    await IncidentsService.getLoadingUnloadingStockCountingLogs(
+      logsContext.req,
+      logsContext.res,
+      logsContext.next,
+    );
+    const result = payload(logsContext.res).data;
+
+    // Both UNKNOWN3 events land in one row, like a real plate.
+    const unknown3 = result.data.filter((row) => row.vehicleNumber === "UNKNOWN3");
+    expect(unknown3).toHaveLength(1);
+    expect(unknown3[0]).toMatchObject({ boxCount: 5, eventCount: 2 });
+    // Bare UNKNOWN and a blank plate are still unreadable: one row each, shown blank.
+    expect(result.data.filter((row) => row.vehicleNumber === "")).toHaveLength(2);
+    expect(result.totalCount).toBe(3);
+  });
 });
 
 describe("v2 industrial detection incidents and logs", () => {

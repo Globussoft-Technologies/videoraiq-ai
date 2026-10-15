@@ -34,7 +34,8 @@ export const stockNormalizationStages = (timezone) => [
         },
         { $set: {
           _invalidCount: { $or: [{ $eq: ["$_boxCount", null] }, { $lt: ["$_boxCount", 0] }, { $ne: ["$_boxCount", { $trunc: "$_boxCount" }] }] },
-          _vehicle: { $cond: [{ $regexMatch: { input: "$_vehicle", regex: "^(UNKNOWN[0-9]*|UNREADABLE.*|N/?A|NONE|NULL|-)$" } }, "UNKNOWN", "$_vehicle"] },
+          // Bare UNKNOWN means no plate. UNKNOWN1, UNKNOWN2... are DS ids for one unreadable truck, so they group like real plates.
+          _vehicle: { $cond: [{ $regexMatch: { input: "$_vehicle", regex: "^(UNKNOWN|UNREADABLE.*|N/?A|NONE|NULL|-)$" } }, "UNKNOWN", "$_vehicle"] },
         } },
         { $set: { _boxCount: { $cond: ["$_invalidCount", 0, "$_boxCount"] } } },
         { $set: { _validColourSplit: { $and: [

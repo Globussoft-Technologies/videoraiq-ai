@@ -60,15 +60,16 @@ describe('stock analytics and movement evidence', () => {
       fixture({ boxCount: 100, channelId: other }), fixture({ userId: '200', boxCount: 100 }),
     ]);
     const data = (await analytics())._body.body.data;
-    expect(data.summary).toMatchObject({ totalEvents: 7, totalVehicles: 1, loadedBoxes: 4, unloadedBoxes: 2,
-      totalBoxes: 9, unidentifiedEvents: 3, invalidCountEvents: 4, unknownDirectionBoxes: 3,
+    // UNKNOWN2 is a DS id for one unreadable truck, so it counts as a vehicle; blank and UNREADABLE:1 do not.
+    expect(data.summary).toMatchObject({ totalEvents: 7, totalVehicles: 2, loadedBoxes: 4, unloadedBoxes: 2,
+      totalBoxes: 9, unidentifiedEvents: 2, invalidCountEvents: 4, unknownDirectionBoxes: 3,
       unknownDirectionEvents: 1, colourSplitEvents: 1 });
     expect(data.composition).toEqual([{ boxType: 'classification only', total: 5 }, { boxType: 'brown', total: 3 }, { boxType: 'white', total: 1 }]);
     expect(data.trends).toHaveLength(2);
     expect(data.trends[1]).toMatchObject({ date: '2026-10-15', total: 0, events: 0 });
     expect(data.hourlyActivity).toHaveLength(24);
     expect(data.hourlyActivity[1]).toMatchObject({ total: 9, events: 7 });
-    expect(data.topVehicles).toHaveLength(1);
+    expect(data.topVehicles.map((v) => v.vehicleNumber)).toEqual(['GJ01AA1234', 'UNKNOWN2']);
     expect(data.insights[0].message).toContain('were loaded than unloaded');
     const grouped = serviceCtx({ user_id: '100', authorizedChannel: { channels: [channel] } });
     grouped.req.query = { startDate: '2026-10-14', endDate: '2026-10-15', limit: 100 };
