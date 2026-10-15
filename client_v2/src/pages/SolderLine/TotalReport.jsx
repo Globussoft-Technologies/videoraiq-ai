@@ -14,10 +14,10 @@ function PointResult({ point, value }) {
   </div>;
 }
 
-export default function TotalReport({ rows = [], sorting: suppliedSort, animate = false }) {
+export default function TotalReport({ rows = [], sorting: suppliedSort, animate = false, sortable = true }) {
   const localSort = useTableSort(rows);
   const sorting = suppliedSort || localSort;
-  const shown = suppliedSort ? rows : localSort.rows;
+  const shown = !sortable || suppliedSort ? rows : localSort.rows;
   if (!rows.length) return <NoPeriodData minH={200} />;
   const headers = Object.keys(rows[0]);
   return <div style={{ overflowX: 'auto', minWidth: 0 }}>
@@ -29,7 +29,7 @@ export default function TotalReport({ rows = [], sorting: suppliedSort, animate 
       @media (prefers-reduced-motion: reduce) { .solder-log-row, .solder-log-row td > div[aria-label^="P"] { animation: none; } }
     `}</style>}
     <table aria-label="Total reports" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-      <thead><tr>{headers.map(header => <th key={header} scope="col" aria-sort={sorting.directionFor(header)} style={{ ...mono, fontSize: 9, padding: '9px 6px', textAlign: 'left', color: 'var(--tx3)', fontWeight: 500, whiteSpace: 'nowrap', borderBottom: '1px solid var(--bd)' }}><SortButton column={header} sorting={sorting}>{header.toUpperCase()}</SortButton></th>)}</tr></thead>
+      <thead><tr>{headers.map(header => <th key={header} scope="col" aria-sort={sortable ? sorting.directionFor(header) : undefined} style={{ ...mono, fontSize: 9, padding: '9px 6px', textAlign: 'left', color: 'var(--tx3)', fontWeight: 500, whiteSpace: 'nowrap', borderBottom: '1px solid var(--bd)' }}>{sortable ? <SortButton column={header} sorting={sorting}>{header.toUpperCase()}</SortButton> : header.toUpperCase()}</th>)}</tr></thead>
       <tbody>{shown.map((row, index) => <tr key={animate ? `${row.Panel}:${row.Time}` : index} className={animate ? 'solder-log-row' : undefined} style={{ borderBottom: '1px solid var(--bd)' }}>
         {headers.map(header => <td key={header} style={{ padding: '6px', verticalAlign: 'middle', whiteSpace: 'pre-line', lineHeight: '18px', ...(typeof row[header] === 'number' ? mono : {}), ...(['Panel', 'Time', 'Zone'].includes(header) ? { minWidth: header === 'Time' ? 120 : 95 } : {}) }}>
           {header === 'Snapshot' ? <SnapshotCell value={row[header]} /> : /^P\d+$/.test(header) ? <PointResult point={header} value={row[header]} /> : row[header]}

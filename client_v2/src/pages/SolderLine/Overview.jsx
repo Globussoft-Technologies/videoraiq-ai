@@ -290,6 +290,23 @@ function PresenceCard({ o }) {
 }
 
 function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
+  const cameraColumn = useRef(null);
+  const logsColumn = useRef(null);
+  const [columnHeight, setColumnHeight] = useState(undefined);
+  useEffect(() => {
+    const camera = cameraColumn.current;
+    const logs = logsColumn.current;
+    if (!camera || !logs) return;
+    const measure = () => {
+      const sideBySide = Math.abs(camera.getBoundingClientRect().top - logs.getBoundingClientRect().top) < 2;
+      setColumnHeight(sideBySide ? camera.getBoundingClientRect().height : undefined);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(camera);
+    window.addEventListener('resize', measure);
+    measure();
+    return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
+  }, []);
   const latest = s.absences[s.absences.length - 1];
   const total = s.absences.reduce((a, b) => a + b.durSec, 0);
   const span = s.windowStart && s.windowEnd ? s.windowEnd.diff(s.windowStart, 'seconds') : 0;
@@ -300,6 +317,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
     <>
       <SectionHead n="01" color="#3b82f6" title="Desk / Zone Absence Monitoring" sub="Alert when an operator's desk stays empty past its threshold" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 520px), 1fr))', gap: 16, alignItems: 'start' }}>
+        <div ref={cameraColumn}>
         <Panel pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: BAD, animation: 'vq-blink 1.2s ease-in-out infinite' }} />
@@ -317,7 +335,8 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
           <LatestPanel panel={s.latestPanel} />
         </Panel>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, alignSelf: 'start' }}>
+        </div>
+        <div ref={logsColumn} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, height: columnHeight, alignSelf: 'start' }}>
           {s.ops.length ? s.ops.map((o) => <PresenceCard key={o.i} o={o} />) : <Waiting title="No zones configured">Draw the operator zones on this camera's Desk Solar Shoulder detection.</Waiting>}
           <Panel pad={false}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
