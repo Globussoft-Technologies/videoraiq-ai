@@ -336,7 +336,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
         </Panel>
 
         </div>
-        <div ref={logsColumn} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, height: columnHeight, alignSelf: 'start' }}>
+        <div ref={logsColumn} style={{ display: 'grid', gridTemplateRows: `repeat(${Math.max(s.ops.length, 1) + 1}, max-content) minmax(100px, 1fr)`, gap: 16, minWidth: 0, height: columnHeight, minHeight: 'min-content', alignSelf: 'start' }}>
           {s.ops.length ? s.ops.map((o) => <PresenceCard key={o.i} o={o} />) : <Waiting title="No zones configured">Draw the operator zones on this camera's Desk Solar Shoulder detection.</Waiting>}
           <Panel pad={false}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>

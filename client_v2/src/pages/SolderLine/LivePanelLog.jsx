@@ -27,7 +27,7 @@ export default function LivePanelLog({ station }) {
 
   return (
     <Panel pad={false} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
-      <div style={{ padding: '12px 14px 0' }}>
+      <div style={{ padding: '12px 14px 0', flexShrink: 0 }}>
         <PanelHead title="Recent logs" />
       </div>
       <div onScroll={loadOnScroll} style={{ padding: '0 14px 12px', maxHeight: 218, minHeight: 0, overflowY: 'auto' }}>
