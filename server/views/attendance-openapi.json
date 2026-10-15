@@ -1,0 +1,1846 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "VideoraIQ Attendance Integration — On-premise",
+    "version": "1.0.0",
+    "description": "Attendance Logs integration using an admin API key. Based on docs/attendance-api-key-integration.md; verified 15 October 2026.\n\n**IP and port:** the default server `/api/v2` uses the same IP, protocol and API port as this Swagger page. Open this page on the backend API port, not the frontend port. Open Swagger directly on the installation you want to use; no manual server variables are needed. No domain is required.\n\n**Authenticate:** click Authorize and paste the generated key only (without Bearer). Requests send `x-api-key`; no login JWT or access token is needed. Keys are not saved across reloads. Obtain a key from the admin UI hidden route `/admin/api-keys`.\n\n**Permissions:** logs for attendance; people for filter options; media for snapshots. Read-only access is enough for all listed operations. The key must be active and its admin subscription must remain active. Revoked/expired keys return HTTP 401. API-key/session management cannot be accessed using an integration key.\n\n**Summary cards:** Total Active Employees = totalEmployees; Check In = statusCounts.checkinLogs; Full Day = present; Half Day = halfDay; Absent = absent; Still In = checkedIn; Checkout = checkoutLogs. Use counts from a second request without status to keep totals unchanged while filtering table rows. Counts are not limited to the current page.\n\n**Current date-range behavior:** notCheckedIn is roster-derived for one day (startDate, then endDate, then today), not accumulated over a range. Request each day separately for daily absence statistics. Recorded status counts are employee-day totals. minutesSpent is elapsed first check-in to last checkout, not reduced by breaks. Use returned status instead of re-grading hours.\n\n**Timezones:** list date bounds follow the admin/shift timezone, default Asia/Kolkata; fromTime/toTime use UTC HH:mm. Roster-only and employee-detail lookups use host-local day bounds, so confirm midnight/overnight behavior when host and admin timezones differ. A timezone query does not override the admin setting.\n\n**Errors:** inspect HTTP status and body.status; some legacy failures use HTTP 200. Limits per server process: 600 accepted requests/key/minute and 1,000 key attempts/source IP/minute. Retry 429 with backoff."
+  },
+  "servers": [
+    {
+      "url": "/api/v2",
+      "description": "This installation — same IP and API port as this page"
+    }
+  ],
+  "security": [
+    {
+      "AdminApiKey": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Attendance",
+      "description": "Rows, summary cards, employee events and reports. Scope: logs."
+    },
+    {
+      "name": "Filter options",
+      "description": "Populate department, NVR, camera and employee-location selectors. Scope: people."
+    },
+    {
+      "name": "Snapshots",
+      "description": "Fetch stored image evidence. Scope: media."
+    },
+    {
+      "name": "Attendance rules",
+      "description": "Read account attendance rules. Scope: logs."
+    }
+  ],
+  "paths": {
+    "/attendance/get": {
+      "post": {
+        "operationId": "getAttendance",
+        "tags": [
+          "Attendance"
+        ],
+        "summary": "List attendance and summary counts",
+        "description": "Required key scope: logs. A read-only key is sufficient.\n\nFilters and pagination belong in the query; employeeLocations belongs in the JSON body. skip = (page - 1) * limit. body.data.total is the filtered count before pagination. Continue until skip + attendanceLogs.length >= total. For API keys, use only one ID per nvrId/channelId/departmentIds query field; comma-separated IDs fail the key ownership guard.\n\nstatus=not_checked_in returns expected employees who have no check-in, for one selected day. status=absent covers recorded absent rows only. A successful empty list may still have a nonzero roster/absence count. Summary counts ignore the name search for ordinary recorded rows. attendanceLogsStartDate is currently global earliest-record metadata; do not use it as a tenant reporting range.",
+        "responses": {
+          "200": {
+            "description": "Attendance rows plus roster/status totals; empty rows are a valid success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttendanceResponse"
+                },
+                "examples": {
+                  "attendance": {
+                    "value": {
+                      "statusCode": 200,
+                      "body": {
+                        "status": "success",
+                        "message": "Attendance summary",
+                        "data": {
+                          "attendanceLogs": [
+                            {
+                              "employee": {
+                                "_id": "66fa00000000000000000001",
+                                "firstName": "Sample",
+                                "lastName": "Employee",
+                                "fullName": "Sample Employee",
+                                "location": "Factory A",
+                                "departmentId": {
+                                  "_id": "66fa00000000000000000002",
+                                  "departmentName": "Production"
+                                }
+                              },
+                              "date": "2026-10-14",
+                              "logInTime": "2026-10-14T03:30:00.000Z",
+                              "logOutTime": "2026-10-14T11:30:00.000Z",
+                              "checkinCam": "Entrance",
+                              "checkoutCam": "Exit",
+                              "minutesSpent": 480,
+                              "status": "present",
+                              "breakMinutes": 30,
+                              "breakCount": 1,
+                              "shift": null,
+                              "imageUrls": []
+                            }
+                          ],
+                          "total": 1,
+                          "totalEmployees": 2,
+                          "statusCounts": {
+                            "present": 1,
+                            "halfDay": 0,
+                            "absent": 1,
+                            "checkedIn": 0,
+                            "earlyLeave": 0,
+                            "noCheckout": 0,
+                            "notCheckedIn": 1,
+                            "checkinLogs": 1,
+                            "checkoutLogs": 1
+                          },
+                          "attendanceLogsStartDate": null
+                        }
+                      }
+                    }
+                  },
+                  "noRecordedRows": {
+                    "value": {
+                      "statusCode": 200,
+                      "body": {
+                        "status": "success",
+                        "message": "Attendance summary",
+                        "data": {
+                          "attendanceLogs": [],
+                          "total": 0,
+                          "totalEmployees": 2,
+                          "statusCounts": {
+                            "present": 0,
+                            "halfDay": 0,
+                            "absent": 2,
+                            "checkedIn": 0,
+                            "earlyLeave": 0,
+                            "noCheckout": 0,
+                            "notCheckedIn": 2,
+                            "checkinLogs": 0,
+                            "checkoutLogs": 0
+                          },
+                          "attendanceLogsStartDate": null
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StartDate"
+          },
+          {
+            "$ref": "#/components/parameters/EndDate"
+          },
+          {
+            "$ref": "#/components/parameters/Name"
+          },
+          {
+            "$ref": "#/components/parameters/Status"
+          },
+          {
+            "$ref": "#/components/parameters/NvrId"
+          },
+          {
+            "$ref": "#/components/parameters/ChannelId"
+          },
+          {
+            "$ref": "#/components/parameters/DepartmentIds"
+          },
+          {
+            "$ref": "#/components/parameters/FromTime"
+          },
+          {
+            "$ref": "#/components/parameters/ToTime"
+          },
+          {
+            "$ref": "#/components/parameters/TimeType"
+          },
+          {
+            "$ref": "#/components/parameters/SortField"
+          },
+          {
+            "$ref": "#/components/parameters/SortOrder"
+          },
+          {
+            "$ref": "#/components/parameters/Skip"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "description": "Optional bypass of pagination. Omit for normal paginated list reads.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttendanceFilters"
+              },
+              "example": {
+                "employeeLocations": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attendance/user-logs": {
+      "post": {
+        "operationId": "getAttendanceUserLogs",
+        "tags": [
+          "Attendance"
+        ],
+        "summary": "Get an employee’s daily events and breaks",
+        "description": "Required key scope: logs. A read-only key is sufficient.\n\nemployeeId is attendanceLogs[i].employee._id, not the admin or application-member ID. date is YYYY-MM-DD. Each break is checkout followed by its next checkin. The initial check-in and final checkout are bookends, not breaks. No matching record returns data: [] with HTTP 200.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeLogsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "employeeId": {
+                    "$ref": "#/components/schemas/MongoId"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "employeeId",
+                  "date"
+                ]
+              },
+              "example": {
+                "employeeId": "66fa00000000000000000001",
+                "date": "2026-10-14"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attendance/export": {
+      "post": {
+        "operationId": "exportAttendance",
+        "tags": [
+          "Attendance"
+        ],
+        "summary": "Download attendance CSV or PDF",
+        "description": "Required key scope: logs. A read-only key is sufficient.\n\nInclude export=true to avoid exporting only the default page. format=excel returns CSV, not XLSX; pdf returns a PDF. Filters and employeeLocations match the list. Empty results and status=not_checked_in return HTTP 200 JSON with an explanatory message and data: [], not an empty file. Inspect Content-Type before saving a response as a report.",
+        "responses": {
+          "200": {
+            "description": "PDF or CSV when rows exist; JSON for no rows or unsupported roster-only export.",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment; filename=AttendanceReport.pdf or AttendanceReport.csv for files",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                },
+                "example": {
+                  "statusCode": 200,
+                  "body": {
+                    "status": "success",
+                    "message": "No attendance data to export",
+                    "data": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StartDate"
+          },
+          {
+            "$ref": "#/components/parameters/EndDate"
+          },
+          {
+            "$ref": "#/components/parameters/Name"
+          },
+          {
+            "$ref": "#/components/parameters/Status"
+          },
+          {
+            "$ref": "#/components/parameters/NvrId"
+          },
+          {
+            "$ref": "#/components/parameters/ChannelId"
+          },
+          {
+            "$ref": "#/components/parameters/DepartmentIds"
+          },
+          {
+            "$ref": "#/components/parameters/FromTime"
+          },
+          {
+            "$ref": "#/components/parameters/ToTime"
+          },
+          {
+            "$ref": "#/components/parameters/TimeType"
+          },
+          {
+            "$ref": "#/components/parameters/SortField"
+          },
+          {
+            "$ref": "#/components/parameters/SortOrder"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "excel",
+                "csv",
+                "pdf"
+              ],
+              "default": "excel"
+            },
+            "description": "excel and csv produce Excel-compatible CSV."
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "required": true,
+            "description": "Must be true to include all matching rows.",
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                true
+              ],
+              "default": true
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttendanceFilters"
+              },
+              "example": {
+                "employeeLocations": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attendance/settings": {
+      "get": {
+        "operationId": "getAttendanceSettings",
+        "tags": [
+          "Attendance rules"
+        ],
+        "summary": "Read attendance rules",
+        "description": "Required key scope: logs. A read-only key is sufficient. Returns defaults when no account rules have been saved. Assigned shifts can change grading context. graceHours is the open-day checkout wait, not lateness allowance.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        }
+      }
+    },
+    "/departments/get": {
+      "post": {
+        "operationId": "getAttendanceDepartments",
+        "tags": [
+          "Filter options"
+        ],
+        "summary": "List department filter options",
+        "description": "Required key scope: people. Pagination and search for this endpoint are in the JSON body. Read department IDs from body.data.data and the count from body.data.totalCount. Do not depend on the legacy hasMore field; compare skip + data.length with totalCount.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "skip": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 10
+                  },
+                  "search": {
+                    "type": "string",
+                    "default": ""
+                  }
+                }
+              },
+              "example": {
+                "skip": 0,
+                "limit": 100,
+                "search": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authorizedChannels/getNVRS": {
+      "post": {
+        "operationId": "getAttendanceNvrs",
+        "tags": [
+          "Filter options"
+        ],
+        "summary": "List NVR filter options",
+        "description": "Required key scope: people (this route belongs to authorizedChannels). Body filters are JSON arrays of owned IDs/location names. Body response data is an NVR array.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NvrsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selectedLocations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "departmentIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MongoId"
+                    }
+                  },
+                  "channelsIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MongoId"
+                    }
+                  }
+                }
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/authorizedChannels/getChannels": {
+      "post": {
+        "operationId": "getAttendanceCameras",
+        "tags": [
+          "Filter options"
+        ],
+        "summary": "List camera filter options",
+        "description": "Required key scope: people. Pass nvrIds as a JSON array. Normal filter requests return a camera array; do not use the registration-specific isUserRegFilter mode for this integration.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CamerasResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nvrIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MongoId"
+                    }
+                  },
+                  "departmentIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MongoId"
+                    }
+                  },
+                  "selectedLocations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "camType": {
+                    "type": "string",
+                    "description": "Optional camera check type.",
+                    "enum": [
+                      "checkin",
+                      "checkout"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "nvrIds": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/locations/employee-location": {
+      "post": {
+        "operationId": "getAttendanceEmployeeLocations",
+        "tags": [
+          "Filter options"
+        ],
+        "summary": "List employee-location filter options",
+        "description": "Required key scope: people. Use locationName strings from body.data.locations in employeeLocations, not MongoDB location IDs. Some employee-derived options have no _id.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Inspect body.status as legacy handlers may return failure envelopes with HTTP 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Skip"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional location search."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/uploads/{mediaPath}": {
+      "get": {
+        "operationId": "getAttendanceSnapshot",
+        "tags": [
+          "Snapshots"
+        ],
+        "summary": "Read a stored snapshot",
+        "description": "Required key scope when using an API key: media. Use an actual relative stored path from imageUrls[].images.face/person/frame or employee.profilePics. Enter the entire stored path, including slashes, as mediaPath; the backend uses a wildcard path. Do not paste an absolute URL. Storage-dependent content types and errors may vary; legacy public-media behavior is unchanged.",
+        "responses": {
+          "200": {
+            "description": "Stored image bytes.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "description": "Stored media not found. Error format depends on storage provider."
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "name": "mediaPath",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Stored media path, e.g. v2/<adminId>/env/nas/images/example.jpg. Use a real path from the API response."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AdminApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Paste the generated admin API key only. Do not prefix with Bearer and do not also send Authorization or x-access-token."
+      }
+    },
+    "parameters": {
+      "StartDate": {
+        "name": "startDate",
+        "in": "query",
+        "description": "Inclusive YYYY-MM-DD in the admin/shift timezone. Defaults to today; set both dates for predictable period reads.",
+        "schema": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "EndDate": {
+        "name": "endDate",
+        "in": "query",
+        "description": "Inclusive YYYY-MM-DD; defaults to the start day.",
+        "schema": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "Skip": {
+        "name": "skip",
+        "in": "query",
+        "description": "Rows to skip: (page - 1) * limit.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Page size. Use a reasonable positive size such as 10, 25 or 100.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        }
+      },
+      "Name": {
+        "name": "name",
+        "in": "query",
+        "description": "Case-insensitive employee full-name search. Does not narrow ordinary-record KPI counts.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Status": {
+        "name": "status",
+        "in": "query",
+        "description": "Omit for all recorded rows. present=full day; half_day=half day; checked_in=still open; absent=recorded absent only; checkin/checkout=has that event; early_leave=absent with both timestamps; no_checkout=expired open window; not_checked_in=single-day expected roster with no check-in. Last two absence filters still return status absent or not_checked_in, respectively.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "present",
+            "half_day",
+            "checked_in",
+            "absent",
+            "checkin",
+            "checkout",
+            "early_leave",
+            "no_checkout",
+            "not_checked_in"
+          ]
+        }
+      },
+      "NvrId": {
+        "name": "nvrId",
+        "in": "query",
+        "description": "Optional. Leave blank to apply no filter; use a real ID from the corresponding filter-options API, never a sample ID. One NVR ID owned by this admin; comma-separated IDs fail API-key ownership validation.",
+        "schema": {
+          "$ref": "#/components/schemas/MongoId"
+        }
+      },
+      "ChannelId": {
+        "name": "channelId",
+        "in": "query",
+        "description": "Optional. Leave blank to apply no filter; use a real ID from the corresponding filter-options API, never a sample ID. One owned camera/channel ID. Use this singular parameter for API-key attendance requests.",
+        "schema": {
+          "$ref": "#/components/schemas/MongoId"
+        }
+      },
+      "DepartmentIds": {
+        "name": "departmentIds",
+        "in": "query",
+        "description": "Optional. Leave blank to apply no filter; use a real ID from the corresponding filter-options API, never a sample ID. Despite its plural name, use one owned department ID with API-key requests. Comma-separated strings and query arrays are not supported through the current key/handler combination.",
+        "schema": {
+          "$ref": "#/components/schemas/MongoId"
+        }
+      },
+      "FromTime": {
+        "name": "fromTime",
+        "in": "query",
+        "description": "Inclusive UTC HH:mm. Example: 09:00 India time = 03:30 UTC.",
+        "schema": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "example": "03:30"
+        }
+      },
+      "ToTime": {
+        "name": "toTime",
+        "in": "query",
+        "description": "Inclusive UTC HH:mm upper bound.",
+        "schema": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "example": "12:30"
+        }
+      },
+      "TimeType": {
+        "name": "timeType",
+        "in": "query",
+        "description": "Timestamp used by fromTime/toTime.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "checkin",
+            "checkout"
+          ],
+          "default": "checkin"
+        }
+      },
+      "SortField": {
+        "name": "sortField",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "fullname",
+            "department",
+            "date",
+            "location",
+            "checkin",
+            "checkout"
+          ],
+          "default": "checkin"
+        }
+      },
+      "SortOrder": {
+        "name": "sortOrder",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        }
+      }
+    },
+    "schemas": {
+      "MongoId": {
+        "type": "string",
+        "pattern": "^[a-fA-F0-9]{24}$"
+      },
+      "AttendanceFilters": {
+        "type": "object",
+        "properties": {
+          "employeeLocations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Employee-location names, full case-insensitive matches. Empty means no requested location restriction."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Legacy envelope code may differ from HTTP status."
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failed"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "error": {}
+            }
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "array",
+                "maxItems": 0,
+                "items": {}
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "Department": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "$ref": "#/components/schemas/MongoId"
+          },
+          "departmentName": {
+            "type": "string"
+          }
+        },
+        "nullable": true,
+        "additionalProperties": true
+      },
+      "Employee": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "$ref": "#/components/schemas/MongoId"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string",
+            "nullable": true
+          },
+          "profilePics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "departmentId": {
+            "$ref": "#/components/schemas/Department"
+          }
+        },
+        "additionalProperties": true
+      },
+      "Shift": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "$ref": "#/components/schemas/MongoId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          }
+        },
+        "nullable": true,
+        "additionalProperties": true
+      },
+      "Images": {
+        "type": "object",
+        "properties": {
+          "face": {
+            "type": "string",
+            "description": "Stored face path.",
+            "nullable": true
+          },
+          "person": {
+            "type": "string",
+            "description": "Stored person-image path.",
+            "nullable": true
+          },
+          "frame": {
+            "type": "string",
+            "description": "Stored frame path.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "AttendanceEvent": {
+        "type": "object",
+        "properties": {
+          "cameraType": {
+            "type": "string",
+            "enum": [
+              "checkin",
+              "checkout"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cameraName": {
+            "type": "string",
+            "nullable": true
+          },
+          "confidenceScore": {
+            "type": "number",
+            "nullable": true
+          },
+          "images": {
+            "$ref": "#/components/schemas/Images"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AttendanceRow": {
+        "type": "object",
+        "properties": {
+          "employee": {
+            "$ref": "#/components/schemas/Employee"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "logInTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "logOutTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "checkinCam": {
+            "type": "string",
+            "nullable": true
+          },
+          "checkoutCam": {
+            "type": "string",
+            "nullable": true
+          },
+          "minutesSpent": {
+            "type": "integer",
+            "description": "Rounded elapsed first check-in to last checkout; not reduced by breaks.",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "present",
+              "half_day",
+              "absent",
+              "checked_in",
+              "not_checked_in"
+            ]
+          },
+          "breakMinutes": {
+            "type": "integer",
+            "description": "Rounded paired break minutes.",
+            "minimum": 0
+          },
+          "breakCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttendanceEvent"
+            }
+          },
+          "shift": {
+            "$ref": "#/components/schemas/Shift"
+          },
+          "shiftName": {
+            "type": "string",
+            "nullable": true
+          },
+          "shiftStartTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "shiftEndTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "shiftDayType": {
+            "type": "string",
+            "nullable": true
+          },
+          "isNightShift": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "lateMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "earlyLeaveMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "overtimeMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "isLate": {
+            "type": "boolean"
+          },
+          "isEarlyLeave": {
+            "type": "boolean"
+          },
+          "isWeekOff": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      },
+      "StatusCounts": {
+        "type": "object",
+        "properties": {
+          "present": {
+            "type": "integer",
+            "description": "Full Day card; employee-day groups graded present.",
+            "minimum": 0
+          },
+          "halfDay": {
+            "type": "integer",
+            "description": "Half Day card.",
+            "minimum": 0
+          },
+          "absent": {
+            "type": "integer",
+            "description": "Absent card: earlyLeave + noCheckout + notCheckedIn.",
+            "minimum": 0
+          },
+          "checkedIn": {
+            "type": "integer",
+            "description": "Still In card.",
+            "minimum": 0
+          },
+          "earlyLeave": {
+            "type": "integer",
+            "description": "Absent recorded rows with both timestamps.",
+            "minimum": 0
+          },
+          "noCheckout": {
+            "type": "integer",
+            "description": "Recorded absent rows missing checkout after their grace window. May be omitted for roster-only responses.",
+            "minimum": 0
+          },
+          "notCheckedIn": {
+            "type": "integer",
+            "description": "Single-day expected employees with no check-in; not a cumulative range count.",
+            "minimum": 0
+          },
+          "checkinLogs": {
+            "type": "integer",
+            "description": "Check In card; employee-day groups with a check-in, not event count.",
+            "minimum": 0
+          },
+          "checkoutLogs": {
+            "type": "integer",
+            "description": "Checkout card; employee-day groups with a checkout, not event count.",
+            "minimum": 0
+          }
+        }
+      },
+      "AttendanceResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "attendanceLogs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/AttendanceRow"
+                    }
+                  },
+                  "total": {
+                    "type": "integer",
+                    "description": "Matching rows before pagination.",
+                    "minimum": 0
+                  },
+                  "totalEmployees": {
+                    "type": "integer",
+                    "description": "Current active roster denominator, separate from multi-day attendance totals.",
+                    "minimum": 0
+                  },
+                  "statusCounts": {
+                    "$ref": "#/components/schemas/StatusCounts"
+                  },
+                  "attendanceLogsStartDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "EmployeeLogsResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "employee": {
+                        "$ref": "#/components/schemas/Employee"
+                      },
+                      "date": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "firstCheckIn": {
+                        "$ref": "#/components/schemas/NullableAttendanceEvent"
+                      },
+                      "lastCheckOut": {
+                        "$ref": "#/components/schemas/NullableAttendanceEvent"
+                      },
+                      "logs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "checkout": {
+                              "$ref": "#/components/schemas/AttendanceEvent"
+                            },
+                            "checkin": {
+                              "$ref": "#/components/schemas/AttendanceEvent"
+                            }
+                          }
+                        }
+                      },
+                      "breakMinutes": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "maxItems": 0,
+                    "items": {}
+                  }
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "AttendanceSettings": {
+        "type": "object",
+        "properties": {
+          "fullDayHours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 24,
+            "multipleOf": 0.25,
+            "example": 8
+          },
+          "halfDayHours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 24,
+            "multipleOf": 0.25,
+            "example": 4
+          },
+          "graceHours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 24,
+            "multipleOf": 0.25,
+            "example": 8
+          }
+        }
+      },
+      "SettingsResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "$ref": "#/components/schemas/AttendanceSettings"
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "DepartmentsResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "totalCount": {
+                    "type": "integer"
+                  },
+                  "skip": {
+                    "type": "integer"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "hasMore": {
+                    "type": "boolean",
+                    "description": "Legacy field; calculate pagination using totalCount and returned data length."
+                  },
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Department"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "Nvr": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "$ref": "#/components/schemas/MongoId"
+          },
+          "nvrName": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "NvrsResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Nvr"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "Camera": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "$ref": "#/components/schemas/MongoId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "customName": {
+            "type": "string",
+            "nullable": true
+          },
+          "nvrId": {},
+          "checkType": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "CamerasResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Camera"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "LocationsResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "Envelope status; inspect the actual HTTP status as well.",
+            "example": 200
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "totalCount": {
+                    "type": "integer"
+                  },
+                  "locations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "$ref": "#/components/schemas/MongoId"
+                        },
+                        "locationName": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "Employee-derived options may have source employee and no _id."
+                        }
+                      },
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "status",
+              "data"
+            ]
+          }
+        },
+        "required": [
+          "statusCode",
+          "body"
+        ]
+      },
+      "NullableAttendanceEvent": {
+        "type": "object",
+        "properties": {
+          "cameraType": {
+            "type": "string",
+            "enum": [
+              "checkin",
+              "checkout"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cameraName": {
+            "type": "string",
+            "nullable": true
+          },
+          "confidenceScore": {
+            "type": "number",
+            "nullable": true
+          },
+          "images": {
+            "$ref": "#/components/schemas/Images"
+          }
+        },
+        "additionalProperties": true,
+        "nullable": true
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Invalid or incomplete input. Do not send both an API key and an Authorization header.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "API key is invalid, expired or revoked, or its owner no longer exists.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Missing scope/access, foreign or invalid resource reference, or inactive subscription.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Per-process key/IP rate limit reached. Retry with backoff; response may be plain text.",
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "Server failure; malformed dates/IDs/pagination can also cause legacy handlers to return this status.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}

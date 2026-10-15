@@ -38,7 +38,8 @@ class LogsConfigurationController {
         wrongLocationLogs: true,
         wasteDisposalLogs: true,
         animalEntryLogs: true,
-        messyAreaLogs: true
+        messyAreaLogs: true,
+        boxPackingLogs: true
       }
     }
     #swagger.responses[400] = { description: 'Missing adminId' }
@@ -66,7 +67,8 @@ class LogsConfigurationController {
           wrongLocationLogs: true,
           wasteDisposalLogs: true,
           animalEntryLogs: true,
-          messyAreaLogs: true
+          messyAreaLogs: true,
+          boxPackingLogs: true
         }
       }
     }

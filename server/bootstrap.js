@@ -26,7 +26,7 @@ console.log("🔓 Config decrypted and injected");
 // 3. Run Swagger generation BEFORE loading the rest of the app
 try {
   console.log("📄 Generating Swagger documentation...");
-  execSync("npm run swagger", { stdio: "inherit" });
+  execSync("npm run swagger:all", { stdio: "inherit" });
   console.log("✅ Swagger generation completed");
 } catch (error) {
   console.error("❌ Failed to generate Swagger docs:", error);

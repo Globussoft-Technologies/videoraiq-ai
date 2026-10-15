@@ -44,6 +44,7 @@ Visit `http://localhost:5000/` to confirm the welcome message; Swagger UI is at 
 | `npm run swagger` | Regenerate Swagger JSON only |
 | `npm start` | Sequential: `node server.js && node ./core/v1/jobs/utils/worker.js` (see [docs/deployment.md §2.6](../docs/deployment.md#26-bullmq-worker) — run the worker as a sidecar in prod) |
 | `npm run obfuscate` | Copy → obfuscate sources into `dist/` |
+| `npm run build:assets` | Copy required static runtime assets into `dist/` after obfuscation |
 | `npm run encrypt` | AES-encrypt `config/*.json` using `$MK` |
 | `npm run build` | `obfuscate` + `encrypt` |
 | `npm run production` | `node bootstrap.js` — **container-only** |
@@ -225,6 +226,17 @@ MK=<base64-key> npm run encrypt            # config/*.json → config/*.json.enc
 docker build -t videora-server:latest .
 ```
 
+`npm run obfuscate` finishes by running `build:assets`. This explicitly copies
+`views/attendance-openapi.json` into `dist/views/`: the JavaScript obfuscator
+does not emit JSON, and Docker packages only `dist/`. The Docker build validates
+that this file exists and parses before the image can be published.
+
+If an older image fails with `ENOENT /app/views/attendance-openapi.json`, rebuild
+and publish the backend image, then pull and recreate the backend service on the
+installation machine. Restarting the old image or regenerating legacy Swagger
+does not add this separate static specification. Run Docker commands from the
+host terminal, not from a shell inside the backend container.
+
 At runtime in a container:
 
 ```bash
@@ -257,6 +269,53 @@ sendgrid.apiKey, twilio.{accountSid,authToken,from},
 amember.{url,apiKey}, swagger.{user,pass},
 storage.{s3,googleDrive,sftp}, telegram.botToken
 ```
+
+### Mail provider switch
+
+SendGrid remains the default. Select the provider at process startup:
+
+```env
+MAIL_PROVIDER=sendgrid
+# or
+MAIL_PROVIDER=smtp
+```
+
+For SMTP, either add an `smtp` object to the active `config/<NODE_ENV>.json`
+or set the equivalent environment variables:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=mailer@example.com
+SMTP_PASSWORD=change-me
+SMTP_FROM_NAME=VideoRAIQ
+SMTP_FROM_EMAIL=mailer@example.com
+SMTP_REQUIRE_TLS=false
+SMTP_TLS_REJECT_UNAUTHORIZED=true
+```
+
+Equivalent config shape:
+
+```json
+{
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "secure": false,
+    "user": "mailer@example.com",
+    "password": "change-me",
+    "fromName": "VideoRAIQ",
+    "fromEmail": "mailer@example.com",
+    "requireTls": false,
+    "tlsRejectUnauthorized": true
+  }
+}
+```
+
+Environment variables take precedence over config values. Port `465` normally
+uses `SMTP_SECURE=true`; port `587` normally uses `false` and upgrades with
+STARTTLS. Restart the server after changing the provider.
 
 ---
 

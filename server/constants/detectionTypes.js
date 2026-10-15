@@ -128,6 +128,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   unauthorizedAnimalEntryDetectionSettings: { permissionKey: "animalEntryLogs", logsConfigKey: "animalEntryLogs" },
   spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
   loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
+  boxPackingDetectionSettings: { permissionKey: "boxPackingLogs", logsConfigKey: "boxPackingLogs" },
   blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
   deskSolarShoulderDetectionSettings: { permissionKey: "deskSolarShoulderLogs", logsConfigKey: "deskSolarShoulderLogs" },
 });

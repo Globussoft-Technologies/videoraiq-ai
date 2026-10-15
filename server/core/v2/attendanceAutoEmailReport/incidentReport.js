@@ -67,20 +67,37 @@ const rowFromIncident = (item, timezone) => ({
   vehicleNumber: asText(item.vehicleNumber),
   description: asText(item.report?.description || item.description),
   image: imageUrl(item.Image),
+  boxId: item.boxId || '',
+  completedBy: item.completedBy || '',
+  zones: Array.isArray(item.zones) ? item.zones : [],
+  detectedVia: item.detectedVia || '',
+  confirmationReason: item.confirmationReason || '',
 });
 
 export async function incidentRowsForReport(report, summary) {
   const admin = await Admin.findById(report.adminId).select("user_id").lean();
   if (!admin?.user_id) throw new Error("The report owner does not have an incident data owner configured");
 
+  const incidentTypes = Array.isArray(report.incidentTypes) ? report.incidentTypes : [];
+  const imageMatch = { $exists: true, $nin: [null, "", "https://"] };
   const match = {
     userId: String(admin.user_id),
-    incidentType: { $in: report.incidentTypes || [] },
+    incidentType: { $in: incidentTypes },
     timeOfIncident: { $gte: summary.start.toDate(), $lte: summary.end.toDate() },
-    Image: { $exists: true, $nin: [null, "", "https://"] },
     incidentName: { $not: /Guard Present/i },
     liveDemoData: { $ne: true },
   };
+  // A packing confirmation can come from a line sensor and legitimately have
+  // no snapshot. Include it in scheduled Incident Reports, while retaining
+  // the visual-evidence requirement for every other selected detection.
+  if (incidentTypes.includes("boxPackingDetection")) {
+    match.$or = [
+      { incidentType: "boxPackingDetection" },
+      { Image: imageMatch },
+    ];
+  } else {
+    match.Image = imageMatch;
+  }
 
   const incidents = await Incident.aggregate([
     { $match: match },
@@ -118,7 +135,93 @@ const drawReportHeader = (document, details, suffix) => {
     .text(`${details.label}  |  ${details.rowCount} incident${details.rowCount === 1 ? "" : "s"}  |  ${details.timezone}`, 28, 42);
 };
 
+const isBoxPackingDetails = (details) => details.rows.some((row) => row.incidentType === "boxPackingDetection" || row.boxId);
+
+const packingRows = (details) => details.rows.map((row) => {
+  const zone = row.zones?.[0] || {};
+  const review = row.severity === "moderate" || row.severity === "high" || /review|variance|awaiting|new/i.test(`${row.confirmationReason || ""} ${row.status || ""}`);
+  return {
+    id: row.id,
+    boxId: asText(row.boxId || row.id),
+    operator: asText(row.completedBy || "Completed by not provided"),
+    zone: asText(zone.zone || "Packing Zone"),
+    boxes: Number(zone.boxNumber) || 0,
+    cycle: Number(zone.timeTakenSec) || 0,
+    status: review ? "Needs review" : "Completed",
+    source: asText(row.detectedVia || "Camera"),
+    camera: asText(row.camera || "Packing camera"),
+    time: asText(row.time),
+    image: row.image,
+    notes: asText(row.confirmationReason || row.description || (review ? "Count variance detected" : "Box count matched")),
+  };
+});
+
+const packingSummary = (rows) => ({
+  events: rows.length,
+  boxes: rows.reduce((sum, row) => sum + row.boxes, 0),
+  review: rows.filter((row) => row.status === "Needs review").length,
+  cycle: rows.length ? Math.round(rows.reduce((sum, row) => sum + row.cycle, 0) / rows.length) : 0,
+});
+
+const drawPackingHeader = (document, details, suffix, summary) => {
+  const width = document.page.width;
+  const split = width * 0.75;
+  document.fillColor("#698be8").rect(0, 0, split, 54).fill();
+  document.fillColor("#974fe0").rect(split, 0, width - split, 54).fill();
+  document.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff").text("VideoiraQ", 28, 19);
+  const rightBandX = split + 12;
+  const rightBandWidth = width - split - 40;
+  document.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff").text("Box Packing Alert Logs", rightBandX, 15, { width: rightBandWidth, align: "right", ellipsis: true });
+  document.font("Helvetica").fontSize(7).fillColor("#ffffff").text("Box Packing QC - Alert report", rightBandX, 34, { width: rightBandWidth, align: "right", ellipsis: true });
+  document.font("Helvetica-Bold").fontSize(11).fillColor(INK).text("Packing alerts and confirmation evidence", 28, 68);
+  document.font("Helvetica").fontSize(8).fillColor(MUTED).text(`${details.label}  |  ${details.timezone}`, 28, 82);
+  const cardTop = 96;
+  const gap = 10;
+  const cardWidth = (width - 56 - gap * 3) / 4;
+  [["EVENTS", summary.events, "#4f46e5"], ["BOXES PACKED", summary.boxes, "#059669"], ["NEEDS REVIEW", summary.review, "#d97706"], ["AVG CYCLE", `${summary.cycle} sec`, "#7e22ce"]].forEach(([label, value, color], index) => {
+    const x = 28 + index * (cardWidth + gap);
+    document.roundedRect(x, cardTop, cardWidth, 34, 5).fillAndStroke("#f8fafc", RULE);
+    document.fillColor(color).circle(x + 10, cardTop + 12, 2.2).fill();
+    document.font("Helvetica-Bold").fontSize(6.5).fillColor(MUTED).text(label, x + 18, cardTop + 9);
+    document.font("Helvetica-Bold").fontSize(13).fillColor(INK).text(String(value), x + 10, cardTop + 20);
+  });
+  return cardTop + 48;
+};
+
+export function buildBoxPackingListPdf(details) {
+  const rows = packingRows(details);
+  const summary = packingSummary(rows);
+  const columns = [["Log ID", "id", 68], ["Box ID", "boxId", 70], ["Completed By", "operator", 74], ["Zone", "zone", 74], ["Boxes", "boxes", 36], ["Cycle", "cycle", 40], ["Status", "status", 66], ["Source", "source", 60], ["Camera", "camera", 72], ["Time", "time", 92], ["Snapshot", "image", 58], ["Notes", "notes", 75]];
+  return pdfBuffer((document) => {
+    const left = 28;
+    const tableWidth = columns.reduce((sum, [, , width]) => sum + width, 0);
+    const drawTableHeader = (top) => {
+      document.fillColor("#4f46e5").rect(left, top, tableWidth, 24).fill();
+      let x = left;
+      columns.forEach(([label, , width]) => { document.font("Helvetica-Bold").fontSize(6.5).fillColor("#ffffff").text(label, x + 3, top + 8, { width: width - 6, ellipsis: true }); x += width; });
+      return top + 24;
+    };
+    const drawPage = () => drawTableHeader(drawPackingHeader(document, details, "List View", summary));
+    let y = drawPage();
+    rows.forEach((row, index) => {
+      if (y + 29 > document.page.height - 28) { document.addPage(); y = drawPage(); }
+      if (index % 2 === 1) document.fillColor("#f8fafc").rect(left, y, tableWidth, 29).fill();
+      let x = left;
+      columns.forEach(([, key, width]) => {
+        const linked = key === "image" && row.image;
+        const value = key === "image" ? (linked ? "View image" : "No snapshot") : row[key];
+        document.font("Helvetica").fontSize(6.4).fillColor(linked ? "#2563eb" : key === "status" && row.status === "Needs review" ? "#b45309" : INK).text(String(value), x + 3, y + 9, { width: width - 6, height: 16, ellipsis: true, link: linked || undefined, underline: Boolean(linked) });
+        x += width;
+      });
+      document.strokeColor(RULE).lineWidth(0.4).moveTo(left, y + 29).lineTo(left + tableWidth, y + 29).stroke();
+      y += 29;
+    });
+    if (!rows.length) document.font("Helvetica").fontSize(11).fillColor(MUTED).text("No packing records were found for this period.", left, y + 20);
+  });
+}
+
 export function buildIncidentListPdf(details) {
+  if (isBoxPackingDetails(details)) return buildBoxPackingListPdf(details);
   const showVehicleNumber = showVehicleNumberFor(details);
   const columns = [
     ["Sl No", "serialNumber", 25], ["Incident", "incident", showVehicleNumber ? 111 : 141],
@@ -190,6 +293,7 @@ const concurrentMap = async (items, concurrency, worker) => {
 };
 
 export async function buildIncidentGridPdf(details) {
+  if (isBoxPackingDetails(details)) return buildBoxPackingGridPdf(details);
   return pdfBuffer(async (document) => {
     const margin = 28;
     const gap = 10;
@@ -249,6 +353,47 @@ export async function buildIncidentGridPdf(details) {
       });
     }
     if (!details.rows.length) document.font("Helvetica").fontSize(11).fillColor(MUTED).text("No incidents were found for this period.", margin, 80);
+  });
+}
+
+export async function buildBoxPackingGridPdf(details) {
+  const rows = packingRows(details);
+  const summary = packingSummary(rows);
+  return pdfBuffer(async (document) => {
+    const margin = 28;
+    const gap = 10;
+    const columns = 4;
+    const cardWidth = (document.page.width - margin * 2 - gap * (columns - 1)) / columns;
+    const imageHeight = 76;
+    const cardHeight = 155;
+    let x = margin;
+    let y = drawPackingHeader(document, details, "Grid View", summary);
+    let column = 0;
+    const batchSize = 24;
+    for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
+      const batch = rows.slice(batchStart, batchStart + batchSize);
+      const images = await concurrentMap(batch, 10, (row) => fetchImage(row.image));
+      batch.forEach((row, batchIndex) => {
+        if (column === 0 && y + cardHeight > document.page.height - 26) {
+          document.addPage();
+          y = drawPackingHeader(document, details, "Grid View", summary);
+        }
+        document.roundedRect(x, y, cardWidth, cardHeight, 5).fillAndStroke("#ffffff", RULE);
+        document.roundedRect(x, y, cardWidth, imageHeight, 5).fill("#111827");
+        if (images[batchIndex]) { try { document.image(images[batchIndex], x, y, { fit: [cardWidth, imageHeight], align: "center", valign: "center" }); } catch { /* keep placeholder */ } }
+        if (row.image) document.link(x, y, cardWidth, imageHeight, row.image);
+        const detailsToDraw = [["Box ID", row.boxId], ["COMPLETED BY", row.operator], ["ZONE", row.zone], ["BOXES", row.boxes], ["CYCLE", `${row.cycle}s`], ["STATUS", row.status], ["TIME", row.time]];
+        let textY = y + imageHeight + 9;
+        detailsToDraw.forEach(([label, value]) => {
+          document.font("Helvetica-Bold").fontSize(5.5).fillColor(MUTED).text(label, x + 7, textY, { width: 42, ellipsis: true });
+          document.font("Helvetica").fontSize(6.5).fillColor(label === "STATUS" && row.status === "Needs review" ? "#b45309" : INK).text(asText(value), x + 49, textY, { width: cardWidth - 56, ellipsis: true, align: "right" });
+          textY += 9;
+        });
+        column += 1;
+        if (column === columns) { column = 0; x = margin; y += cardHeight + gap; } else x += cardWidth + gap;
+      });
+    }
+    if (!rows.length) document.font("Helvetica").fontSize(11).fillColor(MUTED).text("No packing records were found for this period.", margin, y + 20);
   });
 }
 

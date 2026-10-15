@@ -746,6 +746,10 @@ class IncidentsController {
     return incidentsService.getSpillsDirtyMessyAreasDetectionLogs(req, res, next);
   }
 
+  async getBoxPackingDetectionLogs(req, res, next) {
+    return incidentsService.getBoxPackingDetectionLogs(req, res, next);
+  }
+
   async getLoadingUnloadingStockCountingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Loading/Unloading Stock Counting Detection logs. direction filters individual movements before vehicle aggregation, pagination and summary totals.'

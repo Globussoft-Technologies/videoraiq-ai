@@ -12,6 +12,8 @@ const upload = multer();
 
 const router = express.Router();
 
+router.get('/logs/box-packing-detection', viewAccessCheck, incidentsController.getBoxPackingDetectionLogs);
+
 router.post("/create", createAccessCheck, incidentsController.createIncidents);
 // Solder Line (deskSolarShoulderDetection) pages: alerts + hourly throughput in
 // one call. DS posts panels through /create (see recordSolderPanel).

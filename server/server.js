@@ -20,6 +20,7 @@ import routes from "./routes/index.js";
 import { connectDB } from "./utils/database.js";
 import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
+import attendanceSwaggerRouter from './views/attendanceSwagger.routes.js';
 import { initSocket } from "./socket.js"; // <-- Socket.io setup
 import { syncDetectionCatalog } from "./core/v2/detectionCatalog/detectionCatalog.service.js";
 import { reconcileAddedCameraLicenses } from "./core/v2/clientConfig/detectionLicense.service.js";
@@ -40,6 +41,7 @@ if (process.env.T === "D") mustRunInsideContainer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const isOnPrem = config.has("APP_ENV") && config.get("APP_ENV") === "onprem";
 
 const swaggerFile = JSON.parse(
   fs.readFileSync("./views/swagger-api-view.json", "utf-8")
@@ -48,6 +50,15 @@ const swaggerFile = JSON.parse(
 const swaggerFileV2 = fs.existsSync("./views/swagger-api-v2-view.json")
   ? JSON.parse(fs.readFileSync("./views/swagger-api-v2-view.json", "utf-8"))
   : { info: { title: "v2 API — run npm run swagger:v2 to generate" }, paths: {} };
+
+// On-prem clients must use the browser's host, published port and protocol.
+// Omitting these Swagger 2 fields makes requests relative to the current origin.
+if (isOnPrem) {
+  for (const spec of [swaggerFile, swaggerFileV2]) {
+    delete spec.host;
+    delete spec.schemes;
+  }
+}
 
 const app = express();
 // The station/streaming deployment binds this backend to 5055 via PORT,
@@ -62,7 +73,11 @@ if (process.env.NODE_ENV === "localDev") {
   app.use(morgan("dev"));
 }
 
-app.use(helmet());
+app.use(helmet(isOnPrem ? {
+  contentSecurityPolicy: {
+    directives: { "upgrade-insecure-requests": null },
+  },
+} : {}));
 app.use(prometheusMiddleware);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -137,6 +152,10 @@ swaggerV2Router.use(auth, swaggerAuthLogger);
 swaggerV2Router.use("/", swaggerUi.serveFiles(swaggerFileV2));
 swaggerV2Router.get("/", swaggerUi.setup(swaggerFileV2));
 app.use("/api-doc/v2", swaggerV2Router);
+
+// Mount before /api-doc's catch-all Basic-auth router. This integration page
+// uses only x-api-key for Try it out and works directly over the on-prem IP.
+app.use('/api-doc/attendance', attendanceSwaggerRouter);
 
 // v1 Swagger UI
 const swaggerV1Router = express.Router();

@@ -1,3 +1,4 @@
+import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
@@ -346,6 +347,14 @@ const LOG_SORT_FIELDS = {
   "nvrData.nvrName": "nvrData.nvrName",
   channelName: "channelData.name",
   "channelData.name": "channelData.name",
+  boxId: "boxId",
+  completedBy: "completedBy",
+  packingZone: "zones.zone",
+  boxNumber: "zones.boxNumber",
+  timeTakenSec: "zones.timeTakenSec",
+  endTimeSource: "endTimeSource",
+  detectedVia: "detectedVia",
+  confirmationReason: "confirmationReason",
 };
 
 const cacheDir = path.join("/tmp", "media-cache"); // You can change this to './cache' or any path
@@ -1471,6 +1480,28 @@ class IncidentsService {
           ...(matchStage.incidentType ?? {}),
           $in: incidentTypeFilter,
         };
+      }
+
+      // Box-packing confirmations can originate from the line sensor, where
+      // there is no camera snapshot to store. They are still valid incidents
+      // and must appear in Incident Center. Keep the visual-evidence rule for
+      // every other detection type, while allowing these sensor-only records.
+      const includesBoxPacking = req.body?.eventSource !== "detection_history"
+        && (!Array.isArray(incidentTypeFilter)
+          || incidentTypeFilter.length === 0
+          || incidentTypeFilter.includes("boxPackingDetection"));
+      if (includesBoxPacking && matchStage.Image) {
+        const imageMatch = matchStage.Image;
+        delete matchStage.Image;
+        matchStage.$and = [
+          ...(matchStage.$and || []),
+          {
+            $or: [
+              { incidentType: "boxPackingDetection" },
+              { Image: imageMatch },
+            ],
+          },
+        ];
       }
 
       /* ---------------------------------------------------
@@ -4751,6 +4782,35 @@ console.log(result,'result');
     );
   }
 
+  async getBoxPackingDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('boxPackingDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Box Packing Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified?.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.boxPackingLogs?.view || logs?.global?.view || logs?.view)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Box Packing Logs'));
+      }
+      const status = String(req.query.status || '').toLowerCase();
+      const extraMatch = {};
+      if (status === 'completed') extraMatch.resolved = true;
+      if (status === 'review') extraMatch.resolved = { $ne: true };
+      // An admin may have an empty authorised-camera array. The shared query
+      // interprets that as "$in: []", which incorrectly removes every row.
+      // Keep restrictions in place for members, while admins see their tenant.
+      const request = !user?.memberId && Array.isArray(req.verified?.authorizedChannel?.channels) && !req.verified.authorizedChannel.channels.length
+        ? { ...req, verified: { ...req.verified, authorizedChannel: undefined } }
+        : req;
+      return await this._fetchIncidentLogs({
+        req: request, res, incidentType: 'boxPackingDetection', extraMatch, postLookupSearch: true,
+        searchFields: ['boxId', 'completedBy', 'zones.zone', 'endTimeSource', 'detectedVia', 'confirmationReason'],
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError('Failed to fetch box packing logs', 500));
+    }
+  }
+
   async getLoadingUnloadingStockCountingLogs(req, res, next) {
     try {
       const data = req?.verified?.userData;
@@ -4840,24 +4900,12 @@ console.log(result,'result');
       const pipeline = [
         { $match: match },
         ...VEHICLE_LOG_LOOKUP_STAGES,
-        {
-          $addFields: {
-            _stockVehicleNumber: {
-              $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } },
-            },
-            _stockDirection: {
-              $toLower: { $ifNull: ["$direction", { $ifNull: ["$stockMovement", ""] }] },
-            },
-            _stockBoxCount: {
-              $convert: {
-                input: { $ifNull: ["$boxCount", { $ifNull: ["$count", 0] }] },
-                to: "double",
-                onError: 0,
-                onNull: 0,
-              },
-            },
-          },
-        },
+        ...stockNormalizationStages(getRequestTimezone(req)),
+        { $set: {
+          _stockVehicleNumber: { $cond: [{ $eq: ["$_vehicle", "UNKNOWN"] }, "", "$_vehicle"] },
+          _stockDirection: "$_direction",
+          _stockBoxCount: "$_boxCount",
+        } },
         ...(stockDirection && stockDirection !== 'all' ? [{ $match: { _stockDirection: stockDirection } }] : []),
         {
           $addFields: {
@@ -5323,6 +5371,10 @@ console.log(result,'result');
         startDate, endDate, nvrId, nvrIds, channelId, channelIds,
         vehicleNumber, boxType, search,
       } = req.query || {};
+      if (Boolean(startDate) !== Boolean(endDate) || (startDate && (
+        !momentTZ(startDate, "YYYY-MM-DD", true).isValid() || !momentTZ(endDate, "YYYY-MM-DD", true).isValid() ||
+        momentTZ(endDate).isBefore(momentTZ(startDate)) || momentTZ(endDate).diff(momentTZ(startDate), "days") > 3660
+      ))) return res.status(400).json({ error: "Select a valid date range of at most 10 years." });
       const toArray = (value) =>
         value ? String(value).split(",").map((item) => item.trim()).filter(Boolean) : [];
       const toObjectIds = (values) =>
@@ -5373,46 +5425,34 @@ console.log(result,'result');
         ];
       }
 
-      const result = await Incident.aggregate([
-        { $match: match },
-        {
-          $set: {
-            _direction: {
-              $toLower: { $ifNull: ["$direction", { $ifNull: ["$stockMovement", "unknown"] }] },
-            },
-            _boxCount: {
-              $convert: {
-                input: { $ifNull: ["$boxCount", { $ifNull: ["$count", 0] }] },
-                to: "double", onError: 0, onNull: 0,
-              },
-            },
-            _boxType: {
-              $let: {
-                vars: { value: { $toLower: { $trim: { input: { $ifNull: ["$boxType", ""] } } } } },
-                in: { $cond: [{ $eq: ["$$value", ""] }, "unknown", "$$value"] },
-              },
-            },
-            _vehicle: {
-              $let: {
-                vars: { value: { $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } } } },
-                in: { $cond: [{ $eq: ["$$value", ""] }, "UNKNOWN", "$$value"] },
-              },
-            },
-            _date: {
-              $dateToString: { date: "$timeOfIncident", format: "%Y-%m-%d", timezone },
-            },
-            _hour: {
-              $hour: { date: "$timeOfIncident", timezone },
-            },
-          },
-        },
-        {
+      const normalization = [{ $match: match }, ...stockNormalizationStages(timezone)];
+      if (req.query.mode === "events") {
+        const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+        const [page] = await Incident.aggregate([...normalization, { $facet: {
+          count: [{ $count: "total" }],
+          rows: [{ $sort: { timeOfIncident: -1, _id: -1 } }, { $skip: skip }, { $limit: limit }, ...VEHICLE_LOG_LOOKUP_STAGES,
+            { $project: { _id: 1, eventId: 1, Image: 1, timeOfIncident: 1, description: 1,
+              vehicleNumber: "$_vehicle", direction: "$_direction", boxCount: "$_boxCount", invalidCount: "$_invalidCount",
+              boxType: "$_boxType", nvrName: "$nvrData.nvrName",
+              channelName: { $ifNull: ["$channelData.customName", "$channelData.name"] } } }],
+        } }]);
+        return res.status(200).json(Response.userSuccessResp("Stock movements fetched successfully", {
+          rows: page?.rows || [], total: page?.count?.[0]?.total || 0, skip, limit, timezone,
+        }));
+      }
+      const result = await Incident.aggregate([...normalization, {
           $facet: {
             summary: [
               {
                 $group: {
                   _id: null,
                   totalEvents: { $sum: 1 },
+                  invalidCountEvents: { $sum: { $cond: ["$_invalidCount", 1, 0] } },
+                  unidentifiedEvents: { $sum: { $cond: [{ $eq: ["$_vehicle", "UNKNOWN"] }, 1, 0] } },
+                  unknownDirectionBoxes: { $sum: { $cond: [{ $in: ["$_direction", ["loading", "unloading"]] }, 0, "$_boxCount"] } },
+                  unknownDirectionEvents: { $sum: { $cond: [{ $in: ["$_direction", ["loading", "unloading"]] }, 0, 1] } },
+                  colourSplitEvents: { $sum: { $cond: ["$_validColourSplit", 1, 0] } },
                   vehicles: { $addToSet: "$_vehicle" },
                   loadedBoxes: { $sum: { $cond: [{ $eq: ["$_direction", "loading"] }, "$_boxCount", 0] } },
                   unloadedBoxes: { $sum: { $cond: [{ $eq: ["$_direction", "unloading"] }, "$_boxCount", 0] } },
@@ -5423,7 +5463,7 @@ console.log(result,'result');
               },
               {
                 $project: {
-                  _id: 0, totalEvents: 1, loadedBoxes: 1, unloadedBoxes: 1,
+                  _id: 0, totalEvents: 1, loadedBoxes: 1, unloadedBoxes: 1, invalidCountEvents: 1, unidentifiedEvents: 1, unknownDirectionBoxes: 1, unknownDirectionEvents: 1, colourSplitEvents: 1,
                   totalBoxes: 1, loadingEvents: 1, unloadingEvents: 1,
                   totalVehicles: {
                     $size: { $filter: { input: "$vehicles", as: "vehicle", cond: { $ne: ["$$vehicle", "UNKNOWN"] } } },
@@ -5444,6 +5484,14 @@ console.log(result,'result');
               },
               { $sort: { _id: 1 } },
               { $project: { _id: 0, date: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
+            ],
+            composition: [
+              { $set: { _split: { $cond: ["$_validColourSplit",
+                [{ type: "brown", count: "$brownCount" }, { type: "white", count: "$whiteCount" }, { type: "other", count: "$otherCount" }],
+                [{ type: "classification only", count: "$_boxCount" }] ] } } },
+              { $unwind: "$_split" }, { $group: { _id: "$_split.type", total: { $sum: "$_split.count" } } },
+              { $match: { total: { $gt: 0 } } }, { $sort: { total: -1, _id: 1 } },
+              { $project: { _id: 0, boxType: "$_id", total: 1 } },
             ],
             boxTypes: [
               {
@@ -5469,8 +5517,7 @@ console.log(result,'result');
                   events: { $sum: 1 },
                 },
               },
-              { $sort: { total: -1, events: -1 } },
-              { $limit: 8 },
+              { $sort: { total: -1, events: -1, _id: 1 } },
               { $project: { _id: 0, vehicleNumber: "$_id", loaded: 1, unloaded: 1, total: 1, events: 1 } },
             ],
             hourlyActivity: [
@@ -5491,9 +5538,48 @@ console.log(result,'result');
       ]);
 
       const analytics = result[0] || {};
+      if (startDate && endDate) {
+        const byDate = new Map((analytics.trends || []).map((item) => [item.date, item]));
+        const days = [];
+        const cursor = momentTZ.tz(startDate, timezone).startOf("day");
+        const last = momentTZ.tz(endDate, timezone).startOf("day");
+        if (!cursor.isValid() || !last.isValid() || last.diff(cursor, "days") > 3660 || last.isBefore(cursor)) {
+          return res.status(400).json({ error: "Select a valid date range of at most 10 years." });
+        }
+        while (cursor.isSameOrBefore(last)) {
+          const date = cursor.format("YYYY-MM-DD");
+          days.push(byDate.get(date) || { date, loaded: 0, unloaded: 0, total: 0, events: 0 }); cursor.add(1, "day");
+        }
+        analytics.trends = days;
+      }
+      const byHour = new Map((analytics.hourlyActivity || []).map((item) => [item.hour, item]));
+      analytics.hourlyActivity = Array.from({ length: 24 }, (_, hour) => byHour.get(hour) || { hour, loaded: 0, unloaded: 0, total: 0, events: 0 });
+      // Choose activity buckets from the inclusive selected date range.
+      // Reuse timezone-aware daily/hourly aggregates so all totals reconcile.
+      const selectedDays = startDate && endDate
+        ? momentTZ.tz(endDate, timezone).startOf("day").diff(momentTZ.tz(startDate, timezone).startOf("day"), "days") + 1
+        : Infinity;
+      const activityInterval = selectedDays === 1 ? "hour" : selectedDays <= 31 ? "day" : "month";
+      let activity;
+      if (activityInterval === "hour") {
+        activity = analytics.hourlyActivity.map((item) => ({ ...item, bucket: String(item.hour).padStart(2, "0") }));
+      } else if (activityInterval === "day") {
+        activity = analytics.trends.map((item) => ({ ...item, bucket: item.date }));
+      } else {
+        const months = new Map();
+        // trends includes empty days within the selection, including partial months.
+        for (const day of analytics.trends || []) {
+          const bucket = day.date.slice(0, 7);
+          const item = months.get(bucket) || { bucket, loaded: 0, unloaded: 0, total: 0, events: 0 };
+          for (const key of ["loaded", "unloaded", "total", "events"]) item[key] += day[key];
+          months.set(bucket, item);
+        }
+        activity = [...months.values()];
+      }
       const summary = analytics.summary?.[0] || {
         totalEvents: 0, totalVehicles: 0, loadedBoxes: 0, unloadedBoxes: 0,
         totalBoxes: 0, loadingEvents: 0, unloadingEvents: 0, netFlow: 0,
+        invalidCountEvents: 0, unidentifiedEvents: 0, unknownDirectionBoxes: 0, unknownDirectionEvents: 0, colourSplitEvents: 0,
       };
       const topType = analytics.boxTypes?.[0];
       const peakHour = [...(analytics.hourlyActivity || [])]
@@ -5505,10 +5591,10 @@ console.log(result,'result');
         ? [
             {
               type: "flow",
-              title: "Box movement",
+              title: "Loading balance",
               message: movement === "balanced"
-                ? "The same number of boxes came in and went out."
-                : `${Math.abs(summary.netFlow)} more ${Math.abs(summary.netFlow) === 1 ? "box" : "boxes"} ${movement === "inbound" ? "came in than went out" : "went out than came in"}.`,
+                ? "The same number of boxes were loaded and unloaded."
+                : `${Math.abs(summary.netFlow)} more ${Math.abs(summary.netFlow) === 1 ? "box" : "boxes"} ${movement === "inbound" ? "were loaded than unloaded" : "were unloaded than loaded"}.`,
             },
             ...(topType ? [{
               type: "boxType",
@@ -5517,7 +5603,7 @@ console.log(result,'result');
             }] : []),
             ...(peakHour ? [{
               type: "peak",
-              title: "Busiest time",
+              title: "Most movement events",
               message: `${momentTZ().hour(peakHour.hour).minute(0).format("hh:mm A")} to ${momentTZ().hour((peakHour.hour + 1) % 24).minute(0).format("hh:mm A")} had the most activity (${peakHour.events} ${peakHour.events === 1 ? "movement" : "movements"}).`,
             }] : []),
           ]
@@ -5528,8 +5614,11 @@ console.log(result,'result');
           summary,
           trends: analytics.trends || [],
           boxTypes: analytics.boxTypes || [],
+          composition: analytics.composition || [],
           topVehicles: analytics.topVehicles || [],
           hourlyActivity: analytics.hourlyActivity || [],
+          activityInterval,
+          activity,
           insights,
           timezone,
         }),
@@ -6016,8 +6105,17 @@ console.log(result,'result');
         { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
       ];
 
+      // Counting does not need newest-first ordering or the incident payload.
+      // Keep both joins/unwinds: legacy array references can expand rows, and
+      // replacing this with countDocuments would change the existing total.
+      const countPipeline = [
+        { $match: matchStage },
+        { $project: { nvrId: 1, channelId: 1 } },
+        ...basePipeline.slice(2),
+        { $count: "totalCount" },
+      ];
       const [countResult, logs] = await Promise.all([
-        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate(countPipeline),
         Incident.aggregate([
           ...basePipeline,
           { $skip: parseInt(skip) },

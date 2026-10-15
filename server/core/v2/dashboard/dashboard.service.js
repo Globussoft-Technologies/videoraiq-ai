@@ -1245,7 +1245,10 @@ class DashboardService {
           let user_id = req?.verified?.userData?.user_id;
           const { nvrId, channelId, location, department } = req.query;
           // Step 1: Find the admin
-          const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+          const isAdminExist = await adminModel
+            .findOne({_id:req?.verified?.userData?.adminId})
+            .select("_id")
+            .lean();
           if (!isAdminExist) {
             return res.send(
               Response.validationFailResp("Admin not found!", "Validation Failed!")
@@ -1255,7 +1258,7 @@ class DashboardService {
           // Step 2: Get dashboard sidebar config
           const dashboardSideBarConfig = await dashboardSidebarModel.findOne({
             adminId: isAdminExist._id
-          });
+          }).select("detectionConfigs");
 
           if (!dashboardSideBarConfig) {
             return res.send(Response.userSuccessResp("No sidebar config found", []));
@@ -1310,7 +1313,7 @@ class DashboardService {
             const nvrs = await NVR.find({
               userId: data.user_id.toString(),
               location: buildCaseInsensitiveLocationMatch(locations),
-            }).select("_id");
+            }).select("_id").lean();
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if (nvrIds.length > 0) {
               channelFilter.nvrId = { $in: nvrIds };
@@ -1328,7 +1331,7 @@ class DashboardService {
                 userId: data.user_id.toString(),
                 department: { $in: deptIds },
               })
-              .select("_id");
+              .select("_id").lean();
             const channelIds = channels.map((ch) => ch._id);
             if (channelIds.length > 0) {
               channelFilter._id = { $in: channelIds };
