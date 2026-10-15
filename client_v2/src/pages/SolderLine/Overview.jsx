@@ -14,6 +14,7 @@ import { buildSolderReportRows } from './reportRows.js';
 import { downloadSnapshot } from './snapshots';
 import DownloadButton from './DownloadButton';
 import LatestPanel from './LatestPanel';
+import LivePanelLog from './LivePanelLog';
 import SortButton, { useTableSort } from './TableSort';
 import { sortRows } from './sorting.js';
 import MissedSolderAlerts from './MissedSolderAlerts';
@@ -346,6 +347,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview }) {
               </div>
             )}
           </Panel>
+          <LivePanelLog station={s} live={model.isToday} />
         </div>
       </div>
 

@@ -14,16 +14,23 @@ function PointResult({ point, value }) {
   </div>;
 }
 
-export default function TotalReport({ rows = [], sorting: suppliedSort }) {
+export default function TotalReport({ rows = [], sorting: suppliedSort, animate = false }) {
   const localSort = useTableSort(rows);
   const sorting = suppliedSort || localSort;
   const shown = suppliedSort ? rows : localSort.rows;
   if (!rows.length) return <NoPeriodData minH={200} />;
   const headers = Object.keys(rows[0]);
   return <div style={{ overflowX: 'auto', minWidth: 0 }}>
+    {animate && <style>{`
+      @keyframes solder-log-arrive { from { opacity: .3; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+      .solder-log-row { animation: solder-log-arrive .6s ease both; }
+      @keyframes solder-log-point { from { opacity: .3; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+      .solder-log-row td > div[aria-label^="P"] { animation: solder-log-point .7s ease both; }
+      @media (prefers-reduced-motion: reduce) { .solder-log-row, .solder-log-row td > div[aria-label^="P"] { animation: none; } }
+    `}</style>}
     <table aria-label="Total reports" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
       <thead><tr>{headers.map(header => <th key={header} scope="col" aria-sort={sorting.directionFor(header)} style={{ ...mono, fontSize: 9, padding: '9px 6px', textAlign: 'left', color: 'var(--tx3)', fontWeight: 500, whiteSpace: 'nowrap', borderBottom: '1px solid var(--bd)' }}><SortButton column={header} sorting={sorting}>{header.toUpperCase()}</SortButton></th>)}</tr></thead>
-      <tbody>{shown.map((row, index) => <tr key={index} style={{ borderBottom: '1px solid var(--bd)' }}>
+      <tbody>{shown.map((row, index) => <tr key={animate ? `${row.Panel}:${row.Time}` : index} className={animate ? 'solder-log-row' : undefined} style={{ borderBottom: '1px solid var(--bd)' }}>
         {headers.map(header => <td key={header} style={{ padding: '6px', verticalAlign: 'middle', whiteSpace: 'pre-line', lineHeight: '18px', ...(typeof row[header] === 'number' ? mono : {}), ...(['Panel', 'Time', 'Zone'].includes(header) ? { minWidth: header === 'Time' ? 120 : 95 } : {}) }}>
           {header === 'Snapshot' ? <SnapshotCell value={row[header]} /> : /^P\d+$/.test(header) ? <PointResult point={header} value={row[header]} /> : row[header]}
         </td>)}
