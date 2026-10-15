@@ -102,9 +102,11 @@ export const fetchIncidentBoxTypes = async ({
   });
 };
 
-export const fetchStockCountingAnalytics = async (filters = {}) => {
+export const fetchStockCountingAnalytics = async (filters = {}, options = {}) => {
   return axios.get(`${HOST}/incidents/logs/loading-unloading-stock-counting-detection/analytics`, {
+    signal: options.signal,
     params: {
+      ...(filters.mode && { mode: filters.mode, skip: filters.skip, limit: filters.limit }),
       ...(filters.startDate && { startDate: filters.startDate }),
       ...(filters.endDate && { endDate: filters.endDate }),
       ...(filters.nvrIds?.length && { nvrIds: filters.nvrIds.join(',') }),

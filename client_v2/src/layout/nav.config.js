@@ -102,7 +102,6 @@ const stevinrockLogItems = [
   { key: 'waste-disposal', label: 'Sand, Dust, Waste & Scrap Disposal Logs', path: 'logs/waste-disposal', icon: Trash2, permissionKey: 'logs', permissionSubKey: 'wasteDisposalLogs', logsConfigKey: 'wasteDisposalLogs' },
   { key: 'animal-entry', label: 'Unauthorized Animal Entry Logs', path: 'logs/animal-entry', icon: PawPrint, permissionKey: 'logs', permissionSubKey: 'animalEntryLogs', logsConfigKey: 'animalEntryLogs' },
   { key: 'messy-area', label: 'Messy Area Logs', path: 'logs/messy-area', icon: BrushCleaning, permissionKey: 'logs', permissionSubKey: 'messyAreaLogs', logsConfigKey: 'messyAreaLogs' },
-  { key: 'box-packing', label: 'Box Packing Logs', path: 'logs/box-packing', icon: Package, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
   {
     key: 'stock-counting',
     label: 'Loading/Unloading Stock Logs',
@@ -168,6 +167,14 @@ export const NAV_GROUPS = [
           { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementCalibration', permissionKey: 'settings' },
         ],
       },
+    ],
+  },
+  {
+    label: 'BOX PACKING QC',
+    items: [
+      { key: 'box-packing', label: 'Box Packing', path: 'box-packing', end: true, icon: Package, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing-alerts', label: 'Packing Alert Logs', path: 'box-packing/alerts', icon: TriangleAlert, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing-reports', label: 'Box Packing Reports', path: 'box-packing/reports', icon: FileChartColumn, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
     ],
   },
   {
@@ -295,6 +302,10 @@ export const VIEW_META = {
   'messy-area': { title: 'Messy Area Logs', sub: 'Spill, dirty and messy-area detections' },
   'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },
+  'box-packing': { title: 'Box Packing', sub: 'Completed packing activity, box counts and confirmation evidence' },
+  'box-packing-alerts': { title: 'Box Packing Alert Logs', sub: 'Packing alerts, count variance and confirmation evidence' },
+  'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, zone comparison and review summaries' },
+  'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },

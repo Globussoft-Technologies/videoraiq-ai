@@ -86,6 +86,7 @@ export default function CameraStream({
   clickToMaximize = true, // false → a single click on the tile no longer calls onMaximize (only the explicit maximize icon and onDoubleClick, if wired by the caller, do)
   onDoubleClick,
   enableZoom = false, // scroll-to-zoom + drag-to-pan even when the tile isn't in true fullscreen (isFullscreen still only swaps the maximize/restore icon)
+  cursor,
 }) {
   const videoRef = useRef(null);
   const hostRef  = useRef(null);
@@ -241,7 +242,7 @@ export default function CameraStream({
         background: '#07090c',
         borderRadius: rounded ? 10 : 0,
         overflow: 'hidden',
-        cursor: clickToMaximize && onMaximize ? 'grab' : 'default',
+        cursor: cursor || (clickToMaximize && onMaximize ? 'grab' : 'default'),
       }}
     >
       {enableFullscreenZoom ? (

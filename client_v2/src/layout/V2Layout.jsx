@@ -82,6 +82,12 @@ function currentViewKey(pathname) {
   if (segs[0] === 'logs' && segs[1] === 'stock-counting' && segs[2] === 'analytics') {
     return 'stock-counting-analytics';
   }
+  if (segs[0] === 'box-packing' && segs[1] === 'alerts') {
+    return 'box-packing-alerts';
+  }
+  if (segs[0] === 'box-packing' && segs[1] === 'reports') {
+    return 'box-packing-reports';
+  }
   let seg = segs[0] || 'overview';
   if (seg === 'logs') seg = segs[1] || 'overview';
   return PATH_TO_KEY[seg] || seg;

@@ -6,6 +6,24 @@ import getAccessToken from '@/utils/getAccessToken';
 
 const ModuleConfigContext = createContext({ modules: null, loading: true });
 
+// Box Packing was added after some tenant module-config documents already
+// existed. The server treats a missing boxPackingQc block as enabled, so keep
+// the client-side navigation and route guard consistent with that default.
+// Explicit false values are preserved for tenants that intentionally disabled
+// a Box Packing page.
+function normalizeModules(modules) {
+  if (!modules || typeof modules !== 'object') return modules;
+  const current = modules.boxPackingQc || {};
+  return {
+    ...modules,
+    boxPackingQc: {
+      boxPacking: current.boxPacking !== false,
+      packingAlertLogs: current.packingAlertLogs !== false,
+      boxPackingReports: current.boxPackingReports !== false,
+    },
+  };
+}
+
 export function ModuleConfigProvider({ children }) {
   const { user } = useAuth();
   const { socket, connected } = useSocket() || {};
@@ -26,7 +44,7 @@ export function ModuleConfigProvider({ children }) {
     const handleUpdate = (payload) => {
       if (cancelled || !payload?.modules || typeof payload.modules !== 'object') return;
       receivedLiveUpdate = true;
-      setModules(payload.modules);
+      setModules(normalizeModules(payload.modules));
       setLoading(false);
     };
     if (socket && adminId) socket.on(eventName, handleUpdate);
@@ -36,7 +54,7 @@ export function ModuleConfigProvider({ children }) {
     axios.get(`${import.meta.env.VITE_BACKEND}/client-config`, {
       headers: { 'x-access-token': getAccessToken() },
     }).then((response) => {
-      if (!cancelled && !receivedLiveUpdate) setModules(response?.data?.body?.data?.modules || null);
+      if (!cancelled && !receivedLiveUpdate) setModules(normalizeModules(response?.data?.body?.data?.modules || null));
     }).catch(() => {
       if (!cancelled && !receivedLiveUpdate) setModules(null);
     }).finally(() => {

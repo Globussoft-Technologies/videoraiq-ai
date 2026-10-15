@@ -1,4 +1,4 @@
-import { Route, useLocation } from 'react-router-dom';
+import { Navigate, Route, useLocation } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
 import HomeRedirect from './layout/HomeRedirect';
 import RequirePermission from './layout/RequirePermission';
@@ -54,11 +54,11 @@ import WrongLocationLogs from './pages/WrongLocationLogs/WrongLocationLogs';
 import WasteDisposalLogs from './pages/WasteDisposalLogs/WasteDisposalLogs';
 import AnimalEntryLogs from './pages/AnimalEntryLogs/AnimalEntryLogs';
 import MessyAreaLogs from './pages/MessyAreaLogs/MessyAreaLogs';
+import BoxPackingLogs from './pages/BoxPackingLogs/BoxPackingLogs';
 import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
 import StockCountingAnalytics from './pages/StockCountingAnalytics/StockCountingAnalytics';
 import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
 import SolderLine from './pages/SolderLine/SolderLine';
-import BoxPackingLogs from './pages/BoxPackingLogs/BoxPackingLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -96,6 +96,14 @@ function SolderLineRoute() {
   return (
     <RequirePermission permissionKey="logs" permissionSubKey="deskSolarShoulderLogs" moduleKey="solarLineQc" modulePageKey={modulePageKey}>
       <SolderLine />
+    </RequirePermission>
+  );
+}
+
+function BoxPackingRoute() {
+  return (
+    <RequirePermission permissionKey="logs" permissionSubKey="boxPackingLogs">
+      <BoxPackingLogs />
     </RequirePermission>
   );
 }
@@ -166,7 +174,13 @@ export const v2Routes = (
     <Route path="logs/waste-disposal" element={guard('logs', 'wasteDisposalLogs', <WasteDisposalLogs />)} />
     <Route path="logs/animal-entry" element={guard('logs', 'animalEntryLogs', <AnimalEntryLogs />)} />
     <Route path="logs/messy-area" element={guard('logs', 'messyAreaLogs', <MessyAreaLogs />)} />
-    <Route path="logs/box-packing" element={guard('logs', 'boxPackingLogs', <BoxPackingLogs />)} />
+    {/* Box Packing is a standalone module shell, matching JB Solder Line. */}
+    <Route path="box-packing/*" element={<BoxPackingRoute />} />
+    {/* Legacy /logs URLs redirect into the standalone module shell. */}
+    <Route path="logs/box-packing/alerts" element={<Navigate to="/box-packing/alerts" replace />} />
+    <Route path="logs/box-packing/reports" element={<Navigate to="/box-packing/reports" replace />} />
+    <Route path="logs/box-packing/analytics" element={<Navigate to="/box-packing" replace />} />
+    <Route path="logs/box-packing" element={<Navigate to="/box-packing" replace />} />
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />

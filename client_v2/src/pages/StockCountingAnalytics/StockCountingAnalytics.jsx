@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
 import {
   Boxes,
-  BrainCircuit,
   ChevronDown,
   Clock3,
   Loader2,
@@ -23,7 +22,6 @@ import IncidentFilterPopover from '@/pages/IncidentLogs/components/IncidentFilte
 import { getConfiguredTimezone } from '@/utils/timezone';
 import {
   fetchIncidentBoxTypes,
-  fetchIncidentLogs,
   fetchIncidentVehicleNumbers,
   fetchStockCountingAnalytics,
   getNVRs,
@@ -34,7 +32,6 @@ const VEHICLE_ENDPOINT = '/incidents/logs/loading-unloading-stock-counting-detec
 const BOX_TYPE_ENDPOINT = '/incidents/logs/loading-unloading-stock-counting-detection/box-types';
 const number = (value) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(value || 0);
 const titleCase = (value) => String(value || 'Unknown').replace(/\b\w/g, (letter) => letter.toUpperCase());
-const STAT_CARD_WAVE = [0.12, 0.05, 0.18, 0.58, 0.76, 0.55, 0.28, 0.22, 0.48, 0.76, 0.9];
 const incidentImageUrl = (value) => {
   if (!value) return '';
   const image = String(value).trim();
@@ -44,31 +41,23 @@ const incidentImageUrl = (value) => {
 const stockEventImageKey = (boxType, event, index) => (
   `${boxType}:${event?._id || event?.eventId || index}`
 );
-const statCardSpark = (values, fallbackValue) => {
-  const points = (Array.isArray(values) ? values : [])
-    .map(Number)
-    .filter(Number.isFinite);
-  if (points.length > 1 && points.some((point) => point !== points[0])) return points;
-
-  const base = Number(fallbackValue) || 0;
-  const amplitude = Math.max(Math.abs(base) * 0.2, 1);
-  return STAT_CARD_WAVE.map((point) => Math.max(0, base + ((point - 0.4) * amplitude)));
-};
-
 const initialAnalytics = {
   summary: {},
+  composition: [],
   trends: [],
   boxTypes: [],
   topVehicles: [],
   hourlyActivity: [],
+  activity: [],
+  activityInterval: 'hour',
   insights: [],
 };
 
 const StockCountingAnalytics = () => {
   const navigate = useNavigate();
   const { permissions, loading: permissionsLoading } = usePermissions();
-  const [startDate, setStartDate] = useState(moment().subtract(29, 'days').format('YYYY-MM-DD'));
-  const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
+  const [startDate, setStartDate] = useState(moment.tz(getConfiguredTimezone()).subtract(29, 'days').format('YYYY-MM-DD'));
+  const [endDate, setEndDate] = useState(moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD'));
   const [nvrList, setNvrList] = useState([]);
   const [cameraList, setCameraList] = useState([]);
   const [nvrIds, setNvrIds] = useState([]);
@@ -86,6 +75,11 @@ const StockCountingAnalytics = () => {
   const [boxTypeEventRows, setBoxTypeEventRows] = useState({});
   const [boxTypeEventLoading, setBoxTypeEventLoading] = useState({});
   const [boxTypeEventErrors, setBoxTypeEventErrors] = useState({});
+  const [boxTypeEventTotals, setBoxTypeEventTotals] = useState({});
+  const eventGeneration = useRef(0);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [trendMetric, setTrendMetric] = useState('boxes');
+  const analyticsRequest = useRef(0);
   const [previewImageKey, setPreviewImageKey] = useState('');
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
 
@@ -97,18 +91,26 @@ const StockCountingAnalytics = () => {
       : Boolean(logs?.view);
 
   useEffect(() => {
+    if (!canView) return;
+    let active = true;
     getNVRs()
-      .then((res) => setNvrList(res?.data?.body?.data || []))
-      .catch(() => setNvrList([]));
-  }, []);
+      .then((res) => { if (active) setNvrList(res?.data?.body?.data || []); })
+      .catch(() => { if (active) setNvrList([]); });
+    return () => { active = false; };
+  }, [canView]);
 
   useEffect(() => {
+    if (!canView) return;
+    let active = true;
     getchannels({ nvrIds })
-      .then((res) => setCameraList(res?.data?.body?.data || []))
-      .catch(() => setCameraList([]));
-  }, [nvrIds]);
+      .then((res) => { if (active) setCameraList(res?.data?.body?.data || []); })
+      .catch(() => { if (active) setCameraList([]); });
+    return () => { active = false; };
+  }, [nvrIds, canView]);
 
   useEffect(() => {
+    if (!canView) return;
+    let active = true;
     const timer = setTimeout(() => {
       fetchIncidentVehicleNumbers({
         endpoint: VEHICLE_ENDPOINT,
@@ -118,13 +120,15 @@ const StockCountingAnalytics = () => {
         nvrIds,
         channelIds,
       })
-        .then((res) => setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []))
-        .catch(() => setVehicleNumberList([]));
+        .then((res) => { if (active) setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []); })
+        .catch(() => { if (active) setVehicleNumberList([]); });
     }, 250);
-    return () => clearTimeout(timer);
-  }, [vehicleNumberSearch, startDate, endDate, nvrIds, channelIds]);
+    return () => { active = false; clearTimeout(timer); };
+  }, [vehicleNumberSearch, startDate, endDate, nvrIds, channelIds, canView]);
 
   useEffect(() => {
+    if (!canView) return;
+    let active = true;
     fetchIncidentBoxTypes({
       endpoint: BOX_TYPE_ENDPOINT,
       startDate,
@@ -133,11 +137,13 @@ const StockCountingAnalytics = () => {
       channelIds,
       vehicleNumber,
     })
-      .then((res) => setBoxTypeList(res?.data?.body?.data?.boxTypes || []))
-      .catch(() => setBoxTypeList([]));
-  }, [startDate, endDate, nvrIds, channelIds, vehicleNumber]);
+      .then((res) => { if (active) setBoxTypeList(res?.data?.body?.data?.boxTypes || []); })
+      .catch(() => { if (active) setBoxTypeList([]); });
+    return () => { active = false; };
+  }, [startDate, endDate, nvrIds, channelIds, vehicleNumber, canView]);
 
   const loadAnalytics = useCallback(async () => {
+    const request = ++analyticsRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -149,27 +155,53 @@ const StockCountingAnalytics = () => {
         vehicleNumber,
         boxType,
       });
+      if (request !== analyticsRequest.current) return;
       setAnalytics({ ...initialAnalytics, ...(res?.data?.body?.data || {}) });
+      setLastUpdated(new Date());
     } catch (err) {
+      if (request !== analyticsRequest.current) return;
       setError(err);
       setAnalytics(initialAnalytics);
     } finally {
-      setLoading(false);
+      if (request === analyticsRequest.current) setLoading(false);
     }
   }, [startDate, endDate, nvrIds, channelIds, vehicleNumber, boxType]);
 
   useEffect(() => {
     if (canView) loadAnalytics();
+    return () => { analyticsRequest.current += 1; };
   }, [canView, loadAnalytics, refreshKey]);
 
   useEffect(() => {
+    eventGeneration.current += 1;
     setExpandedBoxTypes(new Set());
     setBoxTypeEventRows({});
     setBoxTypeEventLoading({});
     setBoxTypeEventErrors({});
-  }, [startDate, endDate, nvrIds, channelIds, vehicleNumber, boxType]);
+    setBoxTypeEventTotals({});
+    setPreviewImageKey('');
+    return () => { eventGeneration.current += 1; };
+  }, [startDate, endDate, nvrIds, channelIds, vehicleNumber, boxType, refreshKey]);
 
-  const toggleBoxType = useCallback(async (selectedBoxType) => {
+  const loadBoxTypeEvents = useCallback(async (selectedBoxType, skip = 0) => {
+    const generation = eventGeneration.current;
+    setBoxTypeEventLoading((current) => ({ ...current, [selectedBoxType]: true }));
+    setBoxTypeEventErrors((current) => ({ ...current, [selectedBoxType]: '' }));
+    try {
+      const response = await fetchStockCountingAnalytics({ startDate, endDate, nvrIds, channelIds,
+        vehicleNumber, boxType: selectedBoxType, mode: 'events', skip, limit: 10 });
+      if (generation !== eventGeneration.current) return;
+      const data = response?.data?.body?.data || {};
+      setBoxTypeEventRows((current) => ({ ...current, [selectedBoxType]: skip ? [...(current[selectedBoxType] || []), ...(data.rows || [])] : (data.rows || []) }));
+      setBoxTypeEventTotals((current) => ({ ...current, [selectedBoxType]: data.total || 0 }));
+    } catch {
+      if (generation === eventGeneration.current) setBoxTypeEventErrors((current) => ({ ...current, [selectedBoxType]: 'Unable to load movements for this box type.' }));
+    } finally {
+      if (generation === eventGeneration.current) setBoxTypeEventLoading((current) => ({ ...current, [selectedBoxType]: false }));
+    }
+  }, [startDate, endDate, nvrIds, channelIds, vehicleNumber]);
+
+  const toggleBoxType = useCallback((selectedBoxType) => {
     const isExpanded = expandedBoxTypes.has(selectedBoxType);
     setExpandedBoxTypes((current) => {
       const next = new Set(current);
@@ -177,42 +209,8 @@ const StockCountingAnalytics = () => {
       else next.add(selectedBoxType);
       return next;
     });
-    if (isExpanded || boxTypeEventRows[selectedBoxType] || boxTypeEventLoading[selectedBoxType]) return;
-
-    setBoxTypeEventLoading((current) => ({ ...current, [selectedBoxType]: true }));
-    setBoxTypeEventErrors((current) => ({ ...current, [selectedBoxType]: '' }));
-    try {
-      const response = await fetchIncidentLogs({
-        endpoint: '/incidents/logs/loading-unloading-stock-counting-detection',
-        skip: 0,
-        limit: 10000,
-        startDate,
-        endDate,
-        nvrIds,
-        channelIds,
-        vehicleNumber,
-        boxType: selectedBoxType,
-        sortField: 'timeOfIncident',
-        sortOrder: 'desc',
-      });
-      const groupedRows = response?.data?.body?.data?.data || [];
-      const events = groupedRows
-        .flatMap((row) => (row.events || []).map((event) => ({
-          ...event,
-          vehicleNumber: String(row.vehicleNumber || '').trim() || 'Unknown',
-        })))
-        .sort((left, right) => new Date(right.timeOfIncident) - new Date(left.timeOfIncident));
-      setBoxTypeEventRows((current) => ({ ...current, [selectedBoxType]: events }));
-    } catch (fetchError) {
-      console.error(`Failed to fetch ${selectedBoxType} stock movements:`, fetchError);
-      setBoxTypeEventErrors((current) => ({
-        ...current,
-        [selectedBoxType]: 'Unable to load movements for this box type.',
-      }));
-    } finally {
-      setBoxTypeEventLoading((current) => ({ ...current, [selectedBoxType]: false }));
-    }
-  }, [expandedBoxTypes, boxTypeEventRows, boxTypeEventLoading, startDate, endDate, nvrIds, channelIds, vehicleNumber]);
+    if (!isExpanded && !boxTypeEventRows[selectedBoxType] && !boxTypeEventLoading[selectedBoxType]) loadBoxTypeEvents(selectedBoxType);
+  }, [expandedBoxTypes, boxTypeEventRows, boxTypeEventLoading, loadBoxTypeEvents]);
 
   const nvrOptions = useMemo(
     () => nvrList.map((item) => ({ label: item.nvrName, id: item._id || item.id })),
@@ -227,9 +225,6 @@ const StockCountingAnalytics = () => {
     [boxTypeList],
   );
 
-  // Keep every image currently shown in the expanded performance rows in one
-  // ordered gallery. This lets the modal arrows and Left/Right keys move
-  // naturally through the same top-to-bottom order visible in the table.
   const performanceImageSlots = useMemo(() => {
     const slots = [];
     analytics.boxTypes.forEach((item) => {
@@ -262,43 +257,39 @@ const StockCountingAnalytics = () => {
   const kpis = [
     {
       label: 'Loaded Boxes',
-      value: summary.loadedBoxes,
+      value: loading ? null : summary.loadedBoxes,
       note: `${number(summary.loadingEvents)} loading events`,
       icon: PackageCheck,
       color: '#10b981',
       cardClass: 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.09] to-[var(--bg1solid)]',
       iconClass: 'bg-emerald-500/10 text-emerald-500',
-      spark: analytics.hourlyActivity.map((item) => item.loaded),
     },
     {
       label: 'Unloaded Boxes',
-      value: summary.unloadedBoxes,
+      value: loading ? null : summary.unloadedBoxes,
       note: `${number(summary.unloadingEvents)} unloading events`,
       icon: PackageOpen,
       color: '#f59e0b',
       cardClass: 'border-amber-500/20 bg-gradient-to-br from-amber-500/[0.09] to-[var(--bg1solid)]',
       iconClass: 'bg-amber-500/10 text-amber-500',
-      spark: analytics.hourlyActivity.map((item) => item.unloaded),
     },
     {
-      label: 'Total Boxes',
-      value: summary.totalBoxes,
+      label: 'Total Boxes Moved',
+      value: loading ? null : summary.totalBoxes,
       note: `${number(summary.totalEvents)} total events`,
       icon: Boxes,
       color: '#8b5cf6',
       cardClass: 'border-violet-500/20 bg-gradient-to-br from-violet-500/[0.09] to-[var(--bg1solid)]',
       iconClass: 'bg-violet-500/10 text-violet-500',
-      spark: analytics.hourlyActivity.map((item) => item.total),
     },
     {
-      label: 'Active Vehicles',
-      value: summary.totalVehicles,
-      note: `${summary.netFlow >= 0 ? '+' : ''}${number(summary.netFlow)} net box flow`,
+      label: 'Identified Vehicles',
+      value: loading ? null : summary.totalVehicles,
+      note: `${number(summary.unidentifiedEvents)} unidentified movements`,
       icon: Truck,
       color: '#3b82f6',
       cardClass: 'border-blue-500/20 bg-gradient-to-br from-blue-500/[0.09] to-[var(--bg1solid)]',
       iconClass: 'bg-blue-500/10 text-blue-500',
-      spark: [summary.totalVehicles, summary.totalVehicles],
     },
   ];
 
@@ -307,56 +298,71 @@ const StockCountingAnalytics = () => {
     grid: { borderColor: 'var(--bd)', strokeDashArray: 4 },
     dataLabels: { enabled: false },
     tooltip: { theme: false },
-    legend: { labels: { colors: 'var(--tx2)' }, fontSize: '11px' },
+    legend: { labels: { colors: 'var(--tx2)' }, fontSize: '12px' },
   }), []);
 
+  const activityInterval = analytics.activityInterval;
+  const trendRows = analytics.activity;
+  const trendPeriod = { hour: 'Hourly', day: 'Daily', month: 'Monthly' }[activityInterval];
+  const selectTrendBucket = useCallback((bucket) => {
+    if (!bucket || activityInterval === 'hour') return;
+    if (activityInterval === 'day') { setStartDate(bucket); setEndDate(bucket); return; }
+    const month = moment(bucket, 'YYYY-MM');
+    // Keep partial months within the selected date range.
+    setStartDate(month.clone().startOf('month').format('YYYY-MM-DD') < startDate ? startDate : month.clone().startOf('month').format('YYYY-MM-DD'));
+    setEndDate(month.clone().endOf('month').format('YYYY-MM-DD') > endDate ? endDate : month.clone().endOf('month').format('YYYY-MM-DD'));
+  }, [activityInterval, startDate, endDate]);
   const trendOptions = useMemo(() => ({
     ...sharedChart,
-    chart: { ...sharedChart.chart, type: 'bar' },
+    chart: { ...sharedChart.chart, type: 'bar', events: { dataPointSelection: (_event, _chart, selection) => selectTrendBucket(trendRows[selection.dataPointIndex]?.bucket) } },
     colors: ['#10b981', '#f59e0b', '#c084fc'],
     plotOptions: { bar: { borderRadius: 2, columnWidth: '64%', dataLabels: { position: 'top' } } },
     dataLabels: {
-      enabled: true,
+      enabled: false,
       offsetY: -18,
-      style: { fontSize: '10px', fontWeight: 700, colors: ['var(--tx)'] },
+      style: { fontSize: '12px', fontWeight: 700, colors: ['var(--tx)'] },
       formatter: (value) => number(value),
     },
     xaxis: {
-      categories: analytics.trends.map((item) => moment(item.date).format('DD MMM')),
-      labels: { style: { colors: 'var(--tx3)', fontSize: '10px' } },
+      categories: trendRows.map((item) => activityInterval === 'hour' ? `${item.bucket}:00` : moment(item.bucket, activityInterval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD').format(activityInterval === 'month' ? 'MMM YYYY' : 'DD MMM')),
+      labels: { style: { colors: 'var(--tx3)', fontSize: '12px' } },
       axisBorder: { color: 'var(--bd)' },
       axisTicks: { show: false },
     },
-    yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: 'var(--tx3)', fontSize: '10px' } } },
+    yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: 'var(--tx3)', fontSize: '12px' } } },
     legend: { ...sharedChart.legend, position: 'top', horizontalAlign: 'right', markers: { size: 5 } },
-  }), [analytics.trends, sharedChart]);
+  }), [trendRows, activityInterval, sharedChart, selectTrendBucket]);
 
   const hourlyOptions = useMemo(() => ({
     ...sharedChart,
     colors: ['#10b981', '#f59e0b', '#8b5cf6'],
     plotOptions: { bar: { borderRadius: 3, columnWidth: '58%', dataLabels: { position: 'top' } } },
     dataLabels: {
-      enabled: true,
+      enabled: false,
       offsetY: -18,
-      style: { fontSize: '10px', fontWeight: 700, colors: ['var(--tx)'] },
+      style: { fontSize: '12px', fontWeight: 700, colors: ['var(--tx)'] },
       formatter: (value) => number(value),
     },
     xaxis: {
-      categories: analytics.hourlyActivity.map((item) => (
-        `${String(item.hour).padStart(2, '0')}:00-${String((item.hour + 1) % 24).padStart(2, '0')}:00`
-      )),
-      labels: { rotate: 0, hideOverlappingLabels: true, style: { colors: 'var(--tx3)', fontSize: '9px' } },
+      categories: analytics.hourlyActivity.map((item) => `${String(item.hour).padStart(2, '0')}:00`),
+      labels: {
+        rotate: 0,
+        hideOverlappingLabels: true,
+        offsetY: 4,
+        formatter: (value) => Number.parseInt(String(value), 10) % 2 === 0 ? value : '',
+        style: { colors: 'var(--tx3)', fontSize: '12px' },
+      },
       axisBorder: { color: 'var(--bd)' },
       axisTicks: { show: false },
     },
-    yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: 'var(--tx3)', fontSize: '10px' } } },
+    yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: 'var(--tx3)', fontSize: '12px' } } },
     legend: { ...sharedChart.legend, position: 'top', horizontalAlign: 'right', markers: { size: 5 } },
   }), [analytics.hourlyActivity, sharedChart]);
 
   const boxTypeOptionsChart = useMemo(() => ({
     ...sharedChart,
-    labels: analytics.boxTypes.map((item) => titleCase(item.boxType)),
-    colors: ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#6366f1'],
+    labels: analytics.composition.map((item) => titleCase(item.boxType)),
+    colors: analytics.composition.map((item) => ({ brown: '#a16207', white: '#06b6d4', other: '#8b5cf6' }[item.boxType] || '#64748b')),
     stroke: { colors: ['var(--bg1solid)'], width: 2 },
     dataLabels: { enabled: false },
     plotOptions: {
@@ -365,55 +371,15 @@ const StockCountingAnalytics = () => {
           size: '68%',
           labels: {
             show: true,
-            name: { show: true, color: 'var(--tx2)', fontSize: '11px', offsetY: -5 },
+            name: { show: true, color: 'var(--tx2)', fontSize: '12px', offsetY: -5 },
             value: { show: true, color: 'var(--tx)', fontSize: '20px', fontWeight: 800, offsetY: 5 },
-            total: { show: true, label: 'Total Boxes', color: 'var(--tx2)', formatter: () => number(summary.totalBoxes) },
+            total: { show: true, label: 'Total Boxes Moved', color: 'var(--tx2)', formatter: () => number(summary.totalBoxes) },
           },
         },
       },
     },
-    legend: { position: 'bottom', fontSize: '10px', labels: { colors: 'var(--tx2)' }, markers: { size: 5 } },
-  }), [analytics.boxTypes, sharedChart, summary.totalBoxes]);
-
-  const vehicleOptions = useMemo(() => ({
-    ...sharedChart,
-    colors: ['#3b82f6', '#a855f7'],
-    plotOptions: { bar: { horizontal: true, borderRadius: 2, barHeight: '52%', dataLabels: { position: 'top' } } },
-    dataLabels: {
-      enabled: true,
-      offsetX: 8,
-      style: { fontSize: '10px', fontWeight: 700, colors: ['var(--tx)'] },
-      formatter: (value) => number(value),
-    },
-    xaxis: {
-      categories: analytics.topVehicles.map((item) => item.vehicleNumber),
-      labels: { style: { colors: 'var(--tx3)', fontSize: '10px' } },
-    },
-    yaxis: { labels: { style: { colors: 'var(--tx2)', fontWeight: 600, fontSize: '10px' } } },
-    legend: { ...sharedChart.legend, position: 'top', horizontalAlign: 'right', markers: { size: 5 } },
-  }), [analytics.topVehicles, sharedChart]);
-
-  const sparkOptions = useCallback((color, points) => ({
-    chart: { type: 'area', sparkline: { enabled: true }, animations: { enabled: false } },
-    colors: [color],
-    dataLabels: { enabled: false },
-    grid: { show: false, padding: { left: 0, right: 0, top: 2, bottom: 0 } },
-    markers: { size: 0 },
-    stroke: { curve: 'smooth', width: 2 },
-    fill: { type: 'gradient', gradient: { opacityFrom: 0.35, opacityTo: 0.04 } },
-    tooltip: { enabled: false },
-    // Let each compact chart scale to its own range. Pinning the minimum to
-    // zero compresses low-variance data into an almost straight horizontal
-    // line instead of the clearly visible wave used by the stat-card design.
-    yaxis: { show: false, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
-    xaxis: {
-      categories: points.map((_, index) => index),
-      labels: { show: false },
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-      tooltip: { enabled: false },
-    },
-  }), []);
+    legend: { position: 'bottom', fontSize: '12px', labels: { colors: 'var(--tx2)' }, markers: { size: 5 } },
+  }), [analytics.composition, sharedChart, summary.totalBoxes]);
 
   if (permissionsLoading) return null;
   if (!canView) return <AccessDenied message="You do not have permission to view stock analytics." onBack={() => navigate(-1)} />;
@@ -436,22 +402,22 @@ const StockCountingAnalytics = () => {
           setPreviewImageLoading(false);
         }}
       />
-      <section className="overflow-hidden rounded-2xl border border-violet-500/30 shadow-[0_12px_34px_rgba(109,40,217,0.16)]">
-        <div className="flex flex-col gap-4 bg-gradient-to-r from-violet-700 via-fuchsia-600 to-indigo-600 p-4 text-white lg:flex-row lg:items-center lg:justify-between">
+      <section className="sticky top-0 z-20 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-sm">
+        <div className="flex flex-col gap-4 bg-slate-800 p-4 text-white lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-white/75">
-              <BrainCircuit className="h-4 w-4" /> AI-powered operational intelligence
+              Recorded stock movements
             </div>
             <h2 className="mt-1 text-xl font-bold">Loading/Unloading Analytics</h2>
-            <p className="mt-1 text-sm text-white/75">Movement trends, box mix, vehicle activity, and data-driven insights.</p>
+            <p className="mt-1 text-sm text-white/75">Box throughput and recorded loading/unloading activity.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <PresetDateRangePicker
               startDate={startDate}
               endDate={endDate}
-              maxDate={moment().format('YYYY-MM-DD')}
+              maxDate={moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD')}
               onRangeChange={({ start, end }) => {
-                const nextStart = start ? moment(start).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD');
+                const nextStart = start ? moment(start).format('YYYY-MM-DD') : moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD');
                 const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart;
                 setStartDate(nextStart);
                 setEndDate(nextEnd);
@@ -460,7 +426,7 @@ const StockCountingAnalytics = () => {
             <IncidentFilterPopover
               nvrOptions={nvrOptions}
               nvrIds={nvrIds}
-              setNvrIds={(value) => { setNvrIds(value); if (!value.length) setChannelIds([]); }}
+              setNvrIds={(value) => { setNvrIds(value); setChannelIds([]); setVehicleNumber(''); setBoxType(''); }}
               cameraOptions={cameraOptions}
               channelIds={channelIds}
               setChannelIds={setChannelIds}
@@ -479,6 +445,7 @@ const StockCountingAnalytics = () => {
               boxTypeOptions={boxTypeOptions}
               triggerClassName="!border-white/25 !bg-white/10 !text-white hover:!bg-white/20"
             />
+            <button type="button" onClick={() => { setStartDate(moment.tz(getConfiguredTimezone()).subtract(29, 'days').format('YYYY-MM-DD')); setEndDate(moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD')); setNvrIds([]); setChannelIds([]); setVehicleNumber(''); setBoxType(''); setVehicleNumberSearch(''); }} className="h-10 rounded-lg border border-white/25 px-3 text-sm">Reset</button>
             <button
               type="button"
               onClick={() => setRefreshKey((value) => value + 1)}
@@ -489,8 +456,13 @@ const StockCountingAnalytics = () => {
             </button>
           </div>
         </div>
+      <div className="px-4 py-2 text-sm text-[var(--tx2)]" aria-live="polite">
+        {startDate} to {endDate} | {analytics.timezone || getConfiguredTimezone()} | {nvrIds.length ? `${nvrIds.length} NVRs` : 'All authorized NVRs'} | {channelIds.length ? `${channelIds.length} cameras` : 'All authorized cameras'}
+        {vehicleNumber && ` | Vehicle: ${vehicleNumber}`}{boxType && ` | Type: ${titleCase(boxType)}`}
+        {lastUpdated && ` | Updated ${moment(lastUpdated).tz(analytics.timezone || getConfiguredTimezone()).format('hh:mm:ss A')}`}
+      </div>
       </section>
-
+      <p className="text-sm text-[var(--tx2)]">Totals represent box movements, not current inventory. Repeat movements can count the same box more than once.</p>
       {error ? (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-sm font-medium text-red-500">
           Unable to load stock analytics. Please refresh and try again.
@@ -498,8 +470,7 @@ const StockCountingAnalytics = () => {
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {kpis.map(({ label, value, note, icon: Icon, color, cardClass, iconClass, spark }) => {
-              const points = statCardSpark(spark, value);
+            {kpis.map(({ label, value, note, icon: Icon, color, cardClass, iconClass }) => {
               return (
                 <div key={label} className={`relative min-h-[104px] overflow-hidden rounded-2xl border p-4 shadow-sm ${cardClass}`}>
                   <div className="relative z-10 flex h-full items-center gap-3">
@@ -508,49 +479,49 @@ const StockCountingAnalytics = () => {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-[10px] font-extrabold uppercase tracking-wider" style={{ color }}>{label}</p>
-                      <p className="mt-0.5 text-2xl font-black leading-none" style={{ color }}>{number(value)}</p>
-                      <p className="mt-2 truncate text-[11px] font-medium" style={{ color }}>{note}</p>
+                      <p className="mt-0.5 text-2xl font-black leading-none" style={{ color }}>{loading ? '--' : number(value)}</p>
+                      <p className="mt-2 truncate text-[11px] font-medium" style={{ color }}>{loading ? 'Loading...' : note}</p>
                     </div>
-                    <div className="ml-auto mt-auto h-[54px] w-[42%] min-w-[90px]">
-                      <ReactApexChart
-                        type="area"
-                        height={54}
-                        options={sparkOptions(color, points)}
-                        series={[{ name: label, data: points }]}
-                      />
-                    </div>
+
                   </div>
                 </div>
               );
             })}
           </div>
 
+          {!loading && summary.totalEvents > 0 && (
+            <p className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-3 text-sm text-[var(--tx2)]">
+              {number(summary.unknownDirectionEvents)} movements have unknown direction ({number(summary.unknownDirectionBoxes)} boxes).
+              {' '}{number(summary.invalidCountEvents)} movements have invalid counts and contribute no boxes.
+              {' '}{number(summary.colourSplitEvents)} of {number(summary.totalEvents)} movements have a validated colour split.
+            </p>
+          )}
           {loading ? (
             <div className="grid min-h-[360px] place-items-center rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)]">
               <div className="text-center text-sm text-[var(--tx2)]"><Loader2 className="mx-auto mb-2 h-7 w-7 animate-spin text-[var(--brand)]" />Analyzing stock movements...</div>
             </div>
           ) : summary.totalEvents ? (
             <div className="grid gap-3 xl:grid-cols-12">
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-5">
+              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-12">
                 <div className="mb-3">
                   <h3 className="font-bold text-[var(--tx)]">Stock movement trend</h3>
-                  <p className="text-xs text-[var(--tx3)]">Daily loaded and unloaded box volume</p>
+                  <p className="text-sm text-[var(--tx2)]">{trendPeriod} {trendMetric === 'boxes' ? 'loaded and unloaded boxes' : 'movement events'}. Empty intervals mean no recorded movements.{activityInterval !== 'hour' && ` Click a bar to inspect that ${activityInterval === 'month' ? 'month' : 'day'}.`}</p>
+                  <div className="mt-2 flex gap-2">{['boxes', 'events'].map((metric) => <button key={metric} type="button" aria-pressed={trendMetric === metric} onClick={() => setTrendMetric(metric)} className={`rounded-lg border px-3 py-1 text-sm ${trendMetric === metric ? 'border-violet-500 bg-violet-500/10 text-violet-500' : 'border-[var(--bd)] text-[var(--tx2)]'}`}>{titleCase(metric)}</button>)}</div>
                 </div>
                 <ReactApexChart
                   type="bar"
                   height={250}
                   options={trendOptions}
-                  series={[
-                    { name: 'Loaded', data: analytics.trends.map((item) => item.loaded) },
-                    { name: 'Unloaded', data: analytics.trends.map((item) => item.unloaded) },
-                    { name: 'Total (Events)', data: analytics.trends.map((item) => item.events) },
+                  series={trendMetric === 'events' ? [{ name: 'Events', data: trendRows.map((item) => item.events) }] : [
+                    { name: 'Loaded boxes', data: trendRows.map((item) => item.loaded) },
+                    { name: 'Unloaded boxes', data: trendRows.map((item) => item.unloaded) },
                   ]}
                 />
               </section>
 
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-4">
-                <h3 className="font-bold text-[var(--tx)]">Hourly activity</h3>
-                <p className="mb-1 text-xs text-[var(--tx3)]">Events and boxes by hour of day</p>
+              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
+                <h3 className="font-bold text-[var(--tx)]">Activity by hour of day</h3>
+                <p className="mb-1 text-sm text-[var(--tx2)]">Loaded and unloaded boxes at each hour, summed across the selected dates.</p>
                 <ReactApexChart
                   type="bar"
                   height={250}
@@ -558,40 +529,32 @@ const StockCountingAnalytics = () => {
                   series={[
                     { name: 'Loaded', data: analytics.hourlyActivity.map((item) => item.loaded) },
                     { name: 'Unloaded', data: analytics.hourlyActivity.map((item) => item.unloaded) },
-                    { name: 'Total', data: analytics.hourlyActivity.map((item) => item.total) },
                   ]}
                 />
               </section>
 
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-3">
-                <h3 className="font-bold text-[var(--tx)]">Box-type breakdown</h3>
-                <p className="mb-1 text-xs text-[var(--tx3)]">Share of total box movement</p>
+              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-5">
+                <h3 className="font-bold text-[var(--tx)]">Box composition</h3>
+                <p className="mb-1 text-sm text-[var(--tx2)]">Validated colour counts; classification only means no reliable colour split</p>
                 <ReactApexChart
                   type="donut"
                   height={250}
                   options={boxTypeOptionsChart}
-                  series={analytics.boxTypes.map((item) => item.total)}
+                  series={analytics.composition.map((item) => item.total)}
                 />
               </section>
 
               <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
                 <h3 className="font-bold text-[var(--tx)]">Top vehicle throughput</h3>
-                <p className="mb-1 text-xs text-[var(--tx3)]">Loaded and unloaded boxes by vehicle</p>
-                <ReactApexChart
-                  type="bar"
-                  height={220}
-                  options={vehicleOptions}
-                  series={[
-                    { name: 'Loaded', data: analytics.topVehicles.map((item) => item.loaded) },
-                    { name: 'Unloaded', data: analytics.topVehicles.map((item) => item.unloaded) },
-                  ]}
-                />
+                <p className="mb-1 text-sm text-[var(--tx2)]">Loaded and unloaded boxes by vehicle</p>
+                <div className="max-h-[240px] overflow-auto" tabIndex="0" role="region" aria-label="Vehicle throughput, scroll to see more vehicles"><table className="w-full border-separate border-spacing-0 whitespace-nowrap text-left text-sm"><thead><tr className="h-10 text-[var(--tx2)]">{['Identified vehicle', 'Loaded', 'Unloaded', 'Total boxes', 'Events'].map((label) => <th key={label} className="sticky top-0 z-10 h-10 border-b border-[var(--bd)] bg-[var(--bg1solid)] px-3 py-2">{label}</th>)}</tr></thead><tbody>{analytics.topVehicles.map((vehicle) => <tr key={vehicle.vehicleNumber} className="h-10 text-[var(--tx)]"><td className="border-b border-[var(--bd)] px-3 py-2"><button type="button" onClick={() => { setVehicleNumber(vehicle.vehicleNumber); }} className="text-violet-500 underline">{vehicle.vehicleNumber}</button></td><td className="border-b border-[var(--bd)] px-3 py-2 text-emerald-500">{number(vehicle.loaded)}</td><td className="border-b border-[var(--bd)] px-3 py-2 text-amber-500">{number(vehicle.unloaded)}</td><td className="border-b border-[var(--bd)] px-3 py-2">{number(vehicle.total)}</td><td className="border-b border-[var(--bd)] px-3 py-2">{number(vehicle.events)}</td></tr>)}</tbody></table></div>
+                <p className="mt-2 text-sm text-[var(--tx2)]">Identified vehicles ranked by boxes moved. Scroll to see more. Click a vehicle to inspect its movements.</p>
               </section>
 
               <section className="overflow-hidden rounded-2xl border border-violet-500/20 bg-[var(--bg1solid)] shadow-sm xl:col-span-5">
                 <div className="border-b border-violet-500/15 bg-gradient-to-r from-violet-500/15 to-blue-500/10 px-4 py-3">
                   <div className="flex items-center gap-2 font-bold text-[var(--tx)]"><Sparkles className="h-4 w-4 text-violet-500" /> Quick summary</div>
-                  <p className="mt-1 text-xs text-[var(--tx3)]">A simple summary of the selected stock data</p>
+                  <p className="mt-1 text-sm text-[var(--tx2)]">A simple summary of the selected stock data</p>
                 </div>
                 <div className="space-y-2 p-3">
                   {analytics.insights.map((insight, index) => (
@@ -601,7 +564,7 @@ const StockCountingAnalytics = () => {
                       </span>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[var(--tx)]">{insight.title}</p>
-                        <p className="mt-0.5 text-[11px] text-[var(--tx2)]">{insight.message}</p>
+                        <p className="mt-0.5 text-sm text-[var(--tx2)]">{insight.message}</p>
                       </div>
                     </div>
                   ))}
@@ -653,7 +616,7 @@ const StockCountingAnalytics = () => {
                                     All stock movements for {titleCase(rowKey)} boxes
                                   </div>
 
-                                  {isEventsLoading ? (
+                                  {isEventsLoading && !events.length ? (
                                     <div className="flex min-h-28 items-center justify-center gap-2 rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-sm text-[var(--tx3)]">
                                       <Loader2 className="h-5 w-5 animate-spin text-violet-500" /> Loading movements...
                                     </div>
@@ -669,7 +632,7 @@ const StockCountingAnalytics = () => {
                                           const imageUrl = incidentImageUrl(event.Image);
                                           const movement = String(event.direction || '').toLowerCase();
                                           const isLoadingMovement = movement === 'loading';
-                                          const eventMoment = moment.utc(event.timeOfIncident).tz(getConfiguredTimezone());
+                                          const eventMoment = moment.utc(event.timeOfIncident).tz(analytics.timezone || getConfiguredTimezone());
 
                                           return (
                                             <div
@@ -703,7 +666,7 @@ const StockCountingAnalytics = () => {
                                               <span className={`inline-flex justify-center rounded-full px-3 py-1 text-[11px] font-bold ${isLoadingMovement ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}`}>
                                                 {titleCase(movement || 'Unknown')}
                                               </span>
-                                              <p className="text-xs text-[var(--tx2)]"><span className="font-bold text-[var(--tx)]">Boxes:</span> {number(event.boxCount)}</p>
+                                              <p className="text-xs text-[var(--tx2)]"><span className="font-bold text-[var(--tx)]">Boxes:</span> {event.invalidCount ? 'Invalid count' : number(event.boxCount)}</p>
                                               <p className="truncate text-xs text-[var(--tx2)]" title={event.vehicleNumber || 'Unknown'}><span className="font-bold text-[var(--tx)]">Vehicle:</span> {event.vehicleNumber || 'Unknown'}</p>
                                               <p className="min-w-0 text-xs text-[var(--tx2)]"><span className="font-bold text-[var(--tx)]">Description:</span> {event.description || '--'}</p>
                                             </div>
@@ -712,6 +675,13 @@ const StockCountingAnalytics = () => {
                                       </div>
                                     </div>
                                   )}
+                                  {events.length < (boxTypeEventTotals[rowKey] || 0) && (
+                                    <div className="mt-3 flex items-center justify-between text-xs text-[var(--tx2)]">
+                                      <span>{events.length} of {number(boxTypeEventTotals[rowKey])} movements</span>
+                                      <button type="button" disabled={isEventsLoading} onClick={() => loadBoxTypeEvents(rowKey, events.length)} className="rounded-lg border border-[var(--bd)] px-3 py-2 disabled:opacity-50">{isEventsLoading ? 'Loading...' : 'Load more'}</button>
+                                    </div>
+                                  )}
+                                  {eventsError && <button type="button" onClick={() => loadBoxTypeEvents(rowKey, events.length)} className="mt-2 text-xs text-violet-500 underline">Retry loading movements</button>}
                                 </td>
                               </tr>
                             )}

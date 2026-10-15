@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import {
@@ -566,10 +567,57 @@ function flatCell(row, header, index) {
   return value === null || value === undefined || value === '' || value === '-' ? '-' : String(value);
 }
 
+function isBoxPackingPreview(section, rows) {
+  return section?.contentType === 'incidents' && rows.some((row) => row?.incidentType === 'boxPackingDetection' || row?.boxId || /box\s*packing/i.test(row?.incidentName || row?.description || ''));
+}
+
+function boxPackingPreviewRow(row, index) {
+  const zone = row?.zones?.[0] || {};
+  const image = row?.Image || row?.image || row?.imageUrl || row?.incidentImageUrl;
+  const review = row?.severity === 'moderate' || row?.severity === 'high' || /review|variance|awaiting|new/i.test(`${row?.confirmationReason || ''} ${row?.status || ''}`);
+  const time = row?.timeOfIncident || row?.time || row?.createdAt;
+  return {
+    id: row?._id || row?.id || index + 1,
+    boxId: row?.boxId || row?._id || '—',
+    operator: row?.completedBy || 'Completed by not provided',
+    zone: zone?.zone || row?.zone || 'Packing Zone',
+    boxes: Number(zone?.boxNumber ?? row?.boxNumber) || 0,
+    cycle: Number(zone?.timeTakenSec ?? row?.timeTakenSec) || 0,
+    status: review ? 'Needs review' : 'Completed',
+    source: row?.detectedVia || 'Camera',
+    camera: row?.channelData?.customName || row?.channelData?.name || row?.camera || row?.cameraName || 'Packing camera',
+    time: time ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(time)) : '—',
+    image,
+    notes: row?.confirmationReason || row?.description || (review ? 'Count variance detected' : 'Box count matched'),
+  };
+}
+
+function BoxPackingPreview({ section, rows }) {
+  const records = rows.map(boxPackingPreviewRow);
+  const boxes = records.reduce((sum, row) => sum + row.boxes, 0);
+  const review = records.filter((row) => row.status === 'Needs review').length;
+  const avgCycle = records.length ? Math.round(records.reduce((sum, row) => sum + row.cycle, 0) / records.length) : 0;
+  const cardStyle = { padding: '10px 12px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' };
+  const headers = ['Log ID', 'Box ID', 'Completed By', 'Zone', 'Boxes', 'Cycle', 'Status', 'Source', 'Camera', 'Time', 'Snapshot', 'Notes'];
+  return <div style={{ minWidth: 1080 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+      {[['EVENTS', records.length, '#4f46e5'], ['BOXES PACKED', boxes, '#059669'], ['NEEDS REVIEW', review, '#d97706'], ['AVG CYCLE', `${avgCycle}s`, '#7e22ce']].map(([title, value, color]) => <div key={title} style={cardStyle}><div style={{ ...label, color }}>{title}</div><div style={{ fontSize: 20, fontWeight: 700, marginTop: 5, color: 'var(--tx)' }}>{value}</div></div>)}
+    </div>
+    {section?.title && <div style={{ margin: '0 0 9px', color: 'var(--tx)', fontSize: 13, fontWeight: 700 }}>Packing alerts and confirmation evidence</div>}
+    <div style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 9 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 11 }}>
+        <thead><tr>{headers.map((header) => <th key={header} style={{ ...tableHeadStyle, whiteSpace: 'nowrap' }}>{header}</th>)}</tr></thead>
+        <tbody>{records.map((row) => <tr key={row.id}>{[row.id, row.boxId, row.operator, row.zone, row.boxes, row.cycle, row.status, row.source, row.camera, row.time, row.image ? <a href={String(row.image)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View image</a> : 'No snapshot', row.notes].map((cell, index) => <td key={`${row.id}-${index}`} style={{ ...tableCellStyle, color: index === 6 ? (row.status === 'Completed' ? '#047857' : '#b45309') : undefined }}>{cell}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
 function PreviewSection({ section }) {
   const rows = Array.isArray(section?.rows) ? section.rows : [];
   const tableRows = Array.isArray(section?.tableRows) ? section.tableRows : null;
   const headers = Array.isArray(section?.headers) && section.headers.length ? section.headers : PREVIEW_HEADERS_FALLBACK;
+  if (isBoxPackingPreview(section, rows)) return <BoxPackingPreview section={section} rows={rows} />;
   return (
     <div>
       {section?.title && <div style={{ marginBottom: 9, color: 'var(--tx)', fontSize: 13, fontWeight: 700 }}>{section.title}</div>}
@@ -596,13 +644,14 @@ function PreviewSection({ section }) {
 function PreviewModal({ preview, onClose }) {
   const sections = Array.isArray(preview?.sections) && preview.sections.length ? preview.sections : [preview];
   const totalRows = preview?.rowCount ?? sections.reduce((sum, section) => sum + (section?.rowCount ?? section?.rows?.length ?? 0), 0);
+  const boxPacking = sections.some((section) => isBoxPackingPreview(section, Array.isArray(section?.rows) ? section.rows : []));
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 1200px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div>
-            <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{preview?.label || 'Preview'}</div>
-            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || sections[0]?.timezone || 'Timezone not set'} - {totalRows} report record{totalRows === 1 ? '' : 's'}</div>
+            <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{boxPacking ? 'Box Packing Alert Logs' : preview?.label || 'Preview'}</div>
+            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{boxPacking ? 'Packing alerts and confirmation evidence' : `${preview?.timezone || sections[0]?.timezone || 'Timezone not set'} - ${totalRows} report record${totalRows === 1 ? '' : 's'}`}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close preview" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}><X size={16} /></button>
         </div>
@@ -615,6 +664,7 @@ function PreviewModal({ preview, onClose }) {
 }
 
 export default function AutoEmailReports() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
@@ -651,6 +701,16 @@ export default function AutoEmailReports() {
   const incidentTypes = Array.isArray(incidentTypesApi.data) ? incidentTypesApi.data : [];
   const adminTimezone = timezoneApi.data || '';
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
+
+  useEffect(() => {
+    if (searchParams.get('preset') !== 'box-packing' || !canCreateReports || formOpen) return;
+    setEditingReport(null);
+    setEditingBasePayload(null);
+    setForm({ ...emptyForm(), title: 'Box Packing Alert Report', contentTypes: ['incidents'], incidentTypes: ['boxPackingDetection'], pdf: true, xlsx: true });
+    setTimezoneValue('');
+    setFormOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [canCreateReports, formOpen, searchParams, setSearchParams]);
 
   if (permissionsLoading) return <PageLoader />;
   if (!canViewReports) return <AccessDenied message="You don't have permission to view Auto Email Reports." />;

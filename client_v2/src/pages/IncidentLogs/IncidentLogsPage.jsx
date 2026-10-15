@@ -17,7 +17,8 @@ import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentC
 import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
-import { packingExportValues } from './boxPacking';
+import { packingExportValues, packingZones } from './boxPacking';
+import { BOX_PACKING_DUMMY_LOGS } from '@/pages/BoxPackingLogs/boxPackingData';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -39,6 +40,28 @@ const incidentImageUrl = (value) => {
 const stockEventPreviewKey = (row, event, index) => (
   `stock-event:${event?._id || event?.eventId || `${row?.aggregationKey || row?._id || 'row'}-${index}`}`
 );
+
+const buildDummyBoxPackingRows = ({ startDate, endDate, searchInput, status }) => {
+  const start = moment(startDate).startOf('day');
+  const end = moment(endDate).endOf('day');
+  return BOX_PACKING_DUMMY_LOGS
+    .filter((row) => moment(row.time).isBetween(start, end, undefined, '[]'))
+    .filter((row) => !status || row.status === status)
+    .filter((row) => !searchInput || `${row.id} ${row.boxId} ${row.completedBy} ${row.zone} ${row.camera} ${row.detectedVia} ${row.reason}`.toLowerCase().includes(searchInput.toLowerCase()))
+    .map((row) => ({
+      ...row,
+      _id: row.id,
+      boxId: row.boxId,
+      completedBy: row.completedBy,
+      zones: [{ zone: row.zone, boxNumber: row.boxNumber, timeTakenSec: row.timeTakenSec }],
+      endTimeSource: 'Line sensor',
+      confirmationReason: row.reason,
+      nvrData: { _id: `dummy-nvr-${row.camera}`, nvrName: 'Packing NVR 01' },
+      channelData: { _id: row.camera, name: row.camera },
+      timeOfIncident: row.time,
+      currentStatus: row.status === 'completed' ? 'Completed' : 'Needs review',
+    }));
+};
 
 function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
   const exporting = !!exportingFormat;
@@ -131,6 +154,7 @@ const IncidentLogsPage = ({ config }) => {
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [exportingFormat, setExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
+  const [packingStatusTotals, setPackingStatusTotals] = useState({ all: 0, completed: 0, review: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [boxTypeList, setBoxTypeList] = useState([]);
@@ -165,6 +189,10 @@ const IncidentLogsPage = ({ config }) => {
 
   /* ─────────────── Filter metadata ─────────────── */
   useEffect(() => {
+    if (config.useDummyData) {
+      dispatch({ type: 'SET_NVR_LIST', value: [] });
+      return undefined;
+    }
     (async () => {
       try {
         const res = await getNVRs();
@@ -173,9 +201,13 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, []);
+  }, [config.useDummyData]);
 
   useEffect(() => {
+    if (config.useDummyData) {
+      dispatch({ type: 'SET_CAMERA_LIST', value: [] });
+      return undefined;
+    }
     (async () => {
       try {
         const res = await getchannels({ nvrIds });
@@ -184,7 +216,7 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [nvrIds]);
+  }, [config.useDummyData, nvrIds]);
 
   useEffect(() => {
     if (!config.vehicleNumbersEndpoint) {
@@ -244,6 +276,27 @@ const IncidentLogsPage = ({ config }) => {
     dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
+      if (config.useDummyData && config.showBoxPackingFields) {
+        const dummyList = buildDummyBoxPackingRows({ startDate, endDate, searchInput, status });
+        const mappedDummy = dummyList.map((item) => ({
+          ...item,
+          ...packingExportValues(item),
+          id: item._id,
+          incidentName: '--',
+          currentStatus: item.currentStatus,
+          nvrName: item.nvrData.nvrName,
+          channelName: item.channelData.name,
+          nvrId: item.nvrData._id,
+          channelId: item.channelData._id,
+          createdAt: item.timeOfIncident,
+          incidentImageUrl: incidentImageUrl(item.Image),
+          severity: '--',
+        }));
+        dispatch({ type: 'SET_ROWS', value: mappedDummy });
+        dispatch({ type: 'SET_TOTAL_COUNT', value: mappedDummy.length });
+        dispatch({ type: 'SET_LOADING', value: false });
+        return;
+      }
       const res = await fetchIncidentLogs({
         endpoint: config.endpoint,
         method: config.method,
@@ -264,8 +317,13 @@ const IncidentLogsPage = ({ config }) => {
       });
 
       const data = res?.data?.body?.data;
-      const list = data?.data || [];
-      const total = data?.totalCount || 0;
+      let list = data?.data || [];
+      let total = data?.totalCount || 0;
+
+      // Box Packing is currently being validated with local sample records.
+      // Keep the shared production table and controls, but populate it when
+      // the endpoint returns an empty page so the UI can be reviewed before
+      // the detection service has generated incidents.
 
       const mapped = list.map((item) => ({
         ...item,
@@ -341,6 +399,32 @@ const IncidentLogsPage = ({ config }) => {
           setSeverityTotals(Object.fromEntries(totals));
         } catch (statsErr) {
           console.log(`Error fetching ${config.title} severity totals:`, statsErr);
+        }
+      }
+      if (config.showBoxPackingStatusFilter) {
+        try {
+          const statusCounts = await Promise.all([
+            ['', 'all'],
+            ['completed', 'completed'],
+            ['review', 'review'],
+          ].map(async ([statusValue, key]) => {
+            const countRes = await fetchIncidentLogs({
+              endpoint: config.endpoint,
+              method: config.method,
+              skip: 0,
+              limit: 1,
+              startDate,
+              endDate,
+              nvrIds,
+              channelIds,
+              status: statusValue,
+              search: searchInput,
+            });
+            return [key, countRes?.data?.body?.data?.totalCount || 0];
+          }));
+          setPackingStatusTotals(Object.fromEntries(statusCounts));
+        } catch (statusErr) {
+          console.log(`Error fetching ${config.title} status totals:`, statusErr);
         }
       }
     } catch (err) {
@@ -586,6 +670,17 @@ const IncidentLogsPage = ({ config }) => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     if (config.showStats === false) return [];
+    if (config.showBoxPackingFields) {
+      const boxes = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.boxNumber) || 0), 0), 0);
+      const seconds = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.timeTakenSec) || 0), 0), 0);
+      const review = rows.filter((row) => /variance|review|pending/i.test(`${row.status || ''} ${row.confirmationReason || ''}`)).length;
+      return [
+        { label: 'Packing Events', value: totalCount ?? rows.length, color: 'var(--blue)' },
+        { label: 'Boxes Packed', value: boxes, color: 'var(--ok)' },
+        { label: 'Needs Review', value: review, color: 'var(--warn)' },
+        { label: 'Average Time', value: rows.length ? `${Math.round(seconds / rows.length)}s` : '0s', color: 'var(--violet)' },
+      ];
+    }
     if (config.showStockCountingFields) {
       return [
         { label: config.statsLabel || 'Vehicles', value: stockSummary.vehicles ?? totalCount ?? 0, color: 'var(--blue)' },
@@ -689,7 +784,15 @@ const IncidentLogsPage = ({ config }) => {
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
-        dateFilterActions={config.showStockCountingFields ? (
+        dateFilterActions={config.showBoxPackingStatusFilter ? (
+          <div role="group" aria-label="Box packing status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+            {[['', 'ALL'], ['completed', 'COMPLETED'], ['review', 'NEEDS REVIEW']].map(([value, title]) => {
+              const count = packingStatusTotals[value || 'all'] ?? 0;
+              const active = (status || '') === value;
+              return <button key={value || 'all'} type="button" aria-pressed={active} onClick={() => { dispatch({ type: 'SET_STATUS', value }); dispatch({ type: 'SET_CURRENT_PAGE', value: 1 }); }} className={`h-full cursor-pointer rounded-[7px] border-0 px-3 text-[10px] font-semibold tracking-[0.02em] transition-colors ${active ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'bg-transparent text-[var(--tx2)] hover:text-[var(--tx)]'}`}>{title} <span className="ml-1 opacity-70">{count}</span></button>;
+            })}
+          </div>
+        ) : config.showStockCountingFields ? (
           <div role="group" aria-label="Stock movement" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
             {[['all', 'All'], ['loading', 'Loaded'], ['unloading', 'Unloaded']].map(([value, title]) => (
               <button key={value} type="button" aria-pressed={stockDirection === value} onClick={() => {

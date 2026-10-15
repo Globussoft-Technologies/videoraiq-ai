@@ -345,14 +345,14 @@ export const buildColumns = (config, { onSort, onPreview }) => {
 export const renderIncidentCard = (row, config, { onPreview }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
     <div
-      className="relative bg-[#0a0e15] flex items-center justify-center"
-      style={{ aspectRatio: config.gridVariant === 'details' ? '6 / 3' : '4 / 3' }}
+      className={`relative shrink-0 overflow-hidden bg-[#0a0e15] flex items-center justify-center ${config.showBoxPackingFields ? 'h-[190px]' : ''}`}
+      style={config.showBoxPackingFields ? undefined : { aspectRatio: config.gridVariant === 'details' ? '6 / 3' : '4 / 3' }}
     >
       {row.incidentImageUrl ? (
         <ImageWithLoader
           src={row.incidentImageUrl}
           alt={row.incidentName}
-          className="absolute inset-0 cursor-pointer"
+          className="h-full w-full cursor-pointer"
           imgClassName="w-full h-full object-cover"
           onClick={() => onPreview(row.incidentImageUrl)}
           title="Click to enlarge"
