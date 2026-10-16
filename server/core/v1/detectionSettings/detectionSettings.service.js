@@ -31,7 +31,8 @@ import {
   loiteringDetectionSettings,
   tableOccupancyDetectionSettings,
   foodServicePPEDetectionSettings,
-  mobilePhoneDetectionSettings
+  mobilePhoneDetectionSettings,
+  lightingVisibilitySiteConditionsDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -71,7 +72,8 @@ import {
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,
   carModelDetectionSchemaSetting,
-  attendanceDetectionSetting
+  attendanceDetectionSetting,
+  LightingVisibilitySiteConditionsDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -118,6 +120,7 @@ const modelMap = {
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting,
   carModelDetectionSettings: carModelDetectionSchemaSetting,
   faceAuthenticationSettings: attendanceDetectionSetting,
+  lightingVisibilitySiteConditionsDetectionSettings: LightingVisibilitySiteConditionsDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -1999,6 +2002,7 @@ class DetectionSettingService {
         waterSpillageDetectionSettings,
         vehicleObstructionSettings,
         unauthorizedParkingDetectionSettings,
+        lightingVisibilitySiteConditionsDetectionSettings,
       };
 
       return res.status(200).json(

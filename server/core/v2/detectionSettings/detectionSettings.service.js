@@ -46,6 +46,7 @@ import {
   deskSolarShoulderDetectionSettings,
   boxPackingDetectionSettings,
   hygieneSanitationFoodSafetyDetectionSettings,
+  lightingVisibilitySiteConditionsDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -100,6 +101,7 @@ import {
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
+  LightingVisibilitySiteConditionsDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -164,6 +166,7 @@ const modelMap = {
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
   hygieneSanitationFoodSafetyDetectionSettings: HygieneSanitationFoodSafetyDetectionSetting,
+  lightingVisibilitySiteConditionsDetectionSettings: LightingVisibilitySiteConditionsDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -510,6 +513,10 @@ class DetectionSettingService {
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
+      }
+      const lightingValidation = DetectionSettingsValidation.validateLightingSettings(value.settingType, value.settings);
+      if (lightingValidation.error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", lightingValidation.error.message));
       }
 
       const doorValidation = DetectionSettingsValidation.validateDoorSettings(value.settingType, value.settings);
@@ -930,6 +937,10 @@ class DetectionSettingService {
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
+      }
+      const lightingValidation = DetectionSettingsValidation.validateLightingSettings(settingType, value.settings);
+      if (lightingValidation.error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", lightingValidation.error.message));
       }
 
       // Update base fields
@@ -1855,6 +1866,7 @@ class DetectionSettingService {
         deskSolarShoulderDetectionSettings,
         boxPackingDetectionSettings,
         hygieneSanitationFoodSafetyDetectionSettings,
+        lightingVisibilitySiteConditionsDetectionSettings,
       };
 
       return res.status(200).json(

@@ -77,6 +77,7 @@ import {
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,
   HygieneSanitationFoodSafetyDetectionIncident,
+  LightingVisibilitySiteConditionsDetectionIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
 import { applyDoorEpisodePost, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
@@ -126,6 +127,7 @@ const modelMap = {
   deskSolarShoulderDetection: DeskSolarShoulderDetectionIncident,
   boxPackingDetection: BoxPackingDetectionIncident,
   hygieneSanitationFoodSafetyDetection: HygieneSanitationFoodSafetyDetectionIncident,
+  lightingVisibilitySiteConditionsDetection: LightingVisibilitySiteConditionsDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -4804,6 +4806,22 @@ console.log(result,'result');
 
   async getHygieneSanitationFoodSafetyDetectionLogs(req, res, next) {
     return this._getIndustrialDetectionLogs(req, res, next, "hygieneSanitationFoodSafetyDetection");
+  }
+
+  async getLightingVisibilitySiteConditionsDetectionLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "lightingVisibilitySiteConditionsDetection",
+        searchFields: ["conceptGroup", "zone", "selectedCategories", "violations.category", "violations.categoryName", "violations.description"],
+        searchNumberFields: ["violationCount", "alertThreshold", "violations.confidence"],
+        postLookupSearch: true,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch lighting / visibility / site conditions logs", 500));
+    }
   }
 
   async getBoxPackingDetectionLogs(req, res, next) {

@@ -589,6 +589,27 @@ const HygieneSanitationFoodSafetyDetectionIncident = Incident.discriminator(
   }),
 );
 
+const LightingVisibilitySiteConditionsDetectionIncident = Incident.discriminator(
+  "lightingVisibilitySiteConditionsDetection",
+  new Schema({
+    conceptGroup: String,
+    cameraId: { type: Schema.Types.ObjectId, ref: "Channel" },
+    adminId: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
+    alertThreshold: { type: Number, default: 400 },
+    triggerNotification: { type: Boolean, default: true },
+    selectedCategories: [String],
+    violationCount: { type: Number, min: 0 },
+    violations: [{
+      _id: false,
+      category: String,
+      categoryName: String,
+      description: String,
+      confidence: { type: Number, min: 0, max: 1 },
+      severity: { type: String, enum: ["low", "medium", "moderate", "high"] },
+    }],
+  }),
+);
+
 const LoadingUnloadingStockCountingDetectionSchema = new Schema({
   // DS event identity. eventId is unique per detection event, while
   // vehicleSessionId ties all stock movements from the same vehicle visit
@@ -891,4 +912,5 @@ export  {
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,
   HygieneSanitationFoodSafetyDetectionIncident,
+  LightingVisibilitySiteConditionsDetectionIncident,
 };

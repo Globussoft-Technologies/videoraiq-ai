@@ -149,6 +149,11 @@ router.get(
   incidentsController.getHygieneSanitationFoodSafetyDetectionLogs,
 );
 router.get(
+  "/logs/lighting-visibility-site-conditions-detection",
+  viewAccessCheck,
+  incidentsController.getLightingVisibilitySiteConditionsDetectionLogs,
+);
+router.get(
   "/logs/loading-unloading-stock-counting-detection/numbers",
   viewAccessCheck,
   incidentsController.getLoadingUnloadingStockCountingVehicleNumbers,

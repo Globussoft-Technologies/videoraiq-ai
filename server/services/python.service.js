@@ -61,6 +61,19 @@ const appendIndustrialDetectors = (
         });
         continue;
       }
+      if (name === "lightingVisibilitySiteConditionsDetectionSettings") {
+        detectors.push({
+          name,
+          zones: zones || [],
+          zone_name: stockSettings.zone_name ?? plainZoneConfig(zone_configs?.[0])?.name,
+          trigger_notification: stockSettings.trigger_notification ?? true,
+          lighting_categories: stockSettings.lighting_categories ?? ["weatherSiteHazard"],
+          lighting_interval_sec: stockSettings.lighting_interval_sec ?? 3600,
+          lighting_min_confidence: stockSettings.lighting_min_confidence ?? 0.6,
+          lighting_cooldown_sec: stockSettings.lighting_cooldown_sec ?? 21600,
+        });
+        continue;
+      }
       if (name === "deskSolarShoulderDetectionSettings") {
         // DS takes only name/capacity/threshold_sec per zone; the stored
         // Telegram and alert-window fields stay on our side.

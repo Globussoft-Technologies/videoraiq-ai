@@ -60,6 +60,7 @@ export const DETECTION_TYPES = {
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
   hygieneSanitationFoodSafetyDetectionSettings: "Hygiene, Sanitation & Food Safety Detection",
+  lightingVisibilitySiteConditionsDetectionSettings: "Lighting / Visibility / Site Conditions Detection",
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
@@ -75,6 +76,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "deskSolarShoulderDetectionSettings",
   "boxPackingDetectionSettings",
   "hygieneSanitationFoodSafetyDetectionSettings",
+  "lightingVisibilitySiteConditionsDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -90,6 +92,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "deskSolarShoulderDetection",
   "boxPackingDetection",
   "hygieneSanitationFoodSafetyDetection",
+  "lightingVisibilitySiteConditionsDetection",
 ]);
 
 /**
@@ -133,6 +136,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
   boxPackingDetectionSettings: { permissionKey: "boxPackingLogs", logsConfigKey: "boxPackingLogs" },
   hygieneSanitationFoodSafetyDetectionSettings: { permissionKey: "hygieneSanitationFoodSafetyLogs", logsConfigKey: "hygieneSanitationFoodSafetyLogs" },
+  lightingVisibilitySiteConditionsDetectionSettings: { permissionKey: "lightingVisibilitySiteConditionsLogs", logsConfigKey: "lightingVisibilitySiteConditionsLogs" },
   blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
   deskSolarShoulderDetectionSettings: { permissionKey: "deskSolarShoulderLogs", logsConfigKey: "deskSolarShoulderLogs" },
 });
@@ -200,6 +204,7 @@ export const TYPE_MAP = {
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
   boxPackingDetectionSettings: "boxPackingDetection",
   hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetection",
+  lightingVisibilitySiteConditionsDetectionSettings: "lightingVisibilitySiteConditionsDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -245,6 +250,7 @@ export const DETECTION_MODES_MAP = {
   deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
   boxPackingDetectionSettings: ["boxPackingDetectionSettings"],
   hygieneSanitationFoodSafetyDetectionSettings: ["hygieneSanitationFoodSafetyDetectionSettings"],
+  lightingVisibilitySiteConditionsDetectionSettings: ["lightingVisibilitySiteConditionsDetectionSettings"],
 };
 
 /**
@@ -311,6 +317,7 @@ export const DS_DETECTOR_BY_MODE = {
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
   hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
+  lightingVisibilitySiteConditionsDetectionSettings: "lightingVisibilitySiteConditionsDetectionSettings",
 };
 
 /**
@@ -390,6 +397,7 @@ export const DS_LOGIC_BY_MODE = {
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
   hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
+  lightingVisibilitySiteConditionsDetectionSettings: "lightingVisibilitySiteConditionsDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -449,6 +457,7 @@ export const toPopulateDetections = [
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
   { path: "detections.boxPackingDetectionSettings.id" },
   { path: "detections.hygieneSanitationFoodSafetyDetectionSettings.id" },
+  { path: "detections.lightingVisibilitySiteConditionsDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1639,6 +1648,7 @@ export const loadingUnloadingStockCountingSettings = {
       "loadingUnloadingStockCountingSettings",
       "Loading/Unloading Stock Counting Detection",
     ).settings,
+    zone_name: "Scrap Yard",
     mode: "both",
   },
 };
@@ -1701,5 +1711,23 @@ export const hygieneSanitationFoodSafetyDetectionSettings = {
     referencePoints: {
       "664f89e8a9d345001ee326b1": [[[100, 120], [900, 120], [900, 700], [100, 700]]],
     },
+  },
+};
+export const lightingVisibilitySiteConditionsDetectionSettings = {
+  ...industrialDetectionExample(
+    "lightingVisibilitySiteConditionsDetectionSettings",
+    "Lighting / Visibility / Site Conditions Detection",
+  ),
+  settings: {
+    ...industrialDetectionExample(
+      "lightingVisibilitySiteConditionsDetectionSettings",
+      "Lighting / Visibility / Site Conditions Detection",
+    ).settings,
+    zone_name: "Scrap Yard",
+    lighting_categories: ["weatherSiteHazard"],
+    lighting_interval_sec: 3600,
+    lighting_min_confidence: 0.6,
+    lighting_cooldown_sec: 21600,
+    trigger_notification: true,
   },
 };

@@ -123,6 +123,7 @@ const detectionFields = {
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
   hygieneSanitationFoodSafetyDetectionSettings: detectionSettingSchema,
+  lightingVisibilitySiteConditionsDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

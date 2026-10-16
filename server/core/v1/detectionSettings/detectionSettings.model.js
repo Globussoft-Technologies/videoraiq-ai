@@ -1295,6 +1295,19 @@ const HygieneSanitationFoodSafetyDetectionSetting = DetectionSetting.discriminat
   "hygieneSanitationFoodSafetyDetectionSettings",
   new mongoose.Schema({ settings: HygieneSanitationFoodSafetyDetectionSchema }),
 );
+const LightingVisibilitySiteConditionsDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+LightingVisibilitySiteConditionsDetectionSchema.add({
+  zone_name: { type: String, default: "default" },
+  lighting_categories: { type: [String], default: ["weatherSiteHazard"] },
+  lighting_interval_sec: { type: Number, default: 3600, min: 1 },
+  lighting_min_confidence: { type: Number, default: 0.6, min: 0, max: 1 },
+  lighting_cooldown_sec: { type: Number, default: 21600, min: 0 },
+  trigger_notification: { type: Boolean, default: true },
+});
+const LightingVisibilitySiteConditionsDetectionSetting = DetectionSetting.discriminator(
+  "lightingVisibilitySiteConditionsDetectionSettings",
+  new mongoose.Schema({ settings: LightingVisibilitySiteConditionsDetectionSchema }),
+);
 
 
 
@@ -1705,4 +1718,5 @@ export {
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
+  LightingVisibilitySiteConditionsDetectionSetting,
 };

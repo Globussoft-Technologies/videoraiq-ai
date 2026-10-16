@@ -757,6 +757,13 @@ class IncidentsController {
     return incidentsService.getHygieneSanitationFoodSafetyDetectionLogs(req, res, next);
   }
 
+  async getLightingVisibilitySiteConditionsDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Lighting / Visibility / Site Conditions Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getLightingVisibilitySiteConditionsDetectionLogs(req, res, next);
+  }
+
   async getLoadingUnloadingStockCountingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Loading/Unloading Stock Counting Detection logs. direction filters individual movements before vehicle aggregation, pagination and summary totals.'

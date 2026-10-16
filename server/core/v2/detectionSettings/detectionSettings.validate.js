@@ -143,6 +143,18 @@ class DetectionSettingsValidation {
     }).unknown(true).validate(settings, { convert: false });
   }
 
+  validateLightingSettings(settingType, settings = {}) {
+    if (settingType !== "lightingVisibilitySiteConditionsDetectionSettings") return { error: null };
+    return Joi.object({
+      zone_name: Joi.string().trim(),
+      lighting_categories: Joi.array().items(Joi.string().trim().min(1)).min(1).unique(),
+      lighting_interval_sec: Joi.number().min(1),
+      lighting_min_confidence: Joi.number().min(0).max(1),
+      lighting_cooldown_sec: Joi.number().min(0),
+      trigger_notification: Joi.boolean(),
+    }).unknown(true).validate(settings, { convert: false });
+  }
+
   createDetectionSettingsValidation(body) {
     const schema = Joi.object().keys({
       name: Joi.string().required(),
