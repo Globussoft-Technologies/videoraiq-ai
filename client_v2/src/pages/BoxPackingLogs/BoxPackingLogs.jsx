@@ -260,12 +260,13 @@ function PackingActivityCharts({ rows, dateRange }) {
   const period = packingPeriod(dateRange);
   const buckets = Object.values(rows.reduce((result, row) => {
     const bucket = packingBucket(row.time, period);
-    result[bucket.key] ||= { ...bucket, boxes: 0, completed: 0, review: 0, seconds: 0 };
+    result[bucket.key] ||= { ...bucket, boxes: 0, completed: 0, review: 0, seconds: 0, timed: 0 };
     const item = result[bucket.key];
     item.boxes += 1;
     item.completed += row.status === 'completed' ? 1 : 0;
     item.review += row.status === 'review' ? 1 : 0;
-    item.seconds += Number(row.timeTakenSec) || 0;
+    const seconds = Number(row.timeTakenSec);
+    if (Number.isFinite(seconds) && seconds > 0) { item.seconds += seconds; item.timed += 1; }
     return result;
   }, {})).sort((a, b) => a.key.localeCompare(b.key));
   const scope = JSON.stringify([dateRange, rows.map((row) => row.id)]);
@@ -294,10 +295,11 @@ function PackingActivityCharts({ rows, dateRange }) {
         const value = (item) => metric.key === 'boxes' ? item.boxes : item.seconds / (item.timed || 1);
         const maximum = Math.max(1, ...buckets.map(value));
         const total = buckets.reduce((sum, item) => sum + item.boxes, 0);
+        const totalTimed = buckets.reduce((sum, item) => sum + item.timed, 0);
         return <Panel key={metric.key} style={{ minWidth: 0, padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
             <strong style={{ fontSize: 15 }}>{metric.title} per {period.label}</strong>
-            <span style={{ fontSize: 11, color: metric.color, fontWeight: 700 }}>{metric.key === 'boxes' ? total + ' boxes' : formatPackingDuration(buckets.reduce((sum, item) => sum + item.seconds, 0) / total) + ' overall'}</span>
+            <span style={{ fontSize: 11, color: metric.color, fontWeight: 700 }}>{metric.key === 'boxes' ? total + ' boxes' : formatPackingDuration(buckets.reduce((sum, item) => sum + item.seconds, 0) / totalTimed) + ' overall'}</span>
           </div>
           <div style={{ marginTop: 5, fontSize: 11, color: 'var(--tx3)' }}>{metric.description} Hover or select a bar for details.</div>
           <div style={{ overflowX: 'auto', marginTop: 16 }}>
@@ -322,7 +324,7 @@ function PackingActivityCharts({ rows, dateRange }) {
     {hoveredItem && <ChartTooltip anchor={hovered.anchor}>
       <strong>{rangeText(hoveredItem)}</strong>
       <div>Boxes packed: <strong>{hoveredItem.boxes}</strong></div>
-      <div>Average time to complete: <strong>{formatPackingDuration(hoveredItem.seconds / hoveredItem.boxes)}</strong></div>
+      <div>Average time to complete: <strong>{formatPackingDuration(hoveredItem.seconds / hoveredItem.timed)}</strong></div>
     </ChartTooltip>}
   </>;
 }
@@ -332,7 +334,7 @@ function CameraStationCards({ rows, streamChannels, activeCameraIndex, setActive
     <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
       <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 15 }}>Camera stations</span>
       <span style={{ fontSize: 11, color: 'var(--tx3)' }}>Select a camera to view packing activity</span>
-      <span style={{ marginLeft: 'auto', ...mono, fontSize: 9, color: 'var(--tx3)' }}>{streamChannels.filter((channel) => !channel._packingHistoryOnly).length} ENABLED · {streamChannels.filter((channel) => channel._packingHistoryOnly).length} HISTORY ONLY</span>
+      <span style={{ marginLeft: 'auto', ...mono, fontSize: 9, color: 'var(--tx3)' }}>{streamChannels.length} {streamChannels.length === 1 ? 'STATION' : 'STATIONS'}</span>
     </div>
     <div style={{ display: 'flex', gap: 12, padding: 14, overflowX: 'auto', overflowY: 'hidden', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}>
       {streamChannels.length ? streamChannels.map((channel, index) => {
@@ -351,7 +353,6 @@ function CameraStationCards({ rows, streamChannels, activeCameraIndex, setActive
           <div style={{ padding: '11px 12px 12px' }}>
             <div style={label}>Camera</div>
             <div style={{ marginTop: 4, fontWeight: 700, fontSize: 13 }}>{stationName}</div>
-            {channel._packingHistoryOnly && <div style={{ marginTop: 5, fontSize: 10, color: 'var(--tx3)' }}>History only · live detection unavailable</div>}
             <div style={{ ...label, marginTop: 10 }}>NVR</div>
             <div style={{ marginTop: 4, color: 'var(--tx2)', fontSize: 11.5 }}>{channelNvrLabel(channel)}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginTop: 11, paddingTop: 10, borderTop: '1px solid var(--bd)' }}>
@@ -464,14 +465,14 @@ function ZoneCompletionCards({ rows }) {
     rows: rows.filter((row) => packingWorkerId(row) === zone),
   }));
   const totalCompleted = rows.filter((row) => row.status === 'completed').length;
-  return <Panel pad={false} style={{ padding: 16, minWidth: 0 }}>
-    <div style={{ display: 'grid', gap: 12 }}>
+  return <Panel pad={false} className="flex min-h-0 flex-1 flex-col" style={{ padding: 16, minWidth: 0, minHeight: 0, flex: '1 1 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div>
         <div style={{ fontWeight: 600, fontSize: 15 }}>Worker completions</div>
         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--tx3)' }}>Each worker's share of this camera's completed boxes</div>
       </div>
       {!groups.length && <div style={{ color: 'var(--tx3)', fontSize: 12 }}>No worker activity for this station.</div>}
-      <div role="region" aria-label="Worker completion cards" style={{ display: 'grid', gap: 12, maxHeight: 292, overflowY: 'auto', overflowX: 'hidden', paddingRight: 6, scrollbarGutter: 'stable', overscrollBehavior: 'contain', minWidth: 0 }}>
+      <div role="region" aria-label="Worker completion cards" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1.5" style={{ display: 'grid', gap: 12, scrollbarGutter: 'stable', overscrollBehavior: 'contain', minWidth: 0 }}>
         {groups.map((group, index) => {
           const completed = group.rows.filter((row) => row.status === 'completed');
           const average = packingStats(completed).avgTime;
@@ -502,12 +503,12 @@ function ZoneCompletionCards({ rows }) {
 
 function RecentPackingActivity({ rows, onOpen }) {
   const recent = [...rows].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 1);
-  return <Panel pad={false} style={{ minHeight: 300, padding: 0, overflow: 'hidden', background: 'linear-gradient(135deg, rgba(79,70,229,.15), rgba(168,85,247,.08) 58%, var(--bg2))', border: '1px solid rgba(99,102,241,.38)', boxShadow: 'inset 3px 0 0 #6366f1, 0 8px 20px rgba(79,70,229,.08)' }}>
+  return <Panel pad={false} className="flex min-h-[300px] flex-col min-[901px]:min-h-0 min-[901px]:h-[300px] min-[901px]:basis-[300px] min-[901px]:shrink-0" style={{ padding: 0, overflow: 'hidden', background: 'linear-gradient(135deg, rgba(79,70,229,.15), rgba(168,85,247,.08) 58%, var(--bg2))', border: '1px solid rgba(99,102,241,.38)', boxShadow: 'inset 3px 0 0 #6366f1, 0 8px 20px rgba(79,70,229,.08)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '16px 18px', borderBottom: '1px solid var(--bd)', fontWeight: 600, fontSize: 15 }}><span style={{ display: 'grid', placeItems: 'center', width: 29, height: 29, borderRadius: 9, background: 'rgba(99,102,241,.15)', color: '#6366f1' }}><PackageCheck size={16} /></span>Latest packing activity</div>
-    {!recent.length && <div style={{ minHeight: 230, padding: 20, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 13 }}>No packing activity for this station.</div>}
+    {!recent.length && <div className="min-h-0 flex-1" style={{ padding: 20, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 13 }}>No packing activity for this station.</div>}
     {recent.map((row) => {
       const image = row.Image || row.image || row.imageUrl || row.incidentImageUrl;
-      return <div key={row.id} style={{ display: 'flex', gap: 18, padding: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      return <div key={row.id} className="min-h-0 flex-1" style={{ display: 'flex', gap: 18, padding: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         {image ? <button type="button" onClick={() => onOpen(row)} aria-label={`Open packing snapshot for ${row.boxId}`} style={{ flex: '1 1 170px', maxWidth: '100%', minWidth: 0, padding: 0, border: '1px solid var(--bd2)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg2)', cursor: 'pointer' }}><img src={mediaUrl(image)} alt={`Packing snapshot for ${row.boxId}`} style={{ width: '100%', aspectRatio: '16 / 10', objectFit: 'cover', display: 'block' }} /></button> : <div style={{ flex: '1 1 170px', minHeight: 160, display: 'grid', placeItems: 'center', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx3)', fontSize: 12 }}>No snapshot</div>}
         <div style={{ flex: '2 1 230px', minWidth: 0 }}>
           <div style={label}>Box ID</div><div style={{ marginTop: 5, fontFamily: 'var(--disp)', fontSize: 23, fontWeight: 800, overflowWrap: 'anywhere' }}>{row.boxId}</div>
@@ -595,12 +596,11 @@ function PackingOverview({ rows: allRows, selectedZone, setSelectedZone, streamC
       <Kpi label="Boxes packed" value={activeCameraStats.boxes} sub="Selected camera" title="Packed box records for this camera in the selected period." color={OK} />
       <Kpi label="Average time to complete" value={activeCameraRows.length ? formatPackingDuration(activeCameraStats.avgTime) : '—'} sub="Selected camera" title="Average recorded packing duration for this camera." color="#3b82f6" />
     </KpiGrid>
-    <Panel pad={false} style={{ padding: 0, minHeight: 0, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14, padding: 14, boxSizing: 'border-box', alignItems: 'stretch' }}>
-        <div style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <div className="box-border grid min-h-0 items-stretch gap-3.5 min-[901px]:h-[560px] min-[901px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[901px]:overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-[var(--bd)] bg-[var(--bg1)] p-3.5">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Live packing cameras</span><span style={{ ...mono, fontSize: 9, color: 'var(--tx3)' }}>{streamChannels.filter((channel) => !channel._packingHistoryOnly).length} enabled</span></div>
           {activeChannel ? <>
-            <div style={{ position: 'relative', flex: 1, width: '100%', minHeight: 340, minWidth: 0, border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden' }}>
+            <div className="relative min-h-[340px] min-w-0 flex-1 min-[901px]:min-h-0" style={{ width: '100%', border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden' }}>
               {activeChannel._packingHistoryOnly ? <PackingStreamUnavailable /> : <PackingVideo fill row={latestPackingEvent || rows[0]} channel={{ ...activeChannel, _compactBoxPacking: true }} />}
 
             </div>
@@ -614,12 +614,11 @@ function PackingOverview({ rows: allRows, selectedZone, setSelectedZone, streamC
             </div>
           </> : <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', padding: 24, borderRadius: 12, border: '1px dashed var(--bd2)', color: 'var(--tx3)', textAlign: 'center' }}>No Box Packing cameras match the selected filters.</div>}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <ZoneCompletionCards rows={activeCameraRows} />
           <RecentPackingActivity rows={activeCameraRows} onOpen={setActivityPreview} />
         </div>
-      </div>
-    </Panel>
+    </div>
      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 8 }}><span style={{ ...mono, fontSize: 11, fontWeight: 700, color: '#a855f7' }}>02</span><span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 19 }}>Conveyor Count &amp; Packing Activity</span><span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Boxes counted per {packingPeriod(dateRange).label} · operators share the work</span></div>
     <div style={{ minWidth: 0, width: '100%' }}>
       <PackingActivityCharts rows={rows} stats={stats} dateRange={dateRange} />
