@@ -5,7 +5,7 @@ vi.mock("../../../core/v2/NVR/nvr.model.js", () => ({
   default: { findOne: vi.fn() },
 }));
 vi.mock("../../../core/v2/channels/channels.model.js", () => ({
-  default: { findOne: vi.fn() },
+  default: { findOne: vi.fn(), schema: { path: () => true } },
 }));
 // Real query builders, mocked DB calls.
 vi.mock("../../../core/v2/verifyRecipients/recipients.model.js", async (importOriginal) => ({

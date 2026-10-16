@@ -96,6 +96,12 @@ describe("who gets a crowd alert", () => {
   it("a ticked recipient with no Detection Types gets every type", async () => {
     expect(await emailedFor(CroudIncident, "crowdDetection", "low")).toContain("noTypes@x.com");
   });
+
+  it("still alerts when the camera holds a detection key the schema doesn't know", async () => {
+    // Written past Mongoose (dev had detections.attendanceSettings): populate used to throw and drop the alert.
+    await Channel.collection.updateOne({ _id: channel._id }, { $set: { "detections.attendanceSettings": { id: channel._id, enabled: true } } });
+    expect(await emailedFor(CroudIncident, "crowdDetection", "high")).toContain("any@x.com");
+  });
 });
 
 describe("severity per detection narrows both ways", () => {

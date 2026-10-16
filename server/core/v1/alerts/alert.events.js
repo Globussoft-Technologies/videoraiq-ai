@@ -24,7 +24,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     .lean();
 
     const populatePaths = Object.entries(channelData?.detections || {})
-    .filter(([_, value]) => value) // Only include non-null ObjectId refs
+    .filter(([key, value]) => value && channelsModel.schema.path(`detections.${key}.id`)) // non-null refs the schema knows: one stray key (e.g. attendanceSettings) made populate throw and dropped every alert of the camera
     .map(([key]) => ({ path: `detections.${key}.id` }));
 
 

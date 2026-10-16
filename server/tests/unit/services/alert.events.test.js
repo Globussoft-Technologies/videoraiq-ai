@@ -39,6 +39,7 @@ vi.mock("../../../core/v1/NVR/nvr.model.js", () => ({
 vi.mock("../../../core/v1/channels/channels.model.js", () => ({
   default: {
     findOne: vi.fn(),
+    schema: { path: () => true },
   },
 }));
 
