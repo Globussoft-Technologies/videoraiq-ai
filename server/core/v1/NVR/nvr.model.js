@@ -139,4 +139,6 @@ NVRSchema.pre("distinct", async function () {
   await applyNvrAccessControl(this);
 });
 
+NVRSchema.index({ userId: 1 });
+
 export default mongoose.model("NVR", NVRSchema);

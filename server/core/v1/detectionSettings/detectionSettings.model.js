@@ -93,6 +93,8 @@ DetectionSettingBaseSchema.pre("save", function (next) {
   next();
 });
 
+DetectionSettingBaseSchema.index({ userId: 1, settingType: 1, createdAt: -1 });
+
 const DetectionSetting = mongoose.model(
   "DetectionSetting",
   DetectionSettingBaseSchema,

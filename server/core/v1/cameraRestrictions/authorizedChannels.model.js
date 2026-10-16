@@ -61,4 +61,7 @@ const authorizedChannelsSchema = new mongoose.Schema(
   }
 );
 
+// Non-unique: preserve existing data and authorization lookup semantics.
+authorizedChannelsSchema.index({ userId: 1 });
+
 export default mongoose.model("authorizedChannels", authorizedChannelsSchema);

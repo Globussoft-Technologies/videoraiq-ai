@@ -46,5 +46,7 @@ const alertSchema = new Schema({
   ]
 }, { timestamps: true });
 
+alertSchema.index({ adminId: 1, createdAt: -1 });
+
 const AlertsConfig = model('alerts', alertSchema);
 export default AlertsConfig;

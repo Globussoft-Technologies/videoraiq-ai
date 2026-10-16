@@ -344,4 +344,7 @@ ChannelSchema.statics.findByIdActive = function (id) {
   return this.findById(id).where({ isAdded: true });
 };
 
+// Tenant-scoped active camera pages, including their existing sort order.
+ChannelSchema.index({ userId: 1, isAdded: 1, createdAt: -1, _id: -1 });
+
 export default mongoose.model("Channel", ChannelSchema);
