@@ -5,6 +5,7 @@ import {
   isAttendanceDetectionType,
 } from './constants';
 import { scheduleFromConfig } from '../ZoneScheduleFields';
+import { HYGIENE_SETTING_TYPE, hygieneZoneSettings } from '../../../../helpers/hygieneDetection';
 
 export function extraFieldsFor(settingType) {
   return ZONE_EXTRA_FIELDS[settingType] || [];
@@ -38,6 +39,7 @@ export function zonesFor(setting, cameraId, settingType) {
   const isMultiZone = Array.isArray(raw[0]?.[0]);
   const polygons = isMultiZone ? raw : [raw];
   return polygons.map((poly, i) => ({
+    ...(settingType === HYGIENE_SETTING_TYPE ? hygieneZoneSettings(configs[i], setting?.settings) : {}),
     name: configs[i]?.name || `Zone ${i + 1}`,
     fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
     capacity: configs[i]?.capacity ?? '',

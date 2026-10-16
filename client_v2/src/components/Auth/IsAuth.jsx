@@ -8,6 +8,7 @@ import { logout } from '@/hooks/logout';
 import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
 import { isLocalSetup } from '@/utils/jwt';
 import AuthLoader from '@/page/user/Users/AuthLoader';
+import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobileEmbed';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
@@ -154,6 +155,26 @@ export default function IsAuth({ children }) {
   };
 
   useEffect(() => {
+    if (isMobileEmbedded()) {
+      let stopped = false;
+      const checkEmbedded = async () => {
+        try {
+          const session = getMobileEmbed();
+          if (!session || session.screen.webPath !== window.location.pathname) throw new Error('Open the permitted page again from the mobile app.');
+          const response = await fetch(`${HOST}/mobile-access/session`, { headers: { 'x-access-token': session.token } });
+          const result = await response.json();
+          if (!response.ok || result.body?.status !== 'success') throw new Error('Page access expired or revoked. Reopen from the mobile app.');
+          if (!stopped) { setUser(result.body.data.user); setIsLoading(false); }
+        } catch (error) {
+          if (!stopped) { clearMobileEmbed(); setUser(null); setFailure({ title: 'Mobile page unavailable', message: error.message }); setIsLoading(false); }
+        }
+      };
+      checkEmbedded();
+      const timer = setInterval(checkEmbedded, 30000);
+      const onResume = () => { if (document.visibilityState === 'visible') checkEmbedded(); };
+      document.addEventListener('visibilitychange', onResume);
+      return () => { stopped = true; clearInterval(timer); document.removeEventListener('visibilitychange', onResume); };
+    }
     // React 18 StrictMode (see main.jsx) double-invokes this effect in dev:
     // mount -> cleanup -> mount again, with the SAME component instance (refs
     // survive). exchangeStarted correctly stops the second invocation from
@@ -427,6 +448,9 @@ export default function IsAuth({ children }) {
   }, [socket]);
 
   if (isLoading) return <AuthLoader pending />;
+  if (isMobileEmbedded() && !failure && getMobileEmbed()?.screen.webPath !== location.pathname) {
+    return <main role="alert" style={{ padding: 24 }}>Open the selected page again from the mobile app.</main>;
+  }
   if (failure) {
     return (
       <main
@@ -447,7 +471,7 @@ export default function IsAuth({ children }) {
           <p style={{ margin: '0 0 24px', lineHeight: 1.6, color: '#556176' }}>
             {failure.message}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          {!isMobileEmbedded() && <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
             <a
               href={memberUrl()}
               style={{
@@ -466,7 +490,7 @@ export default function IsAuth({ children }) {
             >
               Sign in with another account
             </a>
-          </div>
+          </div>}
         </section>
       </main>
     );

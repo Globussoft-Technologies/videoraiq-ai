@@ -95,6 +95,14 @@ const DETECTION_SEARCH_INDEX = [
   },
   {
     kind: 'Detection',
+    kindColor: '#14b8a6',
+    label: 'Hygiene, Sanitation & Food Safety Detection',
+    sub: 'Safety & PPE • Hygiene and contamination monitoring',
+    keywords: 'hygiene sanitation food safety hand washing product contamination spillage',
+    to: '/detection-settings?detection=hygieneSanitationFoodSafetyDetectionSettings',
+  },
+  {
+    kind: 'Detection',
     kindColor: '#6366f1',
     label: 'Loading/Unloading Stock Counting Detection',
     sub: 'Industrial & Environment • Stock movement counting',

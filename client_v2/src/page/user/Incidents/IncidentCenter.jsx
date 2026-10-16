@@ -909,7 +909,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const carModel = isCarModelDetection(item);
   const isSolder = item.incidentType === 'deskSolarShoulderDetection';
   const isPacking = item.incidentType === 'boxPackingDetection';
-  const compactDetails = isSolder || isPacking;
+  const isHygiene = item.incidentType === 'hygieneSanitationFoodSafetyDetection';
+  const compactDetails = isSolder || isPacking || isHygiene;
 
   return (
     <div
@@ -1108,7 +1109,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   {shortDateTime(item.timeOfIncident)}
                 </span>
                 <CarModelDetails item={item} />
-                <IncidentZoneDetails item={item} variant="lightbox" compact={compactDetails} />
+                <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder || isPacking} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
                 <div style={{ marginTop: carModel ? 6 : compactDetails ? 3 : 8 }}>
@@ -1370,6 +1371,7 @@ function IncidentListRow({
           <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
+          {item.incidentType === 'hygieneSanitationFoodSafetyDetection' && <IncidentZoneDetails item={item} compact />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -63,6 +63,7 @@ const SHORT_LABELS = {
   blurredCameraDetectionSettings: 'Blurred Camera',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder',
   boxPackingDetectionSettings: 'Box Packing',
+  hygieneSanitationFoodSafetyDetectionSettings: 'Hygiene & Food Safety',
 };
 
 export function humanize(settingType) {

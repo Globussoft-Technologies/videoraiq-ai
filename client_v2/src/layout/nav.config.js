@@ -187,6 +187,13 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    label: 'HYGIENE & FOOD SAFETY',
+    hideForFloMattress: true,
+    items: [
+      { key: 'hygiene-analytics', label: 'Hygiene & Food Safety', path: 'hygiene-analytics', icon: ShieldCheck, permissionKey: 'logs', permissionSubKey: 'hygieneSanitationFoodSafetyLogs', logsConfigKey: 'hygieneSanitationFoodSafetyLogs' },
+    ],
+  },
+  {
     label: 'INTELLIGENCE',
     hidden: true,
     items: [
@@ -308,6 +315,7 @@ export const VIEW_META = {
   'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
+  'hygiene-analytics': { title: 'Hygiene & Food Safety', sub: 'Risk trends, incident evidence and period reports' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

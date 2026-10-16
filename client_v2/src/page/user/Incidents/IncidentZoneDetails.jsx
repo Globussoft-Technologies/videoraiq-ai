@@ -1,7 +1,10 @@
 import { solderAbsenceFields } from '../../../helpers/solderIncidentDetails.js';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
+import { HYGIENE_INCIDENT_TYPE } from '../../../helpers/hygieneDetection';
+import IncidentHygieneDetails from './IncidentHygieneDetails';
 
 export default function IncidentZoneDetails({ item, variant = 'card', compact = false }) {
+  if (item.incidentType === HYGIENE_INCIDENT_TYPE) return <IncidentHygieneDetails item={item} variant={variant} compact={compact} />;
   if (item.incidentType === 'boxPackingDetection') {
     const packing = packingIncidentDetails(item), dark = variant === 'lightbox';
     if (!dark) return <dl aria-label="Box packing details" style={{ margin: '1px 0', fontSize: 11, minWidth: 0 }}>

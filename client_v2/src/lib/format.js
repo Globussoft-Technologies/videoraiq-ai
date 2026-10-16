@@ -86,6 +86,8 @@ const CUSTOM_DETECTION_LABELS = {
   boxPackingDetection: 'Box Packing Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
+  hygieneSanitationFoodSafetyDetection: 'Hygiene, Sanitation & Food Safety Detection',
+  hygieneSanitationFoodSafetyDetectionSettings: 'Hygiene, Sanitation & Food Safety Detection',
 };
 
 /** Human display name for an incident/detection type. */

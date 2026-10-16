@@ -9,6 +9,7 @@ import IsAuth from '@/components/Auth/IsAuth';
 import Logout from '@/components/Auth/Logout';
 import VerifyRecipient from '@/page/user/Administer/VerifyRecipient';
 import { floMattressRoutes } from '@/page/user/flo-mattress/FloMattressRoutes';
+import MobileSso from '@/pages/MobileSso';
 
 function LoginRoute() {
   return <LoginForm />;
@@ -27,6 +28,7 @@ export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route>
       <Route path="/admin-login" element={<LoginRoute />} />
+      <Route path="/mobile-sso" element={<MobileSso />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/employee-login" element={<EmployeeLogin />} />

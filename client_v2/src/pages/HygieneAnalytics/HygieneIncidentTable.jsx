@@ -1,0 +1,12 @@
+import { useState } from 'react';
+import moment from 'moment-timezone';
+import { ChevronDown, ChevronRight, Image } from 'lucide-react';
+import { hygieneCategoryLabel } from '@/helpers/hygieneDetection';
+
+export default function HygieneIncidentTable({ events, timezone, cameraName, onPreview }) {
+  const [expanded, setExpanded] = useState(null);
+  return <div className="hy-table-wrap hy-register"><table className="hy-table"><thead><tr><th>Alert time</th><th>Camera / Zone</th><th>Category</th><th>Violations</th><th>Severity</th><th>Status</th><th>Evidence</th></tr></thead><tbody>{events.map(e => [
+    <tr key={e._id}><td><button type="button" className="hy-register-expand hy-mono" aria-expanded={expanded === e._id} aria-controls={`hy-event-${e._id}`} onClick={() => setExpanded(expanded === e._id ? null : e._id)}>{expanded === e._id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}{moment(e.timeOfIncident).tz(timezone).format('DD MMM · HH:mm:ss')}</button></td><td>{cameraName(e.channelId)}<small className="hy-camera-caption">{e.zone || 'Unassigned zone'}</small></td><td className="hy-category-cell">{[...new Set((e.violations || []).map(v => hygieneCategoryLabel(v.category)))].join(', ') || 'Not supplied'}</td><td>{e.violationCount ?? e.violations?.length ?? 0}</td><td><span className={`hy-severity ${e.severity || ''}`}>{e.severity || 'Unspecified'}</span></td><td><span className={`hy-status ${e.resolved ? 'resolved' : ''}`}>{e.resolved ? 'Resolved' : 'Unresolved'}</span></td><td>{e.Image ? <button type="button" className="hy-link" onClick={() => onPreview(e._id)}><Image size={14} />View</button> : <span className="hy-muted">—</span>}</td></tr>,
+    expanded === e._id && <tr key={`${e._id}-details`} id={`hy-event-${e._id}`} className="hy-register-detail"><td colSpan={7}><div>{e.description && <p>{e.description}</p>}<div className="hy-detail-grid">{(e.violations || []).map((v, i) => <div key={i}><strong>{hygieneCategoryLabel(v.category)}</strong><p>{v.description || v.categoryName || 'No description supplied.'}</p><span>Confidence: <b>{v.confidence == null ? 'Unavailable' : `${Math.round(v.confidence * 100)}%`}</b> · Severity: {v.severity || 'Unspecified'}</span></div>)}</div>{!e.violations?.length && <span className="hy-muted">No detailed violations supplied.</span>}</div></td></tr>,
+  ])}</tbody></table>{!events.length && <div className="hy-inline-empty">No matching incidents. Choose another period or adjust the filters.</div>}</div>;
+}

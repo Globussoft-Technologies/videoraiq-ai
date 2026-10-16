@@ -41,6 +41,7 @@ const DETECTION_LABEL_OVERRIDES = {
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
+  hygieneSanitationFoodSafetyDetectionSettings: 'Hygiene, Sanitation & Food Safety Detection',
   unauthorizedParkingDetectionSettings: 'Unauthorized Parking Detection',
 };
 
@@ -104,6 +105,7 @@ export const DETECTION_THRESHOLDS = {
   blurredCameraDetectionSettings: [],
   deskSolarShoulderDetectionSettings: [],
   boxPackingDetectionSettings: [],
+  hygieneSanitationFoodSafetyDetectionSettings: [],
 };
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */

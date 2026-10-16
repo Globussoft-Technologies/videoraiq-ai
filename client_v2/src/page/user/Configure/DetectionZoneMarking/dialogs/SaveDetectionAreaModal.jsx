@@ -6,6 +6,8 @@ import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, format
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_ALERT_MODE_OPTIONS, DOOR_MIN_THRESHOLD_SEC } from '../constants';
+import HygieneZoneFields from '../components/HygieneZoneFields';
+import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -34,6 +36,7 @@ export default function SaveDetectionAreaModal({
   isFireSmoke = false,
   isDoor = false,
   initialDoorAlertMode = 'open',
+  isHygiene = false,
   saving,
   onCancel,
   onSubmit,
@@ -90,6 +93,11 @@ export default function SaveDetectionAreaModal({
     if (!detectionName.trim()) nextErrors.detectionName = true;
     if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
+      if (isHygiene) {
+        for (const [field, message] of Object.entries(hygieneZoneErrors(z))) {
+          nextErrors[`zone-${i}-${field}`] = message;
+        }
+      }
       const selectedTelegramChatIds = Array.isArray(z?.telegramChatIds)
         ? z.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
         : (String(z?.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []);
@@ -310,6 +318,14 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isHygiene && (
+                <HygieneZoneFields
+                  zone={z}
+                  onChange={(field, value) => updateZoneField(i, field, value)}
+                  disabled={saving}
+                  errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))}
+                />
+              )}
               {isFireSmoke && (
                 <div>
                   <label htmlFor={`fire-outside-zone-enabled-${i}`} style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>

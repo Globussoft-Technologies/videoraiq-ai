@@ -2,6 +2,7 @@ import Cookies from 'js-cookie';
 import axios from 'axios';
 import { clearSessionId, getSessionId } from '@/utils/sessionIdentity';
 import { unregisterWebPush } from '@/utils/webPush';
+import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobileEmbed';
 
 const url = import.meta.env.VITE_ENV;
 const apiUrl = import.meta.env.VITE_BACKEND;
@@ -55,6 +56,14 @@ const shouldPreserveStorageKey = (key) =>
  * is marked logged_out instead of lingering as "active".
  */
 export async function logout({ clearSession = true, syncServer = true } = {}) {
+  if (isMobileEmbedded()) {
+    const session = getMobileEmbed();
+    if (session?.token && syncServer) {
+      try { await axios.post(`${apiUrl}/mobile-access/logout`, {}, { headers: { 'x-access-token': session.token }, skipSessionRedirect: true }); } catch {}
+    }
+    clearMobileEmbed();
+    return;
+  }
   const name = cookieName();
   const token = Cookies.get(name);
   const sessionId = getSessionId();

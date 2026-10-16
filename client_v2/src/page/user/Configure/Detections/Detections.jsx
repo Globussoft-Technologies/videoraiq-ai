@@ -889,6 +889,8 @@ export default function Detections() {
             ? 'unauthorized animal entry intrusion'
             : detectionType === 'spillsDirtyMessyAreasDetectionSettings'
             ? 'spills dirty messy areas housekeeping'
+            : detectionType === 'hygieneSanitationFoodSafetyDetectionSettings'
+            ? 'hygiene sanitation food safety hand washing contamination product floor unclean surface'
             : detectionType === 'loadingUnloadingStockCountingSettings'
             ? 'loading unloading stock counting inventory movement'
             : detectionType === 'blurredCameraDetectionSettings'

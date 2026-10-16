@@ -18,6 +18,7 @@ export const DETECTION_FIELD_KEYS = [
   'loadingUnloadingStockCountingSettings',
   'deskSolarShoulderDetectionSettings',
   'boxPackingDetectionSettings',
+  'hygieneSanitationFoodSafetyDetectionSettings',
 ];
 
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';

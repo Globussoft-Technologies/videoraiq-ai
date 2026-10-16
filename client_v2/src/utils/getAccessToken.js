@@ -1,6 +1,8 @@
 import Cookies from 'js-cookie';
+import { getMobileEmbed, isMobileEmbedded } from './mobileEmbed';
 const url=import.meta.env.VITE_ENV
 function getAccessToken() { 
+  if (isMobileEmbedded()) return getMobileEmbed()?.token || null;
   // const domain = window.location.hostname;
   
   // if (domain.includes("dev"))

@@ -1,5 +1,6 @@
 import Cookies from 'js-cookie';
 import CryptoJS from 'crypto-js';
+import { getMobileEmbed, isMobileEmbedded } from './mobileEmbed';
 
 const SESSION_ID_KEY = 'vq_session_id';
 const CLIENT_ID_KEY = 'vq_client_id';
@@ -46,10 +47,12 @@ export function getDeviceId() {
 }
 
 export function getSessionId() {
+  if (isMobileEmbedded()) return getMobileEmbed()?.sessionId || null;
   return Cookies.get(SESSION_ID_KEY) || null;
 }
 
 export function setSessionId(sessionId) {
+  if (isMobileEmbedded()) return;
   if (!sessionId) return;
   Cookies.set(SESSION_ID_KEY, sessionId, {
     expires: 1,

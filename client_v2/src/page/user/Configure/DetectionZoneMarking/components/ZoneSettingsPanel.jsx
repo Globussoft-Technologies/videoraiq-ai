@@ -4,6 +4,7 @@ import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
 import ThresholdDurationInput from './ThresholdDurationInput';
 import { CAR_COMPANIES } from '../constants';
+import HygieneZoneFields from './HygieneZoneFields';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -25,6 +26,7 @@ export default function ZoneSettingsPanel({
   isCheckInOut = false,
   isStockCounting = false,
   isFireSmoke = false,
+  isHygiene = false,
   laneName = '',
   onLaneNameChange,
   laneNameError = '',
@@ -181,6 +183,14 @@ export default function ZoneSettingsPanel({
                         <option value="false">No</option>
                       </select>
                     </div>
+                  )}
+                  {isHygiene && (
+                    <HygieneZoneFields
+                      zone={z}
+                      onChange={(field, value) => onUpdateField(i, field, value)}
+                      disabled={savingIndex === i}
+                      errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))}
+                    />
                   )}
                   {isStockCounting && (
                     <div>

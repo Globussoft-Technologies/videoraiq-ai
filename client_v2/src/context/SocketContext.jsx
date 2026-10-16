@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import getAccessToken from '@/utils/getAccessToken';
 import { getSessionId } from '@/utils/sessionIdentity';
 import { useAuth } from './AuthContext';
+import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 // How often an open tab tells the server it's still here. Must stay well under
 // the server's presence TTL (PRESENCE_TTL_SECONDS) so one missed beat doesn't
@@ -50,6 +51,7 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (isMobileEmbedded()) return;
     const token = getAccessToken();
     if (!user || !token) {
       if (socketRef.current) {

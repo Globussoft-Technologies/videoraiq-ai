@@ -85,6 +85,7 @@ const INCIDENT_COLOR = {
   blurredCameraDetection: '#94a3b8',
   deskSolarShoulderDetection: '#f59e0b',
   boxPackingDetection: '#b45309',
+  hygieneSanitationFoodSafetyDetection: '#14b8a6',
   countPersons: '#bef264',
   countVehicles: '#93c5fd',
   loiteringWithoutAuth: '#c026d3',

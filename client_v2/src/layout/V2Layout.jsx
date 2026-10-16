@@ -20,6 +20,7 @@ import { shouldHidePlayback } from '../lib/nvrCapabilities';
 import LiveDemo from '../pages/LiveDemo/LiveDemo';
 import { hasLiveDemoPlan } from '../utils/jwt';
 import { BRAND_NAME } from '../lib/branding';
+import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
@@ -94,6 +95,7 @@ function currentViewKey(pathname) {
 }
 
 function Shell() {
+  const embedded = isMobileEmbedded();
   // Mounted on the shell rather than only on the scheduling page, so a DS
   // start/stop that fails is visible wherever the user happens to be. The
   // hook toasts each transition as it arrives over the socket, including the
@@ -321,23 +323,23 @@ function Shell() {
         transition: 'background .3s ease,color .3s ease',
       }}
     >
-      <Sidebar
+      {!embedded && <Sidebar
         isMobile={isMobile}
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}
         camHealth={camHealth}
         hidePlayback={hidePlayback}
-      />
+      />}
       <CameraLimitLock />
       {/* Drawer backdrop (mobile only) */}
-      {isMobile && navOpen && (
+      {!embedded && isMobile && navOpen && (
         <div
           onClick={() => setNavOpen(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 75 }}
         />
       )}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
-        <Header
+        {!embedded && <Header
           title={meta.title}
           sub={meta.sub}
           sites={sites}
@@ -349,7 +351,7 @@ function Shell() {
           onMarkNotificationsRead={markNotificationsRead}
           onMenuClick={isMobile ? openMobileNav : undefined}
           showLiveDemo={canUseLiveDemo}
-        />
+        />}
         <div
           ref={pageScrollRef}
           className={fixedViewportPage ? undefined : 'vq-scroll'}
@@ -365,7 +367,7 @@ function Shell() {
             <div style={{ display: isLiveDemo ? 'none' : 'contents' }}>
               <Outlet context={outletCtx} />
             </div>
-            {!fixedViewportPage && (
+            {!embedded && !fixedViewportPage && (
               <footer
               style={{
                 marginTop: 'auto',
@@ -382,7 +384,7 @@ function Shell() {
         </div>
     
       </main>
-      <AppTour />
+      {!embedded && <AppTour />}
       {/* chatbot */}
       {/* <AssistantLauncher /> */}
     </div>

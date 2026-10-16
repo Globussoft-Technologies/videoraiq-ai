@@ -129,6 +129,7 @@ const ENGINE_LABELS = {
   blurredCameraDetectionSettings: 'BLUR',
   deskSolarShoulderDetectionSettings: 'DESK',
   boxPackingDetectionSettings: 'BOX',
+  hygieneSanitationFoodSafetyDetectionSettings: 'HYGIENE',
 };
 
 const ENGINE_NAMES = {
@@ -166,6 +167,7 @@ const ENGINE_NAMES = {
   blurredCameraDetectionSettings: 'Blurred Camera Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
+  hygieneSanitationFoodSafetyDetectionSettings: 'Hygiene, Sanitation & Food Safety Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {

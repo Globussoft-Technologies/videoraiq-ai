@@ -84,6 +84,7 @@ const DETECTION_ICONS = {
   blurredCameraDetectionSettings: ScanEye,
   deskSolarShoulderDetectionSettings: Armchair,
   boxPackingDetectionSettings: Package,
+  hygieneSanitationFoodSafetyDetectionSettings: UtensilsCrossed,
   'Attendance-detection': UserCheck,
 };
 

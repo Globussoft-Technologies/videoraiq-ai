@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { sessionHeaders } from './sessionIdentity';
 import { logout } from '@/hooks/logout';
+import { isMobileEmbedded, clearMobileEmbed } from './mobileEmbed';
 
 axios.interceptors.request.use(async (config) => {
   config.headers = config.headers || {};
@@ -27,6 +28,11 @@ axios.interceptors.response.use(
       ['SESSION_BLOCKED', 'SESSION_LOGGED_OUT', 'SESSION_INVALID', 'DEVICE_BLOCKED'].includes(body?.code)
     ) {
       sessionRedirectStarted = true;
+      if (isMobileEmbedded()) {
+        clearMobileEmbed();
+        window.location.replace('/mobile-sso');
+        return Promise.reject(error);
+      }
       // clearSession: true — a blocked/logged-out sessionId must never survive
       // into the next login attempt. Left false previously, a re-login could
       // immediately re-trip the same revoked session via the leftover cookie.

@@ -29,6 +29,7 @@ import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPan
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
+import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import {
   createZoneDetectionSetting,
   deleteZoneDetectionSetting,
@@ -109,6 +110,7 @@ export default function DetectionZoneMarking({
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
   const isStockCounting = isStockCountingType(activeType?.settingType);
   const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
+  const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // Door points come from the AI team (pasted, never drawn or moved).
@@ -323,6 +325,7 @@ export default function DetectionZoneMarking({
 
   const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
     name: `Zone ${index + 1}`,
+    ...(isHygiene ? hygieneZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
     threshold: '0',
@@ -511,6 +514,11 @@ export default function DetectionZoneMarking({
   const validateZoneRequiredFields = (zone, index) => {
     const nextErrors = {};
     const fields = extraFieldsFor(activeType?.settingType);
+    if (isHygiene) {
+      for (const [field, message] of Object.entries(hygieneZoneErrors(zone))) {
+        nextErrors[`zone-${index}-${field}`] = message;
+      }
+    }
     const nameLabel = activeType?.settingType === 'lineCrossingSettings' ? 'Line Name' : 'Zone Name';
     const selectedTelegramChatIds = Array.isArray(zone?.telegramChatIds)
       ? zone.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
@@ -572,6 +580,7 @@ export default function DetectionZoneMarking({
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       name: z.name,
+      ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isFireSmoke ? { fire_outside_zone_enabled: z.fireOutsideZoneEnabled ?? activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
       telegramChatId: isCheckInOut
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
@@ -1477,6 +1486,7 @@ export default function DetectionZoneMarking({
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
                 isFireSmoke={isFireSmoke}
+                isHygiene={isHygiene}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1608,6 +1618,7 @@ export default function DetectionZoneMarking({
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
                 isFireSmoke={isFireSmoke}
+                isHygiene={isHygiene}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1630,7 +1641,7 @@ export default function DetectionZoneMarking({
       {showSaveModal && activeType && !isBlurredCameraDetection && (
         <SaveDetectionAreaModal
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
-          initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
+          initialPriority={activeType.setting?.settings?.levelOfImportance || (isHygiene ? 'high' : 'moderate')}
           initialLaneName={laneNameDraft}
           initialCheckInOutMode={savedDetectionMode}
           initialFireOutsideZoneEnabled={activeType.setting?.settings?.fire_outside_zone_enabled ?? false}
@@ -1642,6 +1653,7 @@ export default function DetectionZoneMarking({
           isFireSmoke={isFireSmoke}
           isDoor={isDoor}
           initialDoorAlertMode={activeType.setting?.settings?.door_alert_mode || 'open'}
+          isHygiene={isHygiene}
           saving={saving}
       onCancel={() => setShowSaveModal(false)}
       onSubmit={handleSubmitSave}
