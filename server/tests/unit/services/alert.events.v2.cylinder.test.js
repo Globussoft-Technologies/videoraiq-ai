@@ -7,7 +7,9 @@ vi.mock("../../../core/v2/NVR/nvr.model.js", () => ({
 vi.mock("../../../core/v2/channels/channels.model.js", () => ({
   default: { findOne: vi.fn() },
 }));
-vi.mock("../../../core/v2/verifyRecipients/recipients.model.js", () => ({
+// Real query builders, mocked DB calls.
+vi.mock("../../../core/v2/verifyRecipients/recipients.model.js", async (importOriginal) => ({
+  ...(await importOriginal()),
   default: { find: vi.fn() },
 }));
 vi.mock("../../../core/v2/incidents/incidents.model.js", () => ({

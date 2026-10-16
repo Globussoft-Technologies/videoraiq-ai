@@ -8,6 +8,7 @@ import authorizedUsersModel from "./users.model.js";
 import authorizedUsers from "../authorizedUsers/authorizedUsers.model.js"
 import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
+import { syncUserRecipient, removeUserRecipients } from "../verifyRecipients/userRecipients.js";
 import path from "path";
 import axios from "axios";
 import {
@@ -425,6 +426,7 @@ class UsersService {
               employeeLocations:updatedAuthorizedChannelsData.employeeLocations,
             });
           // }
+          await syncUserRecipient(newUser);
           return res.status(201).json(
             Response.userSuccessResp("Authorized user created successfully", {newUser,authorizedChannels})
           );
@@ -453,6 +455,7 @@ class UsersService {
               departmentIds:[],
               channels:[]
             });
+          await syncUserRecipient(newUser);
           return res.status(201).json(
             Response.userSuccessResp("Authorized user created successfully", {newUser,authorizedChannels})
           );
@@ -558,6 +561,7 @@ class UsersService {
             dataToUpdate,
             { new: true }
           );
+          await syncUserRecipient(updatedUser);
 
           // 📧 Send password-updated email if password was changed
           if (newPlainPassword && updatedUser?.email) {
@@ -769,6 +773,7 @@ class UsersService {
         if (!deletedUser) {
           return res.status(404).json(Response.userFailResp("Authorized user not found"));
         }
+        await removeUserRecipients(deletedUser._id);
 
 
 
@@ -944,6 +949,7 @@ class UsersService {
     
           // Delete authorized users from DB
           const deleteResult = await authorizedUsersModel.deleteMany({ _id: { $in: userIds } });
+          await removeUserRecipients(userIds);
     
           return res.status(200).json(
             Response.userSuccessResp("Authorized users deleted successfully", { deletedCount: deleteResult.deletedCount })

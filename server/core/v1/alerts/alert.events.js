@@ -4,7 +4,7 @@ import { sendIncidentWhatsApp } from "../../../messagingService/IncidentsWhatsAp
 import TelegramService from "../../../services/telegram.service.js";
 import nvrModel from '../NVR/nvr.model.js';
 import channelsModel from '../channels/channels.model.js';
-import RecipientModel from '../verifyRecipients/recipients.model.js';
+import RecipientModel, { normalizeSeverity, selectedRecipientsQuery, subscribedRecipientsQuery } from '../verifyRecipients/recipients.model.js';
 import { Incident } from '../incidents/incidents.model.js';
 import adminModel from '../admin/admin.model.js';
 import logger from '../../../utils/logger.js';
@@ -84,6 +84,9 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     }
       // Step 4: Group alerts by recipientModel
       const groupedAlerts = matchedDetection?.id?.alerts
+    // The incident's own severity, else its detection's level of importance.
+    const alertSeverity = normalizeSeverity(incidentData?.severity ?? saved?.severity)
+      || normalizeSeverity(matchedDetection?.id?.settings?.levelOfImportance);
 
         
     // Step 5: Fetch recipient data from respective models
@@ -93,21 +96,17 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
     // Send Email
     try {
-      const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
-        RecipientModel.find({ _id: { $in: groupedAlerts }, type: 'email' })
+      // Selected on this detection, or subscribed to its type: see
+      // selectedRecipientsQuery / subscribedRecipientsQuery.
+      const [selectedRecipients, subscribedRecipients] = await Promise.all([
+        RecipientModel.find(selectedRecipientsQuery({ ids: groupedAlerts, detectionType, severity: alertSeverity }))
           .select('value -_id')
           .lean(),
-        RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})
+        RecipientModel.find(subscribedRecipientsQuery({ adminId: adminId, detectionType, severity: alertSeverity }))
           .select('value -_id')
           .lean(),
       ]);
-
-      const emailAddresses = [
-        ...new Set([
-          ...emailRecipientsFromAlerts.map(r => r.value),
-          ...emailRecipientsFromIncidentType.map(r => r.value),
-        ])
-      ];
+      const emailAddresses = [...new Set([...selectedRecipients, ...subscribedRecipients].map(r => r.value))];
 
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
       if(emailAddresses?.length && adminFlags?.emailAlertsEnabled !== false){
@@ -183,7 +182,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
     // Send WhatsApp alert (replaces SMS) to the same phone recipients.
     try {
-      const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
+      const smsRecipients = await RecipientModel.find(selectedRecipientsQuery({ ids: groupedAlerts, type: 'phone', detectionType, severity: alertSeverity }))
             .select('value -_id')
             .lean();
 

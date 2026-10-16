@@ -42,7 +42,9 @@ vi.mock("../../../core/v1/channels/channels.model.js", () => ({
   },
 }));
 
-vi.mock("../../../core/v1/verifyRecipients/recipients.model.js", () => ({
+// Real query builders, mocked DB calls.
+vi.mock("../../../core/v1/verifyRecipients/recipients.model.js", async (importOriginal) => ({
+  ...(await importOriginal()),
   default: {
     find: vi.fn(),
   },
@@ -188,9 +190,9 @@ describe("triggerAlertOnIncident", () => {
     setupChannelsChain(channelData, channelForDetections);
     nvrModel.findOne.mockResolvedValueOnce({ _id: "nvr-1", nvrName: "Main" });
     setupIncidentChain({ _id: "inc-1", personDetected: null });
-    // emailRecipientsFromAlerts
+    // selected on the detection
     setupRecipientChain([{ value: "user@a.com" }]);
-    // emailRecipientsFromIncidentType
+    // subscribed to the type
     setupRecipientChain([{ value: "user@b.com" }]);
     // smsRecipients
     setupRecipientChain([{ value: "+1234567890" }]);
@@ -210,10 +212,18 @@ describe("triggerAlertOnIncident", () => {
       "user@a.com",
       "user@b.com",
     ]);
-    expect(RecipientModel.find.mock.calls[0][0]).toEqual({
+    // Verified only, both ways: see selectedRecipientsQuery / subscribedRecipientsQuery.
+    expect(RecipientModel.find.mock.calls[0][0]).toMatchObject({
       _id: { $in: ["r-email-1", "r-phone-1"] },
       type: "email",
+      verified: true,
     });
+    expect(RecipientModel.find.mock.calls[1][0]).toMatchObject({
+      type: "email",
+      verified: true,
+      incidentTypes: { $in: ["loiteringWithoutAuth"] },
+    });
+    expect(RecipientModel.find.mock.calls[2][0]).toMatchObject({ type: "phone", verified: true });
     expect(sendIncidentWhatsApp).toHaveBeenCalledTimes(1);
     expect(sendIncidentWhatsApp.mock.calls[0][1]).toEqual(["+1234567890"]);
     // No res.status calls on the happy path.
@@ -270,7 +280,7 @@ describe("triggerAlertOnIncident", () => {
     setupChannelsChain(channelData, channelForDetections);
     nvrModel.findOne.mockResolvedValueOnce({ _id: "nvr-1" });
     setupIncidentChain({ _id: "inc-1" });
-    // Both recipient lists return the same address — Set should dedupe.
+    // Both ways return the same address — Set should dedupe.
     setupRecipientChain([{ value: "dup@test.com" }]);
     setupRecipientChain([{ value: "dup@test.com" }]);
     // smsRecipients — empty

@@ -4,6 +4,7 @@ import createDepartment from "./departments.validate.js";
 import logger from "../../../utils/logger.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
+import Recipient from "../verifyRecipients/recipients.model.js";
 class DepartmentServices{
 async create(req,res,next){
     try{
@@ -227,6 +228,10 @@ async get(req, res, next) {
             { $set: { departmentId: defaultDept._id } }
           )
       ]);
+
+      // Alert recipients only carry departments as labels: drop this one rather
+      // than move them to "default".
+      await Recipient.updateMany({ departmentIds: departmentId }, { $pull: { departmentIds: departmentId } });
 
       // Hard delete department
       await departmentsModel.deleteOne({ _id: departmentId });

@@ -12,11 +12,11 @@ export const getRecipients = async (alertType = 'email', search = '', filterBySt
   return res?.data?.body?.data?.alerts ?? [];
 };
 
-export const createRecipient = async ({ type, value, fullName, incidentTypes }) => {
+export const createRecipient = async ({ type, value, fullName, incidentTypes, departmentIds, severityByType }) => {
   const token = getAccessToken();
   const res = await axios.post(
     `${Api_url}/recipients/create?alertType=${type}`,
-    { [type]: value, fullName, incidentTypes: incidentTypes || [] },
+    { [type]: value, fullName, incidentTypes: incidentTypes || [], departmentIds: departmentIds || [], severityByType: severityByType || {} },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   return res?.data;
@@ -49,6 +49,17 @@ export const resendVerification = async ({ id, type, value }) => {
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   return res?.data?.body;
+};
+
+// The link mailed when an admin adds a user (…/verify?…&kind=user). Public: the
+// person clicking is not logged in.
+export const verifyUserEmail = async ({ value, tokenData }) => {
+  const res = await axios.post(
+    `${Api_url}/users/email-verification/verify?token=${encodeURIComponent(tokenData)}`,
+    { email: value },
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  return res?.data;
 };
 
 export const verifyRecipientOtp = async ({ type, value, tokenData }) => {

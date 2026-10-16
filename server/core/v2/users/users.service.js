@@ -8,6 +8,8 @@ import authorizedUsersModel from "./users.model.js";
 import authorizedUsers from "../authorizedUsers/authorizedUsers.model.js"
 import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
+import { isEmailVerified, consumeEmailVerification } from "./emailVerification.service.js";
+import { syncUserRecipient, removeUserRecipients } from "../../v1/verifyRecipients/userRecipients.js";
 import path from "path";
 import axios from "axios";
 import {
@@ -314,6 +316,11 @@ class UsersService {
             `An authorized user with the userName ${userName} already exists.`
             ));
         }
+        // The address must have been verified from the link mailed to it
+        // (Add User form → /users/email-verification/send).
+        if (!(await isEmailVerified(isAdminExist._id, email))) {
+            return res.send(Response.userFailResp("Verify this email address before adding the user.", "Validation Failed!"));
+        }
         
         //Checking if the role is biometric
         if(validRoles?.[0]?.roleName !== "biometric"){
@@ -451,6 +458,8 @@ class UsersService {
               employeeLocations:updatedAuthorizedChannelsData.employeeLocations,
             });
           // }
+          await consumeEmailVerification(isAdminExist._id, email);
+          await syncUserRecipient(newUser, { verified: true });
           return res.status(201).json(
             Response.userSuccessResp("Authorized user created successfully", {newUser,authorizedChannels})
           );
@@ -479,6 +488,8 @@ class UsersService {
               departmentIds:[],
               channels:[]
             });
+          await consumeEmailVerification(isAdminExist._id, email);
+          await syncUserRecipient(newUser, { verified: true });
           return res.status(201).json(
             Response.userSuccessResp("Authorized user created successfully", {newUser,authorizedChannels})
           );
@@ -557,6 +568,10 @@ class UsersService {
                 "Another authorized user with email already exists"
               ));
             }
+            // A changed address must be verified too, same as on create.
+            if (!(await isEmailVerified(existingUser.adminId, email))) {
+              return res.send(Response.userFailResp("Verify the new email address before saving.", "Validation Failed!"));
+            }
           }
           let dataToUpdate = { userName,firstName, lastName, email, profilePics ,adminId:isAdminExist?._id,roleIds};
           if (vehicleNumber !== undefined) dataToUpdate.vehicleNumber = vehicleNumber;
@@ -584,6 +599,8 @@ class UsersService {
             dataToUpdate,
             { new: true }
           );
+          if (email !== existingUser.email) await consumeEmailVerification(existingUser.adminId, email);
+          await syncUserRecipient(updatedUser, { verified: email !== existingUser.email });
 
           // 📧 Send password-updated email if password was changed
           if (newPlainPassword && updatedUser?.email) {
@@ -795,6 +812,7 @@ class UsersService {
         if (!deletedUser) {
           return res.status(404).json(Response.userFailResp("Authorized user not found"));
         }
+        await removeUserRecipients(deletedUser._id);
 
 
 
@@ -992,6 +1010,7 @@ class UsersService {
     
           // Delete authorized users from DB
           const deleteResult = await authorizedUsersModel.deleteMany({ _id: { $in: userIds } });
+          await removeUserRecipients(userIds);
     
           return res.status(200).json(
             Response.userSuccessResp("Authorized users deleted successfully", { deletedCount: deleteResult.deletedCount })

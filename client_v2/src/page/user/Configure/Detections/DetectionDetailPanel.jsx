@@ -4,6 +4,7 @@ import {
   GitCommitHorizontal, Globe, Hammer, HardHat, HeartPulse, Lightbulb, ListRestart, Package, Plus,
   ScanEye, ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
   Users, UtensilsCrossed, Waves, X, ChevronDown, Droplet, PackageSearch, PawPrint, Sparkles,
+  Check, Search,
 } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -15,8 +16,11 @@ import { useTimezone } from '../../../../context/TimezoneContext';
 import { nowInConfiguredTimezone, utcToConfiguredTimezone } from '../../../../utils/timezone';
 import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
+import { fetchDepartments } from '../../Departments/Api';
 import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
 import { isAttendanceDetectionType } from '../DetectionZoneMarking/constants';
+import { departmentLabel, departmentTitle, departmentsIn, inDepartments } from '../../Administer/recipientDepartments';
+import MultiSelect from '../../../../components/MultiSelect';
 
 // Detection types are API-driven, so use their stable setting type rather than
 // the category icon. Aliases cover the setting-type variants returned by the
@@ -161,6 +165,7 @@ function recipientId(value) {
 function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
   const [open, setOpen] = useState(false);
   const [recipients, setRecipients] = useState([]);
+  const [allDepartments, setAllDepartments] = useState([]);
   const [selectedIds, setSelectedIds] = useState(() => initialAlerts.map(recipientId).filter(Boolean));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -184,8 +189,13 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
     if (loaded || loading) return;
     setLoading(true);
     try {
-      const result = await fetchAlertRecipients({ limit: 1000, filterByStatus: 'verified' });
+      const [result, departments] = await Promise.all([
+        fetchAlertRecipients({ limit: 1000, filterByStatus: 'verified' }),
+        // Only for the filter, so a failure just leaves the recipients' own departments.
+        fetchDepartments(0, 1000).then((resp) => resp?.data?.body?.data?.data || []).catch(() => []),
+      ]);
       setRecipients(result?.recipients || []);
+      setAllDepartments(departments);
       setLoaded(true);
     } catch {
       toast.error('Failed to load recipients.');
@@ -230,10 +240,152 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
     persist(nextIds);
   };
 
-  const selectedNames = recipients
-    .filter((recipient) => selectedIds.includes(String(recipient._id)))
-    .map((recipient) => recipient.fullName || recipient.name || recipient.value)
-    .filter(Boolean);
+  // Every verified recipient can be selected here.
+  const offered = recipients;
+  // Department filter and search, only to find people. The filter last picked
+  // for this detection is remembered in this browser and restored on open.
+  // (Not derived from the selected people: a few users with many departments
+  // would pre-tick nearly every department and make the filter useless.)
+  const [deptFilter, setDeptFilter] = useState([]);
+  const [query, setQuery] = useState('');
+  const filterKey = `recipientDeptFilter:${settingId}`;
+  const changeDeptFilter = (ids) => {
+    setDeptFilter(ids);
+    try { localStorage.setItem(filterKey, JSON.stringify(ids)); } catch { /* storage blocked: filter just isn't remembered */ }
+  };
+
+  const isSelected = (recipient) => selectedIds.includes(String(recipient._id));
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (recipient) => !q
+    || [recipient.fullName, recipient.name, recipient.value].some((v) => String(v || '').toLowerCase().includes(q));
+  // The filter and search apply to everyone; selected people it hides are counted.
+  const selectedCount = offered.filter(isSelected).length;
+  const selectedRows = offered.filter((r) => isSelected(r) && inDepartments(r, deptFilter) && matchesQuery(r));
+  const hiddenSelected = selectedCount - selectedRows.length;
+  const otherRows = offered.filter((r) => !isSelected(r) && inDepartments(r, deptFilter) && matchesQuery(r));
+  // "No department" first, then every department, plus any known only from a recipient.
+  const departmentOptions = departmentsIn([
+    ...allDepartments.map((department) => ({ departmentIds: [department] })),
+    ...offered,
+  ]).map(({ key, name }) => ({ id: key, label: name }));
+  // Restore the remembered filter on open, keeping only departments that still exist.
+  useEffect(() => {
+    if (!open) { setQuery(''); return; }
+    if (!loaded) return;
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(filterKey) || '[]'); } catch { saved = []; }
+    const known = new Set(departmentOptions.map((o) => o.id));
+    setDeptFilter(Array.isArray(saved) ? saved.filter((id) => known.has(id)) : []);
+  }, [open, loaded]); // on open only, not on every change
+  // One-time pick: someone added to these departments later is not selected.
+  const selectAllShown = () => {
+    if (saving || !otherRows.length) return;
+    persist([...new Set([...selectedIds, ...otherRows.map((r) => String(r._id))])]);
+  };
+  const initialsOf = (label) => label.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+  const sectionHead = (text, aside) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 14px 6px', fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+      <span>{text}</span>
+      {aside}
+    </div>
+  );
+  const renderRow = (recipient) => {
+    const id = String(recipient._id);
+    const label = recipient.fullName || recipient.name || recipient.value || 'Recipient';
+    const checked = isSelected(recipient);
+    const secondary = recipient.value && recipient.value !== label ? recipient.value : '';
+    return (
+      <label
+        key={id}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          margin: '1px 6px',
+          padding: '7px 8px',
+          borderRadius: 9,
+          cursor: saving ? 'wait' : 'pointer',
+          background: checked ? 'rgba(59,130,246,.08)' : 'transparent',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = 'var(--bg2)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = checked ? 'rgba(59,130,246,.08)' : 'transparent'; }}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={saving}
+          onChange={() => toggleRecipient(id)}
+          style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            borderRadius: 5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1.5px solid ${checked ? 'var(--blue)' : 'var(--bd)'}`,
+            background: checked ? 'var(--blue)' : 'var(--bg1solid)',
+            color: '#fff',
+          }}
+        >
+          {checked && <Check size={11} strokeWidth={3} />}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 28,
+            height: 28,
+            flexShrink: 0,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+            color: '#fff',
+            fontSize: 10.5,
+            fontWeight: 700,
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          {initialsOf(label)}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {label}
+          </span>
+          {secondary && (
+            <span style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {secondary}
+            </span>
+          )}
+        </span>
+        <span
+          title={departmentTitle(recipient)}
+          style={{
+            flexShrink: 0,
+            maxWidth: 118,
+            padding: '2px 8px',
+            borderRadius: 999,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg2)',
+            fontSize: 10.5,
+            fontWeight: 600,
+            color: 'var(--tx2)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {departmentLabel(recipient)}
+        </span>
+      </label>
+    );
+  };
   const buttonLabel = selectedIds.length
     ? `${selectedIds.length} Recipient${selectedIds.length === 1 ? '' : 's'}`
     : 'Select Recipients';
@@ -281,67 +433,117 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
       </button>
       {open && (
         <div
+          role="dialog"
+          aria-label="Select alert recipients"
           style={{
             position: 'absolute',
             top: 42,
             right: 0,
-            width: 'min(360px, 82vw)',
-            maxHeight: 260,
-            overflowY: 'auto',
+            width: 'min(380px, 90vw)',
+            maxHeight: 460,
+            display: 'flex',
+            flexDirection: 'column',
             zIndex: 80,
             background: 'var(--bg1solid)',
             border: '1px solid var(--bd)',
-            borderRadius: 10,
-            boxShadow: '0 14px 34px rgba(15,23,42,.18)',
-            padding: 6,
+            borderRadius: 14,
+            boxShadow: '0 18px 44px rgba(15,23,42,.22)',
+            overflow: 'hidden',
           }}
         >
-          <div style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
-            Select Recipients
-          </div>
-          {loading ? (
-            <div style={{ padding: '10px', fontSize: 12, color: 'var(--tx3)' }}>Loading recipients...</div>
-          ) : recipients.length === 0 ? (
-            <div style={{ padding: '10px', fontSize: 12, color: 'var(--tx3)' }}>No recipients available</div>
-          ) : (
-            recipients.map((recipient) => {
-              const id = String(recipient._id);
-              const label = recipient.fullName || recipient.name || recipient.value || 'Recipient';
-              return (
-                <label
-                  key={id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    padding: '9px 10px',
-                    borderRadius: 8,
-                    cursor: saving ? 'wait' : 'pointer',
-                    fontSize: 12.5,
-                    color: 'var(--tx)',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(id)}
-                    disabled={saving}
-                    onChange={() => toggleRecipient(id)}
-                    style={{ cursor: saving ? 'wait' : 'pointer' }}
-                  />
-                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {label}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 14px 10px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)' }}>Alert recipients</span>
+                {selectedCount > 0 && (
+                  <span style={{ padding: '1px 8px', borderRadius: 999, background: 'rgba(59,130,246,.12)', color: 'var(--blue)', fontSize: 10.5, fontWeight: 700 }}>
+                    {selectedCount} selected
                   </span>
-                </label>
-              );
-            })
-          )}
-          {selectedNames.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--bd)', marginTop: 4, padding: '8px 10px', fontSize: 11, color: 'var(--tx3)' }}>
-              Selected: {selectedNames.slice(0, 2).join(', ')}{selectedNames.length > 2 ? ` +${selectedNames.length - 2}` : ''}
+                )}
+              </div>
+              <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx3)' }}>Emailed when this detection raises an alert</div>
             </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 7, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx3)', cursor: 'pointer' }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12, color: 'var(--tx3)' }}>Loading recipients...</div>
+          ) : offered.length === 0 ? (
+            <div style={{ padding: '28px 14px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <Users size={20} color="var(--tx3)" />
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)' }}>No verified recipients yet</span>
+              <span style={{ fontSize: 11, color: 'var(--tx3)' }}>Add and verify them on the Alert Recipients page.</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 14px 12px', borderBottom: '1px solid var(--bd)' }}>
+                <MultiSelect
+                  options={departmentOptions}
+                  value={deptFilter}
+                  onChange={changeDeptFilter}
+                  placeholder="All departments"
+                  searchPlaceholder="Search departments..."
+                  msg="No departments"
+                  inlinePanel
+                />
+                <div style={{ position: 'relative' }}>
+                  <Search size={13} color="var(--tx3)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  <input
+                    id="recipient-picker-search"
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by name or email"
+                    style={{ width: '100%', boxSizing: 'border-box', height: 34, padding: '0 10px 0 30px', borderRadius: 9, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx)', fontSize: 12, outline: 'none' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 6 }}>
+                {selectedCount > 0 && sectionHead(
+                  `Selected · ${selectedCount}`,
+                  hiddenSelected > 0 && (
+                    <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>{hiddenSelected} hidden by filter</span>
+                  ),
+                )}
+                {selectedRows.map(renderRow)}
+                {sectionHead(
+                  `${deptFilter.length ? 'In these departments' : 'Everyone else'} · ${otherRows.length}`,
+                  otherRows.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={selectAllShown}
+                      disabled={saving}
+                      style={{ border: 'none', background: 'none', padding: 0, fontSize: 11, fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: 'var(--blue)', cursor: saving ? 'wait' : 'pointer' }}
+                    >
+                      Select all ({otherRows.length})
+                    </button>
+                  ),
+                )}
+                {otherRows.length > 0
+                  ? otherRows.map(renderRow)
+                  : <div style={{ padding: '8px 14px 12px', fontSize: 12, color: 'var(--tx3)' }}>{q || deptFilter.length ? 'No one else matches this filter.' : 'Everyone is already selected.'}</div>}
+              </div>
+            </>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid var(--bd)', background: 'var(--bg2)' }}>
+            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{saving ? 'Saving...' : 'Changes save automatically'}</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ height: 30, padding: '0 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

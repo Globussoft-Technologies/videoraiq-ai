@@ -106,6 +106,30 @@ export const emitDetectionLicense = async ({ adminId, userId }) => {
   }
 };
 
+// Tell an admin's open Alert Recipients page that a recipient just verified, so
+// the row flips to Verified without a refresh. Admin-scoped event name like the
+// emitters above; only the id travels, never the address. Never throws.
+export const emitRecipientVerified = ({ adminId, recipientId }) => {
+  try {
+    if (!io || !adminId) return;
+    io.emit(`recipientVerified_${adminId}`, { recipientId: String(recipientId) });
+  } catch (e) {
+    logger.error(`emitRecipientVerified failed: ${e?.message || e}`);
+  }
+};
+
+// Tell an admin's open Add/Edit User form that the email it is waiting on was
+// just verified. Only the verification id travels (every socket receives the
+// event), never the address. Never throws.
+export const emitUserEmailVerified = ({ adminId, verificationId }) => {
+  try {
+    if (!io || !adminId) return;
+    io.emit(`userEmailVerified_${adminId}`, { id: String(verificationId) });
+  } catch (e) {
+    logger.error(`emitUserEmailVerified failed: ${e?.message || e}`);
+  }
+};
+
 // Tell connected clients only after a permission change actually stopped a
 // running detector. This is separate from the licence snapshot: snapshots are
 // also sent for grants and harmless edits, which must not show a closure modal.

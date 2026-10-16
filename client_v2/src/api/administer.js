@@ -21,6 +21,18 @@ export async function createUser(payload) {
   return unwrap(res);
 }
 
+// Add/Edit User email verification. send mails a link to the address and
+// returns { id, verified } (or the { status: 'failed', message } body).
+export async function sendUserEmailVerification(email, userId) {
+  const res = await api.post('/users/email-verification/send', { email, ...(userId ? { userId } : {}) });
+  return unwrap(res);
+}
+
+export async function getUserEmailVerificationStatus(email) {
+  const res = await api.get(`/users/email-verification/status?email=${encodeURIComponent(email)}`);
+  return unwrap(res);
+}
+
 export async function createAuthorizedUser(payload) {
   const res = await api.post('/authorizedUsers/create', payload);
   return unwrap(res);

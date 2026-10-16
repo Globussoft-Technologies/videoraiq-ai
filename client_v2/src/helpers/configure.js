@@ -145,6 +145,20 @@ export const resetDetectionThresholdsBatch = async ({ channelId, detectionSettin
   return unwrap(res);
 };
 
+const resetAdminConfiguration = async (action) => {
+  const res = await axios.post(`${Api_url}/detection-settings/${action}`, { confirm: true }, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': getAccessToken() },
+  });
+  if (res.data?.body?.status !== 'success') {
+    throw new Error(res.data?.body?.message || 'Failed to reset all detections.');
+  }
+  window.dispatchEvent(new Event('vq-detection-toggle-change'));
+  return unwrap(res);
+};
+
+export const resetAllDetections = () => resetAdminConfiguration('reset-all');
+export const resetAllCameraTypes = () => resetAdminConfiguration('reset-camera-types');
+
 /** Create a brand-new DetectionSetting for a camera that has never had this
  * type configured — same POST /detection-settings V1 uses on first save. */
 export const createDetectionSetting = async (data) => {

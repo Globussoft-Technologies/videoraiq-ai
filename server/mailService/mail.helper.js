@@ -321,7 +321,8 @@ class MailHelper {
         return sendStatus;
     }
 
-    async verifyEmail(userEmail, verificationLink) {
+    // purpose: 'recipient' (alert subscription) or 'user' (new user account).
+    async verifyEmail(userEmail, verificationLink, purpose = 'recipient') {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -329,8 +330,8 @@ class MailHelper {
                 email: config.get('sendgrid.email'),
             },
             to: userEmail,
-            subject: 'Confirm your alert subscription',
-            html: verifyEmailTemplate(verificationLink),
+            subject: purpose === 'user' ? 'Verify your email for your VideoraIQ account' : 'Confirm your alert subscription',
+            html: verifyEmailTemplate(verificationLink, purpose),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;

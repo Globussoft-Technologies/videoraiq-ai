@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart } from 'lucide-react';
+import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart, ScanLine, CameraOff, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
-import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch } from '../../../helpers/configure';
+import { useAuth } from '@/context/AuthContext';
+import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch, resetAllDetections, resetAllCameraTypes } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import MultiSelect from '../../../components/MultiSelect';
 import CameraStream from '../../../components/CameraStream';
@@ -973,7 +974,9 @@ const LIMIT = 100;
 
 export function DetectionSettingsCameraList({ onOpenCamera }) {
   const { permissions } = usePermissions();
+  const { user } = useAuth();
   const canEditDetections = permissions?.detectionSettings?.edit === true;
+  const canResetAll = Boolean(user?.adminId && !user?.memberId && canEditDetections);
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [camTypeFilter, setCamTypeFilter] = useState('');
@@ -989,6 +992,10 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [resetModal, setResetModal] = useState(null);
   const [resetSelection, setResetSelection] = useState([]);
   const [resetLoadingId, setResetLoadingId] = useState('');
+  const [resetMenuOpen, setResetMenuOpen] = useState(false);
+  const [resetAllTarget, setResetAllTarget] = useState(null);
+  const [resettingAll, setResettingAll] = useState(false);
+  const resetAllInFlight = useRef(false);
 
   const nvrsApi = useApi(() => getNvrs(0, 100), []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
@@ -1090,6 +1097,38 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
     if (resetLoadingId) return;
     setResetModal(null);
     setResetSelection([]);
+  };
+
+  const handleResetAllDetections = async () => {
+    if (!canResetAll || !resetAllTarget || resetAllInFlight.current) return;
+    const cameraTypesOnly = resetAllTarget === 'camera-types';
+    resetAllInFlight.current = true;
+    setResettingAll(true);
+    try {
+      await (cameraTypesOnly ? resetAllCameraTypes() : resetAllDetections());
+      // Clear old badges immediately; refetch also reapplies active filters.
+      channelsApi.setData(previous => previous ? {
+        ...previous,
+        channels: (previous.channels || []).map(camera => cameraTypesOnly
+          ? { ...camera, checkType: 'none' }
+          : { ...camera,
+            detections: camera.detections?.faceAuthenticationSettings ? { faceAuthenticationSettings: camera.detections.faceAuthenticationSettings } : {},
+            control: camera.detections?.faceAuthenticationSettings?.enabled ? 1 : 0,
+          }),
+      } : previous);
+      setDetectionConfirm(null);
+      setResetModal(null);
+      setResetSelection([]);
+      setLimitBlock(null);
+      setResetAllTarget(null);
+      await channelsApi.refetch({ silent: true });
+      toast.success(cameraTypesOnly ? 'Face authentication stopped. All camera types reset to None.' : 'All object detections stopped. Zones and settings have been reset.');
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || error?.message || 'Failed to reset all detections.');
+    } finally {
+      resetAllInFlight.current = false;
+      setResettingAll(false);
+    }
   };
 
   const handleConfirmResetThresholds = async () => {
@@ -1237,6 +1276,55 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             }}
           />
         </div>
+        {canResetAll && (
+          <Popover open={resetMenuOpen} onOpenChange={setResetMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="Reset configuration"
+                aria-expanded={resetMenuOpen}
+                disabled={resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))', background: resetMenuOpen ? 'var(--bg2)' : undefined }}
+              >
+                <ListRestart size={15} /> Reset
+                <ChevronDown size={14} className={`transition-transform ${resetMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[320px] max-w-[calc(100vw-24px)] rounded-2xl p-2">
+              <div className="border-b border-[var(--bd)] px-3 pb-2.5 pt-1.5">
+                <p className="text-xs font-semibold text-[var(--tx)]">Reset configuration</p>
+                <p className="mt-1 text-[11px] text-[var(--tx3)]">Applies to all cameras in your account</p>
+              </div>
+              <div className="space-y-1 py-1.5">
+                {[
+                  { target: 'detections', label: 'Reset all detections', description: 'Stop object detections and clear their zones and settings.', Icon: ScanLine },
+                  { target: 'camera-types', label: 'Reset all camera types', description: 'Stop face authentication and set camera types to None.', Icon: CameraOff },
+                ].map(({ target, label, description, Icon }) => (
+                  <button
+                    key={target}
+                    type="button"
+                    disabled={resettingAll}
+                    onClick={() => { setResetMenuOpen(false); setResetAllTarget(target); }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[var(--bg2)] focus-visible:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--blue)]/30 disabled:opacity-50"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[var(--crit)]" style={{ background: 'color-mix(in srgb, var(--crit) 9%, transparent)' }}>
+                      <Icon size={17} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-[var(--tx)]">{label}</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-[var(--tx3)]">{description}</span>
+                    </span>
+                    <ChevronRight size={14} className="shrink-0 text-[var(--tx3)]" />
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 border-t border-[var(--bd)] px-3 pb-1 pt-2.5 text-[10px] leading-relaxed text-[var(--tx3)]">
+                <Info size={12} className="shrink-0" /> Confirmation required before reset
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
         <ZoneStatusLegend />
         {/* <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
           {total} total
@@ -1287,7 +1375,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               onCheckTypeChange={handleCheckTypeChange}
               checkTypeSaving={checkTypeSavingId === camera._id}
               resetLoading={resetLoadingId === camera._id}
-              canEdit={canEditDetections}
+              canEdit={canEditDetections && !resettingAll}
             />
           ))}
         </AsyncBoundary>
@@ -1334,6 +1422,22 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         <CameraPreviewModal camera={previewCamera} onClose={() => setPreviewCamera(null)} />
       )}
 
+      <ConfirmationModal
+        open={Boolean(resetAllTarget)}
+        title={resetAllTarget === 'camera-types' ? 'Reset all camera types?' : 'Reset all detections?'}
+        message={<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {resetAllTarget === 'camera-types' ? <p>This will stop face authentication on every camera in your account and reset all camera types to None, including cameras outside the current filters.</p> : <>
+            <p>This will stop all object detections and permanently remove their saved zones and settings on every camera in your account, including cameras outside the current filters.</p>
+            <p>You will need to configure these detections again. This action cannot be undone.</p>
+          </>}
+          {resettingAll && <p role="status" aria-live="polite">{resetAllTarget === 'camera-types' ? 'Stopping face authentication and resetting camera types...' : 'Stopping detections and resetting settings...'}</p>}
+        </div>}
+        confirmLabel={resetAllTarget === 'camera-types' ? 'Reset all camera types' : 'Reset all detections'}
+        cancelLabel="Cancel"
+        loading={resettingAll}
+        onClose={() => !resettingAll && setResetAllTarget(null)}
+        onConfirm={handleResetAllDetections}
+      />
       <ConfirmationModal
         open={!!resetModal}
         title="Reset Detection"

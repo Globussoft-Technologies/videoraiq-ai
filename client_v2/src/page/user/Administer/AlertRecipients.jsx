@@ -14,8 +14,13 @@ import { AsyncBoundary } from '../../../components/States';
 import HScrollHint from '../../../components/HScrollHint';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '../../../context/PermissionContext';
+import { useSocket } from '../../../context/SocketContext';
+import { useAuth } from '../../../context/AuthContext';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import MultiSelect from '../../../components/MultiSelect';
+import { fromLegacyKey, toIncidentKey } from './recipientTypes';
+import { departmentLabel, departmentTitle, hasDepartments } from './recipientDepartments';
+import { fetchDepartments } from '../Departments/Api';
 import Pagination from '../../../components/Pagination';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
@@ -30,12 +35,6 @@ import {
   resendVerification,
 } from '../../../helpers/recipients';
 
-function toIncidentKey(detectionKey) {
-  if (detectionKey === 'personalProtectiveEquipmentSettings') {
-    return 'personProtectiveEquipment';
-  }
-  return detectionKey.replace('Settings', '');
-}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_RE = /^\p{L}[\p{L}\p{M} ]*$/u;
@@ -77,11 +76,109 @@ function Avatar({ name }) {
   );
 }
 
+const SEVERITY_OPTIONS = [
+  { id: 'low', label: 'Low', color: '#22d3ee' },
+  { id: 'moderate', label: 'Moderate', color: '#f59e0b' },
+  { id: 'high', label: 'High', color: '#ef4444' },
+];
+
+// Only the selected types' entries, minus empty ones (empty = every severity).
+const severityPayload = (incidentIds, severityByType) => Object.fromEntries(
+  incidentIds.map((id) => [id, severityByType[id] || []]).filter(([, list]) => list.length),
+);
+
+// Per selected detection type: which incident severities this recipient is
+// emailed about. No chip on = every severity for that type.
+function DetectionSeverities({ typeOptions, incidentIds, value, onChange }) {
+  if (!incidentIds.length) return null;
+  const toggle = (type, severity) => {
+    const current = value[type] || [];
+    onChange({
+      ...value,
+      [type]: current.includes(severity) ? current.filter((s) => s !== severity) : [...current, severity],
+    });
+  };
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Severity per detection</div>
+      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}>
+        {incidentIds.map((type, i) => {
+          const current = value[type] || [];
+          return (
+            <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderTop: i ? '1px solid var(--bd)' : 'none' }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {typeOptions.find((o) => o.id === type)?.label || type}
+              </span>
+              {!current.length && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>All</span>}
+              {SEVERITY_OPTIONS.map((s) => {
+                const on = current.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggle(type, s.id)}
+                    aria-pressed={on}
+                    style={{
+                      flexShrink: 0, height: 24, padding: '0 9px', borderRadius: 999, cursor: 'pointer',
+                      fontSize: 10.5, fontWeight: 600, color: on ? '#fff' : 'var(--tx2)',
+                      background: on ? s.color : 'transparent', border: `1px solid ${on ? s.color : 'var(--bd2)'}`,
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
+        Pick severities to limit a detection&apos;s emails. None picked = every severity.
+      </div>
+    </div>
+  );
+}
+
+// Departments for a recipient, as labels: they only help find them in a
+// detection's Select Recipients and never change which alerts they get.
+function DepartmentField({ value, onChange, label = 'Departments', exclude = [] }) {
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDepartments(0, 1000)
+      .then((resp) => setOptions(
+        (resp?.data?.body?.data?.data || []).map((d) => ({ id: String(d._id), label: d.departmentName })),
+      ))
+      .catch(() => toast.error('Failed to load departments'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>{label}</div>
+      <MultiSelect
+        options={options.filter((o) => !exclude.includes(o.id))}
+        value={value}
+        onChange={onChange}
+        placeholder="No department"
+        searchPlaceholder="Search departments..."
+        msg={loading ? 'Loading departments...' : 'No departments found'}
+      />
+      <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
+        Used to find this recipient on the Detections page. They don&apos;t change which alerts they get.
+      </div>
+    </div>
+  );
+}
+
 function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [incidentIds, setIncidentIds] = useState([]);
+  const [departmentIds, setDepartmentIds] = useState([]);
+  const [severityByType, setSeverityByType] = useState({});
   const [saving, setSaving] = useState(false);
 
   const typeOptions = useMemo(
@@ -119,6 +216,8 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
         value: email.trim(),
         fullName: fullName.trim(),
         incidentTypes: incidentIds,
+        departmentIds,
+        severityByType: severityPayload(incidentIds, severityByType),
       });
       if (response?.statusCode === 200 || response?.body?.status === 'success') {
         toast.success(response?.body?.message || 'Recipient added successfully');
@@ -155,6 +254,10 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
         style={{
           width: 440,
           maxWidth: '100%',
+          // Never taller than the window: the body scrolls, header and buttons stay put.
+          maxHeight: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
           background: 'var(--bg1solid)',
           border: '1px solid var(--bd2)',
           borderRadius: 16,
@@ -207,6 +310,8 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
         <div
           className="vq-recipients-modal-body"
           style={{
+            overflowY: 'auto',
+            minHeight: 0,
             padding: '18px 20px',
             display: 'flex',
             flexDirection: 'column',
@@ -270,6 +375,8 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
 
           {emailError && <div role="alert" style={{ fontSize: 11, color: 'var(--crit)', marginTop: -8 }}>{emailError}</div>}
 
+          <DepartmentField value={departmentIds} onChange={setDepartmentIds} />
+
           <div>
             <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
               Detection Types
@@ -282,7 +389,12 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
               searchPlaceholder="Search detection types..."
               msg="No detection types found"
             />
+            <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
+              Alerts of these types from every camera. With none picked, they only get alerts from detections they're selected on (Detections page).
+            </div>
           </div>
+
+          <DetectionSeverities typeOptions={typeOptions} incidentIds={incidentIds} value={severityByType} onChange={setSeverityByType} />
         </div>
 
         <div
@@ -339,10 +451,26 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
 }
 
 function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
+  // A user's row takes its name, and its Camera Access departments, from the
+  // Users page. Those can't be removed here; extra departments can be added.
+  const isUser = Boolean(recipient.userId);
   const [fullName, setFullName] = useState(recipient.fullName || '');
-  const [incidentIds, setIncidentIds] = useState(
-    Array.isArray(recipient.incidentTypes) ? recipient.incidentTypes : [],
-  );
+  const [incidentIds, setIncidentIds] = useState(() => [
+    ...new Set((Array.isArray(recipient.incidentTypes) ? recipient.incidentTypes : []).map(fromLegacyKey)),
+  ]);
+  const lockedDepartmentIds = (recipient.accessDepartmentIds || []).map(String);
+  const lockedDepartmentNames = (recipient.departmentIds || [])
+    .filter((d) => d && lockedDepartmentIds.includes(String(d._id ?? d)))
+    .map((d) => d.departmentName)
+    .filter(Boolean)
+    .join(', ');
+  const [departmentIds, setDepartmentIds] = useState(() => (recipient.departmentIds || [])
+    .filter(Boolean)
+    .map((d) => String(d?._id ?? d))
+    .filter((id) => !lockedDepartmentIds.includes(id)));
+  const [severityByType, setSeverityByType] = useState(() => Object.fromEntries(
+    Object.entries(recipient.severityByType || {}).map(([type, list]) => [fromLegacyKey(type), list]),
+  ));
   const [saving, setSaving] = useState(false);
 
   const typeOptions = useMemo(
@@ -355,19 +483,23 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
   );
 
   async function submit() {
-    if (!fullName.trim()) {
-      toast.error('Full name is required');
-      return;
-    }
-    if (!NAME_RE.test(fullName.trim())) {
-      toast.error('Full name must contain only letters and spaces');
-      return;
+    if (!isUser) {
+      if (!fullName.trim()) {
+        toast.error('Full name is required');
+        return;
+      }
+      if (!NAME_RE.test(fullName.trim())) {
+        toast.error('Full name must contain only letters and spaces');
+        return;
+      }
     }
     setSaving(true);
     try {
       const response = await updateRecipient(recipient._id, {
-        fullName: fullName.trim(),
         incidentTypes: incidentIds,
+        departmentIds,
+        ...(isUser ? {} : { fullName: fullName.trim() }),
+        severityByType: severityPayload(incidentIds, severityByType),
       });
       if (response?.status === 'success' || response?.statusCode === 200) {
         toast.success(response?.message || 'Recipient updated successfully');
@@ -426,6 +558,10 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
         style={{
           width: 440,
           maxWidth: '100%',
+          // Never taller than the window: the body scrolls, header and buttons stay put.
+          maxHeight: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
           background: 'var(--bg1solid)',
           border: '1px solid var(--bd2)',
           borderRadius: 16,
@@ -471,8 +607,9 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
 
         <div
           className="vq-recipients-modal-body"
-          style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}
+          style={{ overflowY: 'auto', minHeight: 0, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}
         >
+          {isUser ? readOnlyField('Full Name', recipient.fullName) : (
           <div>
             <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Full Name</div>
             <input
@@ -493,7 +630,16 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
               }}
             />
           </div>
+          )}
           {readOnlyField('Email Address', recipient.value)}
+
+          {isUser && readOnlyField('Departments from Camera Access (Users page)', lockedDepartmentNames || 'None')}
+          <DepartmentField
+            label={isUser ? 'More departments' : 'Departments'}
+            value={departmentIds}
+            onChange={setDepartmentIds}
+            exclude={lockedDepartmentIds}
+          />
 
           <div>
             <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
@@ -507,7 +653,12 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
               searchPlaceholder="Search detection types..."
               msg="No detection types found"
             />
+            <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
+              Alerts of these types from every camera. With none picked, they only get alerts from detections they're selected on (Detections page).
+            </div>
           </div>
+
+          <DetectionSeverities typeOptions={typeOptions} incidentIds={incidentIds} value={severityByType} onChange={setSeverityByType} />
         </div>
 
         <div
@@ -563,12 +714,29 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
   );
 }
 
+// Desktop table: NAME · EMAIL ID · DEPARTMENT · STATUS · ACTION.
+const RECIPIENT_COLS = '1.3fr 1.5fr 1fr .8fr 84px';
+
+// Rows linked to a login user: name and email come from the Users page,
+// and the row is removed with the user, not from here.
+function UserBadge({ recipient }) {
+  if (!recipient.userId) return null;
+  return (
+    <span
+      title="Linked to a user. Name, email and Camera Access departments follow the Users page."
+      style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 999, fontSize: 10, fontWeight: 600, color: 'var(--blue)', background: 'rgba(59,130,246,.12)', verticalAlign: 'middle' }}
+    >
+      User
+    </span>
+  );
+}
+
 function RecipientRow({ recipient, canEdit, canDelete, onVerify, onEdit, onDelete }) {
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1.4fr 1.6fr .8fr 84px',
+        gridTemplateColumns: RECIPIENT_COLS,
         alignItems: 'center',
         gap: 12,
         padding: '12px 16px',
@@ -579,18 +747,21 @@ function RecipientRow({ recipient, canEdit, canDelete, onVerify, onEdit, onDelet
         style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}
       >
         <Avatar name={recipient.fullName} />
-        <span
-          style={{
-            fontSize: 12.5,
-            fontWeight: 600,
-            color: 'var(--tx)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {recipient.fullName || '-'}
-        </span>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'var(--tx)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {recipient.fullName || '-'}
+            <UserBadge recipient={recipient} />
+          </div>
+        </div>
       </div>
 
       <div
@@ -603,6 +774,10 @@ function RecipientRow({ recipient, canEdit, canDelete, onVerify, onEdit, onDelet
         }}
       >
         {recipient.value}
+      </div>
+
+      <div title={departmentTitle(recipient)} style={{ fontSize: 12, color: hasDepartments(recipient) ? 'var(--tx2)' : 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {departmentLabel(recipient)}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -678,7 +853,7 @@ function RecipientRow({ recipient, canEdit, canDelete, onVerify, onEdit, onDelet
             <Pencil size={13} />
           </button>
         )}
-        {canDelete && (
+        {canDelete && !recipient.userId && (
           <button
             onClick={onDelete}
             title="Delete recipient"
@@ -730,6 +905,7 @@ function RecipientMobileCard({ recipient, canEdit, canDelete, onVerify, onEdit, 
             }}
           >
             {recipient.fullName || '-'}
+            <UserBadge recipient={recipient} />
           </div>
           <div
             style={{
@@ -741,6 +917,9 @@ function RecipientMobileCard({ recipient, canEdit, canDelete, onVerify, onEdit, 
           >
             {recipient.value}
           </div>
+          {hasDepartments(recipient) && (
+            <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx3)' }}>{departmentTitle(recipient)}</div>
+          )}
         </div>
 
         {canEdit && (
@@ -764,7 +943,7 @@ function RecipientMobileCard({ recipient, canEdit, canDelete, onVerify, onEdit, 
             <Pencil size={13} />
           </button>
         )}
-        {canDelete && (
+        {canDelete && !recipient.userId && (
           <button
             onClick={onDelete}
             title="Delete recipient"
@@ -1105,6 +1284,36 @@ export default function AlertRecipients() {
     () => getRecipients('email', debouncedSearch, statusFilter),
     [debouncedSearch, statusFilter],
   );
+
+  // Verification happens from the link in the email (another tab, or the
+  // recipient's own device). The server announces it on
+  // recipientVerified_<adminId>, so the row flips to Verified at once; the list
+  // is re-read quietly (no spinner) so counts and the status filter stay right.
+  const refetchRecipients = recipientsApi.refetch;
+  const { socket } = useSocket() || {};
+  const { user } = useAuth();
+  useEffect(() => {
+    const adminId = user?.adminId;
+    if (!socket || !adminId) return undefined;
+    const onVerified = () => refetchRecipients({ silent: true });
+    socket.on(`recipientVerified_${adminId}`, onVerified);
+    return () => socket.off(`recipientVerified_${adminId}`, onVerified);
+  }, [socket, user?.adminId, refetchRecipients]);
+
+  // Fallback for a dropped socket: while anyone is pending, re-check on
+  // returning to this tab.
+  const hasPending = Array.isArray(recipientsApi.data) && recipientsApi.data.some((r) => !r.verified);
+  useEffect(() => {
+    if (!hasPending) return undefined;
+    const refresh = () => refetchRecipients({ silent: true });
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [hasPending, refetchRecipients]);
   const typesApi = useApi(() => getDetectionTypes(), []);
 
   useEffect(() => {
@@ -1511,12 +1720,13 @@ export default function AlertRecipients() {
             </div>
 
             <div className="vq-recipients-desktop">
-              <HScrollHint minWidth={700} fadeColor="var(--bg1)">
+              <HScrollHint minWidth={920} fadeColor="var(--bg1)">
                 <div>
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1.4fr 1.6fr .8fr 84px',
+                      gridTemplateColumns: RECIPIENT_COLS,
+                      gap: 12,
                       padding: '10px 16px',
                       borderBottom: '1px solid var(--bd)',
                       fontFamily: 'var(--mono)',
@@ -1527,6 +1737,7 @@ export default function AlertRecipients() {
                   >
                     <span>NAME</span>
                     <span>EMAIL ID</span>
+                    <span>DEPARTMENT</span>
                     <span>STATUS</span>
                     <span style={{ textAlign: 'center' }}>ACTION</span>
                   </div>

@@ -1433,68 +1433,120 @@ export let motionDetectionAuthTemplate = (
   `;
 };
 
-export const verifyEmailTemplate = (verificationUrl) => {
+// Recipient email verification. Table layout + inline styles only: Gmail and
+// Outlook drop <style> blocks, which left the old version as plain text with a
+// bare link. Gradient header falls back to solid indigo where unsupported.
+export const verifyEmailTemplate = (verificationUrl, purpose = "recipient") => {
+  // "user": an admin is creating a VideoraIQ account with this address.
+  const forUser = purpose === "user";
+  const link =`${config.get("verificationLink")}${verificationUrl}`;
+  const safeLink = String(link).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const year = new Date().getFullYear();
   return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        <title>Verify Your Email</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f7fa;
-            margin: 0;
-            padding: 0;
-          }
-          .container {
-            max-width: 600px;
-            margin: 40px auto;
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          }
-          h2 {
-            color: #333333;
-          }
-          p {
-            font-size: 16px;
-            color: #555555;
-          }
-          .verify-button {
-            display: inline-block;
-            padding: 12px 24px;
-            background-color: #2e7dff;
-            color: #ffffff !important;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 16px;
-            margin: 20px 0;
-          }
-          .footer {
-            margin-top: 30px;
-            font-size: 12px;
-            color: #999999;
-            text-align: center;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h2>Email Verification</h2>
-          <p>Hello,</p>
-          <p>Please click the button below to verify your email address:</p>
-          <a href="${config.get("verificationLink")}${verificationUrl}" class="verify-button">Verify Email</a>
-          <p>This link is valid for 10 minutes. Please do not share it with anyone.</p>
-          <p>If you did not request this verification, please ignore this message.</p>
-          <div class="footer">
-            &copy; ${new Date().getFullYear()} Your Company. All rights reserved.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify your email address</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+  <!-- Inbox preview text -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+    ${forUser ? "Confirm your email so your VideoraIQ account can be created." : "Confirm your email to start receiving VideoraIQ incident alerts."} The link expires in 10 minutes.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4F6F8;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:24px 24px 18px;">
+              <img src="https://i.postimg.cc/ryCwbgMJ/Videora_IQlogo.png" alt="VideoraIQ" width="180" style="max-width:180px;height:auto;display:block;border:0;">
+            </td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td bgcolor="#4F46E5" style="padding:26px 32px;background-color:#4F46E5;background-image:linear-gradient(135deg,#3B82F6,#A855F7);color:#ffffff;">
+              <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.85;">${forUser ? "Account email verification" : "Alert recipient verification"}</p>
+              <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:700;color:#ffffff;">Verify your email address</h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 32px 8px;color:#334155;font-size:15px;line-height:1.6;">
+              <p style="margin:0 0 14px;">Hello,</p>
+              <p style="margin:0 0 14px;">${forUser
+                ? `An administrator is creating a <strong style="color:#0F172A;">VideoraIQ account</strong> for this email address.
+                Confirm it so the account can be set up.`
+                : `This email address has been added as an <strong style="color:#0F172A;">alert recipient on VideoraIQ</strong>.
+                Confirm it to start receiving incident notifications for the cameras and detections it was set up for.`}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Button -->
+          <tr>
+            <td align="center" style="padding:10px 32px 22px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" bgcolor="#4F46E5" style="border-radius:8px;background-color:#4F46E5;">
+                    <a href="${safeLink}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
+                      Verify email address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Expiry -->
+          <tr>
+            <td style="padding:0 32px 22px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;">
+                <tr>
+                  <td style="padding:14px 16px;font-size:13px;line-height:1.5;color:#475569;">
+                    &#9201; This link expires in <strong style="color:#0F172A;">10 minutes</strong>. Please don&rsquo;t share it with anyone.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:0 32px 26px;font-size:12.5px;line-height:1.6;color:#64748B;">
+              If the button doesn&rsquo;t work, copy and paste this link into your browser:<br>
+              <a href="${safeLink}" target="_blank" style="color:#4F46E5;word-break:break-all;">${safeLink}</a>
+            </td>
+          </tr>
+
+          <!-- Not you -->
+          <tr>
+            <td style="padding:0 32px 28px;font-size:12.5px;line-height:1.6;color:#64748B;">
+              Didn&rsquo;t expect this? You can safely ignore this email &mdash; ${forUser ? "no account is created" : "no alerts are sent"} until the address is verified.
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:18px 32px;background:#0F172A;font-size:12px;line-height:1.6;color:#94A3B8;">
+              <strong style="color:#ffffff;">VideoraIQ</strong> &middot; Smart surveillance by Globussoft<br>
+              This is an automated message. Please do not reply.<br>
+              &copy; ${year} Globussoft Technologies. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
 };
 
 export let genericObjectDetectionTemplate = (

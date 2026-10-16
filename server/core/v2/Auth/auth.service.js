@@ -1604,30 +1604,30 @@ return bypassUsers.find(
         logger.error("Error backfilling onboarded flag:", err?.message);
       }
 
-      // ✅ Backfill the autoEmailReports module for permission configs seeded
-      // before that module existed. Defaults follow the same shape as the role
-      // presets below: admin gets everything, write everything but delete, read
-      // view-only, and any custom role starts all-false. Only fills when the key
-      // is absent, so an admin's own later change to it is never overwritten.
-      // Guarded so it can never block login.
-      try {
-        if (adminData?._id) {
-          const autoEmailReportDefaults = {
-            adminPermission: adminConfig.autoEmailReports,
-            writePermission: writeConfig.autoEmailReports,
-            readPermission: readConfig.autoEmailReports,
+      // ✅ Backfill permission modules added after an admin's configs were
+      // seeded. Defaults follow the same shape as the role presets below: admin
+      // gets everything, write everything but delete, read view-only, and any
+      // custom role starts all-false. Only fills when the key is absent, so an
+      // admin's own later change to it is never overwritten. Guarded so it can
+      // never block login.
+      for (const moduleKey of ["autoEmailReports"]) {
+        try {
+          if (!adminData?._id) break;
+          const presetDefaults = {
+            adminPermission: adminConfig[moduleKey],
+            writePermission: writeConfig[moduleKey],
+            readPermission: readConfig[moduleKey],
           };
 
           const stalePermissions = await permissionModel.find({
             adminId: adminData._id,
-            "permissionConfig.autoEmailReports": { $exists: false },
+            [`permissionConfig.${moduleKey}`]: { $exists: false },
           });
 
           for (const perm of stalePermissions) {
             if (!perm.permissionConfig) continue;
-            perm.permissionConfig.autoEmailReports = {
-              ...(autoEmailReportDefaults[perm.permissionName] ||
-                completeConfig.autoEmailReports),
+            perm.permissionConfig[moduleKey] = {
+              ...(presetDefaults[perm.permissionName] || completeConfig[moduleKey]),
             };
             perm.markModified("permissionConfig");
             await perm.save();
@@ -1635,15 +1635,12 @@ return bypassUsers.find(
 
           if (stalePermissions.length) {
             logger.info(
-              `Backfilled autoEmailReports permissions for ${stalePermissions.length} config(s) of admin ${adminData._id}`,
+              `Backfilled ${moduleKey} permissions for ${stalePermissions.length} config(s) of admin ${adminData._id}`,
             );
           }
+        } catch (err) {
+          logger.error(`Error backfilling ${moduleKey} permissions:`, err?.message);
         }
-      } catch (err) {
-        logger.error(
-          "Error backfilling autoEmailReports permissions:",
-          err?.message,
-        );
       }
 
       // Plan is active here. If this admin's streams were previously stopped due

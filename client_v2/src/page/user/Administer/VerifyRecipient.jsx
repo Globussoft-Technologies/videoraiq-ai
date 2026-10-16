@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Loader2, Mail, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/videoraiq-logo-color.png';
-import { verifyRecipientOtp } from '@/helpers/recipients';
+import { verifyRecipientOtp, verifyUserEmail } from '@/helpers/recipients';
 
 function contactType(value) {
   return String(value || '').includes('@') ? 'email' : 'phone';
@@ -46,6 +46,8 @@ export default function VerifyRecipient() {
   const [searchParams] = useSearchParams();
   const tokenData = searchParams.get('token') || '';
   const value = searchParams.get('value') || '';
+  // kind=user: the link mailed when an admin adds a user; otherwise an alert recipient.
+  const kind = searchParams.get('kind') || '';
   const type = useMemo(() => contactType(value), [value]);
   const [state, setState] = useState('loading');
   const [message, setMessage] = useState('');
@@ -64,7 +66,9 @@ export default function VerifyRecipient() {
 
     async function verify() {
       try {
-        const response = await verifyRecipientOtp({ type, value, tokenData });
+        const response = kind === 'user'
+          ? await verifyUserEmail({ value, tokenData })
+          : await verifyRecipientOtp({ type, value, tokenData });
         const body = response?.body;
         if (response?.statusCode === 200 || body?.status === 'success') {
           setState('success');
@@ -84,7 +88,7 @@ export default function VerifyRecipient() {
     }
 
     verify();
-  }, [tokenData, type, value]);
+  }, [tokenData, type, value, kind]);
 
   const copy = stateCopy(state, type);
   const Icon = copy.Icon;

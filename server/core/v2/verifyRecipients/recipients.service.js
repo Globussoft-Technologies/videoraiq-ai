@@ -10,6 +10,24 @@ import { buildVerificationLinkMessage } from "../../../messagingService/message.
 import alertModel from "../alerts/alerts.model.js"
 import { sendVerificationSMS } from "../../../messagingService/IncidentsSMSFunction/sms.incidentsFunction.js";
 import { DetectionSetting } from "../detectionSettings/detectionSettings.model.js";
+import Department from "../departments/departments.model.js";
+import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
+import { emitRecipientVerified } from "../../../socket.js";
+
+// A recipient's departments must all be this admin's live departments.
+const ownDepartments = async (adminId, departmentIds) =>
+  !departmentIds.length
+  || (await Department.countDocuments({ _id: { $in: departmentIds }, adminId, softDelete: false })) === departmentIds.length;
+
+// A user's own recipient: the user's Camera Access departments (fixed here,
+// edited on the Users page) plus any extra ones picked on the recipient.
+// accessDepartmentIds tells the form which ones it can't remove.
+const linkedDepartments = (ownDepartments, accessDepartments) => {
+  const fixed = (accessDepartments || []).filter(Boolean);
+  const fixedIds = new Set(fixed.map((d) => String(d._id)));
+  const extra = (ownDepartments || []).filter((d) => d && !fixedIds.has(String(d._id)));
+  return { departmentIds: [...fixed, ...extra], accessDepartmentIds: [...fixedIds] };
+};
 
 class AlertService {
     async createRecipients(req, res, next) {
@@ -32,7 +50,14 @@ class AlertService {
           if (error) {
             return res.send(Response.userFailResp('Validation Failed!', error.message));
           }
-      
+          // Shared by both channels below.
+          // Departments are labels for finding people on the Detections page; no effect on alerts.
+          const departmentIds = value?.departmentIds || [];
+          if (!(await ownDepartments(isAdminExist._id, departmentIds))) {
+            return res.send(Response.userFailResp('Validation Failed!', 'One or more departments are invalid'));
+          }
+          const scope = { departmentIds, severityByType: value?.severityByType || {} };
+
           let recipientData = {};
           let token = generateToken();
           
@@ -42,7 +67,7 @@ class AlertService {
               adminId: isAdminExist._id,
               type: 'email',
               value: value.email,
-            });
+            }).collation({ locale: 'en', strength: 2 }); // any letter case: a user's own row is stored lowercase
             let verificationLink = `?token=${token}&value=${value.email}`
       
             if (existing) {
@@ -58,6 +83,7 @@ class AlertService {
               otpExpireDate: new Date(Date.now() + 10 * 60 * 1000),
               verified: false,
               incidentTypes: value?.incidentTypes || [],
+              ...scope,
             };
             mailHelper.verifyEmail(value?.email,verificationLink);
       
@@ -83,6 +109,7 @@ class AlertService {
               otpExpireDate: new Date(Date.now() + 10 * 60 * 1000),
               verified: false,
               incidentTypes: value?.incidentTypes || [],
+              ...scope,
             };
             sendVerificationSMS(verificationLink,value?.phoneNumber)
       
@@ -149,9 +176,10 @@ class AlertService {
           recipient.verified = true;
           recipient.verifyOTP = undefined;
           recipient.otpExpireDate = undefined;
-      
+
           await recipient.save();
-      
+          emitRecipientVerified({ adminId: recipient.adminId, recipientId: recipient._id });
+
           return res.send(Response.userSuccessResp("Recipient verified successfully.",recipient));
         } catch (error) {
           next(new AppError(error.message || "Failed to verify recipient", 500));
@@ -291,11 +319,24 @@ class AlertService {
       
           const [alerts, totalCount] = await Promise.all([
             RecipientModel.find(filter)
+              .populate('departmentIds', 'departmentName') // names for the list, form and picker
               .sort(sortBy)
               .skip(parseInt(skip))
               .limit(parseInt(limit)),
             RecipientModel.countDocuments(filter),
           ]);
+
+          // A user's own recipient shows the user's Camera Access departments,
+          // read live, so the Users and Alert Recipients pages can't disagree.
+          // Extra departments picked on the recipient are added (linkedDepartments).
+          const userIds = alerts.map((alert) => alert.userId).filter(Boolean);
+          const access = userIds.length
+            ? await authorizedChannelsModel.find({ userId: { $in: userIds } })
+              .select('userId departmentIds')
+              .populate('departmentIds', 'departmentName')
+              .lean()
+            : [];
+          const departmentsByUser = new Map(access.map((a) => [String(a.userId), a.departmentIds || []]));
 
           const updatedAlerts = await Promise.all(
             alerts.map(async (alert) => {
@@ -303,8 +344,10 @@ class AlertService {
                 alerts: alert._id,
               });
           
+              const doc = alert.toObject();
               return {
-                ...alert.toObject(),
+                ...doc,
+                ...(doc.userId ? linkedDepartments(doc.departmentIds, departmentsByUser.get(String(doc.userId))) : {}),
                 detectionCount: count > 0 ? count : 0,
               };
             })
@@ -356,6 +399,10 @@ class AlertService {
       
             if (!emailRecipient) {
               return res.status(404).json(Response.userFailResp("Email recipient not found"));
+            }
+            // A user's own row goes when the user is deleted (Users page).
+            if (emailRecipient.userId) {
+              return res.send(Response.userFailResp("This recipient belongs to a user. Delete the user on the Users page, or clear its alert types to stop alerts."));
             }
       
             deletedRecipient = await RecipientModel.findOneAndDelete({
@@ -431,10 +478,22 @@ class AlertService {
           if (!recipient) {
             return res.send(Response.userFailResp("Recipient not found.", "Not Found"));
           }
+          // A user's row takes its name from the user record. Its departmentIds
+          // are only the extras: Camera Access ones are added when listed.
+          if (recipient.userId) {
+            delete value.fullName;
+          }
 
           const updateFields = {};
           if (value.fullName !== undefined) updateFields.fullName = value.fullName;
           if (value.incidentTypes !== undefined) updateFields.incidentTypes = value.incidentTypes;
+          if (value.departmentIds !== undefined) {
+            if (!(await ownDepartments(isAdminExist._id, value.departmentIds))) {
+              return res.send(Response.userFailResp("Validation Failed!", "One or more departments are invalid"));
+            }
+            updateFields.departmentIds = value.departmentIds;
+          }
+          if (value.severityByType !== undefined) updateFields.severityByType = value.severityByType;
 
           if (Object.keys(updateFields).length === 0) {
             return res.send(Response.userFailResp("Nothing to update.", "Validation Failed!"));

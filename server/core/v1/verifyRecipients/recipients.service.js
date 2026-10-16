@@ -10,6 +10,7 @@ import { buildVerificationLinkMessage } from "../../../messagingService/message.
 import alertModel from "../alerts/alerts.model.js"
 import { sendVerificationSMS } from "../../../messagingService/IncidentsSMSFunction/sms.incidentsFunction.js";
 import { DetectionSetting } from "../detectionSettings/detectionSettings.model.js";
+import { emitRecipientVerified } from "../../../socket.js";
 
 class AlertService {
     async createRecipients(req, res, next) {
@@ -42,7 +43,7 @@ class AlertService {
               adminId: isAdminExist._id,
               type: 'email',
               value: value.email,
-            });
+            }).collation({ locale: 'en', strength: 2 }); // any letter case: a user's own row is stored lowercase
             let verificationLink = `?token=${token}&value=${value.email}`
       
             if (existing) {
@@ -149,9 +150,10 @@ class AlertService {
           recipient.verified = true;
           recipient.verifyOTP = undefined;
           recipient.otpExpireDate = undefined;
-      
+
           await recipient.save();
-      
+          emitRecipientVerified({ adminId: recipient.adminId, recipientId: recipient._id });
+
           return res.send(Response.userSuccessResp("Recipient verified successfully.",recipient));
         } catch (error) {
           next(new AppError(error.message || "Failed to verify recipient", 500));
@@ -357,6 +359,10 @@ class AlertService {
             if (!emailRecipient) {
               return res.status(404).json(Response.userFailResp("Email recipient not found"));
             }
+            // A user's own row goes when the user is deleted (Users page).
+            if (emailRecipient.userId) {
+              return res.send(Response.userFailResp("This recipient belongs to a user. Delete the user on the Users page, or clear its alert types to stop alerts."));
+            }
       
             deletedRecipient = await RecipientModel.findOneAndDelete({
               adminId,
@@ -430,6 +436,10 @@ class AlertService {
           const recipient = await RecipientModel.findOne({ _id: id, adminId: isAdminExist._id });
           if (!recipient) {
             return res.send(Response.userFailResp("Recipient not found.", "Not Found"));
+          }
+          // A user's row takes its name from the user record.
+          if (recipient.userId) {
+            delete value.fullName;
           }
 
           const updateFields = {};

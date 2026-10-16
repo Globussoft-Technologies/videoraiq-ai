@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDown } from 'lucide-react';
+import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDown, Check } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
@@ -10,10 +10,13 @@ import PageLoader from '../../../components/PageLoader';
 import MultiSelect from '../../../components/MultiSelect';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import HScrollHint from '../../../components/HScrollHint';
+import SingleSelect from '../../../components/SingleSelect';
 import {
   getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers, getRoles,
   getEmployeeLocations, getNvrsForUserAccess, getChannelsForUserAccess, getDepartmentsForUserAccess,
+  sendUserEmailVerification, getUserEmailVerificationStatus,
 } from '../../../api/administer';
+import { useSocket } from '../../../context/SocketContext';
 import { getLocations } from '../../../helpers/monitoring';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
@@ -171,13 +174,34 @@ function Checkbox({ checked, onToggle, disabled }) {
   );
 }
 
-// Matches the mockup exactly: checkbox / User Name (avatar+name) / Email / Role badge / Action.
-const COL = '44px minmax(160px,1.7fr) minmax(0,1.6fr) 150px 90px';
+// checkbox / User Name (avatar+name) / Email / Role badge / Department / Action.
+const COL = '44px minmax(170px,1.5fr) minmax(170px,1.3fr) 130px minmax(140px,1fr) 90px';
+const TABLE_MIN_WIDTH = 830;
+
+// Names out of users/fetch's authorizedChannels join: populated docs or plain strings.
+const accessNames = (list, key) => (Array.isArray(list) ? list : [])
+  .map((x) => (x && typeof x === 'object' ? x[key] || x.name : x))
+  .filter(Boolean);
+
+// First name + "+N" (the full list on hover), the same summary the form's pickers show.
+function ListCell({ items, tint }) {
+  if (!items.length) return <span style={{ color: 'var(--tx3)' }}>—</span>;
+  return (
+    <span title={items.join(', ')} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 12.5, color: 'var(--tx2)' }}>
+      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{items[0]}</span>
+      {items.length > 1 && (
+        <span style={{ flexShrink: 0, fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700, color: '#fff', background: tint, borderRadius: 999, padding: '1px 7px' }}>
+          +{items.length - 1}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function ColHeaders({ allChecked, onToggleAll, showSelect }) {
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: COL,
+      display: 'grid', gridTemplateColumns: COL, gap: 10,
       padding: '12px 18px', borderBottom: '1px solid var(--bd)',
       fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
     }}>
@@ -185,6 +209,7 @@ function ColHeaders({ allChecked, onToggleAll, showSelect }) {
       <span>USER NAME</span>
       <span>EMAIL</span>
       <span>ROLE</span>
+      <span>DEPARTMENT</span>
       <span style={{ textAlign: 'right' }}>ACTION</span>
     </div>
   );
@@ -195,12 +220,13 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
   const email = userEmail(u);
   const role = userRoleName(u);
   const rc = getRoleColor(role);
+  const access = u.authorizedChannels || {};
 
   return (
     <div
       className="vq-row"
       style={{
-        display: 'grid', gridTemplateColumns: COL,
+        display: 'grid', gridTemplateColumns: COL, gap: 10,
         padding: '12px 18px', borderBottom: '1px solid var(--bd)',
         alignItems: 'center', fontSize: 13, transition: 'background .12s',
       }}
@@ -237,6 +263,8 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
           </span>
         ) : <span style={{ color: 'var(--tx3)' }}>—</span>}
       </span>
+
+      <ListCell items={accessNames(access.departmentIds, 'departmentName')} tint="#f59e0b" />
 
       <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
         {isSelf ? (
@@ -275,65 +303,6 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
 // ── Add / Edit user modal (shared) ──────────────────────────────────────────
 const ROLE_PANEL_MAX_H = 176;
 
-function RoleSelect({ roles, loading, value, onChange, invalid = false }) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef(null);
-  const activeLabel = roles.find(r => r._id === value)?.roleName || 'Select role';
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (!wrapperRef.current?.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  return (
-    <div style={{ position: 'relative' }} ref={wrapperRef}>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        style={{
-          width: '100%', boxSizing: 'border-box', height: 38, padding: '0 34px 0 12px', borderRadius: 9,
-          background: value ? 'rgba(99,102,241,.08)' : 'var(--bg2)',
-          border: `1px solid ${invalid ? 'var(--crit)' : (value ? 'rgba(99,102,241,.4)' : 'var(--bd)')}`,
-          fontSize: 13, color: value ? 'var(--tx)' : 'var(--tx3)',
-          outline: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
-        }}
-      >
-        {activeLabel}
-        <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-      </button>
-      {/* Opens downward, anchored to the trigger — both modes now render the
-          Camera Access rows below this field, so there is room underneath. */}
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50,
-          maxHeight: ROLE_PANEL_MAX_H, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-          borderRadius: 10, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5,
-        }}>
-          {loading ? (
-            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--tx3)' }}>Loading roles…</div>
-          ) : roles.map(r => (
-            <div
-              key={r._id}
-              onClick={() => { onChange(r._id); setOpen(false); }}
-              style={{
-                padding: '8px 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer',
-                background: value === r._id ? 'var(--blue)' : 'transparent',
-                color: value === r._id ? '#fff' : 'var(--tx)',
-              }}
-            >
-              {r.roleName}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const isEdit = mode === 'edit';
   const initialFirst = isEdit ? (user.firstName || '') : '';
@@ -343,6 +312,61 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName]   = useState(initialLast);
   const [email, setEmail]       = useState(isEdit ? (user.email || userEmail(user)) : '');
+
+  // A new (or changed) address must be confirmed from the link mailed to it
+  // before the user can be saved; the server enforces the same rule.
+  const originalEmail = isEdit ? String(user.email || userEmail(user) || '') : '';
+  const typedEmail = email.trim().toLowerCase();
+  const needsVerify = typedEmail !== originalEmail.trim().toLowerCase();
+  const [verify, setVerify] = useState({ email: '', id: null, state: 'idle' }); // idle | sending | pending | verified
+  const verifyState = verify.email === typedEmail ? verify.state : 'idle';
+  const emailVerified = !needsVerify || verifyState === 'verified';
+
+  const sendVerification = async () => {
+    if (!EMAIL_RE.test(typedEmail) || hasEmailEmoji(typedEmail)) {
+      setErrors(prev => ({ ...prev, email: 'Enter a valid email address' }));
+      return;
+    }
+    setVerify({ email: typedEmail, id: null, state: 'sending' });
+    try {
+      const result = await sendUserEmailVerification(typedEmail, isEdit ? user._id : undefined);
+      if (result?.status === 'failed') {
+        setVerify({ email: typedEmail, id: null, state: 'idle' });
+        setErrors(prev => ({ ...prev, email: result.message || 'Could not send the verification email' }));
+        return;
+      }
+      setVerify({ email: typedEmail, id: result?.id || null, state: result?.verified ? 'verified' : 'pending' });
+      setErrors(prev => ({ ...prev, email: undefined }));
+      if (!result?.verified) sonnerToast.success(`Verification email sent to ${typedEmail}`);
+    } catch (err) {
+      setVerify({ email: typedEmail, id: null, state: 'idle' });
+      sonnerToast.error(apiError(err, 'Could not send the verification email'));
+    }
+  };
+
+  // The server announces each verification on userEmailVerified_<adminId>
+  // (only the verification id travels). Fallback for a dropped socket:
+  // re-check when this tab regains focus.
+  const { socket } = useSocket() || {};
+  const { user: me } = useAuth();
+  useEffect(() => {
+    if (verifyState !== 'pending') return undefined;
+    const markVerified = () => setVerify(v => ({ ...v, state: 'verified' }));
+    const onVerified = (p) => { if (p?.id && p.id === verify.id) markVerified(); };
+    const recheck = async () => {
+      try {
+        const result = await getUserEmailVerificationStatus(verify.email);
+        if (result?.verified) markVerified();
+      } catch { /* the next focus or the socket will catch it */ }
+    };
+    const channel = me?.adminId ? `userEmailVerified_${me.adminId}` : null;
+    if (socket && channel) socket.on(channel, onVerified);
+    window.addEventListener('focus', recheck);
+    return () => {
+      if (socket && channel) socket.off(channel, onVerified);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [verifyState, verify.id, verify.email, socket, me?.adminId]);
   const [roleId, setRoleId]     = useState(isEdit ? (user.roleIds?._id || user.roleIds || '') : '');
 
   /* Existing camera access for this user. users/fetch joins the authorizedChannels
@@ -485,6 +509,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     if (!email.trim())                     e.email = 'Email is required';
     else if (hasEmailEmoji(email))         e.email = EMAIL_EMOJI_ERROR;
     else if (!EMAIL_RE.test(email.trim())) e.email = 'Enter a valid email address';
+    else if (!emailVerified)               e.email = 'Verify this email address before saving';
 
     if (!roleId) e.roleId = 'Select a role for this user';
 
@@ -641,6 +666,31 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                 invalid={!!errors.email}
                 autoComplete="off"
               />
+              {needsVerify && EMAIL_RE.test(typedEmail) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 11.5, flexWrap: 'wrap' }}>
+                  {verifyState === 'verified' ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--ok)', fontWeight: 600 }}>
+                      <Check size={13} strokeWidth={2.6} /> Email verified
+                    </span>
+                  ) : verifyState === 'pending' ? (
+                    <>
+                      <span style={{ color: 'var(--warn)' }}>Waiting for verification — check the inbox</span>
+                      <button type="button" onClick={sendVerification} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--blue)', fontWeight: 600, cursor: 'pointer', fontSize: 11.5 }}>
+                        Resend
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={sendVerification}
+                      disabled={verifyState === 'sending'}
+                      style={{ height: 26, padding: '0 10px', borderRadius: 7, border: '1px solid rgba(99,102,241,.45)', background: 'rgba(99,102,241,.08)', color: 'var(--blue)', fontWeight: 600, fontSize: 11.5, cursor: verifyState === 'sending' ? 'wait' : 'pointer' }}
+                    >
+                      {verifyState === 'sending' ? 'Sending…' : 'Verify email'}
+                    </button>
+                  )}
+                </div>
+              )}
               <FieldError>{errors.email}</FieldError>
             </div>
           </div>
@@ -670,15 +720,18 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             </div>
           </div>
 
+
           <div style={{ height: 1, background: 'linear-gradient(90deg,var(--bd),rgba(99,102,241,.35),var(--bd))' }} />
 
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>Assign Role to the user *</FieldLabel>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Assign the correct role permissions to this user.</div>
-              <RoleSelect
-                roles={roles}
+              <SingleSelect
+                options={roles.map(r => ({ id: r._id, label: r.roleName }))}
                 loading={rolesLoading}
+                loadingText="Loading roles…"
+                placeholder="Select role"
                 value={roleId}
                 onChange={(v) => { setRoleId(v); setErrors(prev => (prev.roleId ? { ...prev, roleId: undefined } : prev)); }}
                 invalid={!!errors.roleId}
@@ -868,7 +921,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
 }
 
 // ── Bulk "Assign Role" trigger + dropdown (selected-users toolbar) ─────────
-// Same 5-visible-row scroll behavior as RoleSelect (ROLE_PANEL_MAX_H), just a
+// Same 5-visible-row scroll behavior as SingleSelect (ROLE_PANEL_MAX_H), just a
 // button trigger instead of a form field, since this isn't bound to one user.
 function BulkAssignRoleButton({ roles, rolesLoading, disabled, onAssign }) {
   const [open, setOpen] = useState(false);
@@ -1209,7 +1262,7 @@ export default function UsersPage() {
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
         {/* Horizontal scroll on narrow screens, with edge fades hinting swipeability. */}
-        <HScrollHint minWidth={660} fadeColor="var(--bg1)">
+        <HScrollHint minWidth={TABLE_MIN_WIDTH} fadeColor="var(--bg1)">
           <div>
             <ColHeaders allChecked={allChecked} onToggleAll={toggleAll} showSelect={canSelect} />
 
