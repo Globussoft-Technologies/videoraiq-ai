@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
   TYPE_MAP,
@@ -1265,6 +1266,36 @@ const BoxPackingDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema.clone() }),
 );
 
+const hygieneCategoryField = (defaultValue) => ({
+  type: [{ type: String, enum: HYGIENE_CATEGORIES }],
+  default: defaultValue,
+  validate: {
+    validator: (value) => value == null || (value.length > 0 && new Set(value).size === value.length),
+    message: "hygiene_categories must contain at least one unique hygiene category",
+  },
+});
+const hygieneNumericFields = {
+  hygiene_interval_sec: { type: Number, min: 1 },
+  hygiene_min_confidence: { type: Number, min: 0, max: 1 },
+  hygiene_cooldown_sec: { type: Number, min: 0 },
+};
+const HygieneSanitationFoodSafetyDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+HygieneSanitationFoodSafetyDetectionSchema.add({
+  hygiene_categories: hygieneCategoryField([...HYGIENE_CATEGORIES]),
+  ...Object.fromEntries(Object.entries(hygieneNumericFields).map(([field, definition]) => [
+    field, { ...definition, default: HYGIENE_DEFAULTS[field] },
+  ])),
+  trigger_notification: { type: Boolean, default: true },
+});
+HygieneSanitationFoodSafetyDetectionSchema.path("zone_configs").schema.add({
+  hygiene_categories: hygieneCategoryField(undefined),
+  ...hygieneNumericFields,
+});
+const HygieneSanitationFoodSafetyDetectionSetting = DetectionSetting.discriminator(
+  "hygieneSanitationFoodSafetyDetectionSettings",
+  new mongoose.Schema({ settings: HygieneSanitationFoodSafetyDetectionSchema }),
+);
+
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
@@ -1673,4 +1704,5 @@ export {
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
+  HygieneSanitationFoodSafetyDetectionSetting,
 };

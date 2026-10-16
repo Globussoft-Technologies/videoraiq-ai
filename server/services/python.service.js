@@ -7,6 +7,7 @@ import getStreamingUrl, {
 import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
+import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../constants/hygieneDetection.js";
 import {
   DETECTION_MODES_MAP,
   DS_DETECTOR_BY_MODE,
@@ -39,6 +40,27 @@ const appendIndustrialDetectors = (
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === "hygieneSanitationFoodSafetyDetectionSettings") {
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0])
+          ? [zones]
+          : zones || [];
+        polygons.forEach((polygon, index) => {
+          const config = plainZoneConfig(configs[index]) || {};
+          detectors.push({
+            name,
+            zones: [polygon],
+            zone_name: config.name ?? stockSettings.zone_name ?? `Zone ${index + 1}`,
+            severity: severity ?? "high",
+            trigger_notification: stockSettings.trigger_notification ?? true,
+            hygiene_categories: config.hygiene_categories ?? stockSettings.hygiene_categories ?? [...HYGIENE_CATEGORIES],
+            ...Object.fromEntries(Object.entries(HYGIENE_DEFAULTS).map(([field, fallback]) => [
+              field, config[field] ?? stockSettings[field] ?? fallback,
+            ])),
+          });
+        });
+        continue;
+      }
       if (name === "deskSolarShoulderDetectionSettings") {
         // DS takes only name/capacity/threshold_sec per zone; the stored
         // Telegram and alert-window fields stay on our side.

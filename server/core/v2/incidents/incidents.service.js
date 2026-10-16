@@ -76,6 +76,7 @@ import {
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,
+  HygieneSanitationFoodSafetyDetectionIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
 import { applyDoorEpisodePost, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
@@ -124,6 +125,7 @@ const modelMap = {
   blurredCameraDetection: BlurredCameraDetectionIncident,
   deskSolarShoulderDetection: DeskSolarShoulderDetectionIncident,
   boxPackingDetection: BoxPackingDetectionIncident,
+  hygieneSanitationFoodSafetyDetection: HygieneSanitationFoodSafetyDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -369,6 +371,10 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
+      const hygieneValidation = incidentsValidate.validateHygieneIncident(req.body);
+      if (hygieneValidation.error) {
+        return res.status(400).json(Response.validationFailResp(hygieneValidation.error.message, "Validation Failed!"));
+      }
       const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData } =
         req.body;
       // const userId = req?.verified?.userData?.user_id;
@@ -4794,6 +4800,10 @@ console.log(result,'result');
       next,
       "spillsDirtyMessyAreasDetection",
     );
+  }
+
+  async getHygieneSanitationFoodSafetyDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "hygieneSanitationFoodSafetyDetection");
   }
 
   async getBoxPackingDetectionLogs(req, res, next) {

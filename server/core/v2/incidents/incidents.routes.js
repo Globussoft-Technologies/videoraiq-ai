@@ -144,6 +144,11 @@ router.get(
   incidentsController.getSpillsDirtyMessyAreasDetectionLogs,
 );
 router.get(
+  "/logs/hygiene-sanitation-food-safety-detection",
+  viewAccessCheck,
+  incidentsController.getHygieneSanitationFoodSafetyDetectionLogs,
+);
+router.get(
   "/logs/loading-unloading-stock-counting-detection/numbers",
   viewAccessCheck,
   incidentsController.getLoadingUnloadingStockCountingVehicleNumbers,

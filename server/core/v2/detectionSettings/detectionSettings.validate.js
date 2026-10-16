@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 import {
   WEEKDAYS as weekdays,
   findScheduleConflict,
@@ -127,6 +128,21 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateHygieneSettings(settingType, settings = {}) {
+    if (settingType !== "hygieneSanitationFoodSafetyDetectionSettings") return { error: null };
+    const fields = {
+      hygiene_categories: Joi.array().items(Joi.string().valid(...HYGIENE_CATEGORIES)).min(1).unique(),
+      hygiene_interval_sec: Joi.number().min(1),
+      hygiene_min_confidence: Joi.number().min(0).max(1),
+      hygiene_cooldown_sec: Joi.number().min(0),
+    };
+    return Joi.object({
+      ...fields,
+      trigger_notification: Joi.boolean(),
+      zone_configs: Joi.array().items(Joi.object(fields).unknown(true)),
+    }).unknown(true).validate(settings, { convert: false });
+  }
+
   createDetectionSettingsValidation(body) {
     const schema = Joi.object().keys({
       name: Joi.string().required(),

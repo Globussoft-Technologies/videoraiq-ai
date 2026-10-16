@@ -1,6 +1,7 @@
 // models/incident.js
 
 import mongoose from 'mongoose';
+import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 const { Schema, model } = mongoose;
 const options = { discriminatorKey: 'incidentType', collection: 'incidents' ,timestamps: true };
@@ -567,6 +568,27 @@ const SpillsDirtyMessyAreasDetectionIncident = Incident.discriminator(
   SpillsDirtyMessyAreasDetectionSchema,
 );
 
+const HygieneSanitationFoodSafetyDetectionIncident = Incident.discriminator(
+  "hygieneSanitationFoodSafetyDetection",
+  new Schema({
+    conceptGroup: String,
+    cameraId: { type: Schema.Types.ObjectId, ref: "Channel" },
+    adminId: { type: Schema.Types.ObjectId, ref: "Admin" },
+    alertThreshold: { type: Number, default: 400 },
+    triggerNotification: { type: Boolean, default: true },
+    selectedCategories: [{ type: String, enum: HYGIENE_CATEGORIES }],
+    violationCount: { type: Number, min: 0 },
+    violations: [{
+      _id: false,
+      category: { type: String, enum: HYGIENE_CATEGORIES },
+      categoryName: String,
+      description: String,
+      confidence: { type: Number, min: 0, max: 1 },
+      severity: { type: String, enum: ["low", "medium", "moderate", "high"] },
+    }],
+  }),
+);
+
 const LoadingUnloadingStockCountingDetectionSchema = new Schema({
   // DS event identity. eventId is unique per detection event, while
   // vehicleSessionId ties all stock movements from the same vehicle visit
@@ -868,4 +890,5 @@ export  {
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,
+  HygieneSanitationFoodSafetyDetectionIncident,
 };

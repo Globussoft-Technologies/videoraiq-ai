@@ -122,6 +122,7 @@ const detectionFields = {
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
+  hygieneSanitationFoodSafetyDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

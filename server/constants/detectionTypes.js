@@ -59,6 +59,7 @@ export const DETECTION_TYPES = {
   blurredCameraDetectionSettings: "Blurred Camera Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
+  hygieneSanitationFoodSafetyDetectionSettings: "Hygiene, Sanitation & Food Safety Detection",
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
@@ -73,6 +74,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "loadingUnloadingStockCountingSettings",
   "deskSolarShoulderDetectionSettings",
   "boxPackingDetectionSettings",
+  "hygieneSanitationFoodSafetyDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -87,6 +89,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "loadingUnloadingStockCountingDetection",
   "deskSolarShoulderDetection",
   "boxPackingDetection",
+  "hygieneSanitationFoodSafetyDetection",
 ]);
 
 /**
@@ -129,6 +132,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
   loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
   boxPackingDetectionSettings: { permissionKey: "boxPackingLogs", logsConfigKey: "boxPackingLogs" },
+  hygieneSanitationFoodSafetyDetectionSettings: { permissionKey: "hygieneSanitationFoodSafetyLogs", logsConfigKey: "hygieneSanitationFoodSafetyLogs" },
   blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
   deskSolarShoulderDetectionSettings: { permissionKey: "deskSolarShoulderLogs", logsConfigKey: "deskSolarShoulderLogs" },
 });
@@ -195,6 +199,7 @@ export const TYPE_MAP = {
   blurredCameraDetectionSettings: "blurredCameraDetection",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
   boxPackingDetectionSettings: "boxPackingDetection",
+  hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -239,6 +244,7 @@ export const DETECTION_MODES_MAP = {
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
   deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
   boxPackingDetectionSettings: ["boxPackingDetectionSettings"],
+  hygieneSanitationFoodSafetyDetectionSettings: ["hygieneSanitationFoodSafetyDetectionSettings"],
 };
 
 /**
@@ -304,6 +310,7 @@ export const DS_DETECTOR_BY_MODE = {
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
+  hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
 };
 
 /**
@@ -382,6 +389,7 @@ export const DS_LOGIC_BY_MODE = {
   blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
+  hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -440,6 +448,7 @@ export const toPopulateDetections = [
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
   { path: "detections.boxPackingDetectionSettings.id" },
+  { path: "detections.hygieneSanitationFoodSafetyDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1669,3 +1678,28 @@ export const boxPackingDetectionSettings = industrialDetectionExample(
   "boxPackingDetectionSettings",
   "Box Packing Detection",
 );
+
+export const hygieneSanitationFoodSafetyDetectionSettings = {
+  ...industrialDetectionExample(
+    "hygieneSanitationFoodSafetyDetectionSettings",
+    "Hygiene, Sanitation & Food Safety Detection",
+  ),
+  settings: {
+    ...industrialDetectionExample(
+      "hygieneSanitationFoodSafetyDetectionSettings",
+      "Hygiene, Sanitation & Food Safety Detection",
+    ).settings,
+    trigger_notification: true,
+    hygiene_categories: ["handHygieneBypass", "productContact", "contaminationRisk"],
+    hygiene_interval_sec: 180,
+    hygiene_min_confidence: 0.6,
+    hygiene_cooldown_sec: 1800,
+    zone_configs: [{
+      name: "Meat Processing Area",
+      hygiene_categories: ["handHygieneBypass", "productContact", "contaminationRisk"],
+    }],
+    referencePoints: {
+      "664f89e8a9d345001ee326b1": [[[100, 120], [900, 120], [900, 700], [100, 700]]],
+    },
+  },
+};

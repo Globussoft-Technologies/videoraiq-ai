@@ -45,6 +45,7 @@ import {
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
   boxPackingDetectionSettings,
+  hygieneSanitationFoodSafetyDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -98,6 +99,7 @@ import {
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
+  HygieneSanitationFoodSafetyDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -161,6 +163,7 @@ const modelMap = {
   blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
+  hygieneSanitationFoodSafetyDetectionSettings: HygieneSanitationFoodSafetyDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -502,6 +505,11 @@ class DetectionSettingService {
               lineCrossingValidation.error.message,
             ),
           );
+      }
+
+      const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
+      if (hygieneValidation.error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
       }
 
       const doorValidation = DetectionSettingsValidation.validateDoorSettings(value.settingType, value.settings);
@@ -917,6 +925,11 @@ class DetectionSettingService {
         if (doorValidation.error) {
           return res.status(400).json(Response.userFailResp("Validation Failed", doorValidation.error.message));
         }
+      }
+
+      const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
+      if (hygieneValidation.error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
       }
 
       // Update base fields
@@ -1841,6 +1854,7 @@ class DetectionSettingService {
         blurredCameraDetectionSettings,
         deskSolarShoulderDetectionSettings,
         boxPackingDetectionSettings,
+        hygieneSanitationFoodSafetyDetectionSettings,
       };
 
       return res.status(200).json(

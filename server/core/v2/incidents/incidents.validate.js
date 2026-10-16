@@ -1,6 +1,22 @@
 import Joi from "joi";
+import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validateHygieneIncident(body) {
+    if (body?.incidentType !== "hygieneSanitationFoodSafetyDetection") return { error: null };
+    return Joi.object({
+      selectedCategories: Joi.array().items(Joi.string().valid(...HYGIENE_CATEGORIES)).unique(),
+      violationCount: Joi.number().integer().min(0),
+      violations: Joi.array().items(Joi.object({
+        category: Joi.string().valid(...HYGIENE_CATEGORIES).required(),
+        categoryName: Joi.string(),
+        description: Joi.string(),
+        confidence: Joi.number().min(0).max(1),
+        severity: Joi.string().valid("low", "medium", "moderate", "high"),
+      })),
+    }).unknown(true).validate(body, { convert: false });
+  }
+
   getChannel(body) {
     const schema = Joi.object().keys({
       channelId: Joi.string().required(),
