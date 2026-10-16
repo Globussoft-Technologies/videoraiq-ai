@@ -78,6 +78,7 @@ import {
   BoxPackingDetectionIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
+import { applyDoorEpisodePost, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
 const modelMap = {
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
@@ -407,6 +408,33 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
+      // Door open/close: a repeat alert or the resolved post updates the
+      // episode's incident (doorIncident.js); the first alert falls through
+      // and is created below. A retried post changes and notifies nothing.
+      if (incidentType === "doorDetection") {
+        normalizeDoorPost(req.body);
+        const episode = channelId
+          ? await applyDoorEpisodePost(Model, { userId, channelId, body: req.body })
+          : null;
+        if (episode) {
+          const incidentObj = { ...episode.incident.toObject(), channelName: channel?.name };
+          if (episode.applied) {
+            void sendPayloadToUser(userId, `cameradetection_${isAdminExist?._id}`, incidentObj);
+            if (triggerNotification !== false) {
+              void triggerAlertOnIncident({ detectionType: incidentType, nvrId, channelId, saved: episode.incident, adminId })
+                .catch((err) => logger.error(err));
+              void sendIncidentPush({ admin: isAdminExist, incident: incidentObj });
+            }
+          }
+          return res.status(200).json(
+            Response.userSuccessResp(episode.applied ? "Incident updated" : "Incident already processed", {
+              Incident: incidentObj,
+              duplicate: !episode.applied,
+            }),
+          );
+        }
+      }
+
       // DS can retry a delivery after a timeout. eventId is its idempotency
       // key; accepting the retry as another stock event would inflate the
       // per-vehicle box total and send the same notification twice.
@@ -492,7 +520,6 @@ class IncidentsService {
           "countVehicles",
           "genericObjectDetection",
           "lineCrossing",
-          "doorDetection"
         ].includes(incidentType)
       ) {
         // update the same document in a day
@@ -586,16 +613,6 @@ class IncidentsService {
             recentIncident.timeSeries.push({
               status: req.body?.lightDetection?.status,
               Image: req.body?.lightDetection?.Image,
-            });
-          } else if (incidentType === "doorDetection") {
-            recentIncident.timeOfIncident = req?.body?.timeOfIncident;
-            recentIncident.currentStatus =
-              req?.body?.doorDetectionPayload?.status;
-            recentIncident.currentImage =
-              req?.body?.doorDetectionPayload?.Image;
-            recentIncident.timeSeries.push({
-              status: req?.body?.doorDetectionPayload?.status,
-              Image: req?.body?.doorDetectionPayload?.Image,
             });
           } else if(incidentType === "deskAbsence") {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -730,13 +747,10 @@ class IncidentsService {
           Image: req.body?.lightDetection?.Image,
         });
       } else if (incidentType === "doorDetection") {
-        newIncident.timeOfIncident = req?.body?.timeOfIncident;
-        ((newIncident.currentStatus = req?.body?.doorDetectionPayload?.status),
-          (newIncident.currentImage = req?.body?.doorDetectionPayload?.Image));
-        newIncident.timeSeries.push({
-          status: req?.body?.doorDetectionPayload?.status,
-          Image: req?.body?.doorDetectionPayload?.Image,
-        });
+        // First post of an episode (the flat fields come in with ...req.body).
+        newIncident.timeOfIncident = req?.body?.timeOfIncident || currentTime;
+        if (req.body.isResolved) newIncident.stateEndedAt = newIncident.timeOfIncident;
+        else newIncident.lastAlertAt = newIncident.timeOfIncident;
       } else if (incidentType === "bagDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         ((newIncident.count = req?.body?.count),

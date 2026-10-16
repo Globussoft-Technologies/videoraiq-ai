@@ -669,12 +669,16 @@ const DoorDetectionSchema = new mongoose.Schema({
   },
   alertThreshold: { type: Number, default: 1 },
   videoResolution: [Number],
+  // Door points from the AI team, per camera; sent to DS unchanged.
   referencePoints: Object,
   metricType: {
     type: String,
     enum: ["gauge", "counter", "binary"],
     default: "gauge",
   },
+  // Which door state alerts once it lasts zone_configs[].threshold_sec.
+  door_alert_mode: { type: String, enum: ["open", "closed", "all"], default: "open" },
+  trigger_notification: { type: Boolean, default: true },
 });
 
 const DoorDetectionSetting = DetectionSetting.discriminator(

@@ -204,6 +204,21 @@ class DetectionSettingsValidation {
     return { error: null };
   }
 
+  // DS's door contract: alert mode open/closed/all, and each door's alert
+  // duration (zone_configs[].threshold_sec) at least one minute.
+  validateDoorSettings(settingType, settings = {}) {
+    if (settingType !== "doorDetectionSettings") return { error: null };
+    if (settings.door_alert_mode !== undefined && !["open", "closed", "all"].includes(settings.door_alert_mode)) {
+      return { error: { message: "door_alert_mode must be open, closed, or all" } };
+    }
+    const short = (Array.isArray(settings.zone_configs) ? settings.zone_configs : [])
+      .find((config) => !(Number(config?.threshold_sec) >= 60));
+    if (short) {
+      return { error: { message: `${short.name || "Each door"} needs an alert duration of at least 1 minute` } };
+    }
+    return { error: null };
+  }
+
   extractModelThresholds(settingType, modelThresholds = {}) {
     const fields = thresholdFieldsBySettingType[settingType] || [];
     const detectorKeys = [

@@ -94,15 +94,12 @@ describe("Incident discriminators", () => {
     ).rejects.toThrow();
   });
 
-  it("doorDetection requires currentStatus and validates the enum", async () => {
+  it("doorDetection validates doorStatus open/closed", async () => {
     await expect(
-      DoorStatusIncident.create(baseFields())
+      DoorStatusIncident.create(baseFields({ doorStatus: "ajar" }))
     ).rejects.toThrow();
     await expect(
-      DoorStatusIncident.create(baseFields({ currentStatus: "AJAR" }))
-    ).rejects.toThrow();
-    await expect(
-      DoorStatusIncident.create(baseFields({ currentStatus: "OPEN" }))
+      DoorStatusIncident.create(baseFields({ doorStatus: "open" }))
     ).resolves.toBeDefined();
   });
 

@@ -2694,7 +2694,10 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezo
     severity,
     description,
     Image,
-    currentStatus, // OPENED | CLOSED
+    zoneName,
+    doorStatus, // open | closed: the state that lasted too long
+    isResolved,
+    durationSec,
   } = incidentData;
 
   const getSeverityStyles = (level = "low") => {
@@ -2709,23 +2712,15 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezo
     }
   };
 
-  const getDoorStatusStyles = (status = "CLOSED") => {
-    if (status === "OPENED") {
-      return {
-        bg: "#FEE2E2",
-        text: "#B91C1C",
-        label: "OPENED",
-      };
-    }
-    return {
-      bg: "#DCFCE7",
-      text: "#15803D",
-      label: "CLOSED",
-    };
-  };
-
   const severityStyle = getSeverityStyles(severity);
-  const doorStatusStyle = getDoorStatusStyles(currentStatus);
+  const state = String(doorStatus || "").toUpperCase() || "UNKNOWN";
+  const doorStatusStyle = isResolved
+    ? { bg: "#DCFCE7", text: "#15803D", label: `RESOLVED (was ${state})` }
+    : { bg: "#FEE2E2", text: "#B91C1C", label: state };
+  const minutes = Math.floor(Number(durationSec) / 60);
+  const seconds = Math.round(Number(durationSec) % 60);
+  const duration = Number(durationSec) > 0 ? `${minutes} min${seconds ? ` ${seconds} s` : ""}` : null;
+  const imageUrl = /^https?:\/\//i.test(Image || "") ? Image : config.get("ImageView") + Image;
 
   const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
@@ -2778,7 +2773,7 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezo
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Zone:</strong> ${zone || "N/A"}
+                    <strong>Door:</strong> ${zoneName || zone || "N/A"}
                   </td>
                 </tr>
 
@@ -2792,6 +2787,12 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezo
                     <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
+${duration ? `
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>${isResolved ? "Was" : "Has been"} ${state.toLowerCase()} for:</strong> ${duration}
+                  </td>
+                </tr>` : ""}
 
                 <tr>
                   <td style="padding-top:10px;">
@@ -2836,7 +2837,7 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezo
                 Image
                   ? `
                 <img 
-                  src="${config.get("ImageView") + Image}"
+                  src="${imageUrl}"
                   alt="Door Incident Image"
                   width="100%"
                   style="

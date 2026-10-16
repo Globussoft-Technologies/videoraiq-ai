@@ -91,6 +91,7 @@ export const ZONE_EXTRA_FIELDS = {
   oilLeakageDetectionSettings: ['threshold'],
   sandDustWasteScrapDisposalDetectionSettings: ['threshold'],
   spillsDirtyMessyAreasDetectionSettings: ['threshold'],
+  doorDetectionSettings: ['threshold'],
 };
 
 export const PRIORITY_OPTIONS = [
@@ -100,3 +101,14 @@ export const PRIORITY_OPTIONS = [
 ];
 
 export const CAR_COMPANIES = ['Ford', 'Honda', 'Volvo', 'Maruti Suzuki', 'Mahindra'];
+
+// Door open/close (DS door contract): door points come from the AI team and
+// are pasted, never drawn; each door has a name and an alert duration.
+export const DOOR_DETECTION_SETTING_TYPE = 'doorDetectionSettings';
+export const DOOR_MIN_THRESHOLD_SEC = 60;
+export const DOOR_DEFAULT_THRESHOLD_SEC = 300;
+export const DOOR_ALERT_MODE_OPTIONS = [
+  { value: 'open', label: 'Left open' },
+  { value: 'closed', label: 'Left closed' },
+  { value: 'all', label: 'Left open or closed' },
+];

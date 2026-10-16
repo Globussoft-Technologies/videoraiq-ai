@@ -1176,7 +1176,10 @@ export default function Detections() {
         setLimitBlock({ error: licenseError, model, detectionType });
         return;
       }
-      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || err?.message || 'Failed to update detection status.');
+      // body.error carries the reason (e.g. DS: "camera … is not onboarded for door detection").
+      const body = err?.response?.data?.body;
+      const reason = typeof body?.error === 'string' && body.error ? `: ${body.error}` : '';
+      toast.error(body?.message ? `${body.message}${reason}` : err?.response?.data?.message || err?.message || 'Failed to update detection status.');
     } finally {
       setDetectionToggleLoading('');
     }

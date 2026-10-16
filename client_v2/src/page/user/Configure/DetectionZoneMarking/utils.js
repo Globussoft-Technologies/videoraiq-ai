@@ -104,6 +104,32 @@ export function allTypesFor(camera, typeLabels) {
     });
 }
 
+/**
+ * The AI team's door setup for a camera, pasted as sent:
+ * { camera_id, zones: [[[x, y], ...], ...], zone_names: [...] }.
+ * Returns { zones: [{ name, points }] } or { error }.
+ */
+export function parseDoorSetup(text, cameraId) {
+  let data;
+  try { data = JSON.parse(text); } catch { return { error: 'Paste the door setup exactly as the AI team sent it.' }; }
+  if (data?.camera_id && cameraId && String(data.camera_id) !== String(cameraId)) {
+    return { error: `This setup is for camera ${data.camera_id}, not this camera.` };
+  }
+  const raw = Array.isArray(data?.zones) ? data.zones : [];
+  const polygons = raw.length && !Array.isArray(raw[0]?.[0]) ? [raw] : raw;
+  const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((n) => Number.isFinite(n));
+  if (!polygons.length || !polygons.every((poly) => Array.isArray(poly) && poly.length >= 3 && poly.every(isPoint))) {
+    return { error: 'This setup has no valid door points.' };
+  }
+  const names = Array.isArray(data.zone_names) ? data.zone_names : [];
+  return {
+    zones: polygons.map((poly, i) => ({
+      name: String(names[i] || `Door ${i + 1}`),
+      points: poly.map(([x, y]) => ({ x, y })),
+    })),
+  };
+}
+
 export function polygonPointsAttr(points, videoW, videoH, boxW, boxH) {
   if (!videoW || !videoH) return '';
   return points.map(p => `${(p.x / videoW * boxW).toFixed(1)},${(p.y / videoH * boxH).toFixed(1)}`).join(' ');

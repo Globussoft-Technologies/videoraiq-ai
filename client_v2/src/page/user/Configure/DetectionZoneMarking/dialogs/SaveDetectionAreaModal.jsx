@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
-import { PRIORITY_OPTIONS, CAR_COMPANIES } from '../constants';
+import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_ALERT_MODE_OPTIONS, DOOR_MIN_THRESHOLD_SEC } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -32,6 +32,8 @@ export default function SaveDetectionAreaModal({
   isCheckInOut = false,
   isStockCounting = false,
   isFireSmoke = false,
+  isDoor = false,
+  initialDoorAlertMode = 'open',
   saving,
   onCancel,
   onSubmit,
@@ -50,6 +52,7 @@ export default function SaveDetectionAreaModal({
   // One line name for the whole detection (settings.zone_name) — separate from
   // each drawn zone's own name below.
   const [laneName, setLaneName] = useState(initialLaneName || '');
+  const [doorAlertMode, setDoorAlertMode] = useState(initialDoorAlertMode);
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
   // Check-In / Check-Out keeps its detection-wide mode and shares the same
   // per-zone Telegram channels and alert schedule as the other area types.
@@ -99,6 +102,8 @@ export default function SaveDetectionAreaModal({
       }
       if (extraFields.includes('threshold') && String(z.threshold ?? '').trim() === '') {
         nextErrors[`zone-${i}-threshold`] = true;
+      } else if (isDoor && Number(z.threshold) < DOOR_MIN_THRESHOLD_SEC) {
+        nextErrors[`zone-${i}-threshold`] = 'A door alert needs at least 1 minute.';
       }
       if (extraFields.includes('company') && !String(z.company ?? '').trim()) {
         nextErrors[`zone-${i}-company`] = true;
@@ -128,6 +133,7 @@ export default function SaveDetectionAreaModal({
       priority,
       zones: outZones,
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
+      ...(isDoor ? { doorAlertMode } : {}),
     });
   };
 
@@ -221,6 +227,26 @@ export default function SaveDetectionAreaModal({
                   </div>
                 )}
               </div>
+
+            {isDoor && (
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Alert when a door is</label>
+                <select
+                  value={doorAlertMode}
+                  onChange={e => setDoorAlertMode(e.target.value)}
+                  style={{
+                    width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
+                    outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  {DOOR_ALERT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--tx3)' }}>
+                  Alerts once a door stays that way for its duration, again after each further duration, and notes when it changes back.
+                </div>
+              </div>
+            )}
 
             {/* Check-In / Check-Out: Line Name + Mode share one card, Line
                 Name on top since it names the whole detection. */}

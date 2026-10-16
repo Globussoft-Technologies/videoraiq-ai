@@ -504,6 +504,11 @@ class DetectionSettingService {
           );
       }
 
+      const doorValidation = DetectionSettingsValidation.validateDoorSettings(value.settingType, value.settings);
+      if (doorValidation.error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", doorValidation.error.message));
+      }
+
       // 2. Check if admin is allowed to use this detection type
       // resolveAdminObjectId falls back to the owning channel's user_id when
       // the token carries neither a valid adminId nor a user_id. There is no
@@ -906,6 +911,11 @@ class DetectionSettingService {
                 thresholdValidation.error.message,
               ),
             );
+        }
+
+        const doorValidation = DetectionSettingsValidation.validateDoorSettings(settingType, value.settings);
+        if (doorValidation.error) {
+          return res.status(400).json(Response.userFailResp("Validation Failed", doorValidation.error.message));
         }
       }
 

@@ -2,13 +2,12 @@
  * Integration tests for IncidentsService.createIncidents — same-day UPDATE
  * branches (when a recentIncident already exists for the channel within the
  * same calendar day). The R3/R5 tests cover the "new incident" path for
- * countVehicles + genericObjectDetection + doorDetection, plus the
+ * countVehicles + genericObjectDetection, plus the
  * countPersons same-day update path. This file covers the remaining
  * same-day update branches that are still uncovered:
  *
  *   • countVehicles            — recentIncident.count + timeSeries push
  *   • genericObjectDetection   — objectsDetected + timeSeries push
- *   • doorDetection            — currentStatus/currentImage + timeSeries push
  *
  * Each test exercises 60+ lines of the "if recentIncident" block, including
  * the post-save fan-out (sendPayloadToUser + triggerAlertOnIncident gate on
@@ -50,7 +49,6 @@ const {
   Incident,
   CountVehiclesIncident,
   GenericObjectIncident,
-  DoorStatusIncident,
 } = incidents;
 const { default: IncidentsService } = await import(
   "../../../core/v1/incidents/incidents.service.js"
@@ -68,7 +66,6 @@ const { default: Channel } = await import(
 const {
   CountVehiclesSetting,
   GenericObjectDetectionSetting,
-  DoorDetectionSetting,
 } = await import(
   "../../../core/v1/detectionSettings/detectionSettings.model.js"
 );
@@ -210,52 +207,6 @@ describe("IncidentsService.createIncidents — genericObjectDetection same-day u
     // countPersons/countVehicles/Guard Present that are excluded).
     expect(triggerAlertOnIncident).toHaveBeenCalledTimes(2);
     expect(sendPayloadToUser).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("IncidentsService.createIncidents — doorDetection same-day update", () => {
-  it("updates the same day's doorDetection incident with the latest status/image and fires the alert", async () => {
-    const { admin, nvrId, channel } = await seedScene({
-      SettingModel: DoorDetectionSetting,
-      settingType: "doorDetectionSettings",
-      channelDetections: (s) => ({
-        doorDetectionSettings: { id: s._id, enabled: true },
-      }),
-    });
-
-    const buildBody = (status, Image) => ({
-      incidentType: "doorDetection",
-      incidentName: "Door state",
-      nvrId: nvrId.toString(),
-      channelId: channel._id.toString(),
-      adminId: admin._id.toString(),
-      doorDetectionPayload: { status, Image },
-      timeOfIncident: new Date(),
-    });
-
-    // DoorStatusSchema requires currentStatus to be one of OPEN/CLOSED.
-    const first = serviceCtx({ body: buildBody("CLOSED", "img/closed.jpg") });
-    await IncidentsService.createIncidents(first.req, first.res, first.next);
-    expect(first.res.statusCode).toBe(200);
-
-    const second = serviceCtx({ body: buildBody("OPEN", "img/open.jpg") });
-    await IncidentsService.createIncidents(
-      second.req,
-      second.res,
-      second.next,
-    );
-    expect(second.res.statusCode).toBe(200);
-    expect(payload(second.res).message).toBe("Incident updated successfully");
-
-    expect(await Incident.countDocuments()).toBe(1);
-    const stored = await DoorStatusIncident.findOne({
-      channelId: channel._id,
-    });
-    expect(stored.currentStatus).toBe("OPEN");
-    expect(stored.currentImage).toBe("img/open.jpg");
-    expect(stored.timeSeries).toHaveLength(2);
-    // doorDetection fires the alert pipeline.
-    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -293,37 +293,27 @@ const safetyHelmetSchema = new Schema({
 const SafetyHelmetIncident = Incident.discriminator('personalProtectiveEquipment', safetyHelmetSchema);
 
 
+// A door left open (or closed) too long, per DS's door contract. One incident
+// per door per episode: DS's alerts (every threshold) and its resolved post
+// share an eventId and update this document (see doorIncident.js).
 const DoorStatusSchema = new Schema({
-  currentStatus: {
-    type: String,
-    enum: ['OPEN', 'CLOSED'],
-    required: true
-  },
-  currentImage:{
-    type:String,
-    default:null
-  },
-
-  timeSeries: [
-    {
-      timestamp: {
-        type: Date,
-        default: Date.now
-      },
-      status: {
-        type: String,
-        enum: ['OPEN', 'CLOSED'],
-        required: true
-      },
-      Image:{type:String,default:null}
-    }
-  ],
-
+  eventId: { type: String, default: null },
+  zoneName: { type: String, default: null },
+  // The state that lasted too long; on a resolved episode, the state that ended.
+  doorStatus: { type: String, enum: ['open', 'closed'] },
+  isResolved: { type: Boolean, default: false },
+  stateSince: { type: Date, default: null },
+  // Last alert / when the door changed back (the resolved post's timeOfIncident).
+  lastAlertAt: { type: Date, default: null },
+  stateEndedAt: { type: Date, default: null },
+  thresholdSec: { type: Number, default: null },
+  durationSec: { type: Number, default: null },
+  alertCount: { type: Number, default: 1 },
+  count: { type: Number, default: 1 },
   triggerNotification: {
     type: Boolean,
     default: false
   },
-
 });
 const DoorStatusIncident = Incident.discriminator('doorDetection',DoorStatusSchema);
 

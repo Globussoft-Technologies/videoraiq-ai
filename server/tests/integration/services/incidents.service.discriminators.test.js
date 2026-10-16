@@ -3,7 +3,7 @@
  * incidents.service.test.js to cover unauthorizedAccess, crowdDetection,
  * vehicleDetection, deskAbsence, and bagDetection. Each one is a brand-new
  * insert (the same-day update list only includes countPersons / countVehicles
- * / genericObjectDetection / doorDetection).
+ * / genericObjectDetection).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import mongoose from "mongoose";

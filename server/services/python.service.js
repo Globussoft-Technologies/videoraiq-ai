@@ -185,6 +185,40 @@ const buildBlurredCameraDetector = (severity, settings = {}) => ({
   trigger_notification: settings.trigger_notification ?? true,
 });
 
+// DS door contract: `zones` are the door points the AI team gave for this
+// camera, sent unchanged; one zone_config { name, threshold_sec } per door, in
+// the same order. Refused here (not by DS) when that can't hold.
+export const buildDoorDetector = (zones, zone_configs, severity, settings = {}) => {
+  const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];
+  const configs = (Array.isArray(zone_configs) ? zone_configs : []).map(plainZoneConfig);
+  if (!polygons.length) {
+    throw new Error("Door detection has no door points for this camera yet. The AI team sets each door camera up first.");
+  }
+  if (configs.length !== polygons.length) {
+    throw new Error(`Door detection needs a name and duration for each door (${polygons.length} doors, ${configs.length} configured).`);
+  }
+  const short = configs.find((config) => !(Number(config?.threshold_sec) >= 60));
+  if (short) throw new Error(`${short?.name || "Each door"} needs an alert duration of at least 1 minute.`);
+  return {
+    name: "doorDetectionSettings",
+    zones: polygons,
+    zone_configs: configs.map(({ name, threshold_sec }) => ({ name, threshold_sec: Number(threshold_sec) })),
+    door_alert_mode: ["open", "closed", "all"].includes(settings.door_alert_mode) ? settings.door_alert_mode : "open",
+    severity: severity || "moderate",
+    trigger_notification: settings.trigger_notification ?? true,
+  };
+};
+
+// DS explains a refusal in `detail` (e.g. "camera <id> is not onboarded for
+// door detection"); show that instead of axios's "status code 400".
+const withDsDetail = (error) => {
+  const detail = error?.response?.data?.detail;
+  // 422s carry FastAPI's list of { loc, msg }; 400s a plain string.
+  const text = Array.isArray(detail) ? detail.map((d) => d?.msg || JSON.stringify(d)).join("; ") : detail;
+  if (typeof text === "string" && text) error.message = text;
+  return error;
+};
+
 const pickDetectorThresholds = (detectorName, settings = {}) => {
   const fields = THRESHOLD_FIELDS_BY_DETECTOR[detectorName] || [];
 
@@ -755,6 +789,10 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("door")) {
+        detectors.push(buildDoorDetector(zones, zone_configs, severity, confidence_thresholds));
+      }
+
       appendIndustrialDetectors(detectors, detection_modes, {
         zones,
         zone_configs,
@@ -805,7 +843,7 @@ class PythonService {
         "Error starting detection:",
         error?.response?.data || error.message,
       );
-      throw error;
+      throw withDsDetail(error);
     }
   }
 
@@ -1040,6 +1078,10 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("door")) {
+        detectors.push(buildDoorDetector(zones, zone_configs, severity, confidence_thresholds));
+      }
+
       appendIndustrialDetectors(detectors, detection_modes, {
         zones,
         zone_configs,
@@ -1093,7 +1135,7 @@ class PythonService {
         "Error updating detection:",
         error?.response?.data || error.message,
       );
-      throw error;
+      throw withDsDetail(error);
     }
   }
 
@@ -1171,7 +1213,18 @@ class PythonService {
       line_crossing_settings,
       vehicle_check_in_out_settings,
     };
-    return await this.updateNewDetection(payload);
+    try {
+      return await this.updateNewDetection(payload);
+    } catch (error) {
+      // Door contract: DS answers 400 to an update when door detection isn't
+      // running on the camera; the fix it asks for is POST /stream.
+      if (type !== "doorDetectionSettings" || error?.response?.status !== 400) throw error;
+      return await this.handleDetectionStartStop(
+        channel, admin_id, true, type, zones, zone_configs, videoResolution,
+        obstruction_threshold_sec, severity, confidence_thresholds, line_crossing_settings,
+        vehicle_check_in_out_settings,
+      );
+    }
   }
 
   /**
