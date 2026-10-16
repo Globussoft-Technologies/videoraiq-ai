@@ -26,7 +26,7 @@ import { validateStationToken } from "./core/v2/measurements/stationToken.middle
 // at all?". A client on zero cameras has bought nothing, so the apps freeze with
 // a contact-support message rather than running unrestricted — the policy lives
 // here so v1 and v2 cannot drift on it.
-const getCameraLimitSnapshot = async ({ adminId, userId }) => {
+export const getCameraLimitSnapshot = async ({ adminId, userId }) => {
   const admin = adminId
     ? await adminModel.findById(adminId).select("purchasedCameras user_id").lean()
     : await adminModel.findOne({ user_id: userId }).select("purchasedCameras user_id _id").lean();
@@ -50,7 +50,7 @@ const getCameraLimitSnapshot = async ({ adminId, userId }) => {
 // each one's camera allocation, and how many cameras are running it now. Same
 // shape the /client-config/license endpoint returns, so the frontend can treat
 // a pushed update and a fetched one identically.
-const getDetectionLicenseSnapshot = async ({ adminId, userId }) => {
+export const getDetectionLicenseSnapshot = async ({ adminId, userId }) => {
   const state = await getLicenseState({ adminId, userId });
   if (!state.resolved) return null;
   return {
@@ -163,6 +163,7 @@ export const initSocket = (server) => {
     try {
       const secret = config.get("jwt.secretKey"); // or process.env.JWT_SECRET
       const decoded = jwt.verify(token, secret);
+      if (decoded.tokenType === 'mobile-embed') return next(new Error('Embedded pages use HTTP session checks'));
       socket.user = decoded; // Attach decoded payload (e.g., user ID/email)
       if (decoded?.tokenType === "raspberry-pi") {
         const { claims } = await validateStationToken(token);

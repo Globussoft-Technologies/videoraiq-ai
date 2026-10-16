@@ -47,6 +47,8 @@ import faceImagesRoutes from "../../core/v2/faceImages/faceImages.routes.js";
 import telegramRoutes from "../../core/v2/telegram/telegram.routes.js";
 import clientConfigRoutes from "../../core/v2/clientConfig/clientConfig.routes.js";
 import logsConfigurationRoutes from "../../core/v2/logsConfiguration/logsConfiguration.routes.js";
+import mobileScreensRoutes from "../../core/v2/mobileScreens/mobileScreens.routes.js";
+import mobileAccessRoutes from "../../core/v2/mobileAccess/mobileAccess.routes.js";
 import videoRecordsRoutes from "../../core/v2/videoRecords/videoRecords.routes.js";
 import sessionRoutes from "../../core/v2/sessions/sessions.routes.js";
 import pushTokensRoutes from "../../core/v2/pushTokens/pushTokens.routes.js";
@@ -127,6 +129,8 @@ router.use("/push-tokens", verifyToken, pushTokensRoutes);
 // secret — mount WITHOUT verifyToken, the router guards itself.
 router.use("/email-monitoring", emailMonitoringRoutes);
 router.use("/logs-configuration", verifyToken, logsConfigurationRoutes);
+router.use("/mobile-screens", verifyToken, mobileScreensRoutes);
+router.use("/mobile-access", mobileAccessRoutes);
 router.use("/video-records", verifyToken, videoRecordsRoutes);
 // Supports the normal web token and the approved station Bearer token.
 router.use("/measurement-incidents", verifyMeasurementAuth, measurementIncidentsRoutes);

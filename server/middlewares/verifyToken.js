@@ -62,6 +62,14 @@ async function verifyToken(req, res, next) {
     // Verify the token
     jwt.verify(token, jwtSecret, async (_error, decoded) => {
       if (decoded) {
+        if (decoded.tokenType === 'mobile-embed') {
+          try {
+            const { enforceEmbeddedAccess } = await import('../core/v2/mobileAccess/mobileAccess.service.js');
+            if (!await enforceEmbeddedAccess(req, decoded)) return res.status(401).json(Response.tokenFailResp('Embedded access expired or revoked'));
+          } catch {
+            return res.status(401).json(Response.tokenFailResp('Embedded access unavailable'));
+          }
+        }
         let roleWithPermission = null;
         let authorizedChannel = null;
         // Determine the route access
