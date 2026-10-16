@@ -94,6 +94,11 @@ const adminSchema = new mongoose.Schema({
       solderAlertLogs: { type: Boolean, default: false },
       operatorReports: { type: Boolean, default: false },
     },
+    boxPackingQc: {
+      boxPacking: { type: Boolean, default: true },
+      packingAlertLogs: { type: Boolean, default: true },
+      boxPackingReports: { type: Boolean, default: true },
+    },
   },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).

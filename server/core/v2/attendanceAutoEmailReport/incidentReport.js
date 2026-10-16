@@ -1,4 +1,5 @@
 import axios from "axios";
+import { packingReportData, formatPackingReportDuration } from "./packingReportData.js";
 import config from "config";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
@@ -53,6 +54,9 @@ const showVehicleNumberFor = (details) => (
 
 const rowFromIncident = (item, timezone) => ({
   id: String(item._id),
+  recordedAt: item.timeOfIncident,
+  cameraId: String(item.cameraId?._id || item.cameraId || item.channelData?._id || item.channelId || ''),
+  nvrId: String(item.nvrId?._id || item.nvrId || item.nvrData?._id || ''),
   incidentType: item.incidentType,
   incident: asText(item.incidentName || humanize(item.incidentType)),
   detection: humanize(item.incidentType),
@@ -69,10 +73,15 @@ const rowFromIncident = (item, timezone) => ({
   image: imageUrl(item.Image),
   boxId: item.boxId || '',
   completedBy: item.completedBy || '',
-  zones: Array.isArray(item.zones) ? item.zones : [],
+  zones: Array.isArray(item.zones) ? item.zones : Object.entries(item.zones || {}).map(([zone, data]) => ({ ...data, zone })),
   detectedVia: item.detectedVia || '',
   confirmationReason: item.confirmationReason || '',
 });
+
+const isPackingReviewRow = (row) => (
+  row.severity === "moderate" || row.severity === "high" || /review|variance|awaiting|new/i.test(`${row.confirmationReason || ""} ${row.status || ""}`)
+);
+
 
 export async function incidentRowsForReport(report, summary) {
   const admin = await Admin.findById(report.adminId).select("user_id").lean();
@@ -111,10 +120,19 @@ export async function incidentRowsForReport(report, summary) {
   ]);
 
   const rows = incidents.map((item) => rowFromIncident(item, summary.timezone));
+  // Keep the selected Box Packing report tab with the details. In particular,
+  // review schedules must not fall back to the full total-report dataset.
+  const reportType = report.reportType || "total";
+  const packingOnly = incidentTypes.length === 1 && incidentTypes[0] === "boxPackingDetection";
+  const selectedRows = rows.filter((row) => !packingOnly || reportType !== "review" || isPackingReviewRow(row));
+  const packing = packingOnly ? packingReportData(selectedRows, reportType, summary.timezone) : null;
   return {
     ...summary,
-    rows,
-    rowCount: rows.length,
+    rows: selectedRows,
+    rowCount: packing ? packing.records.length : selectedRows.length,
+    ...(packing ? { packingReport: true, packingRecords: packing.records, packingColumns: packing.columns, packingSummary: packing.summary } : {}),
+    reportType,
+    aggregated: false,
     limited: incidents.length >= MAX_ROWS,
     showVehicleNumber: incidents.some(vehicleNumberRequired),
   };
@@ -135,31 +153,28 @@ const drawReportHeader = (document, details, suffix) => {
     .text(`${details.label}  |  ${details.rowCount} incident${details.rowCount === 1 ? "" : "s"}  |  ${details.timezone}`, 28, 42);
 };
 
-const isBoxPackingDetails = (details) => details.rows.some((row) => row.incidentType === "boxPackingDetection" || row.boxId);
+const isBoxPackingDetails = (details) => details.packingReport || (details.rows.length > 0 && details.rows.every((row) => row.incidentType === "boxPackingDetection" || row.boxId));
 
 const packingRows = (details) => details.rows.map((row) => {
-  const zone = row.zones?.[0] || {};
-  const review = row.severity === "moderate" || row.severity === "high" || /review|variance|awaiting|new/i.test(`${row.confirmationReason || ""} ${row.status || ""}`);
+  const record = packingReportData([row], 'total', details.timezone).records[0];
   return {
     id: row.id,
     boxId: asText(row.boxId || row.id),
-    operator: asText(row.completedBy || "Completed by not provided"),
-    zone: asText(zone.zone || "Packing Zone"),
-    boxes: Number(zone.boxNumber) || 0,
-    cycle: Number(zone.timeTakenSec) || 0,
-    status: review ? "Needs review" : "Completed",
-    source: asText(row.detectedVia || "Camera"),
+    operator: record['Completed By'],
+    station: JSON.stringify([row.nvrId, row.cameraId || row.channelId]),
+    boxes: 1,
+    boxNumber: record['Box Number'],
+    duration: record['Time to complete'],
+    cycle: Number((Array.isArray(row.zones) ? row.zones : Object.entries(row.zones || {}).map(([zone, value]) => ({ ...value, zone }))).find(zone => String(zone.zone).trim() === String(row.completedBy).trim())?.timeTakenSec) || 0,
     camera: asText(row.camera || "Packing camera"),
     time: asText(row.time),
     image: row.image,
-    notes: asText(row.confirmationReason || row.description || (review ? "Count variance detected" : "Box count matched")),
   };
 });
 
 const packingSummary = (rows) => ({
-  events: rows.length,
+  workers: new Set(rows.filter(row => row.operator && row.operator !== '—').map(row => JSON.stringify([row.station, row.operator]))).size,
   boxes: rows.reduce((sum, row) => sum + row.boxes, 0),
-  review: rows.filter((row) => row.status === "Needs review").length,
   cycle: rows.length ? Math.round(rows.reduce((sum, row) => sum + row.cycle, 0) / rows.length) : 0,
 });
 
@@ -171,14 +186,14 @@ const drawPackingHeader = (document, details, suffix, summary) => {
   document.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff").text("VideoiraQ", 28, 19);
   const rightBandX = split + 12;
   const rightBandWidth = width - split - 40;
-  document.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff").text("Box Packing Alert Logs", rightBandX, 15, { width: rightBandWidth, align: "right", ellipsis: true });
-  document.font("Helvetica").fontSize(7).fillColor("#ffffff").text("Box Packing QC - Alert report", rightBandX, 34, { width: rightBandWidth, align: "right", ellipsis: true });
-  document.font("Helvetica-Bold").fontSize(11).fillColor(INK).text("Packing alerts and confirmation evidence", 28, 68);
+  document.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff").text("Box Packing Reports", rightBandX, 15, { width: rightBandWidth, align: "right", ellipsis: true });
+  document.font("Helvetica").fontSize(7).fillColor("#ffffff").text("Box Packing QC", rightBandX, 34, { width: rightBandWidth, align: "right", ellipsis: true });
+  document.font("Helvetica-Bold").fontSize(11).fillColor(INK).text(({ comparison: "Worker Comparison", hourly: "Hourly activity", total: "Total report" })[details.reportType] || "Packing activity", 28, 68);
   document.font("Helvetica").fontSize(8).fillColor(MUTED).text(`${details.label}  |  ${details.timezone}`, 28, 82);
   const cardTop = 96;
   const gap = 10;
-  const cardWidth = (width - 56 - gap * 3) / 4;
-  [["EVENTS", summary.events, "#4f46e5"], ["BOXES PACKED", summary.boxes, "#059669"], ["NEEDS REVIEW", summary.review, "#d97706"], ["AVG CYCLE", `${summary.cycle} sec`, "#7e22ce"]].forEach(([label, value, color], index) => {
+  const cardWidth = (width - 56 - gap * 2) / 3;
+  [["TOTAL WORKERS", summary.workers ?? 0, "#4f46e5"], ["BOXES PACKED", summary.boxes, "#059669"], ["AVERAGE TIME TO COMPLETE", formatPackingReportDuration(summary.cycle), "#7e22ce"]].forEach(([label, value, color], index) => {
     const x = 28 + index * (cardWidth + gap);
     document.roundedRect(x, cardTop, cardWidth, 34, 5).fillAndStroke("#f8fafc", RULE);
     document.fillColor(color).circle(x + 10, cardTop + 12, 2.2).fill();
@@ -188,35 +203,43 @@ const drawPackingHeader = (document, details, suffix, summary) => {
   return cardTop + 48;
 };
 
+const canonicalPackingData = (details) => details.packingRecords
+  ? { records: details.packingRecords, columns: details.packingColumns, summary: details.packingSummary }
+  : packingReportData(details.rows, details.reportType, details.timezone);
+
 export function buildBoxPackingListPdf(details) {
-  const rows = packingRows(details);
-  const summary = packingSummary(rows);
-  const columns = [["Log ID", "id", 68], ["Box ID", "boxId", 70], ["Completed By", "operator", 74], ["Zone", "zone", 74], ["Boxes", "boxes", 36], ["Cycle", "cycle", 40], ["Status", "status", 66], ["Source", "source", 60], ["Camera", "camera", 72], ["Time", "time", 92], ["Snapshot", "image", 58], ["Notes", "notes", 75]];
+  const { records, columns, summary } = canonicalPackingData(details);
   return pdfBuffer((document) => {
-    const left = 28;
-    const tableWidth = columns.reduce((sum, [, , width]) => sum + width, 0);
-    const drawTableHeader = (top) => {
-      document.fillColor("#4f46e5").rect(left, top, tableWidth, 24).fill();
+    const left = 28, tableWidth = document.page.width - 56;
+    const weights = columns.map((column) => ({ 'Camera Name': 1.8, 'Date & time': 1.8, 'Active workers': 2, 'Time range': 1.6 }[column] || 1));
+    const widths = weights.map((weight) => tableWidth * weight / weights.reduce((sum, item) => sum + item, 0));
+    const drawPage = () => {
+      const top = drawPackingHeader(document, details, "List View", summary);
+      document.fillColor("#4f46e5").rect(left, top, tableWidth, 28).fill();
       let x = left;
-      columns.forEach(([label, , width]) => { document.font("Helvetica-Bold").fontSize(6.5).fillColor("#ffffff").text(label, x + 3, top + 8, { width: width - 6, ellipsis: true }); x += width; });
-      return top + 24;
-    };
-    const drawPage = () => drawTableHeader(drawPackingHeader(document, details, "List View", summary));
-    let y = drawPage();
-    rows.forEach((row, index) => {
-      if (y + 29 > document.page.height - 28) { document.addPage(); y = drawPage(); }
-      if (index % 2 === 1) document.fillColor("#f8fafc").rect(left, y, tableWidth, 29).fill();
-      let x = left;
-      columns.forEach(([, key, width]) => {
-        const linked = key === "image" && row.image;
-        const value = key === "image" ? (linked ? "View image" : "No snapshot") : row[key];
-        document.font("Helvetica").fontSize(6.4).fillColor(linked ? "#2563eb" : key === "status" && row.status === "Needs review" ? "#b45309" : INK).text(String(value), x + 3, y + 9, { width: width - 6, height: 16, ellipsis: true, link: linked || undefined, underline: Boolean(linked) });
-        x += width;
+      columns.forEach((column, i) => {
+        document.font("Helvetica-Bold").fontSize(7).fillColor("#ffffff").text(column, x + 5, top + 7, { width: widths[i] - 10 });
+        x += widths[i];
       });
-      document.strokeColor(RULE).lineWidth(0.4).moveTo(left, y + 29).lineTo(left + tableWidth, y + 29).stroke();
-      y += 29;
+      return top + 28;
+    };
+    let y = drawPage();
+    records.forEach((record, index) => {
+      const text = columns.map((column) => column === "Snapshot" ? (record[column] ? "Open snapshot" : "No snapshot") : String(record[column] ?? "—"));
+      document.font("Helvetica").fontSize(7);
+      const height = Math.max(32, ...text.map((value, i) => document.heightOfString(value, { width: widths[i] - 10 }) + 14));
+      if (y + height > document.page.height - 28) { document.addPage(); y = drawPage(); }
+      if (index % 2 === 1) document.fillColor("#f8fafc").rect(left, y, tableWidth, height).fill();
+      let x = left;
+      columns.forEach((column, i) => {
+        const link = column === "Snapshot" ? record[column] : null;
+        document.font("Helvetica").fontSize(7).fillColor(link ? "#2563eb" : INK).text(text[i], x + 5, y + 7, { width: widths[i] - 10, height: height - 10, link: link || undefined, underline: Boolean(link) });
+        x += widths[i];
+      });
+      document.strokeColor(RULE).lineWidth(0.4).moveTo(left, y + height).lineTo(left + tableWidth, y + height).stroke();
+      y += height;
     });
-    if (!rows.length) document.font("Helvetica").fontSize(11).fillColor(MUTED).text("No packing records were found for this period.", left, y + 20);
+    if (!records.length) document.font("Helvetica").fontSize(11).fillColor(MUTED).text("No packing records were found for this period.", left, y + 20);
   });
 }
 
@@ -357,6 +380,7 @@ export async function buildIncidentGridPdf(details) {
 }
 
 export async function buildBoxPackingGridPdf(details) {
+  if (details.packingReport) return buildBoxPackingListPdf(details);
   const rows = packingRows(details);
   const summary = packingSummary(rows);
   return pdfBuffer(async (document) => {
@@ -382,11 +406,11 @@ export async function buildBoxPackingGridPdf(details) {
         document.roundedRect(x, y, cardWidth, imageHeight, 5).fill("#111827");
         if (images[batchIndex]) { try { document.image(images[batchIndex], x, y, { fit: [cardWidth, imageHeight], align: "center", valign: "center" }); } catch { /* keep placeholder */ } }
         if (row.image) document.link(x, y, cardWidth, imageHeight, row.image);
-        const detailsToDraw = [["Box ID", row.boxId], ["COMPLETED BY", row.operator], ["ZONE", row.zone], ["BOXES", row.boxes], ["CYCLE", `${row.cycle}s`], ["STATUS", row.status], ["TIME", row.time]];
+        const detailsToDraw = [["Box ID", row.boxId], ["WORKER", row.operator], ["BOX NUMBER", row.boxNumber], ["TIME TO COMPLETE", row.duration], ["CAMERA", row.camera], ["DATE & TIME", row.time]];
         let textY = y + imageHeight + 9;
         detailsToDraw.forEach(([label, value]) => {
           document.font("Helvetica-Bold").fontSize(5.5).fillColor(MUTED).text(label, x + 7, textY, { width: 42, ellipsis: true });
-          document.font("Helvetica").fontSize(6.5).fillColor(label === "STATUS" && row.status === "Needs review" ? "#b45309" : INK).text(asText(value), x + 49, textY, { width: cardWidth - 56, ellipsis: true, align: "right" });
+          document.font("Helvetica").fontSize(6.5).fillColor(INK).text(asText(value), x + 49, textY, { width: cardWidth - 56, ellipsis: true, align: "right" });
           textY += 9;
         });
         column += 1;
@@ -398,6 +422,7 @@ export async function buildBoxPackingGridPdf(details) {
 }
 
 export async function buildIncidentWorkbook(details) {
+  if (isBoxPackingDetails(details)) return buildBoxPackingWorkbook(details);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Incidents");
   const showVehicleNumber = showVehicleNumberFor(details);
@@ -421,6 +446,28 @@ export async function buildIncidentWorkbook(details) {
       const cell = excelRow.getCell("image");
       cell.value = { text: "View image", hyperlink: row.image };
       cell.font = { color: { argb: "FF2563EB" }, underline: true };
+    }
+  });
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.autoFilter = { from: "A1", to: `${sheet.getColumn(sheet.columnCount).letter}1` };
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+export async function buildBoxPackingWorkbook(details) {
+  const { records, columns } = canonicalPackingData(details);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Packing Report");
+  sheet.columns = columns.map((column) => ({ header: column, key: column, width: /Camera|Date|Time range|Active workers/i.test(column) ? 32 : 20 }));
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4F46E5" } };
+  sheet.getRow(1).alignment = { wrapText: true, vertical: "middle" };
+  records.forEach((record, index) => {
+    const row = sheet.addRow({ ...record, ...(columns.includes("Snapshot") ? { Snapshot: record.Snapshot ? "Open snapshot" : "No snapshot" } : {}) });
+    row.alignment = { wrapText: true, vertical: "middle" };
+    if (index % 2 === 1) row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+    if (record.Snapshot) {
+      row.getCell("Snapshot").value = { text: "Open snapshot", hyperlink: record.Snapshot };
+      row.getCell("Snapshot").font = { color: { argb: "FF2563EB" }, underline: true };
     }
   });
   sheet.views = [{ state: "frozen", ySplit: 1 }];

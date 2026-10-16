@@ -1,4 +1,6 @@
 import path from "path";
+import * as archiver from "archiver";
+import { PassThrough } from "stream";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import fs from 'fs';
@@ -18,6 +20,51 @@ if (!fs.existsSync(cacheDir)) {
     });
 }
 class UploadService {
+    async downloadZip(req, res) {
+        try {
+            const files = Array.isArray(req.body?.files) ? req.body.files : [];
+            if (!files.length || files.length > 100) {
+                return res.status(400).json({ status: 'failed', message: 'Provide between 1 and 100 media files.' });
+            }
+
+            const archive = archiver.create('zip', { zlib: { level: 0 } });
+            archive.on('error', (error) => { throw error; });
+            res.status(200);
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', 'attachment; filename="box-packing-snapshots.zip"');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            archive.pipe(res);
+
+            for (const file of files) {
+                const mediaPath = String(file?.path || '').trim();
+                if (!mediaPath || mediaPath.includes('..')) continue;
+                const buffer = await this.readMediaBuffer(mediaPath);
+                const name = String(file?.name || path.basename(mediaPath)).replace(/[^a-z0-9._-]+/gi, '-').slice(0, 100) || 'snapshot.jpg';
+                archive.append(buffer, { name });
+            }
+            await archive.finalize();
+        } catch (error) {
+            console.error('Error creating media ZIP:', error);
+            if (!res.headersSent) res.status(error.statusCode || 500).json({ status: 'failed', message: `Failed to create ZIP: ${error.message}` });
+            else res.destroy(error);
+        }
+    }
+
+    async readMediaBuffer(mediaPath) {
+        const output = new PassThrough();
+        output.setHeader = () => {};
+        output.headersSent = false;
+        const chunks = [];
+        output.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        const finished = new Promise((resolve, reject) => {
+            output.once('end', resolve);
+            output.once('error', reject);
+        });
+        await streamMediaV2(mediaPath, output);
+        await finished;
+        return Buffer.concat(chunks);
+    }
+
     async uploadMedia(req, res, next) {
         try {
             const { mediaType, folderName } = req.query;

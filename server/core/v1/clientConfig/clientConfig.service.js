@@ -184,6 +184,11 @@ class ClientConfigService {
               solderAlertLogs: admin.moduleConfig?.solarLineQc?.solderAlertLogs === true,
               operatorReports: admin.moduleConfig?.solarLineQc?.operatorReports === true,
             },
+            boxPackingQc: {
+              boxPacking: admin.moduleConfig?.boxPackingQc?.boxPacking !== false,
+              packingAlertLogs: admin.moduleConfig?.boxPackingQc?.packingAlertLogs !== false,
+              boxPackingReports: admin.moduleConfig?.boxPackingQc?.boxPackingReports !== false,
+            },
           },
         })
       );

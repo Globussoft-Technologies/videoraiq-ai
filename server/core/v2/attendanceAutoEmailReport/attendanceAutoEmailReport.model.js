@@ -59,6 +59,9 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     contentType: { type: String, enum: ["attendance", "incidents"], default: "attendance" },
     contentTypes: [{ type: String, enum: ["attendance", "incidents"] }],
     incidentTypes: [{ type: String, trim: true }],
+    // Box Packing schedules retain the selected report tab for previews,
+    // test mails and scheduled attachments.
+    reportType: { type: String, enum: ["comparison", "review", "hourly", "total"], default: "total" },
     pdfLayout: { type: String, enum: ["list", "grid"], default: "list" },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "users", default: null },

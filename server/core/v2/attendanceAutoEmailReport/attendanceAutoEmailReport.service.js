@@ -1609,12 +1609,15 @@ class AttendanceAutoEmailReportService {
       if (types.includes("incidents")) {
         const incidentReport = reportForContent(report, "incidents");
         const details = await incidentRowsForReport(incidentReport, rangeForReport(incidentReport));
-        const headers = [
+        const headers = details.packingReport ? details.packingColumns : [
           "Sl No", "Incident", "NVR", "Camera", "Department", "Location", "Severity", "Status", "Time",
           ...(details.showVehicleNumber ? ["Vehicle Number"] : []),
           "Image",
         ];
-        const tableRows = details.rows.map((row, index) => ({
+        const tableRows = details.packingReport ? details.packingRecords.map((record) => ({
+          kind: "session",
+          cells: headers.map((column) => column === "Snapshot" ? imageCell(record[column]) : record[column]),
+        })) : details.rows.map((row, index) => ({
           kind: "session",
           cells: [
             index + 1, row.incident, row.nvr, row.camera, row.department, row.location, row.severity, row.status, row.time,

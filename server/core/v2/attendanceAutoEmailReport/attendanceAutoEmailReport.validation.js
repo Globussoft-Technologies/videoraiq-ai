@@ -13,6 +13,7 @@ const reportTitle = Joi.string()
 const time = Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).messages({
   "string.pattern.base": "schedule.time must be HH:mm",
 });
+const boxPackingReportType = Joi.string().valid("comparison", "review", "hourly", "total").default("total");
 
 const schedule = Joi.object({
   frequency: Joi.string().valid("daily", "weekly", "monthly", "custom").required(),
@@ -82,6 +83,7 @@ const report = Joi.object({
   contentType: Joi.string().valid("attendance", "incidents"),
   contentTypes: Joi.array().items(Joi.string().valid("attendance", "incidents")).min(1).unique(),
   incidentTypes: Joi.array().items(Joi.string().trim().min(1).max(120)).unique().default([]),
+  reportType: boxPackingReportType,
   pdfLayout: Joi.string().valid("list", "grid").default("list"),
   recipients: Joi.array().items(Joi.string().email()).min(1).required(),
   schedule: schedule.required(),
@@ -97,6 +99,7 @@ export const updateReportSchema = Joi.object({
   contentType: Joi.string().valid("attendance", "incidents"),
   contentTypes: Joi.array().items(Joi.string().valid("attendance", "incidents")).min(1).unique(),
   incidentTypes: Joi.array().items(Joi.string().trim().min(1).max(120)).unique(),
+  reportType: Joi.string().valid("comparison", "review", "hourly", "total"),
   pdfLayout: Joi.string().valid("list", "grid"),
   recipients: Joi.array().items(Joi.string().email()).min(1),
   schedule,

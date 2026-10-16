@@ -4648,7 +4648,7 @@ export const vehicleLogTemplate = (entryData, nvrData, channelData) => {
 };
 
 // Box packing details (box, packer, per-zone box number and time); "" for other types.
-const boxPackingSection = ({ incidentType, boxId, completedBy, zones, confirmationReason }) => {
+const boxPackingSection = ({ incidentType, boxId, completedBy, zones }) => {
   if (incidentType !== "boxPackingDetection") return "";
   const row = (label, value) =>
     `<tr><td style="padding-bottom:6px;"><strong>${label}:</strong> ${value ?? "N/A"}</td></tr>`;
@@ -4660,7 +4660,7 @@ const boxPackingSection = ({ incidentType, boxId, completedBy, zones, confirmati
             <td style="padding:0 24px 20px;">
               <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">Box Packing Details</h3>
               <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
-                ${row("Box ID", boxId)}${row("Completed By", completedBy)}${zoneRows}${confirmationReason ? row("Confirmation", confirmationReason) : ""}
+                ${row("Box ID", boxId)}${row("Completed By", completedBy)}${zoneRows}
               </table>
             </td>
           </tr>`;

@@ -36,6 +36,9 @@ class UploadController {
         /*#swagger.security = [] */
             return await uploadsService.fetchMedia(req, res, next);
       }
+      async downloadZip(req, res, next) {
+            return await uploadsService.downloadZip(req, res, next);
+      }
       async deleteMedia(req, res, next){
             /* #swagger.tags = ['Uploads']
             #swagger.description = 'This route is used to delete uploaded media.' */
