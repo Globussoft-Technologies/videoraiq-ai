@@ -12,7 +12,7 @@
     "swagger:all": "node ./views/swagger.config.js && node ./views/swagger-v2.config.js",
     "production": "node bootstrap.js",
     "build": "npm run obfuscate && npm run encrypt",
-    "obfuscate": "node ./scripts/copy_for_obfuscation.js && javascript-obfuscator obf_src --output dist --config ./obfuscator-strong.json && npm run build:assets",
+    "obfuscate": "node ./scripts/build-swagger.js && node ./scripts/copy_for_obfuscation.js && javascript-obfuscator obf_src --output dist --config ./obfuscator-strong.json && npm run build:assets",
     "build:assets": "node ./scripts/copy_runtime_assets.js",
     "encrypt": "node scripts/encrypt.js",
     "clone:incidents": "node scripts/clone-incidents-by-type.js",

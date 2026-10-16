@@ -666,6 +666,68 @@ class DetectionSettingService {
     };
   }
 
+  async resetAllDetections(req, res, _next) {
+    return this.resetAdminConfiguration(req, res, "detections");
+  }
+
+  async resetAllCameraTypes(req, res, _next) {
+    return this.resetAdminConfiguration(req, res, "camera-types");
+  }
+
+  async resetAdminConfiguration(req, res, target) {
+    const user = req.verified?.userData;
+    if (!user || user.memberId || !isMongoObjectId(user.adminId) || !user.user_id) {
+      return res.status(403).json(Response.accessDeniedResp("An admin account is required for this reset"));
+    }
+    if (req.body?.confirm !== true) {
+      return res.status(400).json(Response.userFailResp("Confirm the reset before continuing"));
+    }
+
+    let stoppedAll = false;
+    try {
+      // Scope comes exclusively from authentication, never request IDs/filters.
+      const owner = await Admin.findOne({ _id: user.adminId, user_id: String(user.user_id) }).select("_id").lean();
+      if (!owner) return res.status(403).json(Response.accessDeniedResp("Admin account mismatch"));
+
+      try {
+        await pythonService.stopAdminPipelines(String(owner._id), target);
+      } catch (error) {
+        logger.error(`Reset ${target}: DS stop failed for admin ${owner._id}: ${error.message}`);
+        return res.status(502).json(Response.errorResp(
+          "The detection service did not confirm the stop. Saved settings and camera types were retained. Please retry.",
+          error.message,
+        ));
+      }
+      stoppedAll = true;
+
+      const scope = { userId: String(user.user_id) };
+      if (target === "camera-types") {
+        await Channel.updateMany(scope, { $set: { checkType: "none" } });
+        return res.status(200).json(Response.userSuccessResp("Face authentication stopped and all camera types reset to None"));
+      }
+      // Include every owned camera, even inactive cameras and cameras hidden by
+      // the current page filters. Removing links also removes local schedules
+      // and overrides. Face-auth belongs to the separate camera-type action.
+      await Channel.updateMany(scope, [{ $set: {
+        detections: { $arrayToObject: { $filter: {
+          input: { $objectToArray: { $ifNull: ["$detections", {}] } },
+          as: "link", cond: { $eq: ["$$link.k", "faceAuthenticationSettings"] },
+        } } },
+        control: { $cond: [{ $eq: ["$detections.faceAuthenticationSettings.enabled", true] }, 1, 0] },
+      } }]);
+      await DetectionSetting.deleteMany({ ...scope, settingType: { $ne: "faceAuthenticationSettings" } });
+      return res.status(200).json(Response.userSuccessResp("All object detections stopped and settings reset successfully"));
+    } catch (error) {
+      logger.error(`Reset all detections failed for admin ${user.adminId}: ${error.message}`);
+      return res.status(500).json(Response.errorResp(
+        stoppedAll
+          ? "Detections were stopped, but the settings reset could not be completed. Please retry."
+          : "Could not reset all detections. Please retry.",
+        error.message,
+      ));
+    }
+  }
+
   async deleteDetectionSettings(req, res, _next) {
     try {
       const { id } = req.params;

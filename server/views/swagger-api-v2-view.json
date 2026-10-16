@@ -2108,6 +2108,59 @@
         "security": []
       }
     },
+    "/api/v2/users/email-verification/send": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/users/email-verification/verify": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/users/email-verification/status": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/v2/users/forgot-password": {
       "post": {
         "tags": [
@@ -7740,6 +7793,86 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/detection-settings/reset-all": {
+      "post": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Stop object detections for the authenticated admin and remove their saved zones/settings. Preserves face-auth and camera types. Requires an admin account and confirm: true.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "confirm": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All detections stopped and settings reset"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "502": {
+            "description": "DS stop failed; settings retained"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/detection-settings/reset-camera-types": {
+      "post": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Stop face authentication for the authenticated admin and set every camera type to none. Preserves object-detection settings. Requires an admin account and confirm: true.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "confirm": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Face authentication stopped and camera types reset"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "502": {
+            "description": "DS stop failed; camera types retained"
           }
         },
         "security": [

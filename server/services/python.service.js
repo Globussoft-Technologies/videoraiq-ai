@@ -230,6 +230,27 @@ const pickVehicleCheckInOutSettings = (settings = {}) => {
 };
 
 class PythonService {
+  // Explicit admin resets target one DS service. The schedule runner's bulk
+  // helper below deliberately targets both and must not be used for these.
+  async stopAdminPipelines(admin_id, target) {
+    if (!admin_id || !['detections', 'camera-types'].includes(target)) {
+      throw new Error('admin_id and a valid reset target are required');
+    }
+    const endpoints = await resolveAdminEndpoints(admin_id);
+    const base = String(target === 'detections' ? endpoints.detectionUrl : endpoints.attendanceUrl).replace(/\/+$/, '');
+    const faceBase = base.endsWith('/face-auth') ? base : `${base}/face-auth`;
+    const url = target === 'detections' ? `${base}/stream/stop-all` : `${faceBase}/api/v1/cameras/stop-all`;
+    const response = await axios.post(url, { admin_id: String(admin_id) }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 45000,
+    });
+    const data = response.data;
+    if (data?.success === false || ['failed', 'failure', 'error'].includes(String(data?.status || '').toLowerCase())) {
+      throw new Error(data?.message || 'The detection service could not stop all cameras');
+    }
+    return data;
+  }
+
   async toggleCamerasBulk(admin_id, camera_ids = [], enable = true) {
     try {
       if (!admin_id) {

@@ -9,6 +9,8 @@ router.get("/", viewAccessCheck,DetectionSettingsController.getAllDetectionSetti
 router.post("/",createAccessCheck, DetectionSettingsController.createDetectionSettings);
 router.get("/examples",viewAccessCheck, DetectionSettingsController.getDetectionExamples);
 router.get("/types",viewAccessCheck, DetectionSettingsController.getDetectionTypes);
+router.post("/reset-all", editAccessCheck, DetectionSettingsController.resetAllDetections);
+router.post("/reset-camera-types", editAccessCheck, DetectionSettingsController.resetAllCameraTypes);
 router.get("/:id/schedule", viewAccessCheck, DetectionSettingsController.getDetectionSchedule);
 router.get("/:id/schedule/:channelId", viewAccessCheck, DetectionSettingsController.getCameraDetectionSchedule);
 router.put("/:id/schedule/:channelId", editAccessCheck, DetectionSettingsController.updateCameraDetectionSchedule);

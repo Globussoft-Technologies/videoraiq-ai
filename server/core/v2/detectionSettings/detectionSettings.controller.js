@@ -1,5 +1,27 @@
 import DetectionSettingService from "./detectionSettings.service.js";
 class DetectionSettingsController {
+  async resetAllDetections(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Stop object detections for the authenticated admin and remove their saved zones/settings. Preserves face-auth and camera types. Requires an admin account and confirm: true.'
+       #swagger.parameters['data'] = { in: 'body', required: true, schema: { confirm: true } }
+       #swagger.responses[200] = { description: 'All detections stopped and settings reset' }
+       #swagger.responses[502] = { description: 'DS stop failed; settings retained' }
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.resetAllDetections(req, res, next);
+  }
+
+  async resetAllCameraTypes(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Stop face authentication for the authenticated admin and set every camera type to none. Preserves object-detection settings. Requires an admin account and confirm: true.'
+       #swagger.parameters['data'] = { in: 'body', required: true, schema: { confirm: true } }
+       #swagger.responses[200] = { description: 'Face authentication stopped and camera types reset' }
+       #swagger.responses[502] = { description: 'DS stop failed; camera types retained' }
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.resetAllCameraTypes(req, res, next);
+  }
+
   async getDetectionTypes(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Get available detection types'
