@@ -24,6 +24,16 @@ export const getchannels = async (data) => {
   return axios.post(`${HOST}/authorizedChannels/getChannels`, data, { headers: jsonHeaders() });
 };
 
+/** Cameras with populated detection settings for live overview widgets. */
+export const getDetectionChannels = async ({ engines = '', limit = 500 } = {}) => {
+  // Use the same channel route as Camera Configuration. The all-channels
+  // route has a different response projection and can omit detection entries.
+  return axios.get(`${HOST}/channel/`, {
+    params: { limit, ...(engines ? { engines } : {}) },
+    headers: getHeaders(),
+  });
+};
+
 /**
  * Update an incident's editable details (name, severity, time, NVR, camera).
  * Ported from V1's EditANPRLogDialog `editIncidentDetails` — the V2 backend

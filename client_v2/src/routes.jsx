@@ -101,8 +101,14 @@ function SolderLineRoute() {
 }
 
 function BoxPackingRoute() {
+  const { pathname } = useLocation();
+  const modulePageKey = pathname.startsWith('/box-packing/reports')
+    ? 'boxPackingReports'
+    : pathname.startsWith('/box-packing/alerts')
+      ? 'packingAlertLogs'
+      : 'boxPacking';
   return (
-    <RequirePermission permissionKey="logs" permissionSubKey="boxPackingLogs">
+    <RequirePermission permissionKey="logs" permissionSubKey="boxPackingLogs" moduleKey="boxPackingQc" modulePageKey={modulePageKey}>
       <BoxPackingLogs />
     </RequirePermission>
   );

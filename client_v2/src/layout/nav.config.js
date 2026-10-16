@@ -172,9 +172,9 @@ export const NAV_GROUPS = [
   {
     label: 'BOX PACKING QC',
     items: [
-      { key: 'box-packing', label: 'Box Packing', path: 'box-packing', end: true, icon: Package, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
-      { key: 'box-packing-alerts', label: 'Packing Alert Logs', path: 'box-packing/alerts', icon: TriangleAlert, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
-      { key: 'box-packing-reports', label: 'Box Packing Reports', path: 'box-packing/reports', icon: FileChartColumn, permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing', label: 'Box Packing', path: 'box-packing', end: true, icon: Package, moduleKey: 'boxPackingQc', modulePageKey: 'boxPacking', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing-alerts', label: 'Packing Alert Logs', path: 'box-packing/alerts', icon: TriangleAlert, moduleKey: 'boxPackingQc', modulePageKey: 'packingAlertLogs', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing-reports', label: 'Box Packing Reports', path: 'box-packing/reports', icon: FileChartColumn, moduleKey: 'boxPackingQc', modulePageKey: 'boxPackingReports', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
     ],
   },
   {
@@ -304,7 +304,7 @@ export const VIEW_META = {
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },
   'box-packing': { title: 'Box Packing', sub: 'Completed packing activity, box counts and confirmation evidence' },
   'box-packing-alerts': { title: 'Box Packing Alert Logs', sub: 'Packing alerts, count variance and confirmation evidence' },
-  'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, zone comparison and review summaries' },
+  'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, worker comparison and review summaries' },
   'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },

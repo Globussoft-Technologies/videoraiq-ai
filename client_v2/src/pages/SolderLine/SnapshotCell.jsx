@@ -11,8 +11,8 @@ export default function SnapshotCell({ value, imageStyle, triggerStyle, onImageE
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <button type="button" title="Open snapshot" aria-label={label} style={{ display: 'inline-flex', padding: 0, border: 'none', background: 'transparent', cursor: 'zoom-in', color: 'var(--blue)', fontSize: 10, ...triggerStyle }}>
-          {failed ? <span>Image unavailable</span> : <img src={url} alt="Incident snapshot" loading="lazy" onError={() => { setFailed(true); onImageError?.(); }} style={{ width: 48, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--bd)', ...imageStyle }} />}
+        <button type="button" title="Open snapshot" aria-label={label} style={{ display: 'inline-flex', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--blue)', fontSize: 10, ...triggerStyle }}>
+          {failed ? <span>Image unavailable</span> : <img src={url} alt="Incident snapshot" loading="lazy" onError={() => { setFailed(true); onImageError?.(); }} style={{ width: 48, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--bd)', cursor: 'pointer', ...imageStyle }} />}
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>

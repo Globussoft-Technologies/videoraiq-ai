@@ -69,6 +69,8 @@ export default function CameraStream({
   children,
   camLabel,          // e.g. "CAM-001" — injected by CameraGrid
   showOverlay = true,
+  unavailableLabel,
+  unavailableContent,
   onMaximize,
   isFullscreen = false, // swaps the maximize icon to a "restore" icon when already fullscreen
   onLiveChange,      // (isLive: boolean) => void — reports live status up to grid
@@ -204,10 +206,10 @@ export default function CameraStream({
   const queued = active && !!url && !admitted;
 
   const placeholder =
-    !url    ? 'No stream configured'
+    !url    ? (unavailableLabel || 'No stream configured')
     : paused ? 'Paused · not in view'
     : queued ? 'Queued…'
-    : error  ? 'Stream unavailable'
+    : error  ? (unavailableLabel || 'Stream unavailable')
     : `${name} · connecting…`;
 
   const videoElement = (
@@ -238,7 +240,7 @@ export default function CameraStream({
         position: 'relative',
         width: '100%',
         height: '100%',
-        minHeight: minH,
+        minHeight: channel?._compactBoxPacking ? 0 : minH,
         background: '#07090c',
         borderRadius: rounded ? 10 : 0,
         overflow: 'hidden',
@@ -256,10 +258,11 @@ export default function CameraStream({
       {/* Offline / queued / connecting placeholder */}
       {(!url || !enabled || error || !playing) && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,.3)' }}>
-          <VideoOff size={22} strokeWidth={1.4} />
+          {unavailableContent && (!url || error) ? unavailableContent : <><VideoOff size={22} strokeWidth={1.4} />
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.5px' }}>
             {placeholder}
           </span>
+          </>}
           {!error && url && !paused && (
             <div style={{ position: 'absolute', left: 0, right: 0, height: 2, top: 0, background: 'linear-gradient(90deg,transparent,rgba(90,170,255,.5),transparent)', animation: 'vq-scan 6s linear infinite' }} />
           )}

@@ -503,7 +503,7 @@ function SolderSection({ s }) {
               `Each bar represents one recorded ${chart.unit}. Periods with no activity are not shown.`,
               `The value above each bar is the panel count. The average uses the displayed ${chart.unit} periods.`,
             ]} />}
-            right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, averagePeriods)).toFixed(1)} / {chart.unit === 'hour' ? 'HR' : chart.unit === 'week' ? 'WK' : 'MO'}</span>}
+            right={has && <span style={{ ...mono, fontSize: 11, color: 'var(--tx3)' }}>AVG {(s.sum.panels / Math.max(1, averagePeriods)).toFixed(1)} / {chart.unit === 'hour' ? 'HR' : chart.unit === 'week' ? 'WK' : chart.unit === 'month' ? 'MO' : 'YR'}</span>}
           />
           {!has ? <NoPeriodData /> : (
             <Bars rows={chartRows} label={`${panelTitle} chart`} minColumnWidth={panelColumnWidth} render={(r) => (

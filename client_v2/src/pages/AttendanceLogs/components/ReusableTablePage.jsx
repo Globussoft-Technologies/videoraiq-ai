@@ -14,8 +14,10 @@ import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import StatCards from './StatCards';
+import { paginateRows } from '@/pages/SolderLine/pagination';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
+export const DEFAULT_LOG_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
 
 /**
  * Reusable table/grid wrapper for the log pages. Theme-aware (dark/light) via
@@ -48,16 +50,20 @@ const ReusableTablePage = ({
   limit: limitProp,
   onLimitChange,
   stats,
+  statsVariant = 'default',
   secondaryToolbar,
   dateFilterActions,
   datePickerVariant,
   renderExpandedRow,
+  onPaginatedDataChange,
+  showSearch = true,
+  showDateRange = true,
   tableContainerClassName = '',
   tableHeaderClassName = '',
 }) => {
   const [internalSearchInput, setInternalSearchInput] = useState('');
   const [internalViewMode, setInternalViewMode] = useState('table');
-  const [internalLimit, setInternalLimit] = useState(10);
+  const [internalLimit, setInternalLimit] = useState(DEFAULT_LOG_PAGE_SIZE);
   const [pageInput, setPageInput] = useState('');
   const [internalDateRange, setInternalDateRange] = useState({ start: null, end: null });
 
@@ -115,9 +121,16 @@ const ReusableTablePage = ({
 
   const paginated = useMemo(() => {
     if (useServerPagination) return data || [];
-    const start = (currentPage - 1) * limit;
-    return (filtered || []).slice(start, start + limit);
+    return paginateRows(filtered || [], currentPage, limit).pageRows;
   }, [filtered, currentPage, limit, data, useServerPagination]);
+
+  useEffect(() => {
+    onPaginatedDataChange?.(paginated);
+  }, [onPaginatedDataChange, paginated]);
+
+  useEffect(() => {
+    if (!useServerPagination && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [useServerPagination, currentPage, totalPages, setCurrentPage]);
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -152,24 +165,18 @@ const ReusableTablePage = ({
     <div className="w-full flex flex-1 flex-col">
       {Array.isArray(stats) && stats.length > 0 && (
         <div data-tour="log-stats" className="mb-[18px]">
-          <StatCards stats={stats} />
+          <StatCards stats={stats} variant={statsVariant} />
         </div>
       )}
       <div className="w-full flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
-          <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
+          {showSearch && <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
             <Search className="absolute left-3 w-4 h-4 text-[var(--tx3)] pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search"
-              className="w-full h-full bg-transparent border-0 outline-none pl-9 pr-3 text-sm text-[var(--tx)] placeholder:text-[var(--tx3)]"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-          </div>
+            <input type="text" placeholder="Search" className="w-full h-full bg-transparent border-0 outline-none pl-9 pr-3 text-sm text-[var(--tx)] placeholder:text-[var(--tx3)]" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+          </div>}
 
-          {from !== 'visibility' && (
+          {showDateRange && from !== 'visibility' && (
             <div data-tour="log-daterange" className="flex items-center">
               <DateFilter
                 startDate={dateRange.start}
@@ -388,7 +395,7 @@ const ReusableTablePage = ({
                 onChange={(e) => setLimit(Number(e.target.value))}
                 className="h-9 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:border-[var(--brand)]"
               >
-                {PAGE_SIZE_OPTIONS.map((size) => (
+                {[...new Set([...PAGE_SIZE_OPTIONS, limit])].sort((a, b) => a - b).map((size) => (
                   <option key={size} value={size}>
                     {size}
                   </option>

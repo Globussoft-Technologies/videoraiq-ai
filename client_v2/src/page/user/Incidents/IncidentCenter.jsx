@@ -18,6 +18,7 @@ import {
 } from '../../../pages/AttendanceLogs/components/timeUtils';
 import IncidentCard, { apiMarkResolved, ReportModal, VehicleTagStrip } from './IncidentCard';
 import IncidentZoneDetails from './IncidentZoneDetails';
+import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
 import TaggedUserDetailsModal from '../../../components/TaggedUserDetailsModal';
@@ -620,7 +621,7 @@ function CarModelDetails({ item }) {
     // { label: 'Year', value: displayValue(item.year), icon: CalendarClock, accent: '#34d399' },
     { label: 'NVR Name', value: displayValue(item.nvrData?.nvrName), icon: Server, accent: '#60a5fa' },
     { label: 'Camera Name', value: displayValue(item.channelData?.name || item.channelName), icon: Video, accent: '#fb7185' },
-    { label: 'Time', value: shortDateTime(item.timeOfIncident || item.createdAt) || '--', icon: CalendarClock, accent: '#f97316', mono: true },
+    { label: 'Time of Incident', value: shortDateTime(item.timeOfIncident) || '--', icon: CalendarClock, accent: '#f97316', mono: true },
   ];
 
   return (
@@ -907,6 +908,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const site   = item.nvrData?.nvrName  || item.location  || '';
   const carModel = isCarModelDetection(item);
   const isSolder = item.incidentType === 'deskSolarShoulderDetection';
+  const isPacking = item.incidentType === 'boxPackingDetection';
+  const compactDetails = isSolder || isPacking;
 
   return (
     <div
@@ -1055,7 +1058,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               onClick={(e) => { e.stopPropagation(); setIsCollapsed(c => !c); }}
               title={isCollapsed ? 'Show details' : 'Hide details'}
               style={{
-                width: 16, height: 120, borderRadius: 3, flexShrink: 0,
+                width: 16, height: isPacking ? 76 : 120, borderRadius: 3, flexShrink: 0,
                 background: '#38bdf8', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background .15s', zIndex: 10,
@@ -1083,31 +1086,32 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               border: '1px solid rgba(255,255,255,.2)',
               boxShadow: '0 25px 50px -12px rgba(0,0,0,.6)',
               backdropFilter: 'blur(6px)',
-              clipPath: 'polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)',
+              clipPath: isPacking ? undefined : 'polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)',
+              borderRadius: isPacking ? 12 : undefined,
               width: carModel ? 'fit-content' : undefined,
               maxWidth: carModel ? '100%' : undefined,
             }}
           >
-            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || isSolder ? 20 : 40, padding: carModel || isSolder ? '10px 18px 12px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : isSolder ? 'min(580px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(isSolder ? { maxHeight: '36vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
+            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || compactDetails ? 20 : 40, padding: carModel || compactDetails ? '10px 18px 12px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : compactDetails ? 'min(580px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(compactDetails ? { maxHeight: '36vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
               {/* Title block */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: isSolder ? 2 : 4, minWidth: 0, width: carModel || isSolder ? '100%' : undefined }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: compactDetails ? 2 : 4, minWidth: 0, width: carModel || compactDetails ? '100%' : undefined }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
                   Security Feed
                 </span>
-                <h1 style={{ margin: 0, fontSize: carModel ? 22 : isSolder ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
+                <h1 style={{ margin: 0, fontSize: carModel ? 22 : compactDetails ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.incidentName || det}
                 </h1>
-                <p style={{ margin: 0, fontSize: carModel ? 13 : isSolder ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
+                <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.description || [cam, site].filter(Boolean).join(' · ')}
                 </p>
-                <span style={{ fontFamily: 'monospace', fontSize: isSolder ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: isSolder ? 0 : 2 }}>
-                  {shortDateTime(item.timeOfIncident)}{!isSolder && !itemRemoved && ` · ${index + 1} / ${items.length}`}
+                <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
+                  {shortDateTime(item.timeOfIncident)}
                 </span>
                 <CarModelDetails item={item} />
-                <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder} />
+                <IncidentZoneDetails item={item} variant="lightbox" compact={compactDetails} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
-                <div style={{ marginTop: carModel ? 6 : isSolder ? 3 : 8 }}>
+                <div style={{ marginTop: carModel ? 6 : compactDetails ? 3 : 8 }}>
                   <VehicleTagStrip
                     item={item}
                     onTagUser={onTagUser}
@@ -1132,7 +1136,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   top: carModel ? 26 : undefined,
                   right: carModel ? 250 : undefined,
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: isSolder ? '6px 14px' : '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
+                  padding: compactDetails ? '6px 14px' : '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
                   fontFamily: 'inherit',
                   border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
                   background: saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)') : 'rgba(255,255,255,.05)',
@@ -1169,7 +1173,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   top: carModel ? 26 : undefined,
                   right: carModel ? 56 : undefined,
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: isSolder ? '6px 14px' : '8px 20px', cursor: 'pointer',
+                  padding: compactDetails ? '6px 14px' : '8px 20px', cursor: 'pointer',
                   border: '1px solid rgba(59,130,246,.5)',
                   background: 'rgba(59,130,246,.2)',
                   color: '#60a5fa', transition: 'background .15s', whiteSpace: 'nowrap',
@@ -1297,6 +1301,7 @@ function IncidentListRow({
   const status = item.resolved ? 'Resolved' : item.report?.status === true ? 'Reported' : 'New';
   const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
+  const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
   const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
   const zoneRows = item.incidentType === 'deskSolarShoulderDetection' && Array.isArray(item.zones)
     ? item.zones.filter((zone) => zone && typeof zone === 'object')
@@ -1332,7 +1337,7 @@ function IncidentListRow({
         className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
         style={{
           display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS,
-          gap: 12, alignItems: 'center', minWidth: 1420, padding: '10px 12px',
+          gap: 12, alignItems: 'center', minWidth: 1420, padding: '14px 12px',
           background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
           borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
         }}
@@ -1364,6 +1369,7 @@ function IncidentListRow({
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
           <span style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
+          {packing && <span style={{ fontSize: 11, color: 'var(--blue)', overflowWrap: 'anywhere' }}>Box ID: {packing.boxId}</span>}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1373,7 +1379,7 @@ function IncidentListRow({
 
         {['zone', 'presenceSec', 'done'].map((field) => (
           <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
-            {zoneRows.length ? zoneRows.map((zone, index) => (
+            {packing ? <span>{({ zone: packing.completedBy, presenceSec: packing.packingTime, done: packing.boxNumber })[field]}</span> : zoneRows.length ? zoneRows.map((zone, index) => (
               <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {zone[field] ?? '—'}
               </span>
@@ -1388,7 +1394,7 @@ function IncidentListRow({
         </div>
 
         <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
-        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident || item.createdAt) || '--'}</div>
+        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident) || '--'}</div>
 
         <div role="cell" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
@@ -1619,6 +1625,8 @@ export default function IncidentCenter() {
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
+  const packingOnly = items.length > 0 && items.every((item) => item.incidentType === 'boxPackingDetection');
+  const hasPacking = items.some((item) => item.incidentType === 'boxPackingDetection');
   // Preserve the selected incident's identity when resolving removes it from
   // the active feed. The grid still refreshes normally behind the viewer.
   const lightboxItemIndex = lightboxIncident
@@ -2140,11 +2148,11 @@ export default function IncidentCenter() {
       <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
-            background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
-            padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4,
-            boxShadow: '0 1px 3px rgba(0,0,0,.07)', minWidth: 0,
+            background: 'var(--bg1solid)', border: `1px solid ${k.color}35`, borderLeft: `3px solid ${k.color}`, borderRadius: 12,
+            padding: '17px 18px', display: 'flex', flexDirection: 'column', gap: 8,
+            boxShadow: '0 4px 12px rgba(15,23,42,.05)', minWidth: 0,
           }}>
-            <div style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 500 }}>{k.label}</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: k.color, lineHeight: 1 }}>
               {stats.loading ? '—' : k.value}
             </div>
@@ -2154,9 +2162,9 @@ export default function IncidentCenter() {
 
       {/* ── Filter bar — everything on one wrapping line ─────────────────────── */}
       <div className="vq-inc-toolbar" data-empty={noIncidents} style={{
-        background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
+        background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12,
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        boxShadow: '0 1px 3px rgba(0,0,0,.07)',
+        boxShadow: '0 4px 14px rgba(15,23,42,.06)',
       }}>
         {/* Detection multi-select */}
         <MultiSelect
@@ -2604,7 +2612,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 20, alignItems: 'start' }}>
               {items.map((item, i) => (
                 <IncidentCard
                   key={item._id || item.id}
@@ -2635,12 +2643,12 @@ export default function IncidentCenter() {
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
-                <span role="columnheader">Zone</span>
-                <span role="columnheader">Presence (s)</span>
-                <span role="columnheader">Done</span>
+                <span role="columnheader">{packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
+                <span role="columnheader">{packingOnly ? 'Time to complete' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
+                <span role="columnheader">{packingOnly ? 'Box number' : hasPacking ? 'Done / Box number' : 'Done'}</span>
                 <span role="columnheader">Severity</span>
                 <span role="columnheader">Status</span>
-                <span role="columnheader">Time</span>
+                <span role="columnheader">Time of Incident</span>
                 <span role="columnheader" style={{ textAlign: 'right' }}>Actions</span>
               </div>
               {items.map((item, i) => (

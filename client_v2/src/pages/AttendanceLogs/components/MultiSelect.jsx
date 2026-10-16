@@ -28,6 +28,7 @@ const MultiSelect = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef(null);
+  const selectedValue = Array.isArray(value) ? value : [];
 
   useEffect(() => {
     const onClick = (e) => {
@@ -44,21 +45,21 @@ const MultiSelect = ({
   }, [options, query]);
 
   const toggle = (id) => {
-    if (value.includes(id)) {
-      onChange(value.filter((v) => v !== id));
+    if (selectedValue.includes(id)) {
+      onChange(selectedValue.filter((v) => v !== id));
     } else {
-      onChange([...value, id]);
+      onChange([...selectedValue, id]);
     }
   };
 
   const selectAll = () => {
     const ids = filtered.map((o) => o.id);
-    onChange(Array.from(new Set([...value, ...ids])));
+    onChange(Array.from(new Set([...selectedValue, ...ids])));
   };
 
   const clearAll = () => onChange([]);
 
-  const selectedLabels = options.filter((o) => value.includes(o.id)).map((o) => o.label);
+  const selectedLabels = options.filter((o) => selectedValue.includes(o.id)).map((o) => o.label);
 
   return (
     <div className={`relative ${className}`} ref={ref}>
@@ -75,7 +76,7 @@ const MultiSelect = ({
               : `${selectedLabels.length} selected`}
         </span>
         <div className="flex items-center gap-1 shrink-0">
-          {value.length > 0 && (
+          {selectedValue.length > 0 && (
             <X
               className="w-3.5 h-3.5 text-[var(--tx3)] hover:text-[var(--crit)]"
               onClick={(e) => {
@@ -127,7 +128,7 @@ const MultiSelect = ({
               <div className="px-3 py-2 text-xs text-[var(--tx3)]">{msg}</div>
             ) : (
               filtered.map((opt) => {
-                const active = value.includes(opt.id);
+                const active = selectedValue.includes(opt.id);
                 return (
                   <button
                     key={opt.id}

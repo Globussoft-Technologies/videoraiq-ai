@@ -93,10 +93,10 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
           </fieldset>
           <fieldset disabled={saving} className="flex gap-4">
             <legend className="text-sm mb-2">Attachments</legend>
-            {['pdf', 'xlsx'].map((format) => <label key={format} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={formats.includes(format)} onChange={() => setFormats(toggle(formats, format))} />{format === 'pdf' ? 'PDF' : 'Excel'}</label>)}
+            {['pdf', 'xlsx'].map((format) => <label key={format} className="flex items-center gap-2 text-sm cursor-pointer"><input className="cursor-pointer" type="checkbox" checked={formats.includes(format)} onChange={() => setFormats(toggle(formats, format))} />{format === 'pdf' ? 'PDF' : 'Excel'}</label>)}
           </fieldset>
           {!formats.length && <p className="text-xs text-[var(--tx3)]">Select PDF or Excel to preview, save, or send this report.</p>}
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={saving} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Enable automatic emails</label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><input className="cursor-pointer" type="checkbox" disabled={saving} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Enable automatic emails</label>
           <div className="flex flex-wrap gap-2">
             <button type="button" style={button} disabled={saving || !formats.length} onClick={(e) => runDraft(e, 'preview')}>
               {action === 'preview' ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}{action === 'preview' ? 'Preparing...' : 'Preview report'}

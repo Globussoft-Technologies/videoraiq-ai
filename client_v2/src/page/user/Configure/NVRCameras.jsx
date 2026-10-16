@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown, Eye, EyeOff, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { ShieldOff } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
@@ -22,7 +22,6 @@ import { createLocation } from '../Locations/Api';
 import { encrypt, decrypt } from '../../../helpers/decryptNvr';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
-import HScrollHint from '../../../components/HScrollHint';
 import { Popover, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import { usePermissions } from '@/context/PermissionContext';
 import { isLocalSetup } from '@/utils/jwt';
@@ -711,6 +710,30 @@ function CamRow({ c, site, onView }) {
 }
 
 // ── Camera checkbox row (Step 2 / Manage Cameras) ──────────────────────────
+function cameraHealth(c) {
+  const value = String(c.status || c.health || c.connectionStatus || '').toLowerCase();
+  if (c.isOnline === true || c.online === true || value === 'online' || value === 'active') return { label: 'Online', color: '#22c55e' };
+  if (c.isOnline === false || c.online === false || ['offline', 'error', 'failed'].includes(value)) return { label: 'Offline', color: '#ef4444' };
+  return { label: 'Status unavailable', color: 'var(--tx3)' };
+}
+
+function CameraInventoryCard({ camera, site, onView }) {
+  const camName = camera.customName || camera.name || camera.channelName || 'Unnamed camera';
+  const technicalName = camera.customName ? (camera.name || camera.channelName || '') : '';
+  const health = cameraHealth(camera);
+  const cameraId = camera._id?.slice(-6) || camera.channelId || '—';
+  return <article style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 14, borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--bd)', boxShadow: '0 3px 10px rgba(15,23,42,.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}><span style={{ display: 'grid', placeItems: 'center', width: 32, height: 32, flexShrink: 0, borderRadius: 9, color: 'var(--blue)', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)' }}><Cctv size={16} /></span><div style={{ minWidth: 0, flex: 1 }}><div title={camName} style={{ fontSize: 13, fontWeight: 700, overflowWrap: 'anywhere', lineHeight: 1.3 }}>{camName}</div>{technicalName && <div title={technicalName} style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 10.5, overflowWrap: 'anywhere' }}>{technicalName}</div>}</div><span title={health.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, padding: '4px 7px', borderRadius: 99, color: health.color, background: health.color === 'var(--tx3)' ? 'var(--bg1)' : `${health.color}18`, border: `1px solid ${health.color === 'var(--tx3)' ? 'var(--bd)' : `${health.color}44`}`, fontSize: 9.5, fontWeight: 700 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: health.color }} />{health.label}</span></div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}><div style={{ minWidth: 0 }}><div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', letterSpacing: '.06em' }}>CAMERA ID</div><div style={{ marginTop: 4, fontFamily: 'var(--mono)', fontSize: 11, overflowWrap: 'anywhere' }}>{cameraId}</div></div><div style={{ minWidth: 0 }}><div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', letterSpacing: '.06em' }}>ALIAS</div><div style={{ marginTop: 4, fontSize: 11, overflowWrap: 'anywhere' }}>{camera.customName || '—'}</div></div></div>
+    <div style={{ minWidth: 0 }}><div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', letterSpacing: '.06em', marginBottom: 5 }}>ENABLED ENGINES</div><EngineChips engines={enabledEnginesFor(camera)} /></div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingTop: 10, borderTop: '1px solid var(--bd)' }}><span style={{ color: 'var(--tx3)', fontSize: 10.5, overflowWrap: 'anywhere' }}>{site || 'Unassigned place'}</span><button type="button" onClick={() => onView(camera)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '6px 9px', borderRadius: 7, color: 'var(--blue)', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.3)', cursor: 'pointer', fontSize: 11.5, fontWeight: 600 }}>View <ArrowUpRight size={12} /></button></div>
+  </article>;
+}
+
+function PlaceCameraGroup({ place, cameras, collapsed, onToggle, onView }) {
+  return <section style={{ borderBottom: '1px solid var(--bd)' }}><button type="button" onClick={onToggle} aria-expanded={!collapsed} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '14px 16px', textAlign: 'left', color: 'var(--tx)', background: 'transparent', border: 0, cursor: 'pointer' }}><span style={{ display: 'grid', placeItems: 'center', width: 30, height: 30, flexShrink: 0, borderRadius: 8, color: 'var(--blue)', background: 'rgba(59,130,246,.1)' }}><MapPin size={15} /></span><span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: 14, overflowWrap: 'anywhere' }}>{place}</strong><span style={{ display: 'block', marginTop: 3, color: 'var(--tx3)', fontSize: 11 }}>{cameras.length} camera{cameras.length === 1 ? '' : 's'}</span></span><ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--tx3)', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .16s ease' }} /></button>{!collapsed && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 12, padding: '0 16px 16px' }}>{cameras.length ? cameras.map((camera) => <CameraInventoryCard key={camera._id || camera.id || camera.channelId} camera={camera} site={place === 'Unassigned place' ? '' : place} onView={onView} />) : <div style={{ gridColumn: '1 / -1', padding: '18px 14px', border: '1px dashed var(--bd2)', borderRadius: 10, color: 'var(--tx3)', fontSize: 12 }}>No cameras match the current filters in this place.</div>}</div>}</section>;
+}
+
 function DiscoveredCameraRow({ cam, checked, onToggle, onPreview }) {
   return (
     <div
@@ -2002,6 +2025,7 @@ export default function NVRCameras() {
   const [nvrPickerOpen, setNvrPickerOpen] = useState(false);
   const [camSearch, setCamSearch] = useState('');
   const [siteFilter, setSiteFilter] = useState('');
+  const [collapsedPlaces, setCollapsedPlaces] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -2083,6 +2107,23 @@ export default function NVRCameras() {
     const siteMatch = !siteFilter || siteOf(c).trim().toLowerCase() === siteFilter.trim().toLowerCase();
     return nameMatch && siteMatch;
   });
+
+  const placeGroups = useMemo(() => {
+    const groups = new Map();
+    const knownPlaces = !camSearch ? nvrs : [];
+    knownPlaces.forEach((nvr) => {
+      const place = String(nvr.location || nvr.locationName || nvr.site || '').trim() || 'Unassigned place';
+      if (!groups.has(place)) groups.set(place, []);
+    });
+    if (siteFilter.trim()) groups.set(siteFilter.trim(), []);
+    camFiltered.forEach((camera) => {
+      const place = siteOf(camera).trim() || 'Unassigned place';
+      if (!groups.has(place)) groups.set(place, []);
+      groups.get(place).push(camera);
+    });
+    if (!groups.size) groups.set('Unassigned place', []);
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [camFiltered, camSearch, nvrs, siteFilter]);
 
   const handleViewCamera = (c) => {
     const camId = c._id || c.channelId;
@@ -2282,30 +2323,25 @@ export default function NVRCameras() {
         ) : !canViewChannels ? (
           <ChannelAccessDeniedState />
         ) : (
-          <HScrollHint minWidth={850}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: CAM_COL,
-              padding: '10px 16px', borderBottom: '1px solid var(--bd)',
-              fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
-            }}>
-              {['ID', 'NAME', 'ALIAS', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
-            </div>
-
-            <div style={{ maxHeight: 430, overflowY: 'auto' }}>
-              <AsyncBoundary
-                loading={channelsApi.loading}
-                error={channelsApi.error}
-                isEmpty={!channelsApi.loading && !channelsApi.error && camFiltered.length === 0}
-                onRetry={channelsApi.refetch}
-                minH={100}
-                emptyLabel="No cameras found"
-              >
-                {() => camFiltered.map(c => (
-                  <CamRow key={c._id || c.id} c={c} site={siteOf(c)} onView={handleViewCamera} />
-                ))}
-              </AsyncBoundary>
-            </div>
-          </HScrollHint>
+          <AsyncBoundary
+            loading={channelsApi.loading}
+            error={channelsApi.error}
+            isEmpty={!channelsApi.loading && !channelsApi.error && !placeGroups.length}
+            onRetry={channelsApi.refetch}
+            minH={100}
+            emptyLabel="No cameras found"
+          >
+            {() => <div style={{ maxHeight: 620, overflowY: 'auto' }}>
+              {placeGroups.map(([place, cameras]) => <PlaceCameraGroup
+                key={place}
+                place={place}
+                cameras={cameras}
+                collapsed={collapsedPlaces[place] === true}
+                onToggle={() => setCollapsedPlaces((current) => ({ ...current, [place]: current[place] !== true }))}
+                onView={handleViewCamera}
+              />)}
+            </div>}
+          </AsyncBoundary>
         )}
       </div>
 

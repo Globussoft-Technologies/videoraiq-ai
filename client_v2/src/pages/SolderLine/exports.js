@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 
-const snapshotLink = (value) => typeof value === 'string' && /^https?:\/\//i.test(value) ? value : null;
+const snapshotLink = (value) => typeof value === 'string' && /^(https?:\/\/|\/|data:image\/)/i.test(value) ? value : null;
 
 /** rows: array of plain objects; the keys of the first row become the header. */
 export function buildReportWorkbook(rows) {

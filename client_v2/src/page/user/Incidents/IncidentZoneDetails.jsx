@@ -1,6 +1,24 @@
 import { solderAbsenceFields } from '../../../helpers/solderIncidentDetails.js';
+import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 
 export default function IncidentZoneDetails({ item, variant = 'card', compact = false }) {
+  if (item.incidentType === 'boxPackingDetection') {
+    const packing = packingIncidentDetails(item), dark = variant === 'lightbox';
+    if (!dark) return <dl aria-label="Box packing details" style={{ margin: '2px 0 1px', fontSize: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: 11, borderBottom: '1px solid var(--bd)' }}>
+        <dt style={{ color: 'var(--tx3)', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Box ID</dt><dd style={{ margin: 0, fontWeight: 700, color: 'var(--tx)', overflowWrap: 'anywhere', fontFamily: 'var(--mono, monospace)', letterSpacing: '.04em' }}>{packing.boxId}</dd>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 11 }}>
+        {[['Completed by', packing.completedBy], ['Time to complete', packing.packingTime]].map(([name, value]) => <div key={name} style={{ minWidth: 0 }}><dt style={{ color: 'var(--tx3)', fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 5 }}>{name}</dt><dd style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{value}</dd></div>)}
+      </div>
+    </dl>;
+    return <dl aria-label="Box packing details" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))', width: '100%', gap: 6, margin: '4px 0 0', fontSize: 11 }}>
+      {[['Box ID', packing.boxId], ['Completed by', packing.completedBy], ['Box number', packing.boxNumber], ['Time to complete', packing.packingTime]].map(([label, value]) => <div key={label} style={{ minWidth: 0, padding: '6px 8px', borderRadius: 6, background: 'rgba(99,102,241,.12)', border: '1px solid rgba(165,180,252,.2)' }}>
+        <dt style={{ color: 'rgba(255,255,255,.7)', marginBottom: 3, fontSize: 10 }}>{label}</dt>
+        <dd style={{ margin: 0, fontWeight: 600, color: label === 'Time to complete' ? '#c4b5fd' : '#fff', overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums' }}>{value}</dd>
+      </div>)}
+    </dl>;
+  }
   if (item.incidentType !== 'deskSolarShoulderDetection') return null;
   const dark = variant === 'lightbox';
   const colors = dark ? { '--tx2': 'rgba(255,255,255,.9)', '--tx3': 'rgba(255,255,255,.65)', '--bd': 'rgba(255,255,255,.2)' } : {};

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { detectionLabel, mediaUrl } from '../../../lib/format';
 import { formatUtcInConfiguredTimezone } from '../../../utils/timezone';
+import { incidentPackingExportFields, PACKING_INCIDENT_EXPORT_COLUMNS } from '../../../helpers/incidentPackingExport.js';
 
 const EXPORT_BATCH_SIZE = 500;
 const MAX_EXPORT_ROWS = 10000;
@@ -74,6 +75,7 @@ const mapRow = (item, index) => {
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
+    ...incidentPackingExportFields(item),
     Severity: severityLabel(item?.severity),
     Status: statusOf(item),
     'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, 'DD/MM/YYYY hh:mm A'),
@@ -85,9 +87,8 @@ const mapRow = (item, index) => {
 const fileStamp = () => moment().format('YYYY-MM-DD_HH-mm');
 
 const exportExcel = (rows, showVehicleNumber) => {
-  const exportRows = showVehicleNumber
-    ? rows
-    : rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'Vehicle Number')));
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))].filter((key) => showVehicleNumber || key !== 'Vehicle Number');
+  const exportRows = rows.map((row) => Object.fromEntries(columns.map((key) => [key, row[key] ?? '--'])));
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
   worksheet['!cols'] = Object.keys(exportRows[0]).map((key) => ({
     wch: key === 'Image'
@@ -125,7 +126,9 @@ const exportListPdf = (rows, showVehicleNumber) => {
   doc.text(`Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}`, 14, 19);
 
   const columns = [
-    'Sl No', 'Incident', 'NVR', 'Camera', 'Severity', 'Status', 'Time of Incident',
+    'Sl No', 'Incident', 'NVR', 'Camera',
+    ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
+    'Severity', 'Status', 'Time of Incident',
     ...(showVehicleNumber ? ['Vehicle Number'] : []),
     'Image',
   ];
@@ -140,16 +143,21 @@ const exportListPdf = (rows, showVehicleNumber) => {
     'Time of Incident': 31,
     'Vehicle Number': 27,
     Image: 20,
+    'Box ID': 28,
+    'Completed by': 26,
+    'Time to complete': 24,
   };
+  const totalWidth = columns.reduce((sum, column) => sum + columnWidths[column], 0);
+  const widthScale = Math.min(1, (doc.internal.pageSize.getWidth() - 20) / totalWidth);
   autoTable(doc, {
     head: [columns],
-    body: rows.map((row) => columns.map((column) => column === 'Image' ? (row.Image === '--' ? '--' : 'View image') : row[column])),
+    body: rows.map((row) => columns.map((column) => column === 'Image' ? (row.Image === '--' ? '--' : 'View image') : row[column] ?? '--')),
     startY: 24,
     margin: { left: 10, right: 10 },
     theme: 'grid',
     styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak', valign: 'middle' },
     headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-    columnStyles: Object.fromEntries(columns.map((column, index) => [index, { cellWidth: columnWidths[column] }])),
+    columnStyles: Object.fromEntries(columns.map((column, index) => [index, { cellWidth: columnWidths[column] * widthScale }])),
     didParseCell: (data) => {
       if (data.section !== 'body' || data.column.index !== imageColumn) return;
       const url = rows[data.row.index]?.Image;
@@ -246,17 +254,18 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
   const columns = 4;
   const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
   const imageHeight = cardWidth * 0.52;
-  const details = [
+  const detailsFor = (row) => [
     ['Incident', 'Incident'],
     ['NVR', 'NVR'],
     ['Camera', 'Camera'],
+    ...(Object.hasOwn(row, 'Box ID') ? PACKING_INCIDENT_EXPORT_COLUMNS.map((key) => [key, key]) : []),
     ['Severity', 'Severity'],
     ['Status', 'Status'],
     ['Time', 'Time of Incident'],
     ...(showVehicleNumber ? [['Vehicle Number', 'Vehicle Number']] : []),
   ];
-  const detailGap = 4.3;
-  const cardHeight = imageHeight + 6 + details.length * detailGap + 4;
+  const detailGap = rows.some((row) => Object.hasOwn(row, 'Box ID')) ? 3.7 : 4.3;
+  const cardHeight = imageHeight + 6 + Math.max(...rows.map((row) => detailsFor(row).length)) * detailGap + 4;
   const firstPageY = 25;
   const nextPageY = 10;
   let x = margin;
@@ -305,7 +314,7 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
     }
 
     let textY = y + imageHeight + 6;
-    details.forEach(([label, key]) => {
+    detailsFor(row).forEach(([label, key]) => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(5.4);
       doc.setTextColor(5, 24, 55);

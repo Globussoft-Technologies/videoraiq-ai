@@ -23,7 +23,7 @@ const COLUMN_CLASS = {
   7: 'lg:grid-cols-7',
 };
 
-const StatCards = ({ stats = [] }) => {
+const StatCards = ({ stats = [], variant = stats[0]?.variant || 'default' }) => {
   if (!stats.length) return null;
 
   // Was fixed at 4, which left a fifth tile stranded on its own row.
@@ -34,6 +34,7 @@ const StatCards = ({ stats = [] }) => {
       {stats.map((s, i) => (
         <div
           key={s.label ?? i}
+          title={s.title || s.label}
           onClick={s.onClick}
           role={s.onClick ? 'button' : undefined}
           tabIndex={s.onClick ? 0 : undefined}
@@ -50,13 +51,16 @@ const StatCards = ({ stats = [] }) => {
           className={`bg-[var(--bg1)] border rounded-[13px] p-[15px] ${
             s.onClick ? 'cursor-pointer hover:border-[var(--brand)]' : ''
           } ${s.active ? 'border-[var(--brand)] ring-1 ring-[var(--brand)]/30' : 'border-[var(--bd)]'}`}
+          style={variant === 'modern' ? { position: 'relative', overflow: 'hidden', minHeight: 92, padding: '16px 18px', borderColor: s.active ? '#2563eb' : 'var(--bd)', background: `linear-gradient(135deg, var(--bg1) 0%, ${s.color || '#64748b'}12 100%)`, boxShadow: `0 8px 22px ${s.color || '#64748b'}14` } : undefined}
         >
-          <div className="text-[11px] text-[var(--tx2)] truncate" title={s.label}>
+          {variant === 'modern' && <span style={{ position: 'absolute', left: 0, top: 14, bottom: 14, width: 4, borderRadius: '0 4px 4px 0', background: s.color || 'var(--brand)' }} />}
+          {variant === 'modern' && <span style={{ position: 'absolute', right: -24, top: -30, width: 96, height: 96, borderRadius: '50%', background: `radial-gradient(circle, ${s.color || '#64748b'}28, transparent 68%)` }} />}
+          <div className="text-[11px] text-[var(--tx2)] truncate" title={s.label} style={variant === 'modern' ? { position: 'relative', paddingLeft: 4, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tx3)' } : undefined}>
             {s.label}
           </div>
           <div
             className="font-[700] text-[26px] mt-[5px] leading-none"
-            style={{ fontFamily: 'var(--disp)', color: s.color || 'var(--tx)' }}
+            style={{ fontFamily: 'var(--disp)', color: s.color || 'var(--tx)', position: variant === 'modern' ? 'relative' : undefined, paddingLeft: variant === 'modern' ? 4 : undefined, fontSize: variant === 'modern' ? 29 : undefined, letterSpacing: variant === 'modern' ? '-.04em' : undefined }}
           >
             {s.value}
           </div>
