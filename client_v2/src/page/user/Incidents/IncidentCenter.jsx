@@ -1337,7 +1337,7 @@ function IncidentListRow({
         className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
         style={{
           display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS,
-          gap: 12, alignItems: 'center', minWidth: 1420, padding: '14px 12px',
+          gap: 12, alignItems: 'center', minWidth: 1420, padding: packing ? '10px 12px' : '14px 12px',
           background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
           borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
         }}
@@ -1367,18 +1367,18 @@ function IncidentListRow({
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
-          <span style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
+          <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
-          {packing && <span style={{ fontSize: 11, color: 'var(--blue)', overflowWrap: 'anywhere' }}>Box ID: {packing.boxId}</span>}
+          {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span title={camera} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera}</span>
-          <span title={nvr} style={{ fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
+          <span title={nvr} style={{ fontSize: 11.5, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
         </div>
 
         {['zone', 'presenceSec', 'done'].map((field) => (
-          <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+          <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: packing ? 'var(--tx)' : 'var(--tx2)', fontWeight: packing ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>
             {packing ? <span>{({ zone: packing.completedBy, presenceSec: packing.packingTime, done: packing.boxNumber })[field]}</span> : zoneRows.length ? zoneRows.map((zone, index) => (
               <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {zone[field] ?? '—'}
@@ -2148,11 +2148,11 @@ export default function IncidentCenter() {
       <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
-            background: 'var(--bg1solid)', border: `1px solid ${k.color}35`, borderLeft: `3px solid ${k.color}`, borderRadius: 12,
-            padding: '17px 18px', display: 'flex', flexDirection: 'column', gap: 8,
-            boxShadow: '0 4px 12px rgba(15,23,42,.05)', minWidth: 0,
+            background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
+            padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4,
+            boxShadow: '0 1px 3px rgba(0,0,0,.07)', minWidth: 0,
           }}>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 500 }}>{k.label}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: k.color, lineHeight: 1 }}>
               {stats.loading ? '—' : k.value}
             </div>
@@ -2162,9 +2162,9 @@ export default function IncidentCenter() {
 
       {/* ── Filter bar — everything on one wrapping line ─────────────────────── */}
       <div className="vq-inc-toolbar" data-empty={noIncidents} style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12,
+        background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        boxShadow: '0 4px 14px rgba(15,23,42,.06)',
+        boxShadow: '0 1px 3px rgba(0,0,0,.07)',
       }}>
         {/* Detection multi-select */}
         <MultiSelect
@@ -2612,7 +2612,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 20, alignItems: 'start' }}>
+            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {items.map((item, i) => (
                 <IncidentCard
                   key={item._id || item.id}

@@ -415,22 +415,20 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             ? '0 0 0 2px rgba(34,197,94,.2), 0 4px 16px rgba(34,197,94,.16)'
             : deleteMode && selectedForDelete
             ? '0 0 0 2px rgba(239,68,68,.3), 0 4px 16px rgba(0,0,0,.14)'
-            : hover ? '0 12px 28px rgba(15,23,42,.14)' : '0 2px 8px rgba(15,23,42,.06)',
-          borderRadius: 14,
+            : hover ? '0 4px 16px rgba(0,0,0,.14)' : '0 1px 4px rgba(0,0,0,.06)',
+          borderRadius: 12,
           overflow: 'hidden',
           cursor: 'pointer',
           display: 'flex',
           flexDirection: 'column',
-          minHeight: 370,
-          transition: 'transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease',
-          transform: hover ? 'translateY(-2px)' : 'none',
+          transition: 'box-shadow .15s, border-color .15s, background .15s',
           position: 'relative',
         }}
       >
         {/* Image area */}
-        <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0f172a', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
           {imgSrc ? (
-            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .25s ease', transform: hover ? 'scale(1.025)' : 'scale(1)' }} />
+            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)' }}>
               <ImageOff size={28} strokeWidth={1.4} />
@@ -546,16 +544,41 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             </span>
           </div>
 
+          {/* Keep card actions over the image, as in the original compact layout. */}
+          <div style={{ position: 'absolute', bottom: 9, right: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, flexWrap: 'wrap' }}>
+            {conf != null && (
+              <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
+                {Math.round(conf)}%
+              </span>
+            )}
+            <button
+              onClick={e => { e.stopPropagation(); setReportOpen(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, background: reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 10, fontWeight: 600, padding: '3px 8px', cursor: 'pointer', transition: 'background .15s' }}
+              onMouseEnter={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.95)' : 'rgba(59,130,246,.95)'}
+              onMouseLeave={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)'}
+            >
+              <Flag size={10} />
+              {reported ? 'Reported' : 'Report'}
+            </button>
+            {imgSrc && (
+              <button type="button" aria-label="Open incident image"
+                onClick={e => { e.stopPropagation(); onOpenLightbox?.(item); }}
+                style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(4px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Maximize2 size={12} color="#fff" />
+              </button>
+            )}
+          </div>
 
         </div>
 
         {/* Info row */}
-          <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 11, minWidth: 0, flex: 1, background: 'var(--bg1solid)' }}>
+        <div style={{ padding: item.incidentType === 'boxPackingDetection' ? '12px 14px' : '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: item.incidentType === 'boxPackingDetection' ? 8 : 5, minWidth: 0 }}>
           {isCarModel ? (
             <>
               {/* Title + Tag User on one row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                   {item.incidentName || det}
                 </span>
                 <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} showPlate={false} />
@@ -600,7 +623,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               {/* Plate + tagged user, for Vehicle Detection and friends. */}
               <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                <span style={{ fontSize: item.incidentType === 'boxPackingDetection' ? 14 : 13, fontWeight: item.incidentType === 'boxPackingDetection' ? 700 : 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                   {item.incidentName || det}
                 </span>
                 {isGuardSleeping && (
@@ -648,14 +671,14 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             </>
           )}
           <IncidentZoneDetails item={item} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(item.incidentType === 'boxPackingDetection' ? { paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>
                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>Camera</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{cam || '--'}</span>
               </span>
             ) : (
-              <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
+              <span style={{ fontSize: 11, color: item.incidentType === 'boxPackingDetection' ? 'var(--tx2)' : 'var(--tx3)', fontWeight: item.incidentType === 'boxPackingDetection' ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
                 {cam}
               </span>
             )}
@@ -691,43 +714,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               </button>
             )}
             */}
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, flex: '0 0 auto', fontSize: 11, color: st.color, fontWeight: 600, padding: '4px 7px', borderRadius: 6, background: 'var(--bg2)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '0 0 auto', fontSize: 10.5, color: st.color, fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color }} />
               {st.label}
             </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-            {conf != null && (
-              <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
-                {Math.round(conf)}%
-              </span>
-            )}
-
-            <button
-              onClick={e => { e.stopPropagation(); setReportOpen(true); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                background: 'var(--bg2)',
-                backdropFilter: 'blur(4px)',
-                border: '1px solid var(--bd2)', borderRadius: 7,
-                color: reported ? 'var(--ok)' : 'var(--tx2)', fontSize: 11, fontWeight: 600,
-                padding: '6px 10px', cursor: 'pointer',
-                transition: 'background .15s',
-              }}
-            >
-              <Flag size={10} />
-              {reported ? 'Reported' : 'Report'}
-            </button>
-
-            {/* Expand / lightbox */}
-            {imgSrc && (
-              <button type="button" aria-label="Open incident image"
-                onClick={e => { e.stopPropagation(); onOpenLightbox?.(item); }}
-                style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--bd2)', backdropFilter: 'blur(4px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Maximize2 size={13} color="var(--tx2)" />
-              </button>
-            )}
           </div>
         </div>
       </div>

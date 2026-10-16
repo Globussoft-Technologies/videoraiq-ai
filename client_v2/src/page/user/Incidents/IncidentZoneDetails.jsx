@@ -4,12 +4,18 @@ import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.
 export default function IncidentZoneDetails({ item, variant = 'card', compact = false }) {
   if (item.incidentType === 'boxPackingDetection') {
     const packing = packingIncidentDetails(item), dark = variant === 'lightbox';
-    if (!dark) return <dl aria-label="Box packing details" style={{ margin: '2px 0 1px', fontSize: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: 11, borderBottom: '1px solid var(--bd)' }}>
-        <dt style={{ color: 'var(--tx3)', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>Box ID</dt><dd style={{ margin: 0, fontWeight: 700, color: 'var(--tx)', overflowWrap: 'anywhere', fontFamily: 'var(--mono, monospace)', letterSpacing: '.04em' }}>{packing.boxId}</dd>
+    if (!dark) return <dl aria-label="Box packing details" style={{ margin: '1px 0', fontSize: 11, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+        <dt style={{ color: 'var(--tx2)', fontWeight: 600, flexShrink: 0 }}>Box ID</dt>
+        <dd style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono, monospace)' }} title={String(packing.boxId)}>{packing.boxId}</dd>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 11 }}>
-        {[['Completed by', packing.completedBy], ['Time to complete', packing.packingTime]].map(([name, value]) => <div key={name} style={{ minWidth: 0 }}><dt style={{ color: 'var(--tx3)', fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 5 }}>{name}</dt><dd style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{value}</dd></div>)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, paddingTop: 10 }}>
+        {[['Completed by', packing.completedBy], ['Time to complete', packing.packingTime], ['Box number', packing.boxNumber]].map(([label, value]) => (
+          <div key={label} style={{ minWidth: 0 }}>
+            <dt style={{ color: 'var(--tx2)', fontSize: 11, lineHeight: 1.2 }}>{label}</dt>
+            <dd style={{ margin: '5px 0 0', color: 'var(--tx)', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={String(value)}>{value}</dd>
+          </div>
+        ))}
       </div>
     </dl>;
     return <dl aria-label="Box packing details" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))', width: '100%', gap: 6, margin: '4px 0 0', fontSize: 11 }}>
