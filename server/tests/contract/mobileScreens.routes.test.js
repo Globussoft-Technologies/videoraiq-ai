@@ -4,12 +4,16 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { createMobileScreensRouter } from '../../core/v2/mobileScreens/mobileScreens.router.js';
 import { MOBILE_SCREENS, buildMobileCatalogue } from '../../constants/mobileScreens.js';
+import { permittedWebScreens } from '../../constants/mobileWebScreens.js';
 
 function setup({ permissionConfig = { logs: { global: { view: true } } }, moduleConfig = {}, effectiveLogs, identity = { adminId: 'tenant-a', memberId: 'member-a', user_id: 'owner-a' }, roleError = false } = {}) {
   const permissions = { resolveRolePermission: vi.fn().mockResolvedValue(roleError ? { error: 'UNAVAILABLE' } : { roles: [{ roleName: 'custom', permissionConfig }] }) };
   const logs = { resolveLogsForAdmin: vi.fn().mockResolvedValue(effectiveLogs ?? Object.fromEntries(MOBILE_SCREENS.filter((s) => s.logsConfigKey).map((s) => [s.logsConfigKey, true]))) };
   const admins = { findById: vi.fn(() => ({ select: () => ({ lean: async () => ({ moduleConfig }) }) })) };
-  const incidents = { getConveyorDetectionLogs: vi.fn((req, res) => res.json({ query: req.query, tenant: req.verified.userData.adminId })) };
+  const incidents = {
+    getConveyorDetectionLogs: vi.fn((req, res) => res.json({ query: req.query, tenant: req.verified.userData.adminId })),
+    getHygieneSanitationFoodSafetyDetectionLogs: vi.fn((req, res) => res.json({ query: req.query, tenant: req.verified.userData.adminId })),
+  };
   const app = express();
   app.use((req, res, next) => { req.verified = { userData: identity }; next(); });
   app.use('/mobile-screens', createMobileScreensRouter({ admins, permissions, logs, incidents }));
@@ -18,6 +22,19 @@ function setup({ permissionConfig = { logs: { global: { view: true } } }, module
 }
 
 describe('mobile screen catalogue', () => {
+  it('includes hygiene logs only when the role and effective logs allow them', async () => {
+    const permissionConfig = { logs: { hygieneSanitationFoodSafetyLogs: { view: true } } };
+    const allowed = await request(setup({ permissionConfig }).app).get('/mobile-screens');
+    expect(allowed.body.body.data.screens).toContainEqual(expect.objectContaining({
+      id: 'hygieneSanitationFoodSafetyLogs', title: 'Hygiene & Food Safety Logs', renderer: 'log-list-v1',
+    }));
+    const disabled = await request(setup({ permissionConfig, effectiveLogs: { hygieneSanitationFoodSafetyLogs: false } }).app).get('/mobile-screens');
+    expect(disabled.body.body.data.screens).toEqual([]);
+    const denied = await request(setup({ permissionConfig: { logs: { hygieneSanitationFoodSafetyLogs: { view: false } } } }).app).get('/mobile-screens');
+    expect(denied.body.body.data.screens).toEqual([]);
+    expect(permittedWebScreens({ permissions: permissionConfig, logs: { hygieneSanitationFoodSafetyLogs: true }, modules: {} }))
+      .toContainEqual(expect.objectContaining({ id: 'hygieneSanitationFoodSafetyLogs', webPath: '/logs/hygiene' }));
+  });
   it('describes supported native lists without exposing executable or web routing details', async () => {
     const { app } = setup();
     const response = await request(app).get('/mobile-screens');
@@ -63,6 +80,16 @@ describe('mobile screen catalogue', () => {
 });
 
 describe('mobile records', () => {
+  it('dispatches hygiene records with the authenticated tenant and denies disabled access', async () => {
+    const { app, incidents, logs } = setup({ permissionConfig: { logs: { hygieneSanitationFoodSafetyLogs: { view: true } } } });
+    const response = await request(app).get('/mobile-screens/hygieneSanitationFoodSafetyLogs/records?limit=10');
+    expect(response.status).toBe(200);
+    expect(response.body.tenant).toBe('tenant-a');
+    expect(incidents.getHygieneSanitationFoodSafetyDetectionLogs).toHaveBeenCalledTimes(1);
+    logs.resolveLogsForAdmin.mockResolvedValue({ hygieneSanitationFoodSafetyLogs: false });
+    expect((await request(app).get('/mobile-screens/hygieneSanitationFoodSafetyLogs/records')).status).toBe(404);
+    expect(incidents.getHygieneSanitationFoodSafetyDetectionLogs).toHaveBeenCalledTimes(1);
+  });
   it('rechecks access and dispatches only to a registered handler with tenant context', async () => {
     const { app, permissions, incidents } = setup();
     const recorderId = '123456789012345678901234';

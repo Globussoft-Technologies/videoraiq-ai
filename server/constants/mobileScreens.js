@@ -12,6 +12,7 @@ const baseFields = [
 // Explicit controller names are server-only. Never accept executable code or URLs
 // from a tenant or send controller names to the mobile application.
 const incidentDefinitions = [
+  ['hygiene', 'getHygieneSanitationFoodSafetyDetectionLogs', [field('zone', 'Zone'), field('violationCount', 'Issues Detected', 'number'), field('description', 'Description')]],
   ['conveyor', 'getConveyorDetectionLogs', [field('currentStatus', 'Status', 'enum', { valueLabels: { ON: 'Loaded', OFF: 'Not-Loaded' } })]],
   ['crusher', 'getCrusherDetectionLogs', [field('currentStatus', 'Status', 'enum')]],
   ['water-spill', 'getWaterSpillageDetectionLogs', []],
