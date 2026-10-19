@@ -58,6 +58,7 @@ import BoxPackingLogs from './pages/BoxPackingLogs/BoxPackingLogs';
 import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
 import StockCountingAnalytics from './pages/StockCountingAnalytics/StockCountingAnalytics';
 import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
+import DoorDetectionLogs from './pages/DoorDetectionLogs/DoorDetectionLogs';
 import SolderLine from './pages/SolderLine/SolderLine';
 // import HygieneAnalytics from './pages/HygieneAnalytics/HygieneAnalytics';
 import HygieneLogs from './pages/HygieneLogs/HygieneLogs';
@@ -192,6 +193,8 @@ export const v2Routes = (
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
+    <Route path="logs/door" element={guard('logs', 'doorDetectionLogs', <DoorDetectionLogs />)} />
+    <Route path="logs/door-detection" element={<Navigate to="/logs/door" replace />} />
 
     {/* Solar Line QC — Desk Solar Shoulder detection. One route so the
         Overview / Alert Logs / Reports tabs share a single mounted shell. */}
