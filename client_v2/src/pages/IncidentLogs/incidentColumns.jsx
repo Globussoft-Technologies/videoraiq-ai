@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -33,6 +33,38 @@ const severityBg = (severity) => {
 
 const formatTime = (t) =>
   t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
+
+export const formatDoorDuration = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return '--';
+
+  const formatValue = (amount) => Number.isInteger(amount)
+    ? String(amount)
+    : amount.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+
+  if (value >= 86400) return `${formatValue(value / 86400)} day${value / 86400 === 1 ? '' : 's'}`;
+  if (value >= 3600) return `${formatValue(value / 3600)} hr${value / 3600 === 1 ? '' : 's'}`;
+  if (value >= 60) return `${formatValue(value / 60)} min${value / 60 === 1 ? '' : 's'}`;
+  return `${formatValue(value)} sec${value === 1 ? '' : 's'}`;
+};
+
+const doorStatusStyle = (status) => {
+  const isOpen = String(status || '').toLowerCase() === 'open';
+  const color = isOpen ? 'var(--crit)' : 'var(--ok)';
+  return {
+    color,
+    backgroundColor: isOpen ? 'color-mix(in srgb, var(--crit) 15%, transparent)' : 'color-mix(in srgb, var(--ok) 15%, transparent)',
+    border: 'none',
+    borderRadius: 999,
+    padding: '4px 10px',
+    fontWeight: 500,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: '0 0 auto',
+    marginLeft: 'auto',
+  };
+};
 
 export const StockPlaybackLink = ({ incidentId }) => incidentId ? (
   <Link
@@ -267,6 +299,32 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showDoorFields) {
+    cols.push(
+      {
+        accessorKey: 'zoneName',
+        header: sortableHeader('Door', 'zone', onSort, sortable),
+        cell: ({ row }) => <span className={styles.text}>{row.original.zoneName || row.original.zone || '--'}</span>,
+      },
+      {
+        accessorKey: 'doorStatus',
+        header: 'Door Status',
+        cell: ({ row }) => {
+          const status = String(row.original.doorStatus || '').toLowerCase();
+          const isOpen = status === 'open';
+          return (
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${isOpen ? 'bg-[var(--crit)]/15 text-[var(--crit)]' : 'bg-[var(--ok)]/15 text-[var(--ok)]'}`}>
+              {status || '--'}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: 'durationSec',
+        header: sortableHeader('Door Open Duration', 'durationSec', onSort, sortable),
+        cell: ({ row }) => <span className={styles.text}>{formatDoorDuration(row.original.durationSec)}</span>,
+      },
+    );
   if (config.showHygieneFields) {
     cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
       cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
@@ -428,6 +486,19 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showIndustrialFields && (
           <>
             <IncidentCardRow icon={Activity} label="Objects Detected" value={row.count ?? '--'} />
+          </>
+        )}
+        {config.showDoorFields && (
+          <>
+            <IncidentCardRow icon={DoorOpen} label="Door" value={row.zoneName || row.zone || '--'} />
+            <IncidentCardRow
+              icon={DoorOpen}
+              label="Status"
+              value={row.doorStatus || '--'}
+              valueClassName="capitalize"
+              valueStyle={doorStatusStyle(row.doorStatus)}
+            />
+            <IncidentCardRow icon={Clock} label="Door Open Duration" value={formatDoorDuration(row.durationSec)} />
           </>
         )}
         {config.showHygieneFields && <IncidentHygieneDetails item={row} />}

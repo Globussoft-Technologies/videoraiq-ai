@@ -1,11 +1,11 @@
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { fetchIncidentLogs } from './Api';
-import { formatStatus } from './incidentColumns';
+import { formatDoorDuration, formatStatus } from './incidentColumns';
 import { boxSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
@@ -55,6 +55,9 @@ const fetchAllForExport = async (config, params) => {
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
+      door: item.zoneName || item.zone || '--',
+      doorStatus: item.doorStatus || '--',
+      doorOpenDuration: formatDoorDuration(item.durationSec),
       createdAt: item.timeOfIncident || item.createdAt
         ? moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
         : '--',
@@ -93,6 +96,15 @@ const buildExportColumns = (config) => {
     { key: 'channelName', label: 'Camera Name' }
   );
   if (config.showSeverity !== false) cols.push({ key: 'severity', label: 'Severity' });
+
+  if (config.showDoorFields) {
+    cols.push(
+      { key: 'door', label: 'Door' },
+      { key: 'doorStatus', label: 'Door Status' },
+      { key: 'doorOpenDuration', label: 'Door Open Duration' },
+    );
+  }
+
   if (config.showBoxPackingFields) cols.push(...BOX_PACKING_FIELDS.map(({ key, label }) => ({ key, label })));
 
   if (config.showFireSmokeFields) {
@@ -169,6 +181,15 @@ const exportToPDF = async (config, params) => {
       head: [headers],
       body: tableRows,
       columnStyles: { [imageColIndex]: { cellWidth: 40 } },
+      didParseCell: (data) => {
+        const statusColumnIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
+        if (config.showDoorFields && statusColumnIndex > 0 && data.section === 'body' && data.column.index === statusColumnIndex) {
+          const isOpen = String(data.cell.raw || '').toLowerCase() === 'open';
+          data.cell.styles.textColor = isOpen ? [220, 38, 38] : [22, 163, 74];
+          data.cell.styles.fillColor = isOpen ? [254, 226, 226] : [220, 252, 231];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
       didDrawCell: (data) => {
         if (data.column.index === imageColIndex && data.section === 'body') {
           const url = allLogs[data.row.index]?.incidentImageUrl;
@@ -310,6 +331,13 @@ const exportToGridPDF = async (config, params) => {
     if (config.showBlurredCameraFields) {
       details.push(['Is Blurred', 'isBlurred']);
     }
+    if (config.showDoorFields) {
+      details.push(
+        ['Door', 'door'],
+        ['Door Status', 'doorStatus'],
+        ['Door Open Duration', 'doorOpenDuration'],
+      );
+    }
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);
       if (config.showAlertThreshold !== false) details.push(['Alert Threshold', 'alertThreshold']);
@@ -382,16 +410,23 @@ const exportToGridPDF = async (config, params) => {
       const valueX = x + cardWidth - 3.5;
       let textY = y + imageHeight + bodyTopGap;
       details.forEach(([label, key]) => {
+        const isDoorStatus = config.showDoorFields && key === 'doorStatus';
+        const isOpen = String(row[key] || '').toLowerCase() === 'open';
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(5, 24, 55);
         doc.setFontSize(5.2);
         doc.text(label.toUpperCase(), labelX, textY);
 
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(26, 42, 103);
+        doc.setFont('helvetica', isDoorStatus ? 'bold' : 'normal');
+        doc.setTextColor(isDoorStatus ? (isOpen ? 220 : 22) : 26, isDoorStatus ? (isOpen ? 38 : 163) : 42, isDoorStatus ? (isOpen ? 38 : 74) : 103);
         doc.setFontSize(6.3);
         const valueText =
           doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 22).slice(0, 1)[0] || '--';
+        if (isDoorStatus) {
+          const pillWidth = doc.getTextWidth(valueText) + 6;
+          doc.setFillColor(isOpen ? 254 : 220, isOpen ? 226 : 252, isOpen ? 226 : 231);
+          doc.roundedRect(valueX - pillWidth, textY - 3.2, pillWidth, 4.8, 1.4, 1.4, 'F');
+        }
         doc.text(valueText, valueX, textY, { align: 'right' });
         textY += rowGap;
       });
@@ -436,8 +471,21 @@ const exportToExcel = async (config, params) => {
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const imageColIndex = cols.length + 1; // after '#' + all cols
+    const statusColIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
 
     allLogs.forEach((row, i) => {
+      if (config.showDoorFields && statusColIndex > 0) {
+        const statusCellRef = XLSX.utils.encode_cell({ r: i + 1, c: statusColIndex });
+        const statusCell = worksheet[statusCellRef];
+        if (statusCell) {
+          const isOpen = String(row.doorStatus || '').toLowerCase() === 'open';
+          statusCell.s = {
+            fill: { patternType: 'solid', fgColor: { rgb: isOpen ? 'FEE2E2' : 'DCFCE7' } },
+            font: { bold: true, color: { rgb: isOpen ? 'DC2626' : '16A34A' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          };
+        }
+      }
       if (row.incidentImageUrl) {
         const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: imageColIndex });
         worksheet[cellRef] = { t: 'f', f: `HYPERLINK("${row.incidentImageUrl}", "View Image")` };

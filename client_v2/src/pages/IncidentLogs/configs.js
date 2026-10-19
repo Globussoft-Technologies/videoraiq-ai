@@ -114,6 +114,24 @@ export const UNAUTHORIZED_ACCESS_CONFIG = {
   datePickerVariant: 'preset',
 };
 
+export const DOOR_DETECTION_CONFIG = {
+  endpoint: '/incidents/logs/door-detection',
+  title: 'Door Logs',
+  fileName: 'door_logs',
+  sheetName: 'Door Logs',
+  storagePrefix: 'door_detection',
+  permissionKey: 'doorDetectionLogs',
+  accessDenied: "You don't have permission to view Door Logs.",
+  showIncidentName: false,
+  showStatus: false,
+  showDoorFields: true,
+  statsLabel: 'Door Logs',
+  sortable: true,
+  gridVariant: 'details',
+  enableViewExports: true,
+  datePickerVariant: 'preset',
+};
+
 export const FIRE_SMOKE_CONFIG = {
   endpoint: '/incidents/logs/fire-smoke-detection',
   title: 'Fire & Smoke Detection Logs',

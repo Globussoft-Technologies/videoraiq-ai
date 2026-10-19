@@ -32,6 +32,24 @@ const statusOf = (item) => {
   return 'New';
 };
 
+const formatDoorDuration = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return '--';
+  if (value >= 86400) {
+    const days = value / 86400;
+    return `${days.toFixed(value % 86400 ? 1 : 0)} day${days === 1 ? '' : 's'}`;
+  }
+  if (value >= 3600) {
+    const hours = value / 3600;
+    return `${hours.toFixed(value % 3600 ? 1 : 0)} hr${hours === 1 ? '' : 's'}`;
+  }
+  if (value >= 60) {
+    const minutes = value / 60;
+    return `${minutes.toFixed(value % 60 ? 1 : 0)} min${minutes === 1 ? '' : 's'}`;
+  }
+  return `${value} sec${value === 1 ? '' : 's'}`;
+};
+
 // The API stores the Medium severity under the `moderate` key. Keep exports
 // consistent with the Incident Center's user-facing severity label.
 const severityLabel = (severity) => {
@@ -69,12 +87,18 @@ const fetchAllFilteredIncidents = async (filter) => {
 };
 
 const mapRow = (item, index) => {
+  const isDoorDetection = item?.incidentType === 'doorDetection';
   return {
     'Sl No': index + 1,
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
+    ...(isDoorDetection ? {
+      Door: text(item?.zoneName || item?.zone),
+      'Door Status': text(item?.doorStatus),
+      'Door Open Duration': formatDoorDuration(item?.durationSec),
+    } : {}),
     ...incidentPackingExportFields(item),
     Severity: severityLabel(item?.severity),
     Status: statusOf(item),
@@ -99,14 +123,48 @@ const exportExcel = (rows, showVehicleNumber) => {
   const imageColumn = Object.keys(exportRows[0]).indexOf('Image');
   exportRows.forEach((row, index) => {
     const url = row.Image;
-    if (!url || url === '--') return;
-    const address = XLSX.utils.encode_cell({ r: index + 1, c: imageColumn });
+    if (url && url !== '--') {
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: imageColumn });
+      if (worksheet[address]) {
+        worksheet[address] = {
+          t: 's',
+          v: 'View image',
+          l: { Target: url, Tooltip: 'Open incident image' },
+          s: { font: { color: { rgb: '000080' }, underline: true } },
+        };
+      }
+    }
+
+    ['Status', 'Door Status'].forEach((key) => {
+      const columnIndex = columns.indexOf(key);
+      if (columnIndex < 0) return;
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: columnIndex });
+      const cell = worksheet[address];
+      if (!cell) return;
+
+      const value = String(row[key] || '').toLowerCase();
+      const isGreen = value === 'resolved' || value === 'closed';
+      const isAmber = value === 'reported';
+      const color = isGreen ? '166534' : isAmber ? '92400E' : 'B91C1C';
+      const fill = isGreen ? 'DCFCE7' : isAmber ? 'FEF3C7' : 'FEE2E2';
+      cell.s = {
+        ...(cell.s || {}),
+        font: { ...(cell.s?.font || {}), bold: true, color: { rgb: color } },
+        fill: { patternType: 'solid', fgColor: { rgb: fill } },
+        alignment: { horizontal: 'center' },
+      };
+    });
+  });
+
+  // Keep the header readable when the export contains the optional Door
+  // Detection fields.
+  columns.forEach((key, columnIndex) => {
+    const address = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
     if (worksheet[address]) {
-      worksheet[address] = {
-        t: 's',
-        v: 'View image',
-        l: { Target: url, Tooltip: 'Open incident image' },
-        s: { font: { color: { rgb: '000080' } } },
+      worksheet[address].s = {
+        ...(worksheet[address].s || {}),
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid', fgColor: { rgb: '3B82F6' } },
       };
     }
   });
@@ -127,6 +185,7 @@ const exportListPdf = (rows, showVehicleNumber) => {
 
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
+    ...(rows.some((row) => Object.hasOwn(row, 'Door')) ? ['Door', 'Door Status', 'Door Open Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
     'Severity', 'Status', 'Time of Incident',
     ...(showVehicleNumber ? ['Vehicle Number'] : []),
@@ -138,6 +197,9 @@ const exportListPdf = (rows, showVehicleNumber) => {
     Incident: showVehicleNumber ? 48 : 60,
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
+    Door: 24,
+    'Door Status': 24,
+    'Door Open Duration': 30,
     Severity: 18,
     Status: 18,
     'Time of Incident': 31,
@@ -159,10 +221,19 @@ const exportListPdf = (rows, showVehicleNumber) => {
     headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
     columnStyles: Object.fromEntries(columns.map((column, index) => [index, { cellWidth: columnWidths[column] * widthScale }])),
     didParseCell: (data) => {
-      if (data.section !== 'body' || data.column.index !== imageColumn) return;
-      const url = rows[data.row.index]?.Image;
-      if (url && url !== '--') {
-        data.cell.styles.textColor = [0, 0, 128];
+      if (data.section !== 'body') return;
+
+      if (data.column.index === imageColumn) {
+        const url = rows[data.row.index]?.Image;
+        if (url && url !== '--') data.cell.styles.textColor = [0, 0, 128];
+      }
+
+      const column = columns[data.column.index];
+      if (column === 'Door Status') {
+        const isOpen = String(data.cell.raw || '').toLowerCase() === 'open';
+        data.cell.styles.textColor = isOpen ? [220, 38, 38] : [22, 163, 74];
+        data.cell.styles.fillColor = isOpen ? [254, 226, 226] : [220, 252, 231];
+        data.cell.styles.fontStyle = 'bold';
       }
     },
     didDrawCell: (data) => {
@@ -258,6 +329,11 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
     ['Incident', 'Incident'],
     ['NVR', 'NVR'],
     ['Camera', 'Camera'],
+    ...(Object.hasOwn(row, 'Door') ? [
+      ['Door', 'Door'],
+      ['Status', 'Door Status'],
+      ['Door Open Duration', 'Door Open Duration'],
+    ] : []),
     ...(Object.hasOwn(row, 'Box ID') ? PACKING_INCIDENT_EXPORT_COLUMNS.map((key) => [key, key]) : []),
     ['Severity', 'Severity'],
     ['Status', 'Status'],
@@ -322,7 +398,9 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.3);
-      doc.setTextColor(26, 42, 103);
+      const isDoorStatus = key === 'Door Status';
+      const isOpen = String(row[key] || '').toLowerCase() === 'open';
+      doc.setTextColor(isDoorStatus ? (isOpen ? 220 : 22) : 26, isDoorStatus ? (isOpen ? 38 : 163) : 42, isDoorStatus ? (isOpen ? 38 : 74) : 103);
       const value = doc.splitTextToSize(text(row[key]), cardWidth - 24).slice(0, 1)[0] || '--';
       doc.text(value, x + cardWidth - 3.5, textY, { align: 'right' });
       textY += detailGap;

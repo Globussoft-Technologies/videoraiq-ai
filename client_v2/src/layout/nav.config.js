@@ -208,6 +208,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs', logsConfigKey: 'attendanceLogs' },
       { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs', logsConfigKey: 'accessLogs' },
+      { key: 'door-detection', label: 'Door Logs', path: 'logs/door', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'doorDetectionLogs', logsConfigKey: 'doorDetectionLogs' },
       { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs', logsConfigKey: 'taggedUsers' },
       { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs', logsConfigKey: 'detectedUsers' },
       { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personCountLogs', logsConfigKey: 'personCountLogs' },
@@ -316,6 +317,7 @@ export const VIEW_META = {
   'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, worker comparison and review summaries' },
   'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
+  'door-detection': { title: 'Door Logs', sub: 'Door open/closed duration detections' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   'hygiene-analytics': { title: 'Hygiene & Food Safety', sub: 'Risk trends, incident evidence and period reports' },
   hygiene: { title: 'Hygiene & Food Safety Logs', sub: 'Hand hygiene, product contact and contamination incidents' },

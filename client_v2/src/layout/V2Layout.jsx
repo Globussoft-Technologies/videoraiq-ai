@@ -74,7 +74,14 @@ function saveReadIds(ids) {
 
 // Maps a route path segment to its nav/VIEW_META key, for the handful of
 // routes whose URL segment (nav.config.js `path`) differs from its `key`.
-const PATH_TO_KEY = { dashboard: 'overview', live: 'wall', playback: 'camera' };
+const PATH_TO_KEY = {
+  dashboard: 'overview',
+  live: 'wall',
+  playback: 'camera',
+  // The Door Logs route is /logs/door, while its nav/VIEW_META key is
+  // door-detection.
+  door: 'door-detection',
+};
 
 function currentViewKey(pathname) {
   // /dashboard -> overview ; /live -> wall ; /<key> -> key ; /logs/<key> -> key

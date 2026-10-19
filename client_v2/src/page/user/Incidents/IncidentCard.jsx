@@ -47,6 +47,15 @@ const HIDE_ALERT_THRESHOLD_TYPES = new Set([
   'gunnyBagsMaterialsWrongLocationDetection',
 ]);
 
+const formatDoorDuration = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return '--';
+  if (value >= 86400) return `${(value / 86400).toFixed(value % 86400 ? 1 : 0)} day${value / 86400 === 1 ? '' : 's'}`;
+  if (value >= 3600) return `${(value / 3600).toFixed(value % 3600 ? 1 : 0)} hr${value / 3600 === 1 ? '' : 's'}`;
+  if (value >= 60) return `${(value / 60).toFixed(value % 60 ? 1 : 0)} min${value / 60 === 1 ? '' : 's'}`;
+  return `${value} sec${value === 1 ? '' : 's'}`;
+};
+
 /**
  * Plate + who it belongs to, for detections that carry a vehicle number
  * (Vehicle Detection and the other plate-bearing types). An untagged plate
@@ -360,6 +369,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const isGuardSleeping =
     item.incidentType === 'guardSleepingDetection' ||
     /guard\s*sleeping|sleep\s*activity/i.test(item.incidentName || item.displayName || '');
+  const isDoorDetection = item.incidentType === 'doorDetection';
 
   function handleCardClick() {
     if (deleteMode) { onToggleDelete?.(); return; }
@@ -670,7 +680,31 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               </div>
             </>
           )}
-          <IncidentZoneDetails item={item} />
+           {isDoorDetection && (
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door</span>
+                 <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{item.zoneName || item.zone || '--'}</span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Status</span>
+                 <span style={{
+                   color: 'var(--tx2)',
+                   background: 'transparent',
+                   padding: 0,
+                   fontSize: 11.5,
+                   fontWeight: 500,
+                 }}>
+                   {item.doorStatus || '--'}
+                 </span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Open Duration</span>
+                 <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{formatDoorDuration(item.durationSec)}</span>
+               </div>
+             </div>
+           )}
+           <IncidentZoneDetails item={item} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(item.incidentType === 'boxPackingDetection' ? { paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>

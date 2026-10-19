@@ -38,6 +38,24 @@ const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 const LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 140px 110px 70px 90px 100px 135px 160px';
 const DELETE_BATCH_SIZE = 250;
 
+const formatDoorDuration = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return '--';
+  if (value >= 86400) {
+    const days = value / 86400;
+    return `${days.toFixed(value % 86400 ? 1 : 0)} day${days === 1 ? '' : 's'}`;
+  }
+  if (value >= 3600) {
+    const hours = value / 3600;
+    return `${hours.toFixed(value % 3600 ? 1 : 0)} hr${hours === 1 ? '' : 's'}`;
+  }
+  if (value >= 60) {
+    const minutes = value / 60;
+    return `${minutes.toFixed(value % 60 ? 1 : 0)} min${minutes === 1 ? '' : 's'}`;
+  }
+  return `${value} sec${value === 1 ? '' : 's'}`;
+};
+
 const SEVERITIES = [
   { key: 'high',     label: 'High'   },
   { key: 'moderate', label: 'Medium' },
@@ -910,7 +928,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const isSolder = item.incidentType === 'deskSolarShoulderDetection';
   const isPacking = item.incidentType === 'boxPackingDetection';
   const isHygiene = item.incidentType === 'hygieneSanitationFoodSafetyDetection';
-  const compactDetails = isSolder || isPacking || isHygiene;
+  const isDoorDetection = item.incidentType === 'doorDetection';
+  const compactDetails = isDoorDetection || isSolder || isPacking || isHygiene;
 
   return (
     <div
@@ -1059,7 +1078,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               onClick={(e) => { e.stopPropagation(); setIsCollapsed(c => !c); }}
               title={isCollapsed ? 'Show details' : 'Hide details'}
               style={{
-                width: 16, height: isPacking ? 76 : 120, borderRadius: 3, flexShrink: 0,
+                width: 16, height: compactDetails ? 76 : 120, borderRadius: 3, flexShrink: 0,
                 background: '#38bdf8', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background .15s', zIndex: 10,
@@ -1108,6 +1127,36 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                 <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
                   {shortDateTime(item.timeOfIncident)}
                 </span>
+                {item.incidentType === 'doorDetection' && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto minmax(0, 1fr)',
+                    gap: '5px 14px',
+                    marginTop: compactDetails ? 4 : 8,
+                    paddingTop: compactDetails ? 4 : 8,
+                    borderTop: '1px solid rgba(255,255,255,.14)',
+                    maxWidth: 360,
+                  }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
+                      Door
+                    </span>
+                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
+                      {item.zoneName || item.zone || '--'}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
+                      Status
+                    </span>
+                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right', textTransform: 'capitalize' }}>
+                      {item.doorStatus || '--'}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
+                      Door Open Duration
+                    </span>
+                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
+                      {formatDoorDuration(item.durationSec)}
+                    </span>
+                  </div>
+                )}
                 <CarModelDetails item={item} />
                 <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder || isPacking} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
@@ -1301,6 +1350,7 @@ function IncidentListRow({
   const severity = String(item.severity || 'low').toLowerCase();
   const status = item.resolved ? 'Resolved' : item.report?.status === true ? 'Reported' : 'New';
   const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
+  const isDoorDetection = item.incidentType === 'doorDetection';
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
   const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
@@ -1381,7 +1431,15 @@ function IncidentListRow({
 
         {['zone', 'presenceSec', 'done'].map((field) => (
           <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: packing ? 'var(--tx)' : 'var(--tx2)', fontWeight: packing ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>
-            {packing ? <span>{({ zone: packing.completedBy, presenceSec: packing.packingTime, done: packing.boxNumber })[field]}</span> : zoneRows.length ? zoneRows.map((zone, index) => (
+            {packing ? <span>{({ zone: packing.completedBy, presenceSec: packing.packingTime, done: packing.boxNumber })[field]}</span> : isDoorDetection ? (
+              <span style={{ fontWeight: 500, textTransform: field === 'done' ? 'capitalize' : undefined }}>
+                {{
+                  zone: item.zoneName || item.zone || '—',
+                  presenceSec: formatDoorDuration(item.durationSec),
+                  done: item.doorStatus || '—',
+                }[field]}
+              </span>
+            ) : zoneRows.length ? zoneRows.map((zone, index) => (
               <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {zone[field] ?? '—'}
               </span>
@@ -1629,6 +1687,8 @@ export default function IncidentCenter() {
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
   const packingOnly = items.length > 0 && items.every((item) => item.incidentType === 'boxPackingDetection');
   const hasPacking = items.some((item) => item.incidentType === 'boxPackingDetection');
+  const doorOnly = items.length > 0 && items.every((item) => item.incidentType === 'doorDetection');
+  const hasDoor = items.some((item) => item.incidentType === 'doorDetection');
   // Preserve the selected incident's identity when resolving removes it from
   // the active feed. The grid still refreshes normally behind the viewer.
   const lightboxItemIndex = lightboxIncident
@@ -2645,9 +2705,9 @@ export default function IncidentCenter() {
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
-                <span role="columnheader">{packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
-                <span role="columnheader">{packingOnly ? 'Time to complete' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
-                <span role="columnheader">{packingOnly ? 'Box number' : hasPacking ? 'Done / Box number' : 'Done'}</span>
+                <span role="columnheader">{doorOnly ? 'Door' : hasDoor ? 'Door / Zone' : packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
+                <span role="columnheader">{doorOnly ? 'Door Open Duration' : hasDoor ? 'Door Open Duration / Presence (s)' : packingOnly ? 'Time to complete' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
+                <span role="columnheader">{doorOnly ? 'Door Status' : hasDoor ? 'Door Status / Done' : packingOnly ? 'Box number' : hasPacking ? 'Done / Box number' : 'Done'}</span>
                 <span role="columnheader">Severity</span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader">Time of Incident</span>
