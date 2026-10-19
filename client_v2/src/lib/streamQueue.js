@@ -2,9 +2,9 @@
  * Sequential stream-start scheduler.
  *
  * Every camera tile asks this queue for permission before it builds its HLS
- * instance. Only `maxConcurrent` cameras may be *starting up* at any moment —
- * the next one is admitted only once the current one settles (first frame
- * decoded, hard error, or watchdog timeout).
+ * instance. Only `maxConcurrent` cameras may hold a startup turn at a time.
+ * The next is admitted after the first frame, an error, or the one-second
+ * turn budget. Streams may still be connecting after yielding their turn.
  *
  * Cameras that have already settled keep streaming: the queue gates the
  * expensive startup burst (manifest fetch → MSE/SourceBuffer setup → worker
@@ -16,15 +16,14 @@
  */
 
 export const STREAM_QUEUE_DEFAULTS = {
-  /* "Load one camera stream at a time." Raise to 2–3 if the full-inventory
-     sweep needs to finish faster on a beefy client. */
+  /* Create players sequentially to spread worker/decoder setup across turns. */
   maxConcurrent: 1,
-  /* Backstop only — tiles run their own (shorter) settle timer. This catches a
-     tile that is destroyed mid-startup without releasing its slot. */
-  watchdogMs: 10000,
+  /* A turn budgets startup work, not time to first frame. A slow stream keeps
+     connecting after yielding its turn, without blocking the other cameras. */
+  watchdogMs: 1000,
   /* Breather between admissions so React/paint/input work gets the main thread
      back between stream starts. Keeps the UI responsive while loading. */
-  gapMs: 120,
+  gapMs: 80,
 };
 
 class StreamQueue {

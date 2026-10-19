@@ -3,6 +3,7 @@ import { Filter, RotateCcw, ChevronDown, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/pages/AttendanceLogs/components/Popover';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
 import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect';
+import { HYGIENE_CATEGORY_OPTIONS } from '@/helpers/hygieneDetection';
 import { Button } from '@/components/ui/button';
 
 const SEVERITY_OPTIONS = [
@@ -22,6 +23,9 @@ const STATUS_OPTIONS = [
  * optional Status select (conveyor). Matches the ANPR popover styling.
  */
 const IncidentFilterPopover = ({
+  showHygieneCategory = false,
+  hygieneCategory = [],
+  setHygieneCategory,
   nvrOptions,
   nvrIds,
   setNvrIds,
@@ -31,6 +35,7 @@ const IncidentFilterPopover = ({
   severity,
   setSeverity,
   showSeverity = true,
+  multiSeverity = false,
   showStatus = false,
   status,
   setStatus,
@@ -49,21 +54,23 @@ const IncidentFilterPopover = ({
   const activeFiltersCount = useMemo(
     () =>
       [
+        showHygieneCategory && hygieneCategory.length > 0,
         nvrIds.length > 0,
         channelIds.length > 0,
-        showSeverity && !!severity,
+        showSeverity && (Array.isArray(severity) ? severity.length > 0 : !!severity),
         showStatus && !!status,
         showVehicleNumber && !!vehicleNumber.trim(),
         showBoxType && !!boxType,
       ].filter(Boolean)
         .length,
-    [nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
+    [showHygieneCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
 
   const resetFilters = () => {
+    if (showHygieneCategory) setHygieneCategory([]);
     setNvrIds([]);
     setChannelIds([]);
-    if (showSeverity) setSeverity('');
+    if (showSeverity) setSeverity(multiSeverity ? [] : '');
     if (showStatus) setStatus('');
     if (showVehicleNumber) {
       setVehicleNumber('');
@@ -143,7 +150,9 @@ const IncidentFilterPopover = ({
                 allLabel="All Box Types"
               />
             )}
-            {showSeverity && (
+            {showHygieneCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={HYGIENE_CATEGORY_OPTIONS.map(c => ({ id: c.id, label: c.label }))} placeholder="All hygiene categories" searchable={false} className="w-full" />}
+            {showSeverity && multiSeverity && <MultiSelect options={SEVERITY_OPTIONS.map(o => ({ id: o.value, label: o.label }))} value={Array.isArray(severity) ? severity : severity ? [severity] : []} onChange={setSeverity} placeholder="All severities" searchable={false} className="w-full" />}
+            {showSeverity && !multiSeverity && (
               <InlineSelect
                 value={severity}
                 onChange={setSeverity}

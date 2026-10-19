@@ -7,6 +7,7 @@ import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
+import IncidentHygieneDetails from '@/page/user/Incidents/IncidentHygieneDetails';
 
 const severityClass = (severity) => {
   const s = (severity || '--').toLowerCase();
@@ -266,6 +267,11 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showHygieneFields) {
+    cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
+      cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
+  }
+
   if (config.showBoxPackingFields) {
     cols.push(...BOX_PACKING_FIELDS.map(field => ({
       id: field.key,
@@ -424,6 +430,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <IncidentCardRow icon={Activity} label="Objects Detected" value={row.count ?? '--'} />
           </>
         )}
+        {config.showHygieneFields && <IncidentHygieneDetails item={row} />}
         {config.showStockCountingFields && (
           <>
             <IncidentCardRow icon={Activity} label="Vehicle" value={row.vehicleNumber || 'Unknown'} />

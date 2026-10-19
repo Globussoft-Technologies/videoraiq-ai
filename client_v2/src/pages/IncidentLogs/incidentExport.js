@@ -39,6 +39,7 @@ const fetchAllForExport = async (config, params) => {
     status,
     search: searchInput,
     vehicleNumber,
+    hygieneCategory: params.hygieneCategory,
   });
 
   const list = res?.data?.body?.data?.data || [];

@@ -59,7 +59,8 @@ import StockCountingLogs from './pages/StockCountingLogs/StockCountingLogs';
 import StockCountingAnalytics from './pages/StockCountingAnalytics/StockCountingAnalytics';
 import BlurredCameraLogs from './pages/BlurredCameraLogs/BlurredCameraLogs';
 import SolderLine from './pages/SolderLine/SolderLine';
-import HygieneAnalytics from './pages/HygieneAnalytics/HygieneAnalytics';
+// import HygieneAnalytics from './pages/HygieneAnalytics/HygieneAnalytics';
+import HygieneLogs from './pages/HygieneLogs/HygieneLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -195,7 +196,9 @@ export const v2Routes = (
     {/* Solar Line QC — Desk Solar Shoulder detection. One route so the
         Overview / Alert Logs / Reports tabs share a single mounted shell. */}
     <Route path="solder-line/*" element={<SolderLineRoute />} />
-    <Route path="hygiene-analytics" element={guard('logs', 'hygieneSanitationFoodSafetyLogs', <HygieneAnalytics />)} />
+    {/* Hygiene analytics UI disabled; retain bookmarks through the log page. */}
+    <Route path="hygiene-analytics" element={<Navigate to="/logs/hygiene" replace />} />
+    <Route path="logs/hygiene" element={guard('logs', 'hygieneSanitationFoodSafetyLogs', <HygieneLogs />)} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

@@ -255,6 +255,20 @@ export const MESSY_AREA_CONFIG = industrialDetectionConfig({
   permissionKey: 'messyAreaLogs',
 });
 
+export const HYGIENE_CONFIG = {
+  ...industrialDetectionConfig({
+    endpoint: '/incidents/logs/hygiene-sanitation-food-safety-detection',
+    title: 'Hygiene & Food Safety Logs',
+    fileName: 'hygiene_food_safety_logs',
+    sheetName: 'Hygiene Logs',
+    storagePrefix: 'hygiene',
+    permissionKey: 'hygieneSanitationFoodSafetyLogs',
+    showAlertThreshold: false,
+  }),
+  showIndustrialFields: false,
+  showHygieneFields: true,
+};
+
 export const STOCK_COUNTING_CONFIG = {
   ...industrialDetectionConfig({
     endpoint: '/incidents/logs/loading-unloading-stock-counting-detection',

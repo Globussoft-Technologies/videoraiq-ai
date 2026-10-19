@@ -6,10 +6,9 @@ import { streamUrl } from '../lib/stream';
 import { utcToConfiguredTimezone } from '../utils/timezone';
 import FullscreenZoomSurface from './FullscreenZoomSurface';
 
-/* How long a tile may hold the shared start slot before the next camera goes.
-   The camera is NOT torn down at this point — it keeps connecting; it just
-   stops blocking the queue, because the expensive part of startup (worker
-   spawn, SourceBuffer setup, first keyframe decode) is over by then. */
+/* Grace period before reporting a connecting tile as unavailable. Startup turns
+   are capped separately at one second by streamQueue; a slow camera continues
+   connecting after its turn ends. This timer controls status, not admission. */
 const SETTLE_TIMEOUT_MS = 6000;
 
 /* Off-screen tiles start after on-screen ones regardless of DOM order. */
@@ -165,23 +164,22 @@ export default function CameraStream({
   /* Reset the tile's stream state whenever it loses (or regains) its slot, so
      a torn-down tile never reports stale playback state. */
   useEffect(() => {
-    if (enabled) return;
     settledRef.current = false;
     setSettled(false);
     setPlaying(false);
     setError(false);
-  }, [enabled]);
+  }, [enabled, url]);
 
   /* Don't let one unreachable camera hold the queue hostage. */
   useEffect(() => {
     if (!enabled) return undefined;
     const t = setTimeout(markSettled, SETTLE_TIMEOUT_MS);
     return () => clearTimeout(t);
-  }, [enabled, markSettled]);
+  }, [enabled, url, markSettled]);
 
   const handleError = useCallback(() => { setError(true); markSettled(); }, [markSettled]);
   const handleStarted = useCallback(() => { setError(false); }, []);
-  const handlePlaying = useCallback(() => { setPlaying(true); markSettled(); }, [markSettled]);
+  const handlePlaying = useCallback(() => { setError(false); setPlaying(true); markSettled(); }, [markSettled]);
 
   useHlsPlayer(videoRef, url, {
     enabled,

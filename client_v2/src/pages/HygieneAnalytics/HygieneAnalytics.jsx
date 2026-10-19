@@ -46,7 +46,8 @@ export default function HygieneAnalytics() {
   const [updated, setUpdated] = useState(null);
   const [preview, setPreview] = useState(null);
   const request = useRef(null);
-  const preserveView = useRef(false);
+  const hasLoaded = useRef(false);
+  const comparisonCache = useRef(new Map());
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -56,28 +57,47 @@ export default function HygieneAnalytics() {
   }, []);
   const change = patch => {
     request.current?.abort();
-    // Category tiles update the detail view without unmounting the dashboard.
-    preserveView.current = Object.keys(patch).length === 1 && 'category' in patch;
     setFilters(current => ({ ...current, ...patch })); setPage(1); setPreview(null);
   };
   const load = useCallback(async (quiet = false) => {
     if (quiet && request.current) return;
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
-    const keepVisible = preserveView.current;
-    preserveView.current = false;
-    if (!quiet && !keepVisible) { setLoading(true); setData(null); }
+    // Loading is an initial state only. Never tear down mounted charts, tiles,
+    // tables or their scroll position for a filter, refresh or page change.
+    if (!hasLoaded.current) setLoading(true);
     setError('');
     try {
-      const response = await axios.get(`${import.meta.env.VITE_BACKEND}/incidents/hygiene-analytics`, {
-        params: { ...filters, page }, signal: controller.signal,
+      const fetchData = params => axios.get(`${import.meta.env.VITE_BACKEND}/incidents/hygiene-analytics`, {
+        params, signal: controller.signal,
         headers: { Accept: 'application/json', 'x-access-token': getAccessToken() },
       });
+      const response = await fetchData({ ...filters, page });
       if (controller.signal.aborted || request.current !== controller) return;
       if (response.data?.body?.status !== 'success') throw new Error(response.data?.body?.message || 'Could not load hygiene analytics.');
       const next = response.data.body.data;
+      const comparisonKey = JSON.stringify({ ...filters, category: '' });
+      // Category navigation must never replace the comparison with filtered
+      // totals, regardless of which backend version serves the request.
+      if (!filters.category) {
+        const overview = { categories: next.categories || [], categoryHours: next.categoryHours || [] };
+        comparisonCache.current.set(comparisonKey, overview);
+        next.categoryOverview = overview;
+      } else if (comparisonCache.current.has(comparisonKey)) {
+        next.categoryOverview = comparisonCache.current.get(comparisonKey);
+      } else {
+        const comparison = await fetchData({ ...filters, category: '', page: 1 });
+        if (controller.signal.aborted || request.current !== controller) return;
+        if (comparison.data?.body?.status !== 'success') throw new Error('Could not load category comparison.');
+        next.categoryOverview = {
+          categories: comparison.data.body.data.categories,
+          categoryHours: comparison.data.body.data.categoryHours,
+        };
+        comparisonCache.current.set(comparisonKey, next.categoryOverview);
+      }
       const lastPage = Math.max(1, Math.ceil((next.summary?.incidents || 0) / 25));
       if (page > lastPage) { setPage(lastPage); return; }
+      hasLoaded.current = true;
       setData(next); setUpdated(new Date());
     } catch (err) {
       if (!controller.signal.aborted && request.current === controller) setError(err.response?.data?.body?.message || err.message || 'Could not load hygiene analytics.');

@@ -81,6 +81,7 @@ export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
 
 // Mining incident log tabs (conveyor, crusher, etc.).
 const stevinrockLogItems = [
+  { key: 'hygiene', label: 'Hygiene & Food Safety Logs', path: 'logs/hygiene', icon: ShieldCheck, permissionKey: 'logs', permissionSubKey: 'hygieneSanitationFoodSafetyLogs', logsConfigKey: 'hygieneSanitationFoodSafetyLogs' },
   { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs', logsConfigKey: 'conveyorLogs' },
   { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs', logsConfigKey: 'vehicleObstructionLogs' },
   { key: 'unauthorized-parking', label: 'Unauthorized Parking Logs', path: 'logs/unauthorized-parking', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'unauthorizedParkingLogs', logsConfigKey: 'unauthorizedParkingLogs' },
@@ -188,6 +189,7 @@ export const NAV_GROUPS = [
   },
   {
     label: 'HYGIENE & FOOD SAFETY',
+    hidden: true, // Analytics navigation disabled; use the standard detection log.
     hideForFloMattress: true,
     items: [
       { key: 'hygiene-analytics', label: 'Hygiene & Food Safety', path: 'hygiene-analytics', icon: ShieldCheck, permissionKey: 'logs', permissionSubKey: 'hygieneSanitationFoodSafetyLogs', logsConfigKey: 'hygieneSanitationFoodSafetyLogs' },
@@ -316,6 +318,7 @@ export const VIEW_META = {
   'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   'hygiene-analytics': { title: 'Hygiene & Food Safety', sub: 'Risk trends, incident evidence and period reports' },
+  hygiene: { title: 'Hygiene & Food Safety Logs', sub: 'Hand hygiene, product contact and contamination incidents' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

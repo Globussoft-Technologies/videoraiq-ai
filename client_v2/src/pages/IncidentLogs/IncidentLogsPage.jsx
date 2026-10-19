@@ -22,6 +22,7 @@ import { BOX_PACKING_DUMMY_LOGS } from '@/pages/BoxPackingLogs/boxPackingData';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
+  getHygieneLogFilters,
   getchannels,
   fetchIncidentLogs,
   fetchIncidentVehicleNumbers,
@@ -145,6 +146,7 @@ const IncidentLogsPage = ({ config }) => {
     const parsed = parseInt(localStorage.getItem(INTERVAL_KEY), 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
+  const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
   const [viewMode, setViewMode] = useState(() => (config.tableOnly ? 'table' : 'grid')); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
@@ -195,13 +197,13 @@ const IncidentLogsPage = ({ config }) => {
     }
     (async () => {
       try {
-        const res = await getNVRs();
-        dispatch({ type: 'SET_NVR_LIST', value: res?.data?.body?.data || [] });
+        const res = config.showHygieneFields ? await getHygieneLogFilters() : await getNVRs();
+        dispatch({ type: 'SET_NVR_LIST', value: config.showHygieneFields ? res?.data?.body?.data?.nvrs || [] : res?.data?.body?.data || [] });
       } catch (err) {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, [config.useDummyData]);
+  }, [config.useDummyData, config.showHygieneFields]);
 
   useEffect(() => {
     if (config.useDummyData) {
@@ -210,13 +212,13 @@ const IncidentLogsPage = ({ config }) => {
     }
     (async () => {
       try {
-        const res = await getchannels({ nvrIds });
-        dispatch({ type: 'SET_CAMERA_LIST', value: res?.data?.body?.data || [] });
+        const res = config.showHygieneFields ? await getHygieneLogFilters() : await getchannels({ nvrIds });
+        dispatch({ type: 'SET_CAMERA_LIST', value: config.showHygieneFields ? (res?.data?.body?.data?.cameras || []).filter(camera => !nvrIds.length || nvrIds.includes(camera.nvrId)) : res?.data?.body?.data || [] });
       } catch (err) {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [config.useDummyData, nvrIds]);
+  }, [config.useDummyData, config.showHygieneFields, nvrIds]);
 
   useEffect(() => {
     if (!config.vehicleNumbersEndpoint) {
@@ -267,7 +269,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, status, vehicleNumber, boxType, limit]);
+  }, [hygieneCategory, nvrIds, channelIds, severity, status, vehicleNumber, boxType, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -308,6 +310,7 @@ const IncidentLogsPage = ({ config }) => {
         sortOrder,
         nvrIds,
         channelIds,
+        hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
         status: config.showStatus ? status : undefined,
         search: searchInput,
@@ -377,7 +380,7 @@ const IncidentLogsPage = ({ config }) => {
         try {
           const totals = await Promise.all(
             SEVERITY_LEVELS.map(async (level) => {
-              if (severity && severity !== level) return [level, 0];
+              if (Array.isArray(severity) ? severity.length > 0 && !severity.includes(level) : severity && severity !== level) return [level, 0];
               const countRes = await fetchIncidentLogs({
                 endpoint: config.endpoint,
                 method: config.method,
@@ -387,6 +390,7 @@ const IncidentLogsPage = ({ config }) => {
                 endDate,
                 nvrIds,
                 channelIds,
+                hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
                 severity: level,
                 status: config.showStatus ? status : undefined,
                 search: searchInput,
@@ -434,7 +438,7 @@ const IncidentLogsPage = ({ config }) => {
       dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -705,14 +709,15 @@ const IncidentLogsPage = ({ config }) => {
       sortOrder,
       nvrIds,
       channelIds,
-      severity: config.showStockCountingFields ? undefined : severity,
+      hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
+        severity: config.showStockCountingFields ? undefined : severity,
       status: config.showStatus ? status : undefined,
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -858,6 +863,9 @@ const IncidentLogsPage = ({ config }) => {
         )}
 
         <IncidentFilterPopover
+          showHygieneCategory={config.showHygieneFields}
+          hygieneCategory={hygieneCategory}
+          setHygieneCategory={setHygieneCategory}
           nvrOptions={nvrOptions}
           nvrIds={nvrIds}
           setNvrIds={(v) => dispatch({ type: 'SET_NVR_IDS', value: Array.isArray(v) ? v : [] })}
@@ -867,6 +875,7 @@ const IncidentLogsPage = ({ config }) => {
           severity={severity}
           setSeverity={(v) => dispatch({ type: 'SET_SEVERITY', value: v })}
           showSeverity={config.showSeverityFilter !== false}
+          multiSeverity={config.showHygieneFields}
           showStatus={config.showStatus}
           status={status}
           setStatus={(v) => dispatch({ type: 'SET_STATUS', value: v })}

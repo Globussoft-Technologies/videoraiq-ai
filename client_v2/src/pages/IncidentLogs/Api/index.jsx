@@ -3,6 +3,8 @@ import getAccessToken from '@/utils/getAccessToken';
 
 const HOST = import.meta.env.VITE_BACKEND;
 
+export const getHygieneLogFilters = () => axios.get(`${HOST}/incidents/logs/hygiene-sanitation-food-safety-detection/filters`, { headers: getHeaders() });
+
 const jsonHeaders = () => ({
   Accept: 'application/json',
   'Content-Type': 'application/json',
@@ -66,6 +68,7 @@ export const fetchIncidentLogs = async ({
   vehicleNumber,
   boxType,
   direction,
+  hygieneCategory,
 }) => {
   return axios.request({
     method,
@@ -79,7 +82,8 @@ export const fetchIncidentLogs = async ({
       ...(sortOrder && { sortOrder }),
       ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
       ...(channelIds?.length && { channelIds: channelIds.join(',') }),
-      ...(severity && { severity }),
+      ...(Array.isArray(hygieneCategory) && hygieneCategory.length ? { hygieneCategory: hygieneCategory.join(',') } : typeof hygieneCategory === 'string' && hygieneCategory ? { hygieneCategory } : {}),
+      ...(Array.isArray(severity) ? severity.length ? { severity: severity.join(',') } : {} : severity ? { severity } : {}),
       ...(status && { status }),
       ...(search && { search }),
       ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),

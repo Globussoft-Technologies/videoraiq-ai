@@ -13,11 +13,8 @@ export default function useHlsPlayer(
   { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted } = {}
 ) {
   const hlsRef = useRef(null);
-  const lastUrlRef = useRef("");
-  const hasPlayedRef = useRef(false);
   const retryTimerRef = useRef(null);
   const liveSyncIntervalRef = useRef(null);
-  const isInitializingRef = useRef(false);
   const startDelayTimerRef = useRef(null);
 
   const onErrorRef = useRef(onError);
@@ -30,7 +27,6 @@ export default function useHlsPlayer(
     if (!video) return;
 
     const cleanup = () => {
-      hasPlayedRef.current = false;
       if (startDelayTimerRef.current) { clearTimeout(startDelayTimerRef.current); startDelayTimerRef.current = null; }
       if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
       if (liveSyncIntervalRef.current) { clearInterval(liveSyncIntervalRef.current); liveSyncIntervalRef.current = null; }
@@ -38,13 +34,19 @@ export default function useHlsPlayer(
       try { video.pause(); video.removeAttribute("src"); video.load(); } catch { /* noop */ }
     };
 
-    if (!enabled || !url) { cleanup(); isInitializingRef.current = false; return; }
-    if (lastUrlRef.current === url && hlsRef.current) { isInitializingRef.current = false; return; }
-    if (isInitializingRef.current) return;
-
-    lastUrlRef.current = url;
-    isInitializingRef.current = true;
+    if (!enabled || !url) { cleanup(); return; }
     cleanup();
+
+    let disposed = false;
+    const handlePlaying = () => {
+      if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+    };
+    video.addEventListener('playing', handlePlaying);
+    const dispose = () => {
+      disposed = true;
+      video.removeEventListener('playing', handlePlaying);
+      cleanup();
+    };
 
     // Safari native HLS
     if (!Hls.isSupported()) {
@@ -52,21 +54,20 @@ export default function useHlsPlayer(
         video.src = url;
         if (autoPlay) video.play().catch(() => {});
       }
-      isInitializingRef.current = false;
-      return;
+      return dispose;
     }
 
     const startPlayer = () => {
+      if (disposed) return;
       cleanup();
-      lastUrlRef.current = "";
       const token = getAccessToken();
 
       const hls = new Hls({
         lowLatencyMode: true,
-        liveSyncDurationCount: 1,
-        liveMaxLatencyDurationCount: 2,
-        maxBufferLength: 2,
-        maxMaxBufferLength: 4,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 6,
+        maxBufferLength: 12,
+        maxMaxBufferLength: 24,
         backBufferLength: 0,
         maxBufferHole: 0.1,
         enableWorker: true,
@@ -78,7 +79,7 @@ export default function useHlsPlayer(
         loader: class CustomLoader extends Hls.DefaultConfig.loader {
           load(context, config, callbacks) {
             if (token && !context.url.includes("token=")) {
-              context.url += context.url.includes("?") ? `&token=${token}` : `?token=${token}`;
+              context.url += context.url.includes("?") ? `&token=${encodeURIComponent(token)}` : `?token=${encodeURIComponent(token)}`;
             }
             super.load(context, config, callbacks);
           }
@@ -86,36 +87,38 @@ export default function useHlsPlayer(
       });
 
       hlsRef.current = hls;
-      hls.attachMedia(video);
       hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(url));
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         const statusCode = data?.response?.status || data?.response?.code || data?.networkDetails?.status;
-        if (statusCode === 404 && !hasPlayedRef.current) {
-          onErrorRef.current?.("Stream not found (404)");
+        if (disposed || hlsRef.current !== hls) return;
+        if (statusCode === 404 || (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR)) {
+          onErrorRef.current?.(statusCode === 404 ? 'Stream not found (404)' : 'Stream connection interrupted');
           if (!retryTimerRef.current) {
             retryTimerRef.current = setTimeout(() => { retryTimerRef.current = null; startPlayer(); }, 2000);
           }
           return;
         }
-        if (statusCode === 404 && hasPlayedRef.current) return;
         if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); return; }
-        if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(-1); }
+        if (data.fatal) onErrorRef.current?.(data.details || 'Stream playback failed');
       });
 
-      hls.on(Hls.Events.BUFFER_STALLED_ERROR, () => hls.startLoad(-1));
-
+      // Buffered data can remain available while a live feed is frozen. Check
+      // progress as well as readyState, and reopen the playlist after a stall.
+      let lastTime = video.currentTime;
       liveSyncIntervalRef.current = setInterval(() => {
-        if (video.readyState < 3 && hlsRef.current) hlsRef.current.startLoad(-1);
+        if (disposed || hlsRef.current !== hls || !autoPlay) return;
+        const stalled = video.currentTime === lastTime;
+        lastTime = video.currentTime;
+        if ((video.readyState < 3 || stalled) && !retryTimerRef.current) {
+          onErrorRef.current?.('Live stream stalled; reconnecting');
+          retryTimerRef.current = setTimeout(() => { retryTimerRef.current = null; startPlayer(); }, 2000);
+        }
       }, 15000);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => { if (autoPlay) video.play().catch(() => {}); });
 
-      video.onplaying = () => {
-        hasPlayedRef.current = true;
-        if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
-        lastUrlRef.current = "";
-      };
+      hls.attachMedia(video);
     };
 
     if (startDelayMs > 0) {
@@ -129,7 +132,7 @@ export default function useHlsPlayer(
       startPlayer();
     }
 
-    return () => { cleanup(); isInitializingRef.current = false; };
+    return dispose;
   }, [url, enabled, autoPlay, startDelayMs]);
 
   return hlsRef;
