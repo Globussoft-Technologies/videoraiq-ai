@@ -53,6 +53,9 @@ describe('real mobile access resolution', () => {
     expect(req.headers['x-session-id']).toBe('native-session');
     expect(req.headers['x-device-id']).toBe('native-device');
     expect(sessions.enforceRequestSession.mock.calls[0][0].headers['x-session-id']).toBe('native-session');
+    expect(getDetectionLicenseSnapshot).not.toHaveBeenCalled();
+    expect(logs.resolveLogsForAdmin).toHaveBeenCalled();
+    expect(req.mobileEmbeddedScreen.id).toBe('stockCountingAnalytics');
   });
   it('denies missing, revoked, expired or mismatched embedded sessions', async () => {
     const claims = { ...identity, mobileEmbedId: 'web' };

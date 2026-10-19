@@ -163,8 +163,10 @@ class LogsConfigurationService {
     }
 
     // Auto-enable logs based on enabled detections for each camera
-    for (const [detectionField, logType] of Object.entries(DETECTION_TO_LOGS_MAP)) {
-      const isEnabled = await this.isDetectionEnabled(adminId, detectionField);
+    const detectionEntries = Object.entries(DETECTION_TO_LOGS_MAP);
+    const enabledDetections = await Promise.all(detectionEntries.map(([detectionField]) => this.isDetectionEnabled(adminId, detectionField)));
+    for (const [index, [, logType]] of detectionEntries.entries()) {
+      const isEnabled = enabledDetections[index];
       if (isEnabled) {
         logs[logType] = true;
       }

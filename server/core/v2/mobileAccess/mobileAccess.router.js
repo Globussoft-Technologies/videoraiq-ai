@@ -20,7 +20,7 @@ export function createMobileAccessRouter({ redis, authenticate, resolveAccess, s
       const grant = JSON.parse(raw);
       if (grant.claims.exp * 1000 <= now() || await redis.get(`mobile:sso:revoked:${grant.parentHash}`)) return fail(res, 401, 'Mobile login expired or logged out');
       if (!await checkSession(req, grant)) return fail(res, 401, 'Parent session is unavailable');
-      const snapshot = await resolveAccess(grant.claims);
+      const snapshot = await resolveAccess(grant.claims, { includeDetectionDetails: false });
       const screen = snapshot.screens.find(screen => screen.id === grant.screenId);
       if (!screen) return fail(res, 403, 'Page access revoked');
       const ttl = Math.min(600, grant.claims.exp - Math.floor(now() / 1000));
@@ -47,7 +47,7 @@ export function createMobileAccessRouter({ redis, authenticate, resolveAccess, s
     try {
       const claims = req.verified?.userData;
       if (!claims?.adminId || claims.tokenType || !Number.isInteger(claims.exp) || !req.get('x-access-token')) return fail(res, 400, 'A user access token is required');
-      const snapshot = await resolveAccess(claims);
+      const snapshot = await resolveAccess(claims, { includeDetectionDetails: false });
       const screen = snapshot.screens.find(screen => screen.id === req.body?.screenId);
       if (!screen) return fail(res, 404, 'Screen unavailable');
       const bucket = `mobile:sso:rate:${claims.adminId}:${claims.memberId || 'admin'}`;
@@ -69,8 +69,7 @@ export function createMobileAccessRouter({ redis, authenticate, resolveAccess, s
       if (!req.verified?.userData?.mobileEmbedId) return fail(res, 403, 'Embedded session required');
       const grant = JSON.parse(await redis.get(`mobile:sso:session:${req.verified.userData.mobileEmbedId}`) || 'null');
       if (!grant) return fail(res, 401, 'Embedded session expired');
-      const snapshot = await resolveAccess(req.verified.userData);
-      const screen = snapshot.screens.find(screen => screen.id === grant.screenId);
+      const screen = req.mobileEmbeddedScreen || (await resolveAccess(req.verified.userData)).screens.find(screen => screen.id === grant.screenId);
       if (!screen) return fail(res, 403, 'Page access revoked');
       res.json(Response.userSuccessResp('Embedded session verified', { user: req.verified.userData, screen }));
     } catch (error) { next(error); }
