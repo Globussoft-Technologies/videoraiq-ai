@@ -9,7 +9,7 @@ const data = { timezone: 'Asia/Kolkata', categories: [{ _id: 'productContact', v
 describe('hygiene report rows', () => {
   it('reports categories with missing confidence as unavailable', () => {
     const rows = buildHygieneReportRows('categories', data, [], cameraName);
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(6);
     expect(rows[0]['Mean confidence']).toBe('Unavailable');
     expect(rows[1]).toMatchObject({ Violations: 2, 'Mean confidence': '82%', 'Confidence samples': 1, 'Share of classified violations': '100%' });
   });

@@ -1,3 +1,4 @@
+import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 /* Update constants when new settings is added - DETECTION_TYPES, TYPE_MAP, Example payloads
  detection settings model
  detection settings service - createDetectionSettings, getDetectionExamples
@@ -1700,13 +1701,13 @@ export const hygieneSanitationFoodSafetyDetectionSettings = {
       "Hygiene, Sanitation & Food Safety Detection",
     ).settings,
     trigger_notification: true,
-    hygiene_categories: ["handHygieneBypass", "productContact", "contaminationRisk"],
+    hygiene_categories: [...HYGIENE_CATEGORIES],
     hygiene_interval_sec: 180,
     hygiene_min_confidence: 0.6,
     hygiene_cooldown_sec: 1800,
     zone_configs: [{
       name: "Meat Processing Area",
-      hygiene_categories: ["handHygieneBypass", "productContact", "contaminationRisk"],
+      hygiene_categories: [...HYGIENE_CATEGORIES],
     }],
     referencePoints: {
       "664f89e8a9d345001ee326b1": [[[100, 120], [900, 120], [900, 700], [100, 700]]],

@@ -6,6 +6,7 @@ import logger from "../../../utils/logger.js";
 import nvrModel from "../NVR/nvr.model.js";
 import incidentsValidate from "./incidents.validate.js";
 import mongoose from "mongoose";
+import { HYGIENE_CATEGORIES } from '../../../constants/hygieneDetection.js';
 import axios from "axios";
 import Response from "../../../utils/response.js";
 import { sendPayloadToUser } from "../../../socket.js";
@@ -4811,7 +4812,7 @@ console.log(result,'result');
       const severity = req.query?.severity;
       const levels = typeof severity === 'string' ? severity.split(',').map(value => value.trim()).filter(Boolean) : [];
       if ((severity && typeof severity !== 'string') || levels.some(value => !['low', 'moderate', 'high'].includes(value))) return res.status(400).send(Response.validationFailResp('Invalid severity', 'Validation Failed!'));
-      if ((category && typeof category !== 'string') || categories.some(value => !['handHygieneBypass', 'productContact', 'contaminationRisk'].includes(value))) {
+      if ((category && typeof category !== 'string') || categories.some(value => !HYGIENE_CATEGORIES.includes(value))) {
         return res.status(400).send(Response.validationFailResp('Invalid hygiene category', 'Validation Failed!'));
       }
       return await this._fetchIncidentLogs({

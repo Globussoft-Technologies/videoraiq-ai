@@ -1,4 +1,7 @@
 export const HYGIENE_CATEGORIES = Object.freeze([
+  "cleaningSanitationSop",
+  "unsafeFoodHandling",
+  "servingFoodSafety",
   "handHygieneBypass",
   "productContact",
   "contaminationRisk",
