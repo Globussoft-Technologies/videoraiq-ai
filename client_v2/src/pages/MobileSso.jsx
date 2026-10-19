@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearMobileEmbed, saveMobileEmbed } from '@/utils/mobileEmbed';
+import MobilePageLoader from '@/components/MobilePageLoader';
 
 // Consume the fragment before any async request or third-party component runs.
 let exchange;
@@ -32,5 +33,5 @@ export default function MobileSso() {
     }).catch(reason => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; };
   }, []);
-  return <main style={{ padding: 24 }}><p role="status">{error || 'Opening your page…'}</p></main>;
+  return error ? <main role="alert" style={{ padding: 24 }}>{error}</main> : <MobilePageLoader />;
 }

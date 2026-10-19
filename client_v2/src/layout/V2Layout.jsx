@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import useDetectionScheduleEvents from '../hooks/useDetectionScheduleEvents';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -17,12 +17,14 @@ import { useApi } from '../hooks/useApi';
 import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import { timeAgo } from '../lib/format';
 import { shouldHidePlayback } from '../lib/nvrCapabilities';
-import LiveDemo from '../pages/LiveDemo/LiveDemo';
+import PageLoader from '@/components/PageLoader';
+import MobilePageLoader from '@/components/MobilePageLoader';
 import { hasLiveDemoPlan } from '../utils/jwt';
 import { BRAND_NAME } from '../lib/branding';
 import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
+const LiveDemo = lazy(() => import('../pages/LiveDemo/LiveDemo'));
 
 // Incident types the Alerts feed deliberately leaves out: it only lists
 // incidents carrying a snapshot image, and these two never have one (a person
@@ -368,11 +370,13 @@ function Shell() {
            
             {(hasVisitedLiveDemo || isLiveDemo) && (
               <div style={{ display: isLiveDemo ? 'contents' : 'none' }}>
-                <LiveDemo active={isLiveDemo} />
+                <Suspense fallback={<PageLoader />}><LiveDemo active={isLiveDemo} /></Suspense>
               </div>
             )}
             <div style={{ display: isLiveDemo ? 'none' : 'contents' }}>
-              <Outlet context={outletCtx} />
+              <Suspense fallback={embedded ? <MobilePageLoader /> : <PageLoader />}>
+                <Outlet context={outletCtx} />
+              </Suspense>
             </div>
             {!embedded && !fixedViewportPage && (
               <footer

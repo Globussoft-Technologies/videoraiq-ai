@@ -1,15 +1,18 @@
+import { lazy, Suspense } from 'react';
+import PageLoader from '@/components/PageLoader';
 import { createBrowserRouter, createRoutesFromElements, Navigate, Outlet, Route } from 'react-router-dom';
 import { v2Routes } from './routes';
-import LoginForm from '@/page/user/Users/UserForm';
-import ForgotPassword from '@/page/user/Users/ForgotPassword';
-import ResetPassword from '@/page/user/Users/ResetPassword';
-import EmployeeLogin from '@/page/user/Portal/EmployeeLogin';
-import EmployeeRegister from '@/page/user/Portal/EmployeeRegister';
 import IsAuth from '@/components/Auth/IsAuth';
 import Logout from '@/components/Auth/Logout';
-import VerifyRecipient from '@/page/user/Administer/VerifyRecipient';
 import { floMattressRoutes } from '@/page/user/flo-mattress/FloMattressRoutes';
 import MobileSso from '@/pages/MobileSso';
+
+const LoginForm = lazy(() => import('@/page/user/Users/UserForm'));
+const ForgotPassword = lazy(() => import('@/page/user/Users/ForgotPassword'));
+const ResetPassword = lazy(() => import('@/page/user/Users/ResetPassword'));
+const EmployeeLogin = lazy(() => import('@/page/user/Portal/EmployeeLogin'));
+const EmployeeRegister = lazy(() => import('@/page/user/Portal/EmployeeRegister'));
+const VerifyRecipient = lazy(() => import('@/page/user/Administer/VerifyRecipient'));
 
 function LoginRoute() {
   return <LoginForm />;
@@ -26,7 +29,7 @@ function LoginRoute() {
  */
 export const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route>
+    <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
       <Route path="/admin-login" element={<LoginRoute />} />
       <Route path="/mobile-sso" element={<MobileSso />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

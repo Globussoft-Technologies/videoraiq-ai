@@ -8,6 +8,7 @@ import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import IncidentHygieneDetails from '@/page/user/Incidents/IncidentHygieneDetails';
+import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 const severityClass = (severity) => {
   const s = (severity || '--').toLowerCase();
@@ -66,7 +67,13 @@ const doorStatusStyle = (status) => {
   };
 };
 
-export const StockPlaybackLink = ({ incidentId }) => incidentId ? (
+export const StockPlaybackLink = ({ incidentId, imageUrl, onPreview }) => isMobileEmbedded() ? (
+  imageUrl && onPreview ? <button
+    type="button"
+    onClick={event => { event.stopPropagation(); onPreview(imageUrl); }}
+    className="text-xs font-semibold text-[var(--blue)] underline underline-offset-2 hover:opacity-80"
+  >View image</button> : <span className={styles.text}>--</span>
+) : incidentId ? (
   <Link
     to={`/playback?incidentId=${encodeURIComponent(incidentId)}`}
     onClick={(event) => event.stopPropagation()}
@@ -400,7 +407,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         const incidentId = item.incidentImageUrl
           ? (events.length ? imageEvent?._id : item._id)
           : null;
-        return <StockPlaybackLink incidentId={incidentId} />;
+        return <StockPlaybackLink incidentId={incidentId} imageUrl={item.incidentImageUrl} onPreview={onPreview} />;
       },
     });
   }

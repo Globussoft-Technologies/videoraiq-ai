@@ -299,10 +299,20 @@ const StockCountingAnalytics = () => {
     dataLabels: { enabled: false },
     tooltip: { theme: false },
     legend: { labels: { colors: 'var(--tx2)' }, fontSize: '12px' },
+    responsive: [{ breakpoint: 640, options: {
+      chart: { animations: { enabled: false } },
+      legend: { position: 'bottom', horizontalAlign: 'center', fontSize: '11px', itemMargin: { horizontal: 5, vertical: 3 } },
+      xaxis: { tickAmount: 5, labels: { rotate: 0, hideOverlappingLabels: true, trim: true, style: { fontSize: '10px' } } },
+      grid: { padding: { left: 0, right: 0 } },
+    } }],
   }), []);
 
   const activityInterval = analytics.activityInterval;
   const trendRows = analytics.activity;
+  const trendCategories = useMemo(() => trendRows.map((item) => activityInterval === 'hour'
+    ? `${item.bucket}:00`
+    : moment(item.bucket, activityInterval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD').format(activityInterval === 'month' ? 'MMM YYYY' : 'DD MMM')), [trendRows, activityInterval]);
+  const mobileTrendLabels = useMemo(() => new Set(trendCategories.filter((_, index) => index % Math.max(1, Math.ceil(trendCategories.length / 5)) === 0)), [trendCategories]);
   const trendPeriod = { hour: 'Hourly', day: 'Daily', month: 'Monthly' }[activityInterval];
   const selectTrendBucket = useCallback((bucket) => {
     if (!bucket || activityInterval === 'hour') return;
@@ -314,6 +324,10 @@ const StockCountingAnalytics = () => {
   }, [activityInterval, startDate, endDate]);
   const trendOptions = useMemo(() => ({
     ...sharedChart,
+    responsive: sharedChart.responsive.map(rule => ({ ...rule, options: {
+      ...rule.options,
+      xaxis: { ...rule.options.xaxis, tickAmount: Math.max(1, trendCategories.length - 1), labels: { ...rule.options.xaxis.labels, trim: false, formatter: value => mobileTrendLabels.has(String(value)) ? value : '' } },
+    } })),
     chart: { ...sharedChart.chart, type: 'bar', events: { dataPointSelection: (_event, _chart, selection) => selectTrendBucket(trendRows[selection.dataPointIndex]?.bucket) } },
     colors: ['#10b981', '#f59e0b', '#c084fc'],
     plotOptions: { bar: { borderRadius: 2, columnWidth: '64%', dataLabels: { position: 'top' } } },
@@ -324,17 +338,21 @@ const StockCountingAnalytics = () => {
       formatter: (value) => number(value),
     },
     xaxis: {
-      categories: trendRows.map((item) => activityInterval === 'hour' ? `${item.bucket}:00` : moment(item.bucket, activityInterval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD').format(activityInterval === 'month' ? 'MMM YYYY' : 'DD MMM')),
+      categories: trendCategories,
       labels: { style: { colors: 'var(--tx3)', fontSize: '12px' } },
       axisBorder: { color: 'var(--bd)' },
       axisTicks: { show: false },
     },
     yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: 'var(--tx3)', fontSize: '12px' } } },
     legend: { ...sharedChart.legend, position: 'top', horizontalAlign: 'right', markers: { size: 5 } },
-  }), [trendRows, activityInterval, sharedChart, selectTrendBucket]);
+  }), [trendCategories, mobileTrendLabels, sharedChart, selectTrendBucket]);
 
   const hourlyOptions = useMemo(() => ({
     ...sharedChart,
+    responsive: sharedChart.responsive.map(rule => ({ ...rule, options: {
+      ...rule.options,
+      xaxis: { ...rule.options.xaxis, tickAmount: Math.max(1, analytics.hourlyActivity.length - 1), labels: { ...rule.options.xaxis.labels, trim: false, formatter: value => Number.parseInt(String(value), 10) % 6 === 0 ? value : '' } },
+    } })),
     colors: ['#10b981', '#f59e0b', '#8b5cf6'],
     plotOptions: { bar: { borderRadius: 3, columnWidth: '58%', dataLabels: { position: 'top' } } },
     dataLabels: {
@@ -385,7 +403,7 @@ const StockCountingAnalytics = () => {
   if (!canView) return <AccessDenied message="You do not have permission to view stock analytics." onBack={() => navigate(-1)} />;
 
   return (
-    <div className="min-h-full space-y-4 p-3 sm:p-4 lg:p-[22px]">
+    <div className="w-full min-w-0 min-h-full space-y-3 p-3 sm:space-y-4 sm:p-4 lg:p-[22px]">
       <ImagePreviewModal
         previewImage={previewImage?.url}
         imageKey={previewImage?.key}
@@ -402,8 +420,8 @@ const StockCountingAnalytics = () => {
           setPreviewImageLoading(false);
         }}
       />
-      <section className="sticky top-0 z-20 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-sm">
-        <div className="flex flex-col gap-4 bg-slate-800 p-4 text-white lg:flex-row lg:items-center lg:justify-between">
+      <section className="min-w-0 sm:sticky top-0 z-20 min-w-0 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-sm">
+        <div className="flex min-w-0 flex-col gap-3 bg-slate-800 p-3 sm:gap-4 sm:p-4 text-white lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-white/75">
               Recorded stock movements
@@ -501,8 +519,8 @@ const StockCountingAnalytics = () => {
               <div className="text-center text-sm text-[var(--tx2)]"><Loader2 className="mx-auto mb-2 h-7 w-7 animate-spin text-[var(--brand)]" />Analyzing stock movements...</div>
             </div>
           ) : summary.totalEvents ? (
-            <div className="grid gap-3 xl:grid-cols-12">
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-12">
+            <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-12">
+              <section className="min-w-0 rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-12">
                 <div className="mb-3">
                   <h3 className="font-bold text-[var(--tx)]">Stock movement trend</h3>
                   <p className="text-sm text-[var(--tx2)]">{trendPeriod} {trendMetric === 'boxes' ? 'loaded and unloaded boxes' : 'movement events'}. Empty intervals mean no recorded movements.{activityInterval !== 'hour' && ` Click a bar to inspect that ${activityInterval === 'month' ? 'month' : 'day'}.`}</p>
@@ -510,6 +528,7 @@ const StockCountingAnalytics = () => {
                 </div>
                 <ReactApexChart
                   type="bar"
+                  width="100%"
                   height={250}
                   options={trendOptions}
                   series={trendMetric === 'events' ? [{ name: 'Events', data: trendRows.map((item) => item.events) }] : [
@@ -519,11 +538,12 @@ const StockCountingAnalytics = () => {
                 />
               </section>
 
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
+              <section className="min-w-0 rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
                 <h3 className="font-bold text-[var(--tx)]">Activity by hour of day</h3>
                 <p className="mb-1 text-sm text-[var(--tx2)]">Loaded and unloaded boxes at each hour, summed across the selected dates.</p>
                 <ReactApexChart
                   type="bar"
+                  width="100%"
                   height={250}
                   options={hourlyOptions}
                   series={[
@@ -533,25 +553,26 @@ const StockCountingAnalytics = () => {
                 />
               </section>
 
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-5">
+              <section className="min-w-0 rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-5">
                 <h3 className="font-bold text-[var(--tx)]">Box composition</h3>
                 <p className="mb-1 text-sm text-[var(--tx2)]">Validated colour counts; classification only means no reliable colour split</p>
                 <ReactApexChart
                   type="donut"
+                  width="100%"
                   height={250}
                   options={boxTypeOptionsChart}
                   series={analytics.composition.map((item) => item.total)}
                 />
               </section>
 
-              <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
+              <section className="min-w-0 rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm xl:col-span-7">
                 <h3 className="font-bold text-[var(--tx)]">Top vehicle throughput</h3>
                 <p className="mb-1 text-sm text-[var(--tx2)]">Loaded and unloaded boxes by vehicle</p>
                 <div className="max-h-[240px] overflow-auto" tabIndex="0" role="region" aria-label="Vehicle throughput, scroll to see more vehicles"><table className="w-full border-separate border-spacing-0 whitespace-nowrap text-left text-sm"><thead><tr className="h-10 text-[var(--tx2)]">{['Identified vehicle', 'Loaded', 'Unloaded', 'Total boxes', 'Events'].map((label) => <th key={label} className="sticky top-0 z-10 h-10 border-b border-[var(--bd)] bg-[var(--bg1solid)] px-3 py-2">{label}</th>)}</tr></thead><tbody>{analytics.topVehicles.map((vehicle) => <tr key={vehicle.vehicleNumber} className="h-10 text-[var(--tx)]"><td className="border-b border-[var(--bd)] px-3 py-2"><button type="button" onClick={() => { setVehicleNumber(vehicle.vehicleNumber); }} className="text-violet-500 underline">{vehicle.vehicleNumber}</button></td><td className="border-b border-[var(--bd)] px-3 py-2 text-emerald-500">{number(vehicle.loaded)}</td><td className="border-b border-[var(--bd)] px-3 py-2 text-amber-500">{number(vehicle.unloaded)}</td><td className="border-b border-[var(--bd)] px-3 py-2">{number(vehicle.total)}</td><td className="border-b border-[var(--bd)] px-3 py-2">{number(vehicle.events)}</td></tr>)}</tbody></table></div>
                 <p className="mt-2 text-sm text-[var(--tx2)]">Identified vehicles ranked by boxes moved. Scroll to see more. Click a vehicle to inspect its movements.</p>
               </section>
 
-              <section className="overflow-hidden rounded-2xl border border-violet-500/20 bg-[var(--bg1solid)] shadow-sm xl:col-span-5">
+              <section className="min-w-0 overflow-hidden rounded-2xl border border-violet-500/20 bg-[var(--bg1solid)] shadow-sm xl:col-span-5">
                 <div className="border-b border-violet-500/15 bg-gradient-to-r from-violet-500/15 to-blue-500/10 px-4 py-3">
                   <div className="flex items-center gap-2 font-bold text-[var(--tx)]"><Sparkles className="h-4 w-4 text-violet-500" /> Quick summary</div>
                   <p className="mt-1 text-sm text-[var(--tx2)]">A simple summary of the selected stock data</p>
@@ -571,7 +592,7 @@ const StockCountingAnalytics = () => {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-sm xl:col-span-12">
+              <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-sm xl:col-span-12">
                 <div className="border-b border-[var(--bd)] px-4 py-3">
                   <h3 className="font-bold text-[var(--tx)]">Box-type performance</h3>
                   <p className="text-xs text-[var(--tx3)]">Loaded, unloaded, and total boxes for each recorded type</p>

@@ -8,6 +8,7 @@ import { logout } from '@/hooks/logout';
 import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
 import { isLocalSetup } from '@/utils/jwt';
 import AuthLoader from '@/page/user/Users/AuthLoader';
+import MobilePageLoader from '@/components/MobilePageLoader';
 import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobileEmbed';
 
 const HOST = import.meta.env.VITE_BACKEND;
@@ -447,7 +448,7 @@ export default function IsAuth({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
 
-  if (isLoading) return <AuthLoader pending />;
+  if (isLoading) return isMobileEmbedded() ? <MobilePageLoader /> : <AuthLoader pending />;
   if (isMobileEmbedded() && !failure && getMobileEmbed()?.screen.webPath !== location.pathname) {
     return <main role="alert" style={{ padding: 24 }}>Open the selected page again from the mobile app.</main>;
   }

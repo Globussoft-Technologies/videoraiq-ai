@@ -627,7 +627,7 @@ const IncidentLogsPage = ({ config }) => {
                     </div>
                     <div className="space-y-1">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tx3)]">Preview</div>
-                      <StockPlaybackLink incidentId={imageUrl ? event?._id : null} />
+                      <StockPlaybackLink incidentId={imageUrl ? event?._id : null} imageUrl={imageUrl} onPreview={() => openPreview(imageUrl, stockEventPreviewKey(row, event, index))} />
                     </div>
                   </div>
                 );

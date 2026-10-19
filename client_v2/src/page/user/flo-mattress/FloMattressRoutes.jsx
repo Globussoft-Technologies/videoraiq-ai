@@ -1,11 +1,13 @@
 import { Navigate, Route } from 'react-router-dom';
 import { V2ThemeProvider } from '@/theme/ThemeContext';
-import FloMattressDashboard from './FloMattressDashboard';
-import FloMattressStation from './FloMattressStation';
+import { lazy, Suspense } from 'react';
+import PageLoader from '@/components/PageLoader';
+const FloMattressDashboard = lazy(() => import('./FloMattressDashboard'));
+const FloMattressStation = lazy(() => import('./FloMattressStation'));
 
 const withFloTheme = (element) => (
   <V2ThemeProvider defaultTheme="light">
-    {element}
+    <Suspense fallback={<PageLoader />}>{element}</Suspense>
   </V2ThemeProvider>
 );
 
