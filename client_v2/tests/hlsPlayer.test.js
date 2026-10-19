@@ -13,11 +13,11 @@ async function harness({ native = false } = {}) {
     static ErrorTypes = { NETWORK_ERROR: 'network', MEDIA_ERROR: 'media' };
     static DefaultConfig = { loader: class { load() {} } };
     static isSupported() { return !native; }
-    constructor(config) { this.config = config; this.events = new Map(); players.push(this); }
+    constructor(config) { this.config = config; this.events = new Map(); this.levels = [{}]; this.sourceLoads = 0; players.push(this); }
     on(event, callback) { this.events.set(event, callback); }
     emit(event, data) { this.events.get(event)?.(event, data); }
     attachMedia() { this.emit('attached'); }
-    loadSource(url) { this.url = url; }
+    loadSource(url) { this.url = url; this.sourceLoads++; }
     destroy() { this.destroyed = true; }
     startLoad() {}
   }
@@ -57,7 +57,7 @@ async function harness({ native = false } = {}) {
   return { mount, players, video, listeners, timers, intervals, retry };
 }
 
-test('a missing segment after playback restarts from a fresh playlist', async () => {
+test('fatal network errors recover on the same player and preserve its media', async () => {
   const h = await harness();
   const unmount = h.mount('camera-a.m3u8');
   assert.equal(h.players[0].url, 'camera-a.m3u8');
@@ -65,8 +65,10 @@ test('a missing segment after playback restarts from a fresh playlist', async ()
   h.players[0].emit('error', { response: { code: 404 }, fatal: true, type: 'network' });
   assert.equal(h.timers.size, 1);
   h.retry();
-  assert.equal(h.players[0].destroyed, true);
-  assert.equal(h.players[1].url, 'camera-a.m3u8');
+  assert.equal(h.players[0].destroyed, undefined);
+  assert.equal(h.players[0].sourceLoads, 1, 'established feeds must not reload/detach their media source');
+  assert.equal(h.players.length, 1);
+  assert.equal(h.players[0].url, 'camera-a.m3u8');
   unmount();
   assert.equal(h.intervals.size, 0);
 });
@@ -105,7 +107,45 @@ test('a frozen live frame reconnects even when readyState says buffered', async 
   tick();
   assert.equal(h.timers.size, 1, 'a frozen buffered frame should reconnect');
   h.retry();
-  assert.equal(h.players[0].destroyed, true);
-  assert.equal(h.players[1].url, 'live-camera.m3u8');
+  assert.equal(h.players[0].destroyed, undefined);
+  assert.equal(h.players.length, 1);
+  assert.equal(h.players[0].url, 'live-camera.m3u8');
+  cleanup();
+});
+
+test('temporary segment 404s do not mark the camera unavailable or rebuild it', async () => {
+  const h = await harness();
+  const errors = [];
+  const cleanup = h.mount('live.m3u8', { onError: error => errors.push(error) });
+  h.players[0].emit('error', { response: { code: 404 }, fatal: false, type: 'network' });
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.players.length, 1);
+  assert.deepEqual(errors, []);
+  cleanup();
+});
+
+test('video progress clears buffering and cancels recovery without another playing event', async () => {
+  const h = await harness();
+  const states = [];
+  const cleanup = h.mount('live.m3u8', { onBuffering: value => states.push(value) });
+  h.listeners.get('waiting')();
+  h.players[0].emit('error', { fatal: true, type: 'network' });
+  assert.equal(h.timers.size, 1);
+  h.video.currentTime = 1;
+  h.listeners.get('timeupdate')();
+  assert.equal(states.at(-1), false);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.players[0].destroyed, undefined);
+  cleanup();
+});
+
+test('an initial manifest failure retries the manifest without creating another player', async () => {
+  const h = await harness();
+  const cleanup = h.mount('live.m3u8');
+  h.players[0].levels = [];
+  h.players[0].emit('error', { fatal: true, type: 'network' });
+  h.retry();
+  assert.equal(h.players[0].sourceLoads, 2);
+  assert.equal(h.players.length, 1);
   cleanup();
 });

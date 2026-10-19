@@ -10,7 +10,7 @@ import getAccessToken from "@/utils/getAccessToken";
 export default function useHlsPlayer(
   videoRef,
   url,
-  { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted } = {}
+  { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted, onBuffering } = {}
 ) {
   const hlsRef = useRef(null);
   const retryTimerRef = useRef(null);
@@ -19,6 +19,8 @@ export default function useHlsPlayer(
 
   const onErrorRef = useRef(onError);
   const onStartedRef = useRef(onStarted);
+  const onBufferingRef = useRef(onBuffering);
+  useEffect(() => { onBufferingRef.current = onBuffering; }, [onBuffering]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
   useEffect(() => { onStartedRef.current = onStarted; }, [onStarted]);
 
@@ -38,13 +40,27 @@ export default function useHlsPlayer(
     cleanup();
 
     let disposed = false;
+    let retryCount = 0;
+    let progressTime = video.currentTime;
     const handlePlaying = () => {
+      retryCount = 0;
+      onBufferingRef.current?.(false);
       if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
     };
+    const handleProgress = () => {
+      if (video.currentTime === progressTime) return;
+      progressTime = video.currentTime;
+      handlePlaying();
+    };
+    const handleWaiting = () => onBufferingRef.current?.(true);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('timeupdate', handleProgress);
+    video.addEventListener('waiting', handleWaiting);
     const dispose = () => {
       disposed = true;
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('timeupdate', handleProgress);
+      video.removeEventListener('waiting', handleWaiting);
       cleanup();
     };
 
@@ -89,17 +105,31 @@ export default function useHlsPlayer(
       hlsRef.current = hls;
       hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(url));
 
+      const retryConnection = () => {
+        onBufferingRef.current?.(true);
+        if (retryTimerRef.current) return;
+        const delay = Math.min(2000 * 2 ** Math.min(retryCount++, 4), 30000);
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          if (disposed || hlsRef.current !== hls) return;
+          // Reuse the attached player so the last decoded frame stays visible.
+          // loadSource can detach MediaSource even for the same URL. Only use
+          // it if the initial manifest never loaded; established feeds resume
+          // their existing controllers and preserve the held frame.
+          if (!hls.levels.length) hls.loadSource(url);
+          hls.startLoad(-1);
+        }, delay);
+      };
+
       hls.on(Hls.Events.ERROR, (_, data) => {
-        const statusCode = data?.response?.status || data?.response?.code || data?.networkDetails?.status;
         if (disposed || hlsRef.current !== hls) return;
-        if (statusCode === 404 || (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR)) {
-          onErrorRef.current?.(statusCode === 404 ? 'Stream not found (404)' : 'Stream connection interrupted');
-          if (!retryTimerRef.current) {
-            retryTimerRef.current = setTimeout(() => { retryTimerRef.current = null; startPlayer(); }, 2000);
-          }
+        // Nonfatal fragment failures belong to hls.js's own retry/recovery.
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          retryConnection();
           return;
         }
-        if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); return; }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { onBufferingRef.current?.(true); hls.recoverMediaError(); return; }
         if (data.fatal) onErrorRef.current?.(data.details || 'Stream playback failed');
       });
 
@@ -111,8 +141,7 @@ export default function useHlsPlayer(
         const stalled = video.currentTime === lastTime;
         lastTime = video.currentTime;
         if ((video.readyState < 3 || stalled) && !retryTimerRef.current) {
-          onErrorRef.current?.('Live stream stalled; reconnecting');
-          retryTimerRef.current = setTimeout(() => { retryTimerRef.current = null; startPlayer(); }, 2000);
+          retryConnection();
         }
       }, 15000);
 

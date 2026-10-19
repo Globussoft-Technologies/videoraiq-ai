@@ -6,6 +6,9 @@ export const HYGIENE_CATEGORY_OPTIONS = [
   { id: 'handHygieneBypass', label: 'Hand Hygiene Bypass' },
   { id: 'productContact', label: 'Product on Floor / Unclean Surface' },
   { id: 'contaminationRisk', label: 'Contamination Risk / Spillage' },
+  { id: 'cleaningSanitationSop', label: 'Cleaning & Sanitation SOP' },
+  { id: 'unsafeFoodHandling', label: 'Unsafe Food Handling / Cross-Contamination' },
+  { id: 'servingFoodSafety', label: 'Serving & Food Distribution Safety' },
 ];
 
 export const HYGIENE_CONTROLS = [
