@@ -140,6 +140,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   lightingVisibilitySiteConditionsDetectionSettings: { permissionKey: "lightingVisibilitySiteConditionsLogs", logsConfigKey: "lightingVisibilitySiteConditionsLogs" },
   blurredCameraDetectionSettings: { permissionKey: "blurredCameraLogs", logsConfigKey: "blurredCameraLogs" },
   deskSolarShoulderDetectionSettings: { permissionKey: "deskSolarShoulderLogs", logsConfigKey: "deskSolarShoulderLogs" },
+  doorDetectionSettings: { permissionKey: "doorDetectionLogs", logsConfigKey: "doorDetectionLogs" },
 });
 
 export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([

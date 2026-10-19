@@ -823,6 +823,12 @@ class IncidentsController {
     return await incidentsService.getUnauthorizedAccessLogs(req, res, next);
   }
 
+  async getDoorDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Door Detection logs.' */
+    return await incidentsService.getDoorDetectionLogs(req, res, next);
+  }
+
   async getVehicleCountLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Vehicle Count (countVehicles) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minCount, maxCount, search. Paginated via skip/limit.'

@@ -187,6 +187,11 @@ router.get(
   incidentsController.getUnauthorizedAccessLogs,
 );
 router.get(
+  "/logs/door-detection",
+  viewAccessCheck,
+  incidentsController.getDoorDetectionLogs,
+);
+router.get(
   "/logs/vehicle-count",
   viewAccessCheck,
   incidentsController.getVehicleCountLogs,

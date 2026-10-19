@@ -90,6 +90,7 @@ const TOUR_MODULE_DEFINITIONS = [
   { "key": "logs-records", "label": "Logs & Records", "path": "dashboard", "group": "LOGS & RECORDS", "tourOnly": true, "requiresAnyLog": true },
   { "key": "attendance", "label": "Attendance Logs", "path": "logs/attendance", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "attendanceLogs", "logsConfigKey": "attendanceLogs" },
   { "key": "access", "label": "Access Logs", "path": "logs/access", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "accessLogs", "logsConfigKey": "accessLogs" },
+  { "key": "door-detection", "label": "Door Logs", "path": "logs/door", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "doorDetectionLogs", "logsConfigKey": "doorDetectionLogs" },
   { "key": "tagged-users", "label": "Tagged Users", "path": "logs/tagged-users", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "taggedUsersLogs", "logsConfigKey": "taggedUsers" },
   { "key": "detected-users", "label": "Detected Users", "path": "logs/detected-users", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "detectedUsersLogs", "logsConfigKey": "detectedUsers" },
   { "key": "person-count", "label": "Person Count Logs", "path": "logs/person-count", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "personCountLogs", "logsConfigKey": "personCountLogs" },

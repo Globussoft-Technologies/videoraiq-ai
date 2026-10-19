@@ -5703,6 +5703,22 @@ console.log(result,'result');
     }
   }
 
+  async getDoorDetectionLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "doorDetection",
+        searchFields: ["incidentName", "description", "zone", "zoneName", "doorStatus", "eventId"],
+        postLookupSearch: true,
+        searchNumberFields: ["thresholdSec", "durationSec", "alertCount"],
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch door detection logs", 500));
+    }
+  }
+
   async getVehicleCountLogs(req, res, next) {
     try {
       const { minCount, maxCount } = req.query;
