@@ -10,6 +10,34 @@ const objectId = value => new mongoose.Types.ObjectId(value);
 const validId = value => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 const invalid = message => Object.assign(new Error(message), { statusCode: 400 });
 
+export async function getHygieneLogFilters(req, res, next) {
+  try {
+    if (req?.verified?.userData?.memberId) {
+      const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+      if (!(logs?.hygieneSanitationFoodSafetyLogs?.view || logs?.global?.view || logs?.view)) return res.status(403).send(Response.accessDeniedResp('Hygiene logs access denied.'));
+    }
+    const userId = req?.verified?.userData?.user_id?.toString();
+    if (!userId) return res.status(401).send(Response.userFailResp('Authentication required'));
+    const match = { userId, incidentType: 'hygieneSanitationFoodSafetyDetection' };
+    const authorized = req?.verified?.authorizedChannel?.channels;
+    if (Array.isArray(authorized)) match.channelId = { $in: authorized.map(String).filter(validId).map(objectId) };
+    // Derive filter choices from the entire authorized log history, so even
+    // inactive cameras and periods with no incidents retain usable filters.
+    const rows = await Incident.aggregate([
+      { $match: match }, { $group: { _id: { camera: '$channelId', nvr: '$nvrId' } } },
+      { $lookup: { from: 'channels', localField: '_id.camera', foreignField: '_id', as: 'camera' } },
+      { $lookup: { from: 'nvrs', localField: '_id.nvr', foreignField: '_id', as: 'nvr' } },
+      { $project: { _id: 1, camera: { $arrayElemAt: ['$camera', 0] }, nvr: { $arrayElemAt: ['$nvr', 0] } } },
+    ]);
+    const nvrs = new Map(), cameras = new Map();
+    rows.forEach(row => {
+      if (row._id.nvr) nvrs.set(String(row._id.nvr), { _id: String(row._id.nvr), nvrName: row.nvr?.nvrName || 'Historical NVR' });
+      if (row._id.camera) cameras.set(String(row._id.camera), { _id: String(row._id.camera), nvrId: String(row._id.nvr || ''), name: row.camera?.customName || row.camera?.name || 'Historical camera' });
+    });
+    return res.send(Response.userSuccessResp('Hygiene log filters fetched', { nvrs: [...nvrs.values()], cameras: [...cameras.values()] }));
+  } catch (error) { next(error); }
+}
+
 export function hygieneQuery(req) {
   const userId = req?.verified?.userData?.user_id?.toString();
   if (!userId) throw Object.assign(new Error('Authentication required'), { statusCode: 401 });

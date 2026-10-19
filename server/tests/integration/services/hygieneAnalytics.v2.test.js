@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import mongoose from 'mongoose';
 import { clearCollections, connectMongo, disconnectMongo } from '../dbSetup.js';
 import { payload, serviceCtx } from '../../helpers/service.js';
-import { getHygieneAnalytics, hygieneQuery } from '../../../core/v2/incidents/hygieneAnalytics.service.js';
+import { getHygieneAnalytics, getHygieneLogFilters, hygieneQuery } from '../../../core/v2/incidents/hygieneAnalytics.service.js';
 import { HygieneSanitationFoodSafetyDetectionIncident as Incident } from '../../../core/v2/incidents/incidents.model.js';
 import Channel from '../../../core/v2/channels/channels.model.js';
 
@@ -40,6 +40,17 @@ async function seed() {
   return { camera, otherCamera };
 }
 describe('hygiene analytics', () => {
+  it('returns historical NVR/camera choices independently of dates, scoped to the tenant and camera grant', async () => {
+    const { camera } = await seed();
+    const ctx = request({ startDate: '2020-01-01' }, { authorizedChannel: { channels: [String(camera)] } });
+    await getHygieneLogFilters(ctx.req, ctx.res, ctx.next);
+    const options = payload(ctx.res).data;
+    expect(options.cameras).toEqual([expect.objectContaining({ _id: String(camera), name: 'Kitchen 1' })]);
+    expect(options.nvrs).toHaveLength(1);
+    const denied = request({}, { authorizedChannel: { channels: [] } });
+    await getHygieneLogFilters(denied.req, denied.res, denied.next);
+    expect(payload(denied.res).data).toEqual({ nvrs: [], cameras: [] });
+  });
   it('aggregates full matching events without multiplying incident counts by violations; respects tenant and local day', async () => {
     await seed();
     const data = await fetch();

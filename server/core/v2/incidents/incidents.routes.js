@@ -8,11 +8,12 @@ import {
 } from "../../../middlewares/permissionMiddleware.js";
 import multer from "multer";
 import solderLineService from "./solderLine.service.js";
-import { getHygieneAnalytics } from "./hygieneAnalytics.service.js";
+import { getHygieneAnalytics, getHygieneLogFilters } from "./hygieneAnalytics.service.js";
 const upload = multer();
 
 const router = express.Router();
 router.get('/hygiene-analytics', viewAccessCheck, getHygieneAnalytics);
+router.get('/logs/hygiene-sanitation-food-safety-detection/filters', viewAccessCheck, getHygieneLogFilters);
 
 router.get('/logs/box-packing-detection', viewAccessCheck, incidentsController.getBoxPackingDetectionLogs);
 

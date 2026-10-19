@@ -4805,7 +4805,21 @@ console.log(result,'result');
   }
 
   async getHygieneSanitationFoodSafetyDetectionLogs(req, res, next) {
-    return this._getIndustrialDetectionLogs(req, res, next, "hygieneSanitationFoodSafetyDetection");
+    try {
+      const category = req.query?.hygieneCategory;
+      const categories = typeof category === 'string' ? [...new Set(category.split(',').map(value => value.trim()).filter(Boolean))] : [];
+      const severity = req.query?.severity;
+      const levels = typeof severity === 'string' ? severity.split(',').map(value => value.trim()).filter(Boolean) : [];
+      if ((severity && typeof severity !== 'string') || levels.some(value => !['low', 'moderate', 'high'].includes(value))) return res.status(400).send(Response.validationFailResp('Invalid severity', 'Validation Failed!'));
+      if ((category && typeof category !== 'string') || categories.some(value => !['handHygieneBypass', 'productContact', 'contaminationRisk'].includes(value))) {
+        return res.status(400).send(Response.validationFailResp('Invalid hygiene category', 'Validation Failed!'));
+      }
+      return await this._fetchIncidentLogs({
+        req: { ...req, query: { ...req.query, severity: undefined } }, res, incidentType: 'hygieneSanitationFoodSafetyDetection',
+        extraMatch: { ...(categories.length ? { 'violations.category': { $in: categories } } : {}), ...(levels.length ? { severity: { $in: levels } } : {}) },
+        searchNumberFields: ['violationCount'], postLookupSearch: true,
+      });
+    } catch (error) { next(error); }
   }
 
   async getLightingVisibilitySiteConditionsDetectionLogs(req, res, next) {
