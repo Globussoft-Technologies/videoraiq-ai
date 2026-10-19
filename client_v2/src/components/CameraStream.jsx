@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { LoaderCircle, Maximize2, Minimize2, VideoOff } from 'lucide-react';
+import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import useStreamSlot from '../hooks/useStreamSlot';
 import { streamUrl } from '../lib/stream';
@@ -93,6 +93,7 @@ export default function CameraStream({
   const hostRef  = useRef(null);
   const [error,   setError]   = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [lastLive, setLastLive] = useState(false);
   const [settled, setSettled] = useState(false);
   /* When gated on visibility we must start as "not visible" and let the observer
      say otherwise, or an off-screen tile would queue itself before the first
@@ -177,24 +178,20 @@ export default function CameraStream({
     return () => clearTimeout(t);
   }, [enabled, url, markSettled]);
 
-  const handleError = useCallback(() => { setPlaying(false); markSettled(); }, [markSettled]);
+  useEffect(() => { setLastLive(false); }, [url]);
+
+  // Transport interruptions are recovery state, not camera availability.
+  const handleError = useCallback(() => { setError(false); setPlaying(false); markSettled(); }, [markSettled]);
   const handleStarted = useCallback(() => { setError(false); }, []);
-  const handlePlaying = useCallback(() => { setError(false); setPlaying(true); markSettled(); }, [markSettled]);
-  const handleBuffering = useCallback((waiting) => {
-    if (waiting) setPlaying(false);
-    else handlePlaying();
-  }, [handlePlaying]);
+  const handlePlaying = useCallback(() => { setError(false); setPlaying(true); setLastLive(true); markSettled(); }, [markSettled]);
 
   useHlsPlayer(videoRef, url, {
     enabled,
     onError:   handleError,
     onStarted: handleStarted,
-    onBuffering: handleBuffering,
   });
 
-  const live = enabled && playing && !error;
-  const buffering = enabled && !live;
-  const statusColor = live ? '#22c55e' : buffering ? '#f59e0b' : '#ef4444';
+  const live = enabled && lastLive;
 
   /* Report status upward only once this tile has an actual opinion. While it is
      queued (or the page is paused) the grid keeps the camera's last known
@@ -202,8 +199,8 @@ export default function CameraStream({
   useEffect(() => {
     if (!enabled) return;
     if (live) { onLiveChange?.(true); return; }
-    if (settled) onLiveChange?.(false);
-  }, [live, settled, enabled, onLiveChange]);
+    if (settled && !lastLive) onLiveChange?.(false);
+  }, [live, settled, enabled, lastLive, onLiveChange]);
 
   const now = useClock(showOverlay && active);
 
@@ -214,7 +211,8 @@ export default function CameraStream({
     !url    ? (unavailableLabel || 'No stream configured')
     : paused ? 'Paused · not in view'
     : queued ? 'Queued…'
-    : 'Buffering…';
+    : error  ? (unavailableLabel || 'Stream unavailable')
+    : `${name} · connecting…`;
 
   const videoElement = (
     <video
@@ -262,7 +260,7 @@ export default function CameraStream({
       {/* Offline / queued / connecting placeholder */}
       {(!url || !enabled || error || !playing) && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,.3)' }}>
-          {unavailableContent && !url ? unavailableContent : <>{buffering ? <LoaderCircle size={22} className="animate-spin" aria-label="Buffering" /> : <VideoOff size={22} strokeWidth={1.4} />}
+          {unavailableContent && (!url || error) ? unavailableContent : <><VideoOff size={22} strokeWidth={1.4} />
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.5px' }}>
             {placeholder}
           </span>
@@ -293,15 +291,15 @@ export default function CameraStream({
             position: 'absolute', top: 8, right: 10,
             display: 'flex', alignItems: 'center', gap: 5,
             fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700,
-            color: statusColor,
+            color: live ? '#22c55e' : '#ef4444',
             background: 'rgba(6,8,13,.65)', padding: '3px 8px', borderRadius: 4, backdropFilter: 'blur(4px)',
             letterSpacing: '.5px',
           }}>
             <span
               className={live ? 'vq-blink' : ''}
-              style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, boxShadow: live ? '0 0 5px #22c55e' : 'none', flexShrink: 0 }}
+              style={{ width: 6, height: 6, borderRadius: '50%', background: live ? '#22c55e' : '#ef4444', boxShadow: live ? '0 0 5px #22c55e' : 'none', flexShrink: 0 }}
             />
-            {live ? 'LIVE' : buffering ? 'BUFFERING' : 'OFFLINE'}
+            {live ? 'LIVE' : 'OFFLINE'}
           </div>
 
           {/* Bottom-left: camera name + site */}
