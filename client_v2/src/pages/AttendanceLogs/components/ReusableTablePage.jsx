@@ -162,13 +162,13 @@ const ReusableTablePage = ({
   const DateFilter = datePickerVariant === 'preset' ? PresetDateRangePicker : DateRangePicker;
 
   return (
-    <div className="w-full flex flex-1 flex-col">
+    <div className="w-full min-w-0 flex flex-1 flex-col">
       {Array.isArray(stats) && stats.length > 0 && (
         <div data-tour="log-stats" className="mb-[18px]">
           <StatCards stats={stats} variant={statsVariant} />
         </div>
       )}
-      <div className="w-full flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
+      <div className="w-full min-w-0 flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-3 sm:p-5 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
           {showSearch && <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">

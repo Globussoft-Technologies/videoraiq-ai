@@ -5,23 +5,37 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
   const dark = variant === 'lightbox';
   const violations = Array.isArray(item.violations) ? item.violations.filter(violation => violation && typeof violation === 'object') : [];
   const categories = Array.isArray(item.selectedCategories) ? item.selectedCategories : [];
-  const count = item.violationCount ?? violations.length;
+  const count = Number.isInteger(item.violationCount) && item.violationCount >= 0
+    ? item.violationCount : violations.length;
   return (
     <section aria-label="Hygiene and food safety violations" style={{ color: dark ? '#e2e8f0' : 'var(--tx2)', fontSize: dark ? 12 : 11, minWidth: 0, maxWidth: '100%' }}>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <strong>{count} violation{count === 1 ? '' : 's'}</strong>
-        {item.zone && <span>Zone: {item.zone}</span>}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 6, background: dark ? 'rgba(245,158,11,.14)' : 'var(--bg2)', fontWeight: 600 }}>
+          Issues detected
+          <strong style={{ minWidth: 18, textAlign: 'center', fontVariantNumeric: 'tabular-nums', color: dark ? '#fbbf24' : 'var(--tx)' }}>{count}</strong>
+        </span>
+        {item.zone && <span style={{ overflowWrap: 'anywhere' }}>Zone: <strong>{item.zone}</strong></span>}
       </div>
+      {compact && violations.length > 0 && (
+        <div style={{ marginTop: 6, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+          {violations[0].categoryName || hygieneCategoryLabel(violations[0].category) || 'Issue'}
+          {count > 1 && <span style={{ marginLeft: 6, color: 'var(--tx3)' }}>+{count - 1} more</span>}
+        </div>
+      )}
       {!compact && (
         <>
           {dark && item.conceptGroup && <div style={{ marginTop: 5, color: '#94a3b8' }}>{item.conceptGroup}</div>}
-          {categories.length > 0 && (
+          {categories.length > 0 && violations.length === 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }} aria-label="Selected hygiene categories">
               {categories.map(category => <span key={category} style={{ padding: '3px 6px', borderRadius: 5, background: dark ? 'rgba(20,184,166,.15)' : 'var(--bg2)', fontSize: 10, overflowWrap: 'anywhere' }}>{hygieneCategoryLabel(category)}</span>)}
             </div>
           )}
-          <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 6 }}>
-            {(dark ? violations : violations.slice(0, 2)).map((violation, index) => {
+          <ul
+            aria-label="Detected issues"
+            tabIndex={!dark && violations.length > 0 ? 0 : undefined}
+            style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 6, ...(!dark ? { maxHeight: 100, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', overscrollBehaviorY: 'contain' } : {}) }}
+          >
+            {violations.map((violation, index) => {
               const level = severity(violation.severity);
               const confidence = typeof violation.confidence === 'number' && Number.isFinite(violation.confidence)
                 ? `${Math.round(violation.confidence * 100)}% confidence`
@@ -29,8 +43,8 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
               return (
                 <li key={`${violation.category}-${index}`} style={{ borderTop: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'var(--bd)'}`, paddingTop: 6, overflowWrap: 'anywhere' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                    <strong>{violation.categoryName || hygieneCategoryLabel(violation.category) || 'Violation'}</strong>
-                    {violation.severity && <span style={{ color: level.color, fontSize: 10, fontWeight: 700 }}>{level.short}</span>}
+                    <strong style={{ flex: '1 1 160px', lineHeight: 1.4 }}>{index + 1}. {violation.categoryName || hygieneCategoryLabel(violation.category) || 'Issue'}</strong>
+                    {violation.severity && <span style={{ color: level.color, fontSize: 10, fontWeight: 700, border: '1px solid currentColor', borderRadius: 4, padding: '2px 5px', alignSelf: 'flex-start' }}>{level.short}</span>}
                   </div>
                   {violation.description && <div style={{ marginTop: 3, lineHeight: 1.45 }}>{violation.description}</div>}
                   {confidence && <div style={{ marginTop: 3, color: dark ? '#94a3b8' : 'var(--tx3)' }}>{confidence}</div>}
@@ -38,7 +52,7 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
               );
             })}
           </ul>
-          {!dark && violations.length > 2 && <div style={{ marginTop: 5 }}>+{violations.length - 2} more in snapshot details</div>}
+          {violations.length === 0 && item.description && <div style={{ marginTop: 6, lineHeight: 1.45 }}>{item.description}</div>}
         </>
       )}
     </section>

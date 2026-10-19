@@ -114,7 +114,7 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Pick a report and period, preview it, then download it</span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 260px', maxWidth: 340, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: '1 1 260px', maxWidth: 340, minWidth: 'min(100%, 260px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Panel style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 14 }}>
             <div style={label}>Report</div>
             {TYPES.map((t) => {

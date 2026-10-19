@@ -470,7 +470,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           </button>
         )}
 
-        <span className="ml-auto flex items-center gap-[10px] shrink-0">
+        <span className="ml-auto flex w-full min-w-0 max-w-full flex-wrap items-center gap-[10px] sm:w-auto">
           {loading ? (
             <Loader2 size={13} className="animate-spin text-[var(--tx3)]" />
           ) : (

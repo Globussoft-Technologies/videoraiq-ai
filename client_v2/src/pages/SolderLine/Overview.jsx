@@ -270,7 +270,7 @@ function PresenceCard({ o }) {
           <span style={{ ...label, fontSize: 8.5, marginTop: 4 }}>Present</span>
         </div>
       </div>
-      <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ flex: 1, minWidth: 'min(100%, 220px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
           <OpBadge op={o.i} />
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>{o.zone}</span>

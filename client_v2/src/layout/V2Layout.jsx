@@ -186,17 +186,17 @@ function Shell() {
   }, [isMobile, needsSidebar, location.pathname]);
 
   // Sites for the switcher (locations master data).
-  const { data: locations, refetch: refreshSites } = useApi(() => getLocations(0, 100), []);
+  const { data: locations, refetch: refreshSites } = useApi(() => getLocations(0, 100), [], { enabled: !embedded });
   const sites = Array.isArray(locations) ? locations : [];
 
   // Direct-mode NVRs do not support the recorder-backed Playback page. The
   // helper fails open while this request is loading or if it fails, and mixed
   // accounts retain Playback for their device-mode NVRs.
-  const { data: nvrInventory } = useApi(() => getNvrs(0, 100), []);
+  const { data: nvrInventory } = useApi(() => getNvrs(0, 100), [], { enabled: !embedded });
   const hidePlayback = shouldHidePlayback(nvrInventory?.nvrs);
 
   // Notifications + alerts badge from the recent alert feed.
-  const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000 });
+  const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000, enabled: !embedded });
   const recentAlerts = crit?.recentAlerts || EMPTY_ALERTS;
   const [readIds, setReadIds] = useState(loadReadIds);
   const notifications = useMemo(() => recentAlerts.map((a, i) => ({
@@ -274,7 +274,7 @@ function Shell() {
   // Some channels have no streamingUrl yet (backend registration pending),
   // so cameraStatusId() returns null for them — pull enough candidates that
   // every domain is very likely to have at least one that resolves.
-  const probeChannelsApi = useApi(() => getChannels({ limit: 30 }), []);
+  const probeChannelsApi = useApi(() => getChannels({ limit: 30 }), [], { enabled: !embedded });
   const probeChannels = useMemo(() => {
     const seenDomains = new Set();
     const picked = [];
@@ -321,7 +321,7 @@ function Shell() {
       className="vq-root"
       data-vq-theme={theme}
       style={{
-        height: '100vh',
+        height: '100dvh',
         display: 'flex',
         overflow: 'hidden',
         fontFamily: 'var(--ui)',

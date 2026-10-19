@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clearMobileEmbed, saveMobileEmbed } from '@/utils/mobileEmbed';
 
 // Consume the fragment before any async request or third-party component runs.
 let exchange;
 export default function MobileSso() {
+  const navigate = useNavigate();
   const [error, setError] = useState('');
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +28,7 @@ export default function MobileSso() {
       const path = session.screen?.webPath;
       if (!path?.startsWith('/') || path.startsWith('//') || path.includes('..')) throw new Error('Invalid page destination');
       saveMobileEmbed(session);
-      window.location.replace(`${path}?embedded=1`);
+      navigate(`${path}?embedded=1`, { replace: true });
     }).catch(reason => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; };
   }, []);

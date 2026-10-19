@@ -101,7 +101,7 @@ export default function SolderLine() {
   const live = !loading && model?.isToday;
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 22px', position: 'sticky', top: 0, zIndex: 40, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 clamp(12px, 3vw, 22px)', position: 'sticky', top: 0, zIndex: 40, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)' }}>
         {visibleTabs.map((t) => (
           <NavLink key={t.view} to={t.to} end style={({ isActive }) => ({
             display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600,
@@ -114,7 +114,7 @@ export default function SolderLine() {
             )}
           </NavLink>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, padding: '5px 0' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%', gap: 12, padding: '5px 0' }}>
           {live && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999, border: `1px solid ${OK}66`, background: `${OK}1a` }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: OK, animation: 'vq-blink 1.4s ease-in-out infinite' }} />
@@ -133,7 +133,7 @@ export default function SolderLine() {
         </div>
       </div>
 
-      <div aria-busy={loading} style={{ padding: '22px 22px 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      <div aria-busy={loading} style={{ padding: '22px clamp(12px, 3vw, 22px) 40px', display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1560, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {error && (
         <div style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${BAD}66`, color: BAD, fontSize: 12.5 }}>
           {error} <button type="button" onClick={() => load()} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>Retry</button>

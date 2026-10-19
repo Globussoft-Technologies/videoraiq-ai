@@ -189,7 +189,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
     const gridStart = month.clone().startOf('month').startOf('week');
     const days = Array.from({ length: 42 }, (_, index) => gridStart.clone().add(index, 'day'));
     return (
-      <div className="min-w-[270px]">
+      <div className="min-w-0 sm:min-w-[270px]">
         <div className="mb-2 text-base font-bold text-[var(--tx)]">{month.format('MMMM YYYY')}</div>
         <div className="grid grid-cols-7 gap-y-0.5">
           {WEEKDAYS.map((weekday) => (
@@ -230,12 +230,13 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
   const panel = (
     <div
       ref={panelRef}
+      data-calendar-panel="true"
       style={pos || { position: 'fixed', top: -9999, left: -9999 }}
       className={`z-[10030] max-h-[calc(100vh-24px)] overflow-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-2xl ${customOpen ? 'w-[760px]' : 'w-[150px]'}`}
     >
-      <div className={customOpen ? 'grid grid-cols-[134px_minmax(0,1fr)]' : ''}>
-        <div className={`${customOpen ? 'border-r border-[var(--bd)]' : ''} p-2.5`}>
-          <div className="space-y-1">
+      <div className={customOpen ? 'grid grid-cols-1 sm:grid-cols-[134px_minmax(0,1fr)]' : ''}>
+        <div className={`${customOpen ? 'border-b sm:border-b-0 sm:border-r border-[var(--bd)]' : ''} p-2.5`}>
+          <div className={customOpen ? 'grid grid-cols-2 gap-1 sm:block sm:space-y-1' : 'space-y-1'}>
             {PRESETS.map((preset) => (
               <button
                 key={preset.key}
@@ -255,7 +256,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
 
         {customOpen && (
           <div>
-            <div className="relative flex gap-6 px-5 py-3" onMouseLeave={() => setHovered(null)}>
+            <div className="relative flex flex-col sm:flex-row gap-6 px-3 sm:px-5 py-3" onMouseLeave={() => setHovered(null)}>
               {months.map((month) => (
                 <React.Fragment key={month.format('YYYY-MM')}>{renderMonth(month)}</React.Fragment>
               ))}
@@ -279,7 +280,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[var(--bd)] px-4 py-2">
+            <div className="flex flex-wrap gap-2 items-center justify-between border-t border-[var(--bd)] px-4 py-2">
               <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--tx2)]">
                 <span className="truncate">
                   {sel.start ? sel.start.format('DD MMMM YYYY') : 'Start date'}

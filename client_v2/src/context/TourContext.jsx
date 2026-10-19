@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { visibleNavItems } from '@/lib/navVisibility';
 import { SHELL_TOUR, resolveSteps, tourForItem } from '@/lib/tour/steps';
 import { fetchOnboarding, updateOnboarding, fetchTourModules } from '@/helpers/onboarding';
+import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 const TourContext = createContext(null);
 
@@ -404,6 +405,7 @@ export function TourProvider({ children }) {
 
   useEffect(() => {
     if (autoStarted.current) return;
+    if (isMobileEmbedded()) return;
     if (onboarded !== false) return;
     // Wait for permissions to load, otherwise the queue is built from the
     // fail-open "show everything" state and would walk the user into modules

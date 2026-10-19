@@ -325,6 +325,8 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         cell: ({ row }) => <span className={styles.text}>{formatDoorDuration(row.original.durationSec)}</span>,
       },
     );
+  }
+
   if (config.showHygieneFields) {
     cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
       cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
