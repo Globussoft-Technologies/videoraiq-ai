@@ -357,5 +357,4 @@ export const BOX_PACKING_CONFIG = {
   gridVariant: 'details',
   enableViewExports: false,
   datePickerVariant: 'preset',
-  useDummyData: false,
 };

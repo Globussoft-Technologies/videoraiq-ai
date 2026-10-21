@@ -18,7 +18,6 @@ import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
 import { packingExportValues, packingZones } from './boxPacking';
-import { BOX_PACKING_DUMMY_LOGS } from '@/pages/BoxPackingLogs/boxPackingData';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -41,28 +40,6 @@ const incidentImageUrl = (value) => {
 const stockEventPreviewKey = (row, event, index) => (
   `stock-event:${event?._id || event?.eventId || `${row?.aggregationKey || row?._id || 'row'}-${index}`}`
 );
-
-const buildDummyBoxPackingRows = ({ startDate, endDate, searchInput, status }) => {
-  const start = moment(startDate).startOf('day');
-  const end = moment(endDate).endOf('day');
-  return BOX_PACKING_DUMMY_LOGS
-    .filter((row) => moment(row.time).isBetween(start, end, undefined, '[]'))
-    .filter((row) => !status || row.status === status)
-    .filter((row) => !searchInput || `${row.id} ${row.boxId} ${row.completedBy} ${row.zone} ${row.camera} ${row.detectedVia} ${row.reason}`.toLowerCase().includes(searchInput.toLowerCase()))
-    .map((row) => ({
-      ...row,
-      _id: row.id,
-      boxId: row.boxId,
-      completedBy: row.completedBy,
-      zones: [{ zone: row.zone, boxNumber: row.boxNumber, timeTakenSec: row.timeTakenSec }],
-      endTimeSource: 'Line sensor',
-      confirmationReason: row.reason,
-      nvrData: { _id: `dummy-nvr-${row.camera}`, nvrName: 'Packing NVR 01' },
-      channelData: { _id: row.camera, name: row.camera },
-      timeOfIncident: row.time,
-      currentStatus: row.status === 'completed' ? 'Completed' : 'Needs review',
-    }));
-};
 
 function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
   const exporting = !!exportingFormat;
@@ -191,10 +168,6 @@ const IncidentLogsPage = ({ config }) => {
 
   /* ─────────────── Filter metadata ─────────────── */
   useEffect(() => {
-    if (config.useDummyData) {
-      dispatch({ type: 'SET_NVR_LIST', value: [] });
-      return undefined;
-    }
     (async () => {
       try {
         const res = config.showHygieneFields ? await getHygieneLogFilters() : await getNVRs();
@@ -203,13 +176,9 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, [config.useDummyData, config.showHygieneFields]);
+  }, [config.showHygieneFields]);
 
   useEffect(() => {
-    if (config.useDummyData) {
-      dispatch({ type: 'SET_CAMERA_LIST', value: [] });
-      return undefined;
-    }
     (async () => {
       try {
         const res = config.showHygieneFields ? await getHygieneLogFilters() : await getchannels({ nvrIds });
@@ -218,7 +187,7 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [config.useDummyData, config.showHygieneFields, nvrIds]);
+  }, [config.showHygieneFields, nvrIds]);
 
   useEffect(() => {
     if (!config.vehicleNumbersEndpoint) {
@@ -278,27 +247,6 @@ const IncidentLogsPage = ({ config }) => {
     dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
-      if (config.useDummyData && config.showBoxPackingFields) {
-        const dummyList = buildDummyBoxPackingRows({ startDate, endDate, searchInput, status });
-        const mappedDummy = dummyList.map((item) => ({
-          ...item,
-          ...packingExportValues(item),
-          id: item._id,
-          incidentName: '--',
-          currentStatus: item.currentStatus,
-          nvrName: item.nvrData.nvrName,
-          channelName: item.channelData.name,
-          nvrId: item.nvrData._id,
-          channelId: item.channelData._id,
-          createdAt: item.timeOfIncident,
-          incidentImageUrl: incidentImageUrl(item.Image),
-          severity: '--',
-        }));
-        dispatch({ type: 'SET_ROWS', value: mappedDummy });
-        dispatch({ type: 'SET_TOTAL_COUNT', value: mappedDummy.length });
-        dispatch({ type: 'SET_LOADING', value: false });
-        return;
-      }
       const res = await fetchIncidentLogs({
         endpoint: config.endpoint,
         method: config.method,

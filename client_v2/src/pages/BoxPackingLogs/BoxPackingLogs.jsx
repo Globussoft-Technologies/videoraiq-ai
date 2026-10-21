@@ -9,7 +9,7 @@ import { IS_LICENSING_ENABLED } from '@/helpers/license';
 import PageLoader from '@/components/PageLoader';
 import { ErrorState } from '@/components/States';
 import AccessDenied from '@/components/AccessDenied';
-import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Boxes, CheckCircle2, ClipboardCheck, Clock3, Download, FileSpreadsheet, FileText, Filter, Info, LayoutGrid, List, Maximize2, Package, PackageCheck, RefreshCw, RotateCcw, Rows3, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Boxes, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, Filter, Info, LayoutGrid, List, Maximize2, Package, PackageCheck, RefreshCw, RotateCcw, Rows3, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { formatPackingDuration, packingStats, packingWorkerIds, packingWorkerId, packingCompletedZone, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue } from './boxPackingData';
 import { samePackingCamera, packingStationKey, packingNvrId } from './packingIdentity';
 import { downloadBoxPackingCsv, downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
@@ -777,7 +777,6 @@ export default function BoxPackingLogs() {
      {view === 'analytics' && <Panel style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '12px 14px' }}><span style={label}>Status</span>{[['all', 'ALL', '#475569'], ['completed', 'COMPLETED', OK], ['review', 'NEEDS REVIEW', WARN]].map(([value, text, color]) => <Chip key={value} on={filter === value} color={color} onClick={() => setFilter(value)}>{text}<span style={{ opacity: .7 }}>{value === 'all' ? dbRows.length : dbRows.filter((row) => row.status === value).length}</span></Chip>)}</Panel>}
     {showAnalytics && <AnalyticsPanel rows={analyticsRows} stats={analyticsStats} />}
      {view === 'analytics' && (!rows.length ? <Panel><NoPeriodData minH={200} /></Panel> : grid ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>{rows.map((row) => <LogCard key={row.id} row={row} />)}</div> : <LogList rows={rows} />)}
-     {view === 'analytics' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--tx3)', fontSize: 11.5 }}><ClipboardCheck size={14} /> Dummy records are shown for UI validation.</div>}
      </>}
   </div></div></div>;
 }
