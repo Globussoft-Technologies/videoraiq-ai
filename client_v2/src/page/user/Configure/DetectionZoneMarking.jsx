@@ -1105,7 +1105,11 @@ export default function DetectionZoneMarking({
 
             {(!url || videoState === 'error' || streamTimedOut) && !showSnapshot && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.35)', fontSize: 12, fontFamily: 'var(--mono)' }}>
-                {!url ? 'No stream configured' : 'Stream unavailable'}
+                {snapshotFailed
+                  ? 'Stream unavailable. Saved snapshot could not be loaded.'
+                  : !snapshotUrl
+                    ? 'Stream unavailable. No saved snapshot yet.'
+                    : 'Stream unavailable'}
               </div>
             )}
 
@@ -1436,7 +1440,7 @@ export default function DetectionZoneMarking({
               </span>
             )}
 
-            {!isBlurredCameraDetection && zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
+            {videoSize.w > 0 && !isBlurredCameraDetection && zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <span style={{
                   fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',

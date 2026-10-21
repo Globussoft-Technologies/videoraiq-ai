@@ -20,7 +20,7 @@ import NVR from "../../../core/v1/NVR/nvr.model.js";
 import Admin from "../../../core/v1/admin/admin.model.js";
 import { resolveStream } from "../../../utils/rtspStream.js";
 import { putMediaV2, deleteMediaV2 } from "../../../core/v2/adminStorage/mediaStorage.v2.js";
-import { captureFrame, refreshCameraSnapshot, snapshotStreamUrl, loadSnapshotPlaylist, createSnapshotPlaybackToken } from "../../../services/cameraSnapshots.service.js";
+import { captureFrame, refreshCameraSnapshot, snapshotStreamUrl, loadSnapshotPlaylist, createSnapshotPlaybackToken, snapshotFailureReason } from "../../../services/cameraSnapshots.service.js";
 
 const camera = { _id: "camera", nvrId: "nvr", userId: "owner", latestSnapshot: { path: "/old.jpg" } };
 let child;
@@ -45,6 +45,31 @@ beforeEach(() => {
 });
 
 describe("camera snapshots", () => {
+  const brands = ['hikvision', 'dahua', 'prama', 'cpplus', 'camera', 'tiandy', 'securus', 'hanwha', 'honeywell'];
+  it.each(brands)('uses the common cloud HLS endpoint for %s device and direct connections', brand => {
+    for (const connectionMode of ['device', 'direct']) {
+      expect(snapshotStreamUrl({ _id: 'camera' }, { _id: 'nvr', brand, connectionMode }, { appEnv: 'cloud', host: 'https://tenant-stream.example/proxy/' }))
+        .toBe('https://tenant-stream.example/proxy/stream/nvr-camera/playlist.m3u8');
+    }
+  });
+  it.each(brands)('uses the appliance streaming path for %s local and onprem installations', brand => {
+    for (const appEnv of ['local', 'onprem']) {
+      expect(snapshotStreamUrl({ streamingPath: '/stream/appliance-channel/playlist.m3u8' }, { brand, domain: 'https://appliance.example/proxy/' }, { appEnv }))
+        .toBe('https://appliance.example/proxy/stream/appliance-channel/playlist.m3u8');
+    }
+  });
+  it('preserves absolute appliance URLs without requiring an NVR domain', () => {
+    expect(snapshotStreamUrl({ streamingPath: 'https://appliance.example/hls/camera.m3u8' }, {}, { appEnv: 'local' }))
+      .toBe('https://appliance.example/hls/camera.m3u8');
+  });
+  it('falls back to the local channel ID and configured stream host', () => {
+    expect(snapshotStreamUrl({ localChannelId: 'local-camera' }, {}, { appEnv: 'onprem', host: 'http://appliance:8080' }))
+      .toBe('http://appliance:8080/stream/local-camera/playlist.m3u8');
+  });
+  it('does not fabricate a stream URL when required connection details are missing', () => {
+    expect(snapshotStreamUrl({}, {}, { appEnv: 'local' })).toBeNull();
+    expect(snapshotStreamUrl({ _id: 'camera' }, { _id: 'nvr' }, { appEnv: 'cloud' })).toBeNull();
+  });
   it("captures a real JPEG from HLS segments using existing query-token access", async () => {
     const actual = await vi.importActual('node:child_process');
     const { stdout: segment } = await promisify(actual.execFile)(ffmpegStatic, [
@@ -76,8 +101,8 @@ describe("camera snapshots", () => {
     expect(Channel.updateOne.mock.invocationCallOrder[0]).toBeLessThan(deleteMediaV2.mock.invocationCallOrder[0]);
     expect(deleteMediaV2).toHaveBeenCalledWith("/old.jpg");
     const playlistUrl = new URL(axios.get.mock.calls[0][0]);
-    const claims = jwt.verify(playlistUrl.searchParams.get('token'), config.get('Backend.token'));
-    expect(claims).toMatchObject({ service: 'python-backend', user_id: 'owner', purpose: 'camera-snapshot' });
+    const claims = jwt.verify(playlistUrl.searchParams.get('token'), config.get('jwt.secretKey'));
+    expect(claims).toMatchObject({ status: true, user_id: 'owner', purpose: 'camera-snapshot' });
     expect(child.stdin.end.mock.calls[0][0]).toContain('seg_1.ts?token=');
     expect(spawn.mock.calls[0][1]).not.toContain('-headers');
   });
@@ -147,9 +172,17 @@ describe("camera snapshots", () => {
     axios.get.mockResolvedValue({ data: '#EXTM3U\nhttps://other.example/segment.ts\n' });
     await expect(loadSnapshotPlaylist('https://stream.example/playlist.m3u8', 'playback')).rejects.toThrow('Unsupported HLS media URL');
   });
-  it("creates short-lived tokens accepted by the existing service-token verifier", () => {
-    const claims = jwt.verify(createSnapshotPlaybackToken('42'), config.get('Backend.token'));
-    expect(claims.service).toBe('python-backend');
+  it("creates short-lived application tokens for existing browser-playback authentication", () => {
+    const token = createSnapshotPlaybackToken('42');
+    const claims = jwt.verify(token, config.get('jwt.secretKey'));
+    expect(claims.status).toBe(true);
+    expect(claims.user_id).toBe('42');
+    expect(() => jwt.verify(token, config.get('Backend.token'))).toThrow();
     expect(claims.exp - claims.iat).toBe(120);
+  });
+  it("logs failures without exposing playback tokens or request configuration", () => {
+    expect(snapshotFailureReason({ response: { status: 401 }, config: { url: 'https://stream/?token=secret' } })).toBe('stream/storage HTTP 401');
+    expect(snapshotFailureReason({ isAxiosError: true, code: 'ECONNREFUSED', message: 'https://stream/?token=secret' })).toBe('network ECONNREFUSED');
+    expect(snapshotFailureReason(new Error('Failed https://stream/?token=secret'))).not.toContain('secret');
   });
 });

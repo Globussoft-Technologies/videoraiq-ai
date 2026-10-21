@@ -13,9 +13,17 @@ import logger from "../utils/logger.js";
 
 export const SNAPSHOT_INTERVAL_MS = 30 * 60 * 1000;
 
-// The unmodified streaming server validates these through by-login-token.
+// Use the same application-token format as browser playback. Some deployed
+// streaming servers reject service tokens even when backend decoding accepts them.
 export function createSnapshotPlaybackToken(userId) {
-  return jwt.sign({ service: "python-backend", user_id: userId, purpose: "camera-snapshot" }, config.get("Backend.token"), { algorithm: "HS512", expiresIn: "2m" });
+  return jwt.sign({ user_id: userId, status: true, purpose: "camera-snapshot" }, config.get("jwt.secretKey"), { algorithm: "HS512", expiresIn: "2m" });
+}
+
+// Axios errors contain request URLs and credentials: never log the raw error.
+export function snapshotFailureReason(error) {
+  if (error?.response?.status) return `stream/storage HTTP ${error.response.status}`;
+  if (error?.isAxiosError) return `network ${error.code || "request failed"}`;
+  return String(error?.message || "unknown error").replace(/https?:\/\/[^\s"']+/gi, "[URL]").replace(/token=[^\s&]+/gi, "token=[redacted]").slice(0, 250);
 }
 
 export async function loadSnapshotPlaylist(url, playbackToken, depth = 0) {
@@ -77,11 +85,19 @@ export async function captureFrame(url, playbackToken) {
 
 export function snapshotStreamUrl(camera, nvr, stream) {
   if (!nvr) return null;
+  // All supported brands (including direct RTSP cameras) are exposed through
+  // the same HLS interface. Never reconstruct a vendor-specific RTSP URL here.
   if (stream.appEnv === "cloud") {
+    if (!stream.host || !nvr._id || !camera._id) return null;
     return new URL(`stream/${nvr._id}-${camera._id}/playlist.m3u8`, `${stream.host.replace(/\/+$/, "")}/`).href;
   }
-  if (!nvr.domain || !camera.streamingPath) return null;
-  return new URL(camera.streamingPath.replace(/^\/+/, ""), `${nvr.domain.replace(/\/+$/, "")}/`).href;
+  const path = camera.streamingPath || (camera.localChannelId ? `stream/${camera.localChannelId}/playlist.m3u8` : null);
+  if (!path) return null;
+  // Some appliances return a complete URL rather than a relative path.
+  if (/^https?:\/\//i.test(path)) return new URL(path).href;
+  const host = nvr.domain || stream.host;
+  if (!host) return null;
+  return new URL(path.replace(/^\/+/, ""), `${host.replace(/\/+$/, "")}/`).href;
 }
 
 async function cleanupPending(camera, token) {
@@ -101,7 +117,7 @@ export async function refreshCameraSnapshot(camera, token) {
   const nvr = await NVR.findById(camera.nvrId).lean();
   const stream = await resolveStream(camera.userId);
   const url = snapshotStreamUrl(camera, nvr, stream);
-  if (!url) return;
+  if (!url) throw new Error("Camera has no usable stream URL");
   const buffer = await captureFrame(url, createSnapshotPlaybackToken(camera.userId));
   const capturedAt = new Date();
   const admin = await Admin.findOne({ user_id: String(camera.userId) }).select("_id").lean();
@@ -147,7 +163,7 @@ export async function runCameraSnapshotSweep() {
         .select("+snapshotPendingDelete").lean();
       if (!camera) continue;
       try { await refreshCameraSnapshot(camera, token); }
-      catch { logger.warn(`Camera snapshot refresh failed for ${row._id}; retaining the last successful image`); }
+      catch (error) { logger.warn(`Camera snapshot refresh failed for ${row._id}: ${snapshotFailureReason(error)}; retaining the last successful image`); }
       finally { await Channel.updateOne({ _id: row._id, snapshotLeaseToken: token }, { $unset: { snapshotLeaseUntil: 1, snapshotLeaseToken: 1 } }); }
     }
   } catch (error) {
