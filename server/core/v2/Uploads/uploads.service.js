@@ -1,5 +1,5 @@
 import path from "path";
-import * as archiver from "archiver";
+import { ZipArchive } from "archiver";
 import { PassThrough } from "stream";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
@@ -27,8 +27,12 @@ class UploadService {
                 return res.status(400).json({ status: 'failed', message: 'Provide between 1 and 100 media files.' });
             }
 
-            const archive = archiver.create('zip', { zlib: { level: 0 } });
-            archive.on('error', (error) => { throw error; });
+            const archive = new ZipArchive({ zlib: { level: 0 } });
+            archive.on('error', (error) => {
+                logger.error('Error streaming media ZIP:', error);
+                if (!res.headersSent) res.status(500).json({ status: 'failed', message: `Failed to create ZIP: ${error.message}` });
+                else res.destroy(error);
+            });
             res.status(200);
             res.setHeader('Content-Type', 'application/zip');
             res.setHeader('Content-Disposition', 'attachment; filename="box-packing-snapshots.zip"');

@@ -3480,6 +3480,8 @@ console.log(result,'result');
       limit = 10,
       startDate,
       endDate,
+      fromTime,
+      toTime,
       nvrId,
       nvrIds,
       channelId,
@@ -3516,6 +3518,39 @@ console.log(result,'result');
         $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
         $lte: momentTZ.tz(endDate, getRequestTimezone(req)).endOf("day").toDate(),
       };
+    }
+
+    // Apply the same time-of-day window on the server so pagination and every
+    // export path receive the exact filtered dataset. The UI sends either
+    // "HH:MM" or a 12-hour value such as "03:00 PM" in the admin's local
+    // timezone; dateToString evaluates each incident in that same timezone.
+    const parseTimeOfDay = (value) => {
+      if (value == null || String(value).trim() === "") return null;
+      const parsed = momentTZ(String(value).trim(), ["HH:mm", "H:mm", "hh:mm A", "h:mm A"], true);
+      return parsed.isValid() ? parsed.format("HH:mm") : null;
+    };
+    const fromClock = parseTimeOfDay(fromTime);
+    const toClock = parseTimeOfDay(toTime);
+    if ((fromTime && !fromClock) || (toTime && !toClock)) {
+      return res.status(400).json({ error: "fromTime and toTime must be valid times." });
+    }
+    if (fromClock || toClock) {
+      const timeOfDay = {
+        $dateToString: {
+          format: "%H:%M",
+          date: "$timeOfIncident",
+          timezone: getRequestTimezone(req),
+        },
+      };
+      if (fromClock && toClock) {
+        matchStage.$expr = fromClock <= toClock
+          ? { $and: [{ $gte: [timeOfDay, fromClock] }, { $lte: [timeOfDay, toClock] }] }
+          : { $or: [{ $gte: [timeOfDay, fromClock] }, { $lte: [timeOfDay, toClock] }] };
+      } else if (fromClock) {
+        matchStage.$expr = { $gte: [timeOfDay, fromClock] };
+      } else {
+        matchStage.$expr = { $lte: [timeOfDay, toClock] };
+      }
     }
 
     const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);

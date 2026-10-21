@@ -55,6 +55,8 @@ const showVehicleNumberFor = (details) => (
 const rowFromIncident = (item, timezone) => ({
   id: String(item._id),
   recordedAt: item.timeOfIncident,
+  startTime: item.startTime || item.start_time || null,
+  endTime: item.endTime || item.end_time || null,
   cameraId: String(item.cameraId?._id || item.cameraId || item.channelData?._id || item.channelId || ''),
   nvrId: String(item.nvrId?._id || item.nvrId || item.nvrData?._id || ''),
   incidentType: item.incidentType,
@@ -163,8 +165,10 @@ const packingRows = (details) => details.rows.map((row) => {
     operator: record['Completed By'],
     station: JSON.stringify([row.nvrId, row.cameraId || row.channelId]),
     boxes: 1,
-    boxNumber: record['Box Number'],
     duration: record['Time to complete'],
+    date: record.Date,
+    start: record['Start time'],
+    end: record['End time'],
     cycle: Number((Array.isArray(row.zones) ? row.zones : Object.entries(row.zones || {}).map(([zone, value]) => ({ ...value, zone }))).find(zone => String(zone.zone).trim() === String(row.completedBy).trim())?.timeTakenSec) || 0,
     camera: asText(row.camera || "Packing camera"),
     time: asText(row.time),
@@ -211,7 +215,15 @@ export function buildBoxPackingListPdf(details) {
   const { records, columns, summary } = canonicalPackingData(details);
   return pdfBuffer((document) => {
     const left = 28, tableWidth = document.page.width - 56;
-    const weights = columns.map((column) => ({ 'Camera Name': 1.8, 'Date & time': 1.8, 'Active workers': 2, 'Time range': 1.6 }[column] || 1));
+    const weights = columns.map((column) => ({
+      'Camera Name': 1.8,
+      Date: 1.2,
+      'Start time': 1.1,
+      'End time': 1.1,
+      'Time to complete': 1.4,
+      'Active workers': 2,
+      'Time range': 1.6,
+    }[column] || 1));
     const widths = weights.map((weight) => tableWidth * weight / weights.reduce((sum, item) => sum + item, 0));
     const drawPage = () => {
       const top = drawPackingHeader(document, details, "List View", summary);
@@ -406,7 +418,7 @@ export async function buildBoxPackingGridPdf(details) {
         document.roundedRect(x, y, cardWidth, imageHeight, 5).fill("#111827");
         if (images[batchIndex]) { try { document.image(images[batchIndex], x, y, { fit: [cardWidth, imageHeight], align: "center", valign: "center" }); } catch { /* keep placeholder */ } }
         if (row.image) document.link(x, y, cardWidth, imageHeight, row.image);
-        const detailsToDraw = [["Box ID", row.boxId], ["WORKER", row.operator], ["BOX NUMBER", row.boxNumber], ["TIME TO COMPLETE", row.duration], ["CAMERA", row.camera], ["DATE & TIME", row.time]];
+        const detailsToDraw = [["Box ID", row.boxId], ["WORKER", row.operator], ["DATE", row.date], ["START TIME", row.start], ["END TIME", row.end], ["TIME TO COMPLETE", row.duration], ["CAMERA", row.camera]];
         let textY = y + imageHeight + 9;
         detailsToDraw.forEach(([label, value]) => {
           document.font("Helvetica-Bold").fontSize(5.5).fillColor(MUTED).text(label, x + 7, textY, { width: 42, ellipsis: true });

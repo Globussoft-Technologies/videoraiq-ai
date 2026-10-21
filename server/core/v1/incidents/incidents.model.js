@@ -724,6 +724,8 @@ BoxPackingDetectionSchema.add({
   adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
   boxId: { type: String, default: null },
   completedBy: { type: String, default: null },
+  startTime: { type: Date, default: null },
+  endTime: { type: Date, default: null },
   zones: {
     type: [{ _id: false, zone: String, boxNumber: Number, timeTakenSec: Number }],
     default: undefined,
