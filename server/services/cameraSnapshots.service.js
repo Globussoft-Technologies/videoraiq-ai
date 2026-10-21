@@ -136,6 +136,7 @@ export async function refreshCameraSnapshot(camera, token) {
     throw error;
   }
   if (!result.matchedCount) { await deleteMediaV2(path); return; }
+  logger.info(`Camera snapshot saved for ${camera._id} at ${capturedAt.toISOString()}`);
   if (camera.latestSnapshot?.path) await cleanupPending({ ...camera, snapshotPendingDelete: [camera.latestSnapshot.path] }, token);
 }
 

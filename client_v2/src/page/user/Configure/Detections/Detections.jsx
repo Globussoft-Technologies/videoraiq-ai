@@ -13,6 +13,7 @@ import { useAuth } from '../../../../context/AuthContext';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
+import { snapshotForPreview } from '../DetectionZoneMarking/preview';
 import {
   ATTENDANCE_DETECTION_NAME,
   ATTENDANCE_DETECTION_SETTING_TYPE,
@@ -367,6 +368,7 @@ function mergeCameraStreamFields(nextCamera, previousCamera) {
   if (!nextCamera || !previousCamera) return nextCamera;
   return {
     ...nextCamera,
+    latestSnapshot: snapshotForPreview(nextCamera, previousCamera),
     streamingUrl: nextCamera.streamingUrl || previousCamera.streamingUrl,
     StreamingUrl: nextCamera.StreamingUrl || previousCamera.StreamingUrl,
     localChannelId: nextCamera.localChannelId || previousCamera.localChannelId,
