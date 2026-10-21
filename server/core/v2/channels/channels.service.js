@@ -27,6 +27,8 @@ import { getHoneywellPlaybackManifest, fetchHoneywellPlaybackSegment, keepHoneyw
 import {
   parseCompactDeviceTime,
   searchSecurusRecordings,
+  securusPlaybackSearchStart,
+  selectSecurusPlaybackRecordings,
   toCompactDeviceTime,
   toDeviceLocalIso,
 } from "../NVR/securusDvrip.js";
@@ -1203,7 +1205,12 @@ class ChannelService {
         if (requestedEnd <= requestedStart) {
           return res.status(400).json(Response.userFailResp("Invalid Securus playback range"));
         }
-        const searchStart = new Date(requestedStart.getTime() - 5 * 60 * 1000);
+        // Securus recording files have variable lengths. Searching only a few
+        // minutes backwards misses a file that began earlier but still covers
+        // the requested cursor (for example a 09:32 file clicked at 09:41).
+        // Query from the device-local day boundary, then select and clip only
+        // the file(s) that actually cover the requested playback range.
+        const searchStart = securusPlaybackSearchStart(requestedStart);
         const searchEnd = new Date(Math.min(
           requestedEnd.getTime(),
           requestedStart.getTime() + 30 * 60 * 1000,
@@ -1216,25 +1223,15 @@ class ChannelService {
           start: searchStart,
           end: searchEnd,
         });
-        const selectedIndex = recordings.findIndex((recording) =>
-          recording.end >= requestedStart && recording.start <= requestedStart,
-        );
-        const firstIndex = selectedIndex >= 0
-          ? selectedIndex
-          : recordings.findIndex((recording) => recording.start >= requestedStart);
-        if (firstIndex < 0) {
-          return res.status(404).json(Response.notFoundResp("No Securus recording found for this time"));
-        }
         // Include the following files from the same query so continuous play
-        // can cross the NVR's short physical recording-file boundaries.
-        const selectedRecordings = recordings
-          .slice(firstIndex)
-          .filter((recording) => recording.start < requestedEnd)
-          .map((recording) => ({
-            path: recording.path,
-            start_time: toCompactDeviceTime(recording.start),
-            end_time: toCompactDeviceTime(recording.end),
-          }));
+        // can cross the NVR's short physical recording-file boundaries. The
+        // first descriptor is clipped to the requested time so the camera OSD
+        // and the playback timeline begin at the same wall-clock timestamp.
+        const selectedRecordings = selectSecurusPlaybackRecordings(
+          recordings,
+          requestedStart,
+          requestedEnd,
+        );
         if (selectedRecordings.length === 0) {
           return res.status(404).json(Response.notFoundResp("No Securus recording found for this range"));
         }
@@ -1362,6 +1359,8 @@ class ChannelService {
           .filter((item) => item.start < previewEnd && item.end > previewWindow.start)
           .map((item, index) => ({
             path: item.path,
+            index_start_time: toCompactDeviceTime(item.start),
+            index_end_time: toCompactDeviceTime(item.end),
             start_time: toCompactDeviceTime(index === 0 ? previewWindow.start : item.start),
             end_time: toCompactDeviceTime(new Date(Math.min(item.end.getTime(), previewEnd.getTime()))),
           }));

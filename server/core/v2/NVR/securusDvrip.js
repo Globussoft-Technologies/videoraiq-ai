@@ -326,6 +326,64 @@ export function parseCompactDeviceTime(value) {
   return parsed;
 }
 
+/** Start of the Securus device-local recording index for the selected day. */
+export function securusPlaybackSearchStart(requestedStart) {
+  if (!(requestedStart instanceof Date) || Number.isNaN(requestedStart.getTime())) {
+    throw new Error("Invalid Securus playback time");
+  }
+  const dayStart = new Date(requestedStart);
+  dayStart.setHours(0, 0, 0, 0);
+  return dayStart;
+}
+
+/**
+ * Select the Securus recording files that cover a requested playback range.
+ *
+ * File discovery may begin before the requested time so that it can find the
+ * physical file containing that timestamp. The first DVRIP descriptor must,
+ * however, start at the requested timestamp; otherwise the NVR starts at the
+ * beginning of the physical file while the UI clock starts at the requested
+ * time.
+ */
+export function selectSecurusPlaybackRecordings(recordings, requestedStart, requestedEnd) {
+  if (!Array.isArray(recordings) || recordings.length === 0 ||
+      !(requestedStart instanceof Date) || Number.isNaN(requestedStart.getTime()) ||
+      !(requestedEnd instanceof Date) || Number.isNaN(requestedEnd.getTime()) ||
+      requestedEnd <= requestedStart) {
+    return [];
+  }
+
+  const containingIndex = recordings.findIndex((recording) =>
+    recording.end >= requestedStart && recording.start <= requestedStart,
+  );
+  const firstIndex = containingIndex >= 0
+    ? containingIndex
+    : recordings.findIndex((recording) => recording.start >= requestedStart);
+  if (firstIndex < 0) return [];
+
+  return recordings
+    .slice(firstIndex)
+    .filter((recording) => recording.start < requestedEnd)
+    .map((recording, index) => {
+      const start = index === 0 && recording.start < requestedStart
+        ? requestedStart
+        : recording.start;
+      const end = recording.end > requestedEnd ? requestedEnd : recording.end;
+      if (end <= start) return null;
+      return {
+        path: recording.path,
+        // Keep the physical file bounds for the preliminary DVRIP index
+        // lookup. The clipped bounds below are used only to start playback at
+        // the user's exact cursor.
+        index_start_time: toCompactDeviceTime(recording.start),
+        index_end_time: toCompactDeviceTime(recording.end),
+        start_time: toCompactDeviceTime(start),
+        end_time: toCompactDeviceTime(end),
+      };
+    })
+    .filter(Boolean);
+}
+
 function buildPlaybackBody(sessionId, recording, action) {
   const path = String(recording?.path || "");
   if (!path.startsWith("/mnt/") || Buffer.byteLength(path) > 107) {
@@ -401,6 +459,14 @@ export async function openSecurusPlaybackSource({
     return {
       start: parseCompactDeviceTime(recording.start_time || recording.startTime),
       end: parseCompactDeviceTime(recording.end_time || recording.endTime),
+      indexStart: parseCompactDeviceTime(
+        recording.index_start_time || recording.indexStartTime ||
+        recording.start_time || recording.startTime,
+      ),
+      indexEnd: parseCompactDeviceTime(
+        recording.index_end_time || recording.indexEndTime ||
+        recording.end_time || recording.endTime,
+      ),
     };
   });
 
@@ -415,8 +481,8 @@ export async function openSecurusPlaybackSource({
     control.write(buildFileQuery(
       sessionId,
       1,
-      recordingTimes[0].start,
-      recordingTimes.at(-1).end,
+      recordingTimes[0].indexStart,
+      recordingTimes.at(-1).indexEnd,
       Number(String(recordings[0].path).match(/\/(\d{3})\//)?.[1]) || 1,
     ));
     const indexed = await waitForMessage(controlReader, FILE_QUERY_RESPONSE);
