@@ -5,6 +5,8 @@ import BufferingIndicator from '../../../components/BufferingIndicator';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
+import { mediaUrl, shortDateTime } from '../../../lib/format';
+import { shouldShowSnapshot, canResumeLivePreview } from './DetectionZoneMarking/preview';
 import { useApi } from '../../../hooks/useApi';
 import { emptySchedule, buildScheduleFields, formatTime, scheduleError } from './ZoneScheduleFields';
 import { usePermissions } from '@/context/PermissionContext';
@@ -184,13 +186,27 @@ export default function DetectionZoneMarking({
     (camera?.localChannelId ? `stream/${camera.localChannelId}/playlist.m3u8` : '') ||
     (cameraNvrId && cameraId ? `stream/${cameraNvrId}-${cameraId}/playlist.m3u8` : '');
   const url = streamUrl({ ...camera, streamingUrl: streamPath });
+  const snapshotUrl = mediaUrl(camera?.latestSnapshot?.path);
+  const [snapshotFailed, setSnapshotFailed] = useState(false);
+  const [streamTimedOut, setStreamTimedOut] = useState(false);
+  const showSnapshot = shouldShowSnapshot({ snapshotUrl, snapshotFailed, url, videoState, streamTimedOut });
+  useEffect(() => {
+    setSnapshotFailed(false);
+  }, [snapshotUrl, cameraId]);
   useEffect(() => {
     setVideoState(url ? 'loading' : 'error');
-  }, [url]);
+    setVideoSize({ w: 0, h: 0 });
+    setStreamTimedOut(false);
+  }, [url, cameraId]);
+  useEffect(() => {
+    if (videoState === 'ready' || !url) return;
+    const timer = setTimeout(() => setStreamTimedOut(true), 15000);
+    return () => clearTimeout(timer);
+  }, [url, videoState, cameraId]);
 
   useHlsPlayer(videoRef, url, {
     enabled: !!url,
-    onError: () => setVideoState('error'),
+    onError: () => { setVideoState('error'); setStreamTimedOut(true); },
     onStarted: () => setVideoState(s => (s === 'ready' ? s : 'loading')), // retrying after a 404 â€” stay in loading, don't clear a real error into limbo
   });
 
@@ -198,7 +214,14 @@ export default function DetectionZoneMarking({
     const v = videoRef.current;
     if (v?.videoWidth) setVideoSize({ w: v.videoWidth, h: v.videoHeight });
   };
-  const handleVideoReady = () => setVideoState('ready');
+  const handleVideoReady = () => {
+    // Preserve a drawing's native coordinates if a different-sized live feed returns.
+    const v = videoRef.current;
+    if (!canResumeLivePreview(showSnapshot, videoSize, v)) return;
+    handleLoadedMetadata();
+    setStreamTimedOut(false);
+    setVideoState('ready');
+  };
 
   useEffect(() => {
     const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
@@ -1049,24 +1072,38 @@ export default function DetectionZoneMarking({
             <video
               ref={videoRef}
               muted autoPlay playsInline
-              onLoadedMetadata={handleLoadedMetadata}
+              onLoadedMetadata={() => { if (!showSnapshot) handleLoadedMetadata(); }}
               onCanPlay={handleVideoReady}
               onPlaying={handleVideoReady}
               style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill',
                 display: (url && videoState === 'ready') ? 'block' : 'none',
               }}
             />
+            {showSnapshot && (
+              <>
+                <img
+                  src={snapshotUrl}
+                  alt="Last available camera frame for zone drawing"
+                  onLoad={event => setVideoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
+                  onError={() => { setSnapshotFailed(true); setVideoSize({ w: 0, h: 0 }); }}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
+                />
+                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 3, padding: '5px 9px', borderRadius: 6, background: 'rgba(0,0,0,.75)', color: '#fff', fontSize: 12, pointerEvents: 'none' }}>
+                  Snapshot captured at {shortDateTime(camera.latestSnapshot.capturedAt)}
+                </div>
+              </>
+            )}
 
             {/* Buffering overlay â€” shown while the stream connects, instead of a blank box.
                 Same look as PlaybackTimeline.jsx's buffering state (Wifi icon + blink). */}
-            {url && videoState === 'loading' && (
+            {url && videoState === 'loading' && !showSnapshot && !streamTimedOut && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.82)', zIndex: 2 }}>
                 <BufferingIndicator />
               </div>
             )}
 
-            {(!url || videoState === 'error') && (
+            {(!url || videoState === 'error' || streamTimedOut) && !showSnapshot && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.35)', fontSize: 12, fontFamily: 'var(--mono)' }}>
                 {!url ? 'No stream configured' : 'Stream unavailable'}
               </div>
