@@ -102,6 +102,7 @@ const stevinrockLogItems = [
   { key: 'wrong-location', label: 'Gunny Bags/Materials Wrong Location Logs', path: 'logs/wrong-location', icon: PackageSearch, permissionKey: 'logs', permissionSubKey: 'wrongLocationLogs', logsConfigKey: 'wrongLocationLogs' },
   { key: 'waste-disposal', label: 'Sand, Dust, Waste & Scrap Disposal Logs', path: 'logs/waste-disposal', icon: Trash2, permissionKey: 'logs', permissionSubKey: 'wasteDisposalLogs', logsConfigKey: 'wasteDisposalLogs' },
   { key: 'animal-entry', label: 'Unauthorized Animal Entry Logs', path: 'logs/animal-entry', icon: PawPrint, permissionKey: 'logs', permissionSubKey: 'animalEntryLogs', logsConfigKey: 'animalEntryLogs' },
+  { key: 'lighting-visibility-site-conditions', label: 'Lighting / Visibility / Site Conditions Logs', path: 'logs/lighting-visibility-site-conditions', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'lightingVisibilitySiteConditionsLogs', logsConfigKey: 'lightingVisibilitySiteConditionsLogs' },
   { key: 'messy-area', label: 'Messy Area Logs', path: 'logs/messy-area', icon: BrushCleaning, permissionKey: 'logs', permissionSubKey: 'messyAreaLogs', logsConfigKey: 'messyAreaLogs' },
   {
     key: 'stock-counting',
@@ -309,6 +310,7 @@ export const VIEW_META = {
   'wrong-location': { title: 'Wrong Location Logs', sub: 'Misplaced gunny bags and material detections' },
   'waste-disposal': { title: 'Waste Disposal Logs', sub: 'Sand, dust, waste and scrap disposal detections' },
   'animal-entry': { title: 'Unauthorized Animal Entry Logs', sub: 'Unauthorized animal entry detections' },
+  'lighting-visibility-site-conditions': { title: 'Lighting / Visibility / Site Conditions Logs', sub: 'Poor visibility, road surface damage and weather-related site hazards' },
   'messy-area': { title: 'Messy Area Logs', sub: 'Spill, dirty and messy-area detections' },
   'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },

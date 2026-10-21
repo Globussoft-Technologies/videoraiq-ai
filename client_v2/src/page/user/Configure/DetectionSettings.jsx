@@ -16,6 +16,7 @@ import NoDetectionLicense from '../../../components/NoDetectionLicense';
 import { licenseErrorFrom } from '../../../helpers/license';
 import DetectionZoneMarking from './DetectionZoneMarking';
 import { ATTENDANCE_DETECTION_NAME, isAttendanceDetectionType } from './DetectionZoneMarking/constants';
+import { LIGHTING_SETTING_TYPE, LIGHTING_LABEL } from '../../../helpers/lightingDetection';
 
 const CHECK_TYPES = [
   { value: 'none', label: 'None' },
@@ -972,7 +973,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
 
 const LIMIT = 100;
 
-export function DetectionSettingsCameraList({ onOpenCamera }) {
+export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }) {
   const { permissions } = usePermissions();
   const { user } = useAuth();
   const canEditDetections = permissions?.detectionSettings?.edit === true;
@@ -1352,6 +1353,12 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           <span style={{ textAlign: 'center' }}>CAMERA TYPE</span>
           <span />
         </div>
+        {requestedDetection === LIGHTING_SETTING_TYPE && (
+          <div role="status" style={{ padding: '12px 18px', borderBottom: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12, lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--tx)' }}>{LIGHTING_LABEL}</strong>
+            <div>Select a camera row or its right arrow, draw the area to monitor, then click Save Area to choose Low Visibility, Road Surface Damage, or Weather-Related Site Hazard.</div>
+          </div>
+        )}
         <AsyncBoundary
           loading={channelsApi.loading}
           error={channelsApi.error}

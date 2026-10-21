@@ -49,6 +49,7 @@ const DETECTION_ICONS = {
   personFallSickDetection: HeartPulse,
   weaponDetectionSettings: ShieldAlert,
   lightDetectionSettings: Lightbulb,
+  lightingVisibilitySiteConditionsDetectionSettings: Lightbulb,
   personalProtectiveEquipmentSettings: HardHat,
   foodServicePPEDetection: UtensilsCrossed,
   foodServicePPEDetectionSettings: UtensilsCrossed,

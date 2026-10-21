@@ -6,6 +6,8 @@ import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, format
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_ALERT_MODE_OPTIONS, DOOR_MIN_THRESHOLD_SEC } from '../constants';
+import LightingFields from '../components/LightingFields';
+import { lightingSettings, lightingErrors, lightingPayload } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
@@ -37,6 +39,8 @@ export default function SaveDetectionAreaModal({
   isDoor = false,
   initialDoorAlertMode = 'open',
   isHygiene = false,
+  isLighting = false,
+  initialLightingSettings,
   saving,
   onCancel,
   onSubmit,
@@ -49,6 +53,7 @@ export default function SaveDetectionAreaModal({
     ...(isFireSmoke ? { fireOutsideZoneEnabled: zone.fireOutsideZoneEnabled ?? initialFireOutsideZoneEnabled } : {}),
   })));
   const [errors, setErrors] = useState({});
+  const [lighting, setLighting] = useState(() => lightingSettings(initialLightingSettings));
   // Check-In / Check-Out: one detection-wide entry/exit mode, seeded from the
   // first zone (they're all kept in sync).
   const [checkInOutMode, setCheckInOutMode] = useState(initialCheckInOutMode || zones[0]?.countMode || 'entry');
@@ -89,7 +94,7 @@ export default function SaveDetectionAreaModal({
   };
 
   const handleSubmit = () => {
-    const nextErrors = {};
+    const nextErrors = isLighting ? lightingErrors(lighting) : {};
     if (!detectionName.trim()) nextErrors.detectionName = true;
     if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
@@ -140,6 +145,7 @@ export default function SaveDetectionAreaModal({
       detectionName: detectionName.trim(),
       priority,
       zones: outZones,
+      ...(isLighting ? { lighting: { ...lightingPayload(lighting), trigger_notification: true } } : {}),
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
       ...(isDoor ? { doorAlertMode } : {}),
     });
@@ -191,6 +197,7 @@ export default function SaveDetectionAreaModal({
           display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto',
           overscrollBehavior: 'contain', padding: '0 22px 4px', minHeight: 0,
         }}>
+          {isLighting && <LightingFields value={lighting} errors={errors} disabled={saving} onChange={(field, value) => { setLighting(previous => ({ ...previous, [field]: value })); setErrors(previous => ({ ...previous, [field]: undefined })); }} />}
           <div style={{ display: 'grid', gap: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>

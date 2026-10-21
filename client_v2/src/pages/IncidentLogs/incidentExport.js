@@ -1,3 +1,4 @@
+import { lightingCategoryLabel } from '@/helpers/lightingDetection';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import * as XLSX from 'xlsx-js-style';
@@ -40,6 +41,7 @@ const fetchAllForExport = async (config, params) => {
     search: searchInput,
     vehicleNumber,
     hygieneCategory: params.hygieneCategory,
+    lightingCategory: params.lightingCategory,
   });
 
   const list = res?.data?.body?.data?.data || [];
@@ -51,6 +53,17 @@ const fetchAllForExport = async (config, params) => {
     }
     return {
       ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
+      ...(config.showLightingFields ? {
+        zone: item.zone || '--',
+        selectedCategories: (item.selectedCategories || []).map(lightingCategoryLabel).join(', '),
+        violationCount: item.violationCount ?? item.violations?.length ?? 0,
+        violations: (item.violations || []).map(violation => [
+          violation.categoryName || lightingCategoryLabel(violation.category),
+          violation.description,
+          Number.isFinite(violation.confidence) ? `${Math.round(violation.confidence * 100)}% confidence` : '',
+          violation.severity,
+        ].filter(Boolean).join(' - ')).join('\n'),
+      } : {}),
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -124,6 +137,11 @@ const buildExportColumns = (config) => {
 
   if (config.showBlurredCameraFields) {
     cols.push({ key: 'isBlurred', label: 'Is Blurred' });
+  }
+
+  if (config.showLightingFields) {
+    cols.push({ key: 'zone', label: 'Zone' }, { key: 'selectedCategories', label: 'Selected Categories' },
+      { key: 'violationCount', label: 'Issues Detected' }, { key: 'violations', label: 'Violations' });
   }
 
   if (config.showIndustrialFields) {
@@ -337,6 +355,9 @@ const exportToGridPDF = async (config, params) => {
         ['Door Status', 'doorStatus'],
         ['Door Open Duration', 'doorOpenDuration'],
       );
+    }
+    if (config.showLightingFields) {
+      details.push(['Zone', 'zone'], ['Selected Categories', 'selectedCategories'], ['Issues Detected', 'violationCount'], ['Violations', 'violations']);
     }
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);

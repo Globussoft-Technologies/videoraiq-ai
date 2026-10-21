@@ -704,7 +704,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                </div>
              </div>
            )}
-           <IncidentZoneDetails item={item} compact={item.incidentType === 'hygieneSanitationFoodSafetyDetection'} />
+           <IncidentZoneDetails item={item} compact={['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType)} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(item.incidentType === 'boxPackingDetection' ? { paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>

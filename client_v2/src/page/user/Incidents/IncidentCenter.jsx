@@ -927,7 +927,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const carModel = isCarModelDetection(item);
   const isSolder = item.incidentType === 'deskSolarShoulderDetection';
   const isPacking = item.incidentType === 'boxPackingDetection';
-  const isHygiene = item.incidentType === 'hygieneSanitationFoodSafetyDetection';
+  const isHygiene = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const isDoorDetection = item.incidentType === 'doorDetection';
   const compactDetails = isDoorDetection || isSolder || isPacking || isHygiene;
 
@@ -1421,7 +1421,7 @@ function IncidentListRow({
           <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
-          {item.incidentType === 'hygieneSanitationFoodSafetyDetection' && <IncidentZoneDetails item={item} compact />}
+          {['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && <IncidentZoneDetails item={item} compact />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>

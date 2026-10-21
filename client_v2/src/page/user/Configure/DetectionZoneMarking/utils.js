@@ -99,7 +99,7 @@ export function allTypesFor(camera, typeLabels) {
       return {
         settingType: key,
         label: labelFor(key),
-        configured: !!settingId && hasZones,
+        configured: !!settingId && (hasZones || key === 'lightingVisibilitySiteConditionsDetectionSettings'),
         settingId,
         setting,
       };

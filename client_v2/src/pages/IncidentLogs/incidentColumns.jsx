@@ -334,6 +334,11 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showLightingFields) {
+    cols.push({ id: 'lightingDetails', header: 'Lighting / Site condition violations', enableSorting: false,
+      cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
+  }
+
   if (config.showHygieneFields) {
     cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
       cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
@@ -510,7 +515,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <IncidentCardRow icon={Clock} label="Door Open Duration" value={formatDoorDuration(row.durationSec)} />
           </>
         )}
-        {config.showHygieneFields && <IncidentHygieneDetails item={row} />}
+        {(config.showHygieneFields || config.showLightingFields) && <IncidentHygieneDetails item={row} />}
         {config.showStockCountingFields && (
           <>
             <IncidentCardRow icon={Activity} label="Vehicle" value={row.vehicleNumber || 'Unknown'} />

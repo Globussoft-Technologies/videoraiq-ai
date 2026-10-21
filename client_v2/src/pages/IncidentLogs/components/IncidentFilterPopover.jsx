@@ -3,6 +3,7 @@ import { Filter, RotateCcw, ChevronDown, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/pages/AttendanceLogs/components/Popover';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
 import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect';
+import { LIGHTING_CATEGORY_OPTIONS } from '@/helpers/lightingDetection';
 import { HYGIENE_CATEGORY_OPTIONS } from '@/helpers/hygieneDetection';
 import { Button } from '@/components/ui/button';
 
@@ -24,6 +25,7 @@ const STATUS_OPTIONS = [
  */
 const IncidentFilterPopover = ({
   showHygieneCategory = false,
+  showLightingCategory = false,
   hygieneCategory = [],
   setHygieneCategory,
   nvrOptions,
@@ -54,7 +56,7 @@ const IncidentFilterPopover = ({
   const activeFiltersCount = useMemo(
     () =>
       [
-        showHygieneCategory && hygieneCategory.length > 0,
+        (showHygieneCategory || showLightingCategory) && hygieneCategory.length > 0,
         nvrIds.length > 0,
         channelIds.length > 0,
         showSeverity && (Array.isArray(severity) ? severity.length > 0 : !!severity),
@@ -63,11 +65,11 @@ const IncidentFilterPopover = ({
         showBoxType && !!boxType,
       ].filter(Boolean)
         .length,
-    [showHygieneCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
+    [showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
 
   const resetFilters = () => {
-    if (showHygieneCategory) setHygieneCategory([]);
+    if (showHygieneCategory || showLightingCategory) setHygieneCategory([]);
     setNvrIds([]);
     setChannelIds([]);
     if (showSeverity) setSeverity(multiSeverity ? [] : '');
@@ -150,6 +152,7 @@ const IncidentFilterPopover = ({
                 allLabel="All Box Types"
               />
             )}
+            {showLightingCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={LIGHTING_CATEGORY_OPTIONS} placeholder="All lighting categories" searchable={false} className="w-full" />}
             {showHygieneCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={HYGIENE_CATEGORY_OPTIONS.map(c => ({ id: c.id, label: c.label }))} placeholder="All hygiene categories" searchable={false} className="w-full" />}
             {showSeverity && multiSeverity && <MultiSelect options={SEVERITY_OPTIONS.map(o => ({ id: o.value, label: o.label }))} value={Array.isArray(severity) ? severity : severity ? [severity] : []} onChange={setSeverity} placeholder="All severities" searchable={false} className="w-full" />}
             {showSeverity && !multiSeverity && (

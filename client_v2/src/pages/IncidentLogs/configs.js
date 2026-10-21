@@ -273,6 +273,20 @@ export const MESSY_AREA_CONFIG = industrialDetectionConfig({
   permissionKey: 'messyAreaLogs',
 });
 
+export const LIGHTING_CONFIG = {
+  ...industrialDetectionConfig({
+    endpoint: '/incidents/logs/lighting-visibility-site-conditions-detection',
+    title: 'Lighting / Visibility / Site Conditions Logs',
+    fileName: 'lighting_visibility_site_conditions_logs',
+    sheetName: 'Lighting Logs',
+    storagePrefix: 'lighting_visibility_site_conditions',
+    permissionKey: 'lightingVisibilitySiteConditionsLogs',
+    showAlertThreshold: false,
+  }),
+  showIndustrialFields: false,
+  showLightingFields: true,
+};
+
 export const HYGIENE_CONFIG = {
   ...industrialDetectionConfig({
     endpoint: '/incidents/logs/hygiene-sanitation-food-safety-detection',

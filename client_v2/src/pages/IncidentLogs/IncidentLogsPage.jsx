@@ -311,6 +311,7 @@ const IncidentLogsPage = ({ config }) => {
         nvrIds,
         channelIds,
         hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
+        lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
         status: config.showStatus ? status : undefined,
         search: searchInput,
@@ -391,6 +392,7 @@ const IncidentLogsPage = ({ config }) => {
                 nvrIds,
                 channelIds,
                 hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
+                lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
                 severity: level,
                 status: config.showStatus ? status : undefined,
                 search: searchInput,
@@ -710,6 +712,7 @@ const IncidentLogsPage = ({ config }) => {
       nvrIds,
       channelIds,
       hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
+      lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
       status: config.showStatus ? status : undefined,
       searchInput,
@@ -864,6 +867,7 @@ const IncidentLogsPage = ({ config }) => {
 
         <IncidentFilterPopover
           showHygieneCategory={config.showHygieneFields}
+          showLightingCategory={config.showLightingFields}
           hygieneCategory={hygieneCategory}
           setHygieneCategory={setHygieneCategory}
           nvrOptions={nvrOptions}

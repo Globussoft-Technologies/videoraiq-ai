@@ -29,6 +29,7 @@ import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPan
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
+import { LIGHTING_SETTING_TYPE, lightingSettings, lightingErrors, lightingPayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import {
   createZoneDetectionSetting,
@@ -111,6 +112,7 @@ export default function DetectionZoneMarking({
   const isStockCounting = isStockCountingType(activeType?.settingType);
   const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
+  const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // Door points come from the AI team (pasted, never drawn or moved).
@@ -540,13 +542,15 @@ export default function DetectionZoneMarking({
     return nextErrors;
   };
 
-  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode }) => {
+  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, lighting }) => {
     const doorSettings = isDoor
       ? {
           door_alert_mode: doorAlertMode || activeType.setting?.settings?.door_alert_mode || 'open',
           trigger_notification: activeType.setting?.settings?.trigger_notification ?? true,
         }
       : null;
+    const sharedLighting = isLighting ? lightingPayload(lighting || lightingSettings(activeType.setting?.settings)) : null;
+    if (isLighting && Object.keys(lightingErrors(sharedLighting)).length) throw new Error('Please check lighting settings before saving.');
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
     const fields = extraFieldsFor(activeType.settingType);
     const usesLineMode = activeType.settingType === 'lineCrossingSettings' || isCheckInOut;
@@ -636,6 +640,7 @@ export default function DetectionZoneMarking({
           ...(auxiliaryLineExtras || {}),
           ...(isStockCounting ? { trigger_notification: setting.settings?.trigger_notification ?? true } : {}),
           ...(doorSettings || {}),
+          ...(sharedLighting || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -671,6 +676,7 @@ export default function DetectionZoneMarking({
           ...(auxiliaryLineExtras || {}),
           ...(isStockCounting ? { trigger_notification: true } : {}),
           ...(doorSettings || {}),
+          ...(sharedLighting || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -715,10 +721,10 @@ export default function DetectionZoneMarking({
     setShowSaveModal(true);
   };
 
-  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode }) => {
+  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, lighting }) => {
     setSaving(true);
     try {
-      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode });
+      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, lighting });
       setZones(editedZones);
       setDraftZones([]);
       setPoints([]);
@@ -1640,6 +1646,8 @@ export default function DetectionZoneMarking({
 
       {showSaveModal && activeType && !isBlurredCameraDetection && (
         <SaveDetectionAreaModal
+          isLighting={isLighting}
+          initialLightingSettings={activeType.setting?.settings}
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={activeType.setting?.settings?.levelOfImportance || (isHygiene ? 'high' : 'moderate')}
           initialLaneName={laneNameDraft}

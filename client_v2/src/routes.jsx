@@ -65,6 +65,7 @@ const BlurredCameraLogs = lazy(() => import('./pages/BlurredCameraLogs/BlurredCa
 const DoorDetectionLogs = lazy(() => import('./pages/DoorDetectionLogs/DoorDetectionLogs'));
 const SolderLine = lazy(() => import('./pages/SolderLine/SolderLine'));
 const HygieneLogs = lazy(() => import('./pages/HygieneLogs/HygieneLogs'));
+const LightingLogs = lazy(() => import('./pages/LightingLogs/LightingLogs'));
 const ProductivityLog = lazy(() => import('./pages/ProductivityLog/ProductivityLog'));
 const TrackLog = lazy(() => import('./pages/TrackLog/TrackLog'));
 const VisibilityLog = lazy(() => import('./pages/VisibilityLog/VisibilityLog'));
@@ -203,6 +204,7 @@ export const v2Routes = (
     <Route path="solder-line/*" element={<SolderLineRoute />} />
     {/* Hygiene analytics UI disabled; retain bookmarks through the log page. */}
     <Route path="hygiene-analytics" element={<Navigate to="/logs/hygiene" replace />} />
+    <Route path="logs/lighting-visibility-site-conditions" element={guard('logs', 'lightingVisibilitySiteConditionsLogs', <LightingLogs />)} />
     <Route path="logs/hygiene" element={guard('logs', 'hygieneSanitationFoodSafetyLogs', <HygieneLogs />)} />
 
     {/* Configure */}

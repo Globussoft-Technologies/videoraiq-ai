@@ -889,6 +889,8 @@ export default function Detections() {
             ? 'unauthorized animal entry intrusion'
             : detectionType === 'spillsDirtyMessyAreasDetectionSettings'
             ? 'spills dirty messy areas housekeeping'
+            : detectionType === 'lightingVisibilitySiteConditionsDetectionSettings'
+            ? 'lighting visibility site conditions fog rain poor light road surface damage potholes weather scrap yard hazard'
             : detectionType === 'hygieneSanitationFoodSafetyDetectionSettings'
             ? 'hygiene sanitation food safety hand washing contamination product floor unclean surface'
             : detectionType === 'loadingUnloadingStockCountingSettings'
@@ -1322,7 +1324,7 @@ export default function Detections() {
   // immediately closes the detail view, forcing users to click twice.
   }, [detailCameraId]);
 
-  const enterDetections = (camera, targetSettingType = '') => {
+  const enterDetections = (camera, targetSettingType = detailDetection || '') => {
     const nextCameraId = String(camera?._id || '');
     // Opened from an Engines-column chip: remember the detection it stands for so
     // the detail view lands on it. If the catalogue is already loaded, apply it
@@ -1339,8 +1341,7 @@ export default function Detections() {
         pendingDetectionRef.current = String(targetSettingType);
       }
     } else {
-      // Plain row open (anywhere outside a chip): no detection isolation, and
-      // clear any stale request left by an earlier chip click.
+      // No detection was requested by the URL or a camera chip.
       pendingDetectionRef.current = '';
       setSearch('');
     }
@@ -1348,6 +1349,7 @@ export default function Detections() {
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       next.set('camera', nextCameraId);
+      if (targetSettingType) next.set('detection', targetSettingType);
       return next;
     });
     setSelectedFilterCameraId(nextCameraId);
@@ -1585,6 +1587,7 @@ export default function Detections() {
   if (!enteredDetections) {
     return (
       <DetectionSettingsCameraList
+        requestedDetection={detailDetection}
         onOpenCamera={(camera, targetSettingType) => enterDetections(camera, targetSettingType)}
       />
     );
