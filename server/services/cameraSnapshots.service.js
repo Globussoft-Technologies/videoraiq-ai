@@ -174,7 +174,10 @@ export async function runCameraSnapshotSweep() {
 
 let timer;
 export function startCameraSnapshotRunner() {
-  if (timer || process.env.CAMERA_SNAPSHOTS_ENABLED === "false") return;
+  const enabled = config.has("CAMERA_SNAPSHOTS_ENABLED")
+    ? config.get("CAMERA_SNAPSHOTS_ENABLED")
+    : true;
+  if (timer || enabled === false || enabled === "false") return;
   void runCameraSnapshotSweep();
   timer = setInterval(() => void runCameraSnapshotSweep(), 60000);
   timer.unref();
