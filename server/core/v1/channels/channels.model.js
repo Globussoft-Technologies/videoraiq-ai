@@ -139,6 +139,14 @@ const ChannelSchema = new mongoose.Schema(
       required: true,
     },
     channelId: String,
+    latestSnapshot: {
+      path: String,
+      capturedAt: Date,
+    },
+    snapshotNextAttemptAt: { type: Date, select: false },
+    snapshotLeaseUntil: { type: Date, select: false },
+    snapshotLeaseToken: { type: String, select: false },
+    snapshotPendingDelete: { type: [String], select: false, default: undefined },
     streamingPath: String,
     localChannelId: String,
     rtspChannels: [Object],
@@ -348,5 +356,6 @@ ChannelSchema.statics.findByIdActive = function (id) {
 
 // Tenant-scoped active camera pages, including their existing sort order.
 ChannelSchema.index({ userId: 1, isAdded: 1, createdAt: -1, _id: -1 });
+ChannelSchema.index({ isAdded: 1, snapshotNextAttemptAt: 1, snapshotLeaseUntil: 1 });
 
 export default mongoose.model("Channel", ChannelSchema);

@@ -228,6 +228,8 @@ const startServer = async () => {
     MeasurementAutoEmailReportService.startRunner();
     SolderAutoEmailReportService.startRunner();
     startMeasurementMediaRetryWorker();
+    const { startCameraSnapshotRunner } = await import("./services/cameraSnapshots.service.js");
+    startCameraSnapshotRunner();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

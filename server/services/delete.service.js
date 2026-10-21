@@ -73,7 +73,7 @@ class DeleteService {
     try {
       // findById hits the same isAdded pre-hook, so an un-added camera would
       // read as "not found" and abort the NVR delete mid-way.
-      const channel = await Channel.findById(channelId).setOptions({
+      const channel = await Channel.findById(channelId).select("+snapshotPendingDelete").setOptions({
         includeInactive: true,
       });
       if (!channel) {
@@ -90,6 +90,11 @@ class DeleteService {
       );
 
       await Channel.deleteOne({ _id: channelId });
+
+      await deleteMediaBestEffort([
+        channel.latestSnapshot?.path,
+        ...(channel.snapshotPendingDelete || []),
+      ].filter(Boolean), `Camera ${channelId} snapshots`);
 
       logger.info(
         `Deleted channel ${channelId}: removed ${deleted} incident(s)` +
