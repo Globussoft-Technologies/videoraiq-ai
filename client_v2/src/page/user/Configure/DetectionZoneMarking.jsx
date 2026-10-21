@@ -1090,7 +1090,9 @@ export default function DetectionZoneMarking({
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                 />
                 <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 3, padding: '5px 9px', borderRadius: 6, background: 'rgba(0,0,0,.75)', color: '#fff', fontSize: 12, pointerEvents: 'none' }}>
-                  Snapshot captured at {shortDateTime(camera.latestSnapshot.capturedAt)}
+                  {camera.latestSnapshot.source === 'playback'
+                    ? `Playback frame ${camera.latestSnapshot.recordingTimeEstimated ? 'near' : 'at'} ${shortDateTime(camera.latestSnapshot.recordedAt)} · Saved ${shortDateTime(camera.latestSnapshot.capturedAt)}`
+                    : `Snapshot captured at ${shortDateTime(camera.latestSnapshot.capturedAt)}`}
                 </div>
               </>
             )}

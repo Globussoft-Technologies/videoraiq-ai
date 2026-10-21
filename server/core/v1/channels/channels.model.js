@@ -142,6 +142,9 @@ const ChannelSchema = new mongoose.Schema(
     latestSnapshot: {
       path: String,
       capturedAt: Date,
+      source: { type: String, enum: ["live", "playback"] },
+      recordedAt: Date,
+      recordingTimeEstimated: Boolean,
     },
     snapshotNextAttemptAt: { type: Date, select: false },
     snapshotLeaseUntil: { type: Date, select: false },

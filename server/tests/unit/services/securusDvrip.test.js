@@ -16,6 +16,7 @@ import {
   rewriteSecurusPlaylist,
   securusPreviewWindow,
   securusThumbnailArguments,
+  securusSnapshotArguments,
 } from "../../../core/v2/NVR/securusPlayback.js";
 import {
   animatedPreviewArguments,
@@ -287,6 +288,14 @@ describe("Securus DVRIP protocol", () => {
 });
 
 describe("Securus HLS proxy", () => {
+  it('captures one JPEG without scaling native zone coordinates', () => {
+    const args = securusSnapshotArguments('hevc', 2);
+    expect(args).toContain('hevc');
+    expect(args.slice(args.indexOf('-ss'), args.indexOf('-ss') + 2)).toEqual(['-ss', '2']);
+    expect(args.slice(args.indexOf('-frames:v'), args.indexOf('-frames:v') + 2)).toEqual(['-frames:v', '1']);
+    expect(args).toContain('mjpeg');
+    expect(args).not.toContain('-vf');
+  });
   it("adds the access token to every media segment", () => {
     const source = "#EXTM3U\n#EXTINF:2.0,\nsegment_000001.ts\n";
     expect(rewriteSecurusPlaylist(source, "a+b/c=")).toContain(

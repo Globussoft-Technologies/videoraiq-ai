@@ -127,6 +127,15 @@ export function securusPreviewWindow(recording, previewTime) {
   };
 }
 
+export function securusSnapshotArguments(codec, offsetSeconds = 0) {
+  return [
+    "-hide_banner", "-loglevel", "error", "-threads", "1",
+    "-fflags", "+genpts+discardcorrupt", "-r", "15", "-f", codec, "-i", "pipe:0",
+    "-ss", String(Math.max(0, Number(offsetSeconds) || 0)),
+    "-frames:v", "1", "-an", "-threads", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
+  ];
+}
+
 async function captureSecurusPlaybackPreview({
   ip,
   port,
@@ -135,6 +144,8 @@ async function captureSecurusPlaybackPreview({
   recording,
   recordings,
   offsetSeconds = 0,
+  still = false,
+  ffmpegPath,
 }) {
   const source = await openSecurusPlaybackSource({
     ip,
@@ -153,8 +164,8 @@ async function captureSecurusPlaybackPreview({
     ]);
 
     ffmpeg = spawn(
-      process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg",
-      securusThumbnailArguments(codec, offsetSeconds),
+      ffmpegPath || process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg",
+      still ? securusSnapshotArguments(codec, offsetSeconds) : securusThumbnailArguments(codec, offsetSeconds),
       { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
     );
 
@@ -209,6 +220,11 @@ async function captureSecurusPlaybackPreview({
       ffmpeg.kill("SIGTERM");
     }
   }
+}
+
+/** Capture a native-resolution JPEG through its own bounded DVRIP source. */
+export async function captureSecurusPlaybackSnapshot(options) {
+  return captureSecurusPlaybackPreview({ ...options, still: true });
 }
 
 /** Generate or reuse one animated preview without affecting normal playback. */
