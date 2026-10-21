@@ -4825,10 +4825,16 @@ console.log(result,'result');
 
   async getLightingVisibilitySiteConditionsDetectionLogs(req, res, next) {
     try {
+      const category = req.query?.lightingCategory;
+      const categories = typeof category === 'string' ? [...new Set(category.split(',').map(value => value.trim()).filter(Boolean))] : [];
+      if ((category !== undefined && typeof category !== 'string') || categories.some(value => !['lowVisibility', 'roadSurfaceDamage', 'weatherSiteHazard'].includes(value))) {
+        return res.status(400).send(Response.validationFailResp('Invalid lighting category', 'Validation Failed!'));
+      }
       return await this._fetchIncidentLogs({
         req,
         res,
         incidentType: "lightingVisibilitySiteConditionsDetection",
+        extraMatch: categories.length ? { "violations.category": { $in: categories } } : {},
         searchFields: ["conceptGroup", "zone", "selectedCategories", "violations.category", "violations.categoryName", "violations.description"],
         searchNumberFields: ["violationCount", "alertThreshold", "violations.confidence"],
         postLookupSearch: true,

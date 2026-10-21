@@ -7,6 +7,8 @@ import {
   openSecurusPlaybackSource,
   parseFileQueryResponse,
   searchSecurusRecordings,
+  securusPlaybackSearchStart,
+  selectSecurusPlaybackRecordings,
   sofiaPasswordHash,
   toDeviceLocalIso,
 } from "../../../core/v2/NVR/securusDvrip.js";
@@ -40,6 +42,45 @@ describe("Securus DVRIP protocol", () => {
 
   it("serializes NVR wall time without applying a server timezone", () => {
     expect(toDeviceLocalIso(new Date(2026, 9, 1, 0, 20, 59))).toBe("2026-10-01T00:20:59");
+  });
+
+  it("searches the complete device-local day for a file containing the cursor", () => {
+    expect(securusPlaybackSearchStart(new Date(2026, 9, 21, 9, 41, 24)))
+      .toEqual(new Date(2026, 9, 21, 0, 0, 0));
+  });
+
+  it("starts Securus playback at the requested time inside a physical recording", () => {
+    const requestedStart = new Date(2026, 9, 21, 4, 14, 49);
+    const requestedEnd = new Date(2026, 9, 21, 4, 30, 0);
+    const recordings = [
+      {
+        path: "/mnt/sda0/2026-10-21/001/04.09.07-04.20.00.h264",
+        start: new Date(2026, 9, 21, 4, 9, 7),
+        end: new Date(2026, 9, 21, 4, 20, 0),
+      },
+      {
+        path: "/mnt/sda0/2026-10-21/001/04.20.00-04.40.00.h264",
+        start: new Date(2026, 9, 21, 4, 20, 0),
+        end: new Date(2026, 9, 21, 4, 40, 0),
+      },
+    ];
+
+    expect(selectSecurusPlaybackRecordings(recordings, requestedStart, requestedEnd)).toEqual([
+      {
+        path: recordings[0].path,
+        index_start_time: "20261021T040907Z",
+        index_end_time: "20261021T042000Z",
+        start_time: "20261021T041449Z",
+        end_time: "20261021T042000Z",
+      },
+      {
+        path: recordings[1].path,
+        index_start_time: "20261021T042000Z",
+        index_end_time: "20261021T044000Z",
+        start_time: "20261021T042000Z",
+        end_time: "20261021T043000Z",
+      },
+    ]);
   });
 
   it("builds the captured binary login packet shape", () => {
@@ -190,6 +231,7 @@ describe("Securus DVRIP protocol", () => {
             response.writeUInt32LE(100, 8);
             socket.write(buildDvripPacket(0x96, 0, 1001, response));
           } else if (messageId === 1440) {
+            expect(packet.readUInt32LE(120)).toBe(0);
             const response = Buffer.alloc(28);
             response.writeUInt32LE(100, 4);
             socket.write(buildDvripPacket(0x96, 1, 1441, response));
@@ -201,6 +243,7 @@ describe("Securus DVRIP protocol", () => {
             socket.write(buildDvripPacket(0x96, 1, 1425, response));
           } else if (messageId === 1420) {
             protocolOrder.push("start");
+            expect(packet.readUInt32LE(172)).toBe(20);
             const response = Buffer.alloc(8);
             response.writeUInt32LE(100, 4);
             socket.write(buildDvripPacket(0x96, 1, 1421, response));
@@ -224,7 +267,9 @@ describe("Securus DVRIP protocol", () => {
       password: "admin",
       recordings: [{
         path: "/mnt/idea0/2026-10-01/001/test.h264",
-        start_time: "20261001T000000Z",
+        index_start_time: "20261001T000000Z",
+        index_end_time: "20261001T000100Z",
+        start_time: "20261001T000020Z",
         end_time: "20261001T000100Z",
       }],
       timeoutMs: 1000,

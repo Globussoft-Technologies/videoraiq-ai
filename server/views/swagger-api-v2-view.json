@@ -508,6 +508,16 @@
         }
       }
     },
+    "/api/v2/uploads/zip": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/v2/uploads/{mediaPath(*)}": {
       "get": {
         "tags": [
@@ -4056,6 +4066,35 @@
         }
       }
     },
+    "/api/v2/incidents/hygiene-analytics": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/hygiene-sanitation-food-safety-detection/filters": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/v2/incidents/logs/box-packing-detection": {
       "get": {
         "description": "",
@@ -5390,6 +5429,42 @@
         ]
       }
     },
+    "/api/v2/incidents/logs/hygiene-sanitation-food-safety-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Hygiene, Sanitation & Food Safety Detection logs, including categories and violations.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/incidents/logs/lighting-visibility-site-conditions-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Lighting / Visibility / Site Conditions Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
     "/api/v2/incidents/logs/loading-unloading-stock-counting-detection/numbers": {
       "get": {
         "tags": [
@@ -5593,6 +5668,19 @@
             "EncryptedAuthToken": []
           }
         ]
+      }
+    },
+    "/api/v2/incidents/logs/door-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Door Detection logs.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
     "/api/v2/incidents/logs/vehicle-count": {

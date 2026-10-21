@@ -592,6 +592,11 @@ const HygieneSanitationFoodSafetyDetectionIncident = Incident.discriminator(
 const LightingVisibilitySiteConditionsDetectionIncident = Incident.discriminator(
   "lightingVisibilitySiteConditionsDetection",
   new Schema({
+    severity: {
+      type: String,
+      enum: ["info", "low", "moderate", "high"],
+      set: value => value === "medium" ? "moderate" : value,
+    },
     conceptGroup: String,
     cameraId: { type: Schema.Types.ObjectId, ref: "Channel" },
     adminId: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
