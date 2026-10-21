@@ -5,7 +5,7 @@ import { autoTable } from 'jspdf-autotable';
 import { readPackingPdfImage, loadPackingPdfImages } from './packingPdfImages';
 import { drawPackingPdfGrid } from './packingPdfGrid';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
-import { formatPackingDuration, packingWorkerCount, packingAverageSeconds } from './boxPackingData';
+import { formatPackingDuration, packingWorkerCount, packingAverageSeconds, packingDateValue, packingEndTimeValue, packingStartTimeValue } from './boxPackingData';
 import { packingMediaUrls } from './packingMedia';
 import { buildPackingReportRecords, REPORT_COLUMNS } from './packingReportData';
 
@@ -33,6 +33,18 @@ const reportRecords = (rows = [], timezone, reportType = 'total') => {
   }));
   return buildPackingReportRecords(rows, reportType === 'zones' ? 'comparison' : (REPORT_COLUMNS[reportType] ? reportType : 'total'), timezone);
 };
+
+const normalizePackingRecords = (records, rows, timezone, reportType) => records.map((record, index) => {
+  const next = { ...record };
+  delete next['Box Number'];
+  delete next['Date & time'];
+  if (reportType === 'alerts' && rows[index]) {
+    next.Date = packingDateValue(rows[index], timezone);
+    next['Start time'] = packingStartTimeValue(rows[index], timezone);
+    next['End time'] = packingEndTimeValue(rows[index], timezone);
+  }
+  return next;
+});
 
 const summaryFrom = (rows, stats) => ({
   'Total workers': packingWorkerCount(rows),
@@ -66,7 +78,7 @@ export const downloadBoxPackingXlsx = (rows = [], options = {}) => {
   const reportType = options.reportType || 'total';
   // The activity table supplies its already grouped and sorted rows so the
   // download preserves the visible columns, date buckets and station scope.
-  const records = removeReviewFields(options.records ?? reportRecords(rows, timezone, reportType));
+  const records = removeReviewFields(normalizePackingRecords(options.records ?? reportRecords(rows, timezone, reportType), rows, timezone, reportType));
   const summary = reportType === 'activity' || reportType === 'hourly'
     ? {
       'Total workers': packingWorkerCount(rows),
@@ -134,7 +146,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
   const periodLabel = options.periodLabel || 'Selected period';
   const filenamePrefix = options.filenamePrefix || 'box-packing-alert-report';
   const reportType = options.reportType || 'total';
-  const records = removeReviewFields(options.records ?? reportRecords(rows, timezone, reportType));
+  const records = removeReviewFields(normalizePackingRecords(options.records ?? reportRecords(rows, timezone, reportType), rows, timezone, reportType));
   const summary = removeReviewFields(summaryFrom(rows, stats));
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -172,7 +184,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
     if (options.layout === 'grid') {
       drawPackingPdfGrid(doc, records, images, { linkFor: (url) => packingMediaUrls(url).link });
     } else {
-      const widths = [42, 30, 30, 25, 60, 25, 29, 42];
+      const widths = [42, 30, 30, 25, 52, 28, 27, 27, 29];
       const scale = (pageWidth - 28) / widths.reduce((a, b) => a + b, 0);
       autoTable(doc, {
         startY: 76, margin: { left: 14, right: 14, top: 18, bottom: 14 }, tableWidth: pageWidth - 28,
@@ -201,7 +213,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
     doc.save(`${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.pdf`);
     return;
   }
-  const totalWidths = { 'Box ID': 28, 'Completed By': 28, NVR: 24, 'Camera Name': 64, 'Box Number': 26, 'Time to complete': 28, 'Date & time': 42, Snapshot: 29 };
+  const totalWidths = { 'Box ID': 28, 'Completed By': 28, NVR: 24, 'Camera Name': 52, Date: 27, 'Start time': 27, 'End time': 27, 'Time to complete': 28, Snapshot: 29 };
   const totalWidth = headers.reduce((sum, key) => sum + (totalWidths[key] || 28), 0);
   autoTable(doc, {
     startY: 76, margin: { left: 14, right: 14 }, head: [headers],

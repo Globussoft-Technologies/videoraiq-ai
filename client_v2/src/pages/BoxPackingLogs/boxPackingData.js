@@ -23,6 +23,30 @@ export const packingAverageSeconds = (rows) => {
   return seconds.length ? seconds.reduce((sum, value) => sum + value, 0) / seconds.length : 0;
 };
 
+export const packingDurationSeconds = (row) => Number(row?.timeTakenSec ?? packingCompletedZone(row)?.timeTakenSec) || 0;
+export const packingStartTimestamp = (row) => row?.startTime || row?.start_time || row?.time || row?.recordedAt || row?.timeOfIncident || row?.createdAt;
+export const packingEndTimestamp = (row) => {
+  const explicit = row?.endTime || row?.end_time;
+  if (explicit) return explicit;
+  const start = packingStartTimestamp(row);
+  const seconds = packingDurationSeconds(row);
+  if (!start || !seconds) return null;
+  const value = new Date(start);
+  return Number.isNaN(value.getTime()) ? null : new Date(value.getTime() + seconds * 1000).toISOString();
+};
+export const packingDateValue = (row, timezone = 'Asia/Kolkata') => {
+  const start = packingStartTimestamp(row);
+  return start && moment.tz(start, timezone).isValid() ? moment.tz(start, timezone).format('DD MMM YYYY') : '—';
+};
+export const packingStartTimeValue = (row, timezone = 'Asia/Kolkata') => {
+  const start = packingStartTimestamp(row);
+  return start && moment.tz(start, timezone).isValid() ? moment.tz(start, timezone).format('hh:mm A') : '—';
+};
+export const packingEndTimeValue = (row, timezone = 'Asia/Kolkata') => {
+  const end = packingEndTimestamp(row);
+  return end && moment.tz(end, timezone).isValid() ? moment.tz(end, timezone).format('hh:mm A') : '—';
+};
+
 // A zones array is a workstation snapshot. Only the entry matching this
 // incident's completedBy identifies a participating packing zone.
 export const packingCompletedZone = (row) => {

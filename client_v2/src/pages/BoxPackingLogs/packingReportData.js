@@ -1,12 +1,10 @@
 import moment from 'moment-timezone';
-import { formatPackingDuration, packingWorkerIds, packingWorkerDetails, packingAverageSeconds } from './boxPackingData.js';
+import { formatPackingDuration, packingWorkerIds, packingWorkerDetails, packingAverageSeconds, packingDateValue, packingEndTimeValue, packingStartTimeValue } from './boxPackingData.js';
 import { packingStationKey, samePackingCamera } from './packingIdentity.js';
 
 export const reportCameraName = (row) => row.cameraName || row.camera || row.channelData?.customName || row.channelData?.name || row.channelName || '—';
 export const reportNvrName = (row) => row.nvrName || row.nvrData?.nvrName || row.nvrData?.name || row.nvr || '—';
 
-// Keep configured cameras available even when the selected dates have no boxes.
-// Match by camera/NVR identity, never by a potentially duplicated display name.
 export function buildPackingReportStations(rows = [], channels = []) {
   const stations = channels.map((channel) => ({
     id: packingStationKey(channel, true),
@@ -26,14 +24,13 @@ export function buildPackingReportStations(rows = [], channels = []) {
   }
   return stations.map(({ channel, ...station }) => ({ ...station, workers: packingWorkerIds(station.rows) }));
 }
+
 export const REPORT_COLUMNS = {
-  total: ['Box ID', 'Completed By', 'NVR', 'Camera Name', 'Box Number', 'Time to complete', 'Date & time', 'Snapshot'],
+  total: ['Box ID', 'Completed By', 'NVR', 'Camera Name', 'Date', 'Start time', 'End time', 'Time to complete', 'Snapshot'],
   hourly: ['Time range', 'Boxes packed', 'Average time to complete', 'Active workers'],
   comparison: ['NVR', 'Camera Name', 'Worker', 'Boxes packed', 'Average time to complete'],
 };
 
-// Shared by previews, PDF and Excel. Each record is one box; its boxNumber
-// identifies that box and is never summed as a quantity.
 export function buildPackingReportRecords(rows = [], type = 'total', timezone = 'Asia/Kolkata') {
   rows = rows.map((row) => {
     const details = packingWorkerDetails(row);
@@ -42,8 +39,8 @@ export function buildPackingReportRecords(rows = [], type = 'total', timezone = 
   if (type === 'total') return rows.map((row) => ({
     'Box ID': row.boxId || '—', 'Completed By': row.worker || '—',
     NVR: reportNvrName(row), 'Camera Name': reportCameraName(row),
-    'Box Number': Number.isFinite(Number(row.boxNumber)) && Number(row.boxNumber) > 0 ? row.boxNumber : '—', 'Time to complete': formatPackingDuration(row.timeTakenSec),
-    'Date & time': row.time ? moment(row.time).tz(timezone).format('DD MMM YYYY, hh:mm A') : '—',
+    Date: packingDateValue(row, timezone), 'Start time': packingStartTimeValue(row, timezone), 'End time': packingEndTimeValue(row, timezone),
+    'Time to complete': formatPackingDuration(row.timeTakenSec),
     Snapshot: row.Image || row.image || row.imageUrl || row.incidentImageUrl || '',
   }));
 

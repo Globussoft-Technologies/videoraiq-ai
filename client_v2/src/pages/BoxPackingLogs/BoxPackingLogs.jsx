@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
-import ChartTooltip from '@/pages/SolderLine/ChartTooltip';
 import { useLogsConfig } from '@/context/LogsConfigContext';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
@@ -10,8 +9,8 @@ import { IS_LICENSING_ENABLED } from '@/helpers/license';
 import PageLoader from '@/components/PageLoader';
 import { ErrorState } from '@/components/States';
 import AccessDenied from '@/components/AccessDenied';
-import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Boxes, CheckCircle2, ClipboardCheck, Clock3, Download, FileSpreadsheet, FileText, Filter, Info, LayoutGrid, List, Maximize2, Package, PackageCheck, RefreshCw, RotateCcw, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
-import { formatPackingDuration, packingStats, packingWorkerIds, packingWorkerId, packingCompletedZone } from './boxPackingData';
+import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Boxes, CheckCircle2, ClipboardCheck, Clock3, Download, FileSpreadsheet, FileText, Filter, Info, LayoutGrid, List, Maximize2, Package, PackageCheck, RefreshCw, RotateCcw, Rows3, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { formatPackingDuration, packingStats, packingWorkerIds, packingWorkerId, packingCompletedZone, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue } from './boxPackingData';
 import { samePackingCamera, packingStationKey, packingNvrId } from './packingIdentity';
 import { downloadBoxPackingCsv, downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
 import { BOX_PACKING_CONFIG } from '@/pages/IncidentLogs/configs';
@@ -30,6 +29,9 @@ import { mediaUrl } from '@/lib/format';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import { PackingSortHeader, usePackingSort } from './PackingSort';
 import SolderPagination, { useSolderPagination } from '@/pages/SolderLine/SolderPagination';
+import WorkerComparison from './WorkerComparison';
+import DownloadButton from '@/pages/SolderLine/DownloadButton';
+import { downloadBoxPackingSnapshot } from './boxPackingSnapshots';
 
 const statusMeta = {
   completed: { label: 'COMPLETED', color: OK, icon: CheckCircle2 },
@@ -76,6 +78,8 @@ const apiRowToPackingRow = (item) => {
     nvrData: item.nvrData,
     nvrId: packingNvrId(item),
     time: item.timeOfIncident || item.createdAt,
+    startTime: item.startTime || item.start_time,
+    endTime: item.endTime || item.end_time,
     color: review ? WARN : OK,
     reason: '\u200b',
     confirmationReason: item.confirmationReason || '',
@@ -120,25 +124,28 @@ function StatusTag({ status }) {
 }
 
 function LogCard({ row }) {
+  const timing = [['Date', packingDateValue(row)], ['Start time', packingStartTimeValue(row)], ['End time', packingEndTimeValue(row)], ['Time to complete', formatPackingDuration(row.timeTakenSec)]];
   return <Panel pad={false} style={{ display: 'flex', flexDirection: 'column' }}>
     <div style={{ position: 'relative', minHeight: 112, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: `radial-gradient(circle at 50% 20%, ${row.color}44, transparent 58%), linear-gradient(135deg, #111827, #0a0e15)` }}>
       <Package size={42} color={row.color} strokeWidth={1.25} />
       <span style={{ position: 'absolute', left: 10, top: 10 }}><StatusTag status={row.status} /></span>
-      <span style={{ ...mono, position: 'absolute', right: 10, bottom: 9, fontSize: 10, color: '#fff', background: 'rgba(6,8,13,.76)', borderRadius: 5, padding: '4px 7px' }}>{formatTime(row.time)}</span>
+      <span style={{ ...mono, position: 'absolute', right: 10, bottom: 9, fontSize: 10, color: '#fff', background: 'rgba(6,8,13,.76)', borderRadius: 5, padding: '4px 7px' }}>{packingDateValue(row)}</span>
     </div>
     <div style={{ padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}><span style={{ ...mono, fontSize: 12, fontWeight: 700 }}>{row.boxId}</span><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{row.id}</span></div>
       <div><div style={label}>Completed by</div><div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 3 }}>{row.completedBy}</div><div style={{ fontSize: 10.5, color: row.evidence === 'Completion confirmed' ? OK : 'var(--tx3)', marginTop: 3 }}>{row.evidence}</div></div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingTop: 8, borderTop: '1px solid var(--bd)' }}>
-        <div><div style={label}>Worker snapshot</div><div style={{ fontSize: 11.5, marginTop: 3, display: 'grid', gap: 3 }}>{(row.zones?.length ? row.zones : [{ zone: row.zone, boxNumber: row.boxNumber, timeTakenSec: row.timeTakenSec }]).map((zone) => <span key={`${zone.zone}-${zone.boxNumber}`}>{zone.zone}: {Number(zone.boxNumber) || 0} boxes · {zone.timeTakenSec == null ? '—' : `${zone.timeTakenSec}s`}</span>)}</div></div><div><div style={label}>Event boxes</div><div style={{ fontSize: 11.5, marginTop: 3 }}>{row.boxNumber}</div></div><div><div style={label}>Event cycle</div><div style={{ fontSize: 11.5, marginTop: 3 }}>{row.timeTakenSec ? `${row.timeTakenSec}s` : '—'}</div></div><div><div style={label}>Camera</div><div style={{ fontSize: 11.5, marginTop: 3 }}>{row.camera}</div></div>
+        {timing.map(([name, value]) => <div key={name}><div style={label}>{name}</div><div style={{ ...mono, fontSize: 11.5, marginTop: 3 }}>{value}</div></div>)}
+        <div><div style={label}>Camera</div><div style={{ fontSize: 11.5, marginTop: 3 }}>{row.camera}</div></div>
       </div><div style={{ fontSize: 11, color: row.status === 'review' ? WARN : 'var(--tx3)', lineHeight: 1.35 }}>{row.reason}</div>
     </div>
   </Panel>;
 }
 
 function LogList({ rows }) {
-  const cols = { display: 'grid', gridTemplateColumns: '132px 112px 150px 135px 60px 95px 145px 130px', gap: 12, padding: '12px 16px', alignItems: 'center' };
-  return <Panel pad={false} style={{ overflowX: 'auto' }}><div style={{ minWidth: 920 }}><div style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>{['STATUS', 'BOX ID', 'COMPLETED BY', 'WORKERS', 'BOX NUMBER', 'TIME TAKEN', 'DETECTED VIA', 'TIME'].map((item) => <span key={item}>{item}</span>)}</div>{rows.map((row) => <div key={row.id} style={{ ...cols, fontSize: 12.5, borderTop: '1px solid var(--bd)' }}><StatusTag status={row.status} /><span style={{ ...mono, fontWeight: 700 }}>{row.boxId}</span><span style={{ fontWeight: 600 }}>{row.completedBy}</span><span>{row.zone}</span><span>{row.boxNumber}</span><span style={mono}>{row.timeTakenSec}s</span><span style={{ color: 'var(--tx3)' }}>{row.detectedVia}</span><span style={{ ...mono, fontWeight: 600 }}>{formatTime(row.time)}</span></div>)}</div></Panel>;
+  const cols = { display: 'grid', gridTemplateColumns: '115px 112px 150px 135px 100px 100px 100px 125px 145px', gap: 12, padding: '12px 16px', alignItems: 'center' };
+  const headings = ['STATUS', 'BOX ID', 'COMPLETED BY', 'WORKERS', 'DATE', 'START TIME', 'END TIME', 'TIME TO COMPLETE', 'DETECTED VIA'];
+  return <Panel pad={false} style={{ overflowX: 'auto' }}><div style={{ minWidth: 1100 }}><div style={{ ...cols, ...mono, fontSize: 9, letterSpacing: '.08em', color: 'var(--tx3)' }}>{headings.map((item) => <span key={item}>{item}</span>)}</div>{rows.map((row) => <div key={row.id} style={{ ...cols, fontSize: 12.5, borderTop: '1px solid var(--bd)' }}><StatusTag status={row.status} /><span style={{ ...mono, fontWeight: 700 }}>{row.boxId}</span><span style={{ fontWeight: 600 }}>{row.completedBy}</span><span>{row.zone}</span><span style={mono}>{packingDateValue(row)}</span><span style={mono}>{packingStartTimeValue(row)}</span><span style={mono}>{packingEndTimeValue(row)}</span><span style={mono}>{formatPackingDuration(row.timeTakenSec)}</span><span style={{ color: 'var(--tx3)' }}>{row.detectedVia}</span></div>)}</div></Panel>;
 }
 
 function AnalyticsMetric({ icon: Icon, label: text, value, sub, color, points }) {
@@ -190,20 +197,20 @@ function HourlyPackingLog({ rows, dateRange }) {
     return result;
   }, {}));
   const sorting = usePackingSort(buckets, { key: 'key', direction: 'asc' }, (row, key) => key === 'average' ? row.seconds / (row.timed || 1) : key === 'zones' ? row.zones.size : row[key]);
-  const headings = [['key', period.unit === 'hour' ? 'TIME RANGE' : period.tableLabel], ['boxes', 'BOXES PACKED'], ['average', 'AVERAGE TIME TO COMPLETE'], ['zones', 'ACTIVE WORKERS']];
+  const headings = [['key', period.unit === 'hour' ? 'TIME RANGE' : period.tableLabel], ['boxes', 'BOXES PACKED'], ['average', 'AVERAGE TIME TO COMPLETE'], ['zones', 'TOTAL WORKERS']];
   const exportActivity = () => {
     const periodColumn = period.unit === 'hour' ? 'Time range' : period.label[0].toUpperCase() + period.label.slice(1);
     const records = sorting.rows.map((item) => ({
       [periodColumn]: period.unit === 'hour' ? `${item.label}–${formatPackingHour((Number(item.key) + 1) % 24)}` : item.label,
       'Boxes packed': item.boxes,
       'Average time to complete': formatPackingDuration(item.seconds / (item.timed || 1)),
-      'Active workers': `${item.zones.size}${item.zones.size ? ' · ' + [...item.zones].join(', ') : ''}`,
+      'Total workers': `${item.zones.size}${item.zones.size ? ' · ' + [...item.zones].join(', ') : ''}`,
     }));
     downloadBoxPackingXlsx(rows, {
       title: `Box Packing ${period.label} Activity`, filenamePrefix: 'box-packing-activity-report',
       reportType: 'activity', timezone: PACKING_TIMEZONE,
       periodLabel: `${dateRange.startDate} – ${dateRange.endDate}`,
-      columns: [periodColumn, 'Boxes packed', 'Average time to complete', 'Active workers'], records,
+      columns: [periodColumn, 'Boxes packed', 'Average time to complete', 'Total workers'], records,
     });
   };
   return <Panel pad={false}>
@@ -229,10 +236,6 @@ function HourlyPackingLog({ rows, dateRange }) {
 
 const PACKING_TIMEZONE = 'Asia/Kolkata';
 
-function packingHour(value) {
-  return moment.tz(value, PACKING_TIMEZONE).hour();
-}
-
 function formatPackingHour(hour) {
   return `${String(hour).padStart(2, '0')}:00`;
 }
@@ -255,88 +258,23 @@ function packingBucket(value, period) {
   return { key: date.format('YYYY'), label: date.format('YYYY') };
 }
 
-function PackingActivityCharts({ rows, dateRange }) {
-  const [hovered, setHovered] = useState(null);
-  const period = packingPeriod(dateRange);
-  const buckets = Object.values(rows.reduce((result, row) => {
-    const bucket = packingBucket(row.time, period);
-    result[bucket.key] ||= { ...bucket, boxes: 0, completed: 0, review: 0, seconds: 0, timed: 0 };
-    const item = result[bucket.key];
-    item.boxes += 1;
-    item.completed += row.status === 'completed' ? 1 : 0;
-    item.review += row.status === 'review' ? 1 : 0;
-    const seconds = Number(row.timeTakenSec);
-    if (Number.isFinite(seconds) && seconds > 0) { item.seconds += seconds; item.timed += 1; }
-    return result;
-  }, {})).sort((a, b) => a.key.localeCompare(b.key));
-  const scope = JSON.stringify([dateRange, rows.map((row) => row.id)]);
-  const hoveredItem = hovered?.scope === scope ? buckets.find((item) => item.key === hovered.key) : null;
-  const rangeText = (item) => period.unit === 'hour' ? item.label + '–' + formatPackingHour((Number(item.key) + 1) % 24) : item.label;
-  if (!buckets.length) return <>
-    <style>{'.packing-chart-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; width: 100%; } @media(max-width: 850px) { .packing-chart-layout { grid-template-columns: minmax(0, 1fr); } }'}</style>
-    <div className="packing-chart-layout">
-      <Panel style={{ minWidth: 0, padding: 18 }}>
-        <strong style={{ fontSize: 15 }}>Boxes counted per {period.label}</strong>
-        <div style={{ marginTop: 5, fontSize: 11, color: 'var(--tx3)' }}>One record represents one packed box.</div>
-        <NoPeriodData minH={150} />
-      </Panel>
-      <Panel style={{ minWidth: 0, padding: 18 }}>
-        <strong style={{ fontSize: 15 }}>Average time to complete</strong>
-        <div style={{ marginTop: 5, fontSize: 11, color: 'var(--tx3)' }}>Average packing duration for the selected period.</div>
-        <NoPeriodData minH={150} />
-      </Panel>
-    </div>
-  </>;
-  return <>
-    <style>{'.packing-chart-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; width: 100%; } @media(max-width: 850px) { .packing-chart-layout { grid-template-columns: minmax(0, 1fr); } } .packing-chart-bar:hover, .packing-chart-bar:focus-visible { filter: brightness(1.12); outline: 2px solid var(--blue); outline-offset: 3px; }'}</style>
-    <div className="packing-chart-layout">
-      {[{ key: 'boxes', title: 'Boxes counted', color: '#0891b2', description: 'One record represents one packed box.' },
-        { key: 'cycle', title: 'Average time to complete', color: '#8b5cf6', description: 'Average packing duration for each period.' }].map((metric) => {
-        const value = (item) => metric.key === 'boxes' ? item.boxes : item.seconds / (item.timed || 1);
-        const maximum = Math.max(1, ...buckets.map(value));
-        const total = buckets.reduce((sum, item) => sum + item.boxes, 0);
-        const totalTimed = buckets.reduce((sum, item) => sum + item.timed, 0);
-        return <Panel key={metric.key} style={{ minWidth: 0, padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <strong style={{ fontSize: 15 }}>{metric.title} per {period.label}</strong>
-            <span style={{ fontSize: 11, color: metric.color, fontWeight: 700 }}>{metric.key === 'boxes' ? total + ' boxes' : formatPackingDuration(buckets.reduce((sum, item) => sum + item.seconds, 0) / totalTimed) + ' overall'}</span>
-          </div>
-          <div style={{ marginTop: 5, fontSize: 11, color: 'var(--tx3)' }}>{metric.description} Hover or select a bar for details.</div>
-          <div style={{ overflowX: 'auto', marginTop: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + buckets.length + ', minmax(76px, 1fr))', gap: 12, minWidth: buckets.length * 88, height: 260, padding: '10px 8px', borderRadius: 12, background: 'repeating-linear-gradient(to top, transparent 0, transparent 47px, rgba(148,163,184,.14) 48px)' }}>
-              {buckets.map((item) => <div key={item.key} style={{ display: 'grid', gridTemplateRows: '22px minmax(0, 1fr) 24px', gap: 7, minWidth: 0, justifyItems: 'center' }}>
-                <span style={{ ...mono, fontSize: 11, fontWeight: 600 }}>{metric.key === 'boxes' ? item.boxes : formatPackingDuration(value(item))}</span>
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'end', justifyContent: 'center' }}>
-                  <button type="button" className="packing-chart-bar" aria-label={rangeText(item) + ': ' + (metric.key === 'boxes' ? item.boxes + ' boxes' : formatPackingDuration(value(item)) + ' average cycle')}
-                    onMouseEnter={(event) => setHovered({ key: item.key, scope, anchor: event.currentTarget })}
-                    onMouseLeave={() => setHovered(null)} onFocus={(event) => setHovered({ key: item.key, scope, anchor: event.currentTarget })}
-                    onBlur={() => setHovered(null)} onClick={(event) => setHovered({ key: item.key, scope, anchor: event.currentTarget })}
-                    onKeyDown={(event) => { if (event.key === 'Escape') setHovered(null); }}
-                    style={{ width: '70%', maxWidth: 68, height: Math.max(2, value(item) / maximum * 100) + '%', border: 0, padding: 0, borderRadius: '8px 8px 3px 3px', cursor: 'pointer', background: 'linear-gradient(180deg, ' + metric.color + ', ' + metric.color + 'aa)', boxShadow: '0 5px 12px ' + metric.color + '24' }} />
-                </div>
-                <span style={{ ...mono, fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{item.label}</span>
-              </div>)}
-            </div>
-          </div>
-        </Panel>;
-      })}
-    </div>
-    {hoveredItem && <ChartTooltip anchor={hovered.anchor}>
-      <strong>{rangeText(hoveredItem)}</strong>
-      <div>Boxes packed: <strong>{hoveredItem.boxes}</strong></div>
-      <div>Average time to complete: <strong>{formatPackingDuration(hoveredItem.seconds / hoveredItem.timed)}</strong></div>
-    </ChartTooltip>}
-  </>;
-}
-
 function CameraStationCards({ rows, streamChannels, activeCameraIndex, setActiveCameraIndex }) {
+  const [view, setView] = useState('cards');
+  const stations = useMemo(() => streamChannels.map((channel, index) => {
+    const stationRows = rows.filter((row) => sameChannel(row, channel));
+    return {
+      id: channelKey(channel, index), index, name: channelCameraLabel(channel, rows),
+      nvr: channelNvrLabel(channel), workers: packingWorkerIds(stationRows),
+      stats: packingStats(stationRows), timedCount: stationRows.filter((row) => Number(row.timeTakenSec) > 0).length,
+    };
+  }), [rows, streamChannels]);
   return <Panel pad={false} style={{ padding: 0, minHeight: 0 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', padding: '14px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
       <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 15 }}>Camera stations</span>
       <span style={{ fontSize: 11, color: 'var(--tx3)' }}>Select a camera to view packing activity</span>
-      <span style={{ marginLeft: 'auto', ...mono, fontSize: 9, color: 'var(--tx3)' }}>{streamChannels.length} {streamChannels.length === 1 ? 'STATION' : 'STATIONS'}</span>
+      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ ...mono, fontSize: 9, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{stations.length} {stations.length === 1 ? 'STATION' : 'STATIONS'}</span><span style={{ display: 'flex', gap: 4 }}><Chip on={view === 'cards'} color="var(--blue)" onClick={() => setView('cards')}><LayoutGrid size={13} />Cards</Chip><Chip on={view === 'compare'} color="var(--blue)" onClick={() => setView('compare')}><Rows3 size={13} />Compare</Chip></span></span>
     </div>
-    <div style={{ display: 'flex', gap: 12, padding: 14, overflowX: 'auto', overflowY: 'hidden', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}>
+    {view === 'cards' ? <div style={{ display: 'flex', gap: 12, padding: 14, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
       {streamChannels.length ? streamChannels.map((channel, index) => {
         const channelId = channelKey(channel, index);
         const stationRows = rows.filter((row) => sameChannel(row, channel)).sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -347,22 +285,46 @@ function CameraStationCards({ rows, streamChannels, activeCameraIndex, setActive
         const stationStats = packingStats(stationRows);
         return <button key={channelId} type="button" onClick={() => setActiveCameraIndex(index)} aria-pressed={active} style={{ flex: '0 0 260px', width: 260, padding: 0, textAlign: 'left', color: 'var(--tx)', background: active ? 'linear-gradient(180deg, rgba(91,124,250,.15), var(--bg2))' : 'var(--bg2)', border: `1px solid ${active ? '#5b7cfa' : 'var(--bd)'}`, borderRadius: 13, overflow: 'hidden', cursor: 'pointer', boxShadow: active ? '0 0 0 2px rgba(91,124,250,.12)' : 'none' }}>
           <div style={{ position: 'relative', height: 132, background: 'linear-gradient(135deg, #111827, #263247)' }}>
-            {image ? <img src={mediaUrl(image)} alt={`${channelCameraLabel(channel, rows)} station`} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', ...mono, fontSize: 10, color: 'rgba(255,255,255,.65)' }}>LIVE CAMERA</div>}
+            {image ? <img src={mediaUrl(image)} alt={`${channelCameraLabel(channel, rows)} latest packing snapshot`} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', ...mono, fontSize: 10, color: 'rgba(255,255,255,.65)' }}>NO SNAPSHOT</div>}
             <span style={{ position: 'absolute', top: 9, left: 9, maxWidth: 'calc(100% - 70px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '4px 7px', borderRadius: 6, background: active ? '#5b7cfa' : 'rgba(10,15,28,.82)', color: '#fff', ...mono, fontSize: 9, fontWeight: 700 }}>{stationName}</span>
           </div>
           <div style={{ padding: '11px 12px 12px' }}>
             <div style={label}>Camera</div>
-            <div style={{ marginTop: 4, fontWeight: 700, fontSize: 13 }}>{stationName}</div>
+            <div style={{ marginTop: 4, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={stationName}>{stationName}</div>
             <div style={{ ...label, marginTop: 10 }}>NVR</div>
             <div style={{ marginTop: 4, color: 'var(--tx2)', fontSize: 11.5 }}>{channelNvrLabel(channel)}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginTop: 11, paddingTop: 10, borderTop: '1px solid var(--bd)' }}>
-              {[['BOXES PACKED', stationStats.boxes, '#5b7cfa'], ['AVG TIME', stationRows.length ? formatPackingDuration(stationStats.avgTime) : '—', '#a855f7']].map(([labelText, value, color]) => <div key={labelText} style={{ minWidth: 0 }}><div style={{ ...mono, fontSize: 8, letterSpacing: '.07em', color: 'var(--tx3)' }}>{labelText}</div><div style={{ ...mono, marginTop: 4, fontSize: 13, fontWeight: 700, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div></div>)}
+              {[['BOXES PACKED', stationStats.boxes, '#5b7cfa'], ['AVG TIME', stations[index].timedCount ? formatPackingDuration(stationStats.avgTime) : '—', '#a855f7']].map(([labelText, value, color]) => <div key={labelText} style={{ minWidth: 0 }}><div style={{ ...mono, fontSize: 8, letterSpacing: '.07em', color: 'var(--tx3)' }}>{labelText}</div><div style={{ ...mono, marginTop: 4, fontSize: 13, fontWeight: 700, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div></div>)}
             </div>
           </div>
         </button>;
-      }) : <div style={{ gridColumn: '1 / -1', padding: 22, textAlign: 'center', color: 'var(--tx3)', border: '1px dashed var(--bd2)', borderRadius: 12 }}>No enabled Box Packing camera stations.</div>}
-    </div>
+      }) : <div style={{ flex: 1, padding: 22, textAlign: 'center', color: 'var(--tx3)', border: '1px dashed var(--bd2)', borderRadius: 12 }}>No enabled Box Packing camera stations.</div>}
+    </div> : <PackingStationCompare stations={stations} activeCameraIndex={activeCameraIndex} setActiveCameraIndex={setActiveCameraIndex} />}
   </Panel>;
+}
+
+function PackingStationCompare({ stations, activeCameraIndex, setActiveCameraIndex }) {
+  const [sort, setSort] = useState({ key: 'boxes', direction: 'desc' });
+  const columns = [['name', 'CAMERA · WORKERS'], ['boxes', 'BOXES PACKED'], ['workers', 'WORKERS'], ['avgTime', 'AVG. TIME TO COMPLETE']];
+  const sortValue = (station, key) => key === 'name' ? station.name : key === 'workers' ? station.workers.length : key === 'avgTime' ? (station.timedCount ? station.stats.avgTime : null) : station.stats[key];
+  const sorted = [...stations].sort((left, right) => {
+    const a = sortValue(left, sort.key);
+    const b = sortValue(right, sort.key);
+    if (a == null) return b == null ? 0 : 1;
+    if (b == null) return -1;
+    const result = typeof a === 'string' ? a.localeCompare(b, undefined, { numeric: true }) : a - b;
+    return sort.direction === 'asc' ? result : -result;
+  });
+  const changeSort = (key) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
+  return <div style={{ padding: 14, overflowX: 'auto' }}><table style={{ width: '100%', minWidth: 680, borderCollapse: 'separate', borderSpacing: 0, border: '1px solid var(--bd)', borderRadius: 12, overflow: 'hidden' }}>
+    <thead><tr style={{ background: 'var(--bg2)', color: 'var(--tx3)', ...mono, fontSize: 9, letterSpacing: '.07em' }}>{columns.map(([key, heading]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--bd)' }}><PackingSortHeader column={key} sort={sort} onSort={changeSort}>{heading}</PackingSortHeader></th>)}</tr></thead>
+    <tbody>{sorted.length ? sorted.map((station) => <tr key={station.id} onClick={() => setActiveCameraIndex(station.index)} style={{ cursor: 'pointer', background: station.index === activeCameraIndex ? 'color-mix(in srgb, var(--blue) 10%, var(--bg1))' : 'var(--bg1)' }}>
+      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--bd)', borderLeft: station.index === activeCameraIndex ? '3px solid var(--blue)' : '3px solid transparent' }}><button type="button" onClick={() => setActiveCameraIndex(station.index)} aria-pressed={station.index === activeCameraIndex} style={{ display: 'block', width: '100%', padding: 0, border: 0, background: 'transparent', color: 'var(--tx)', textAlign: 'left', cursor: 'pointer' }}><strong style={{ display: 'block', ...mono, fontSize: 12 }}>{station.name}</strong><span style={{ display: 'block', marginTop: 3, color: 'var(--tx3)', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{station.workers.length ? station.workers.join(', ') : 'No workers recorded'} · {station.nvr}</span></button></td>
+      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--bd)', ...mono, fontSize: 12, fontWeight: 700 }}>{station.stats.boxes}</td>
+      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--bd)', ...mono, fontSize: 12, fontWeight: 700 }}>{station.workers.length}</td>
+      <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--bd)', ...mono, fontSize: 12, fontWeight: 700 }}>{station.timedCount ? formatPackingDuration(station.stats.avgTime) : '—'}</td>
+    </tr>) : <tr><td colSpan={columns.length} style={{ padding: 22, textAlign: 'center', color: 'var(--tx3)' }}>No enabled Box Packing camera stations.</td></tr>}</tbody>
+  </table></div>;
 }
 
 function LivePackingCameraCards({ rows, streamChannels }) {
@@ -501,10 +463,19 @@ function ZoneCompletionCards({ rows }) {
   </Panel>;
 }
 
-function RecentPackingActivity({ rows, onOpen }) {
+function RecentPackingActivity({ rows, onOpen, onOpenAlerts }) {
   const recent = [...rows].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 1);
-  return <Panel pad={false} className="flex min-h-[300px] flex-col min-[901px]:min-h-0 min-[901px]:h-[300px] min-[901px]:basis-[300px] min-[901px]:shrink-0" style={{ padding: 0, overflow: 'hidden', background: 'linear-gradient(135deg, rgba(79,70,229,.15), rgba(168,85,247,.08) 58%, var(--bg2))', border: '1px solid rgba(99,102,241,.38)', boxShadow: 'inset 3px 0 0 #6366f1, 0 8px 20px rgba(79,70,229,.08)' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '16px 18px', borderBottom: '1px solid var(--bd)', fontWeight: 600, fontSize: 15 }}><span style={{ display: 'grid', placeItems: 'center', width: 29, height: 29, borderRadius: 9, background: 'rgba(99,102,241,.15)', color: '#6366f1' }}><PackageCheck size={16} /></span>Latest packing activity</div>
+  const latest = recent[0];
+  const latestImage = latest?.Image || latest?.image || latest?.imageUrl || latest?.incidentImageUrl;
+  return <Panel pad={false} className="flex min-h-[300px] flex-col" style={{ padding: 0, overflow: 'hidden', background: 'linear-gradient(135deg, rgba(79,70,229,.15), rgba(168,85,247,.08) 58%, var(--bg2))', border: '1px solid rgba(99,102,241,.38)', boxShadow: 'inset 3px 0 0 #6366f1, 0 8px 20px rgba(79,70,229,.08)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
+      <span style={{ display: 'grid', placeItems: 'center', width: 30, height: 30, flexShrink: 0, borderRadius: 9, background: 'rgba(99,102,241,.15)', color: '#6366f1' }}><PackageCheck size={16} /></span>
+      <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 15 }}>Latest packing activity</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+        {latestImage && <DownloadButton action={() => downloadBoxPackingSnapshot(latest)} description="image" aria-label={`Download packing image for ${latest.boxId}`} style={{ height: 32, padding: '0 12px', border: 0, color: '#fff', background: 'linear-gradient(135deg, #3b82f6, #a855f7)', fontSize: 12, fontWeight: 600 }}>Image</DownloadButton>}
+        <button type="button" onClick={onOpenAlerts} style={{ height: 32, padding: '0 12px', border: '1px solid var(--bd2)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>All alert logs →</button>
+      </div>
+    </div>
     {!recent.length && <div className="min-h-0 flex-1" style={{ padding: 20, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 13 }}>No packing activity for this station.</div>}
     {recent.map((row) => {
       const image = row.Image || row.image || row.imageUrl || row.incidentImageUrl;
@@ -513,7 +484,7 @@ function RecentPackingActivity({ rows, onOpen }) {
         <div style={{ flex: '2 1 230px', minWidth: 0 }}>
           <div style={label}>Box ID</div><div style={{ marginTop: 5, fontFamily: 'var(--disp)', fontSize: 23, fontWeight: 800, overflowWrap: 'anywhere' }}>{row.boxId}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '15px 12px', marginTop: 17 }}>
-            {[['Completed by', row.completedBy], ['Box number', row.boxNumber], ['Time to complete', row.timeTakenSec > 0 ? formatPackingDuration(row.timeTakenSec) : 'Not available'], ['Completed at', row.time ? moment.tz(row.time, PACKING_TIMEZONE).format('DD MMM YYYY, hh:mm A') : 'Not available']].map(([name, value]) => <div key={name} style={{ minWidth: 0, padding: '10px 11px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}><div style={label}>{name}</div><div style={{ ...mono, fontSize: name === 'Completed at' ? 11.5 : 13, fontWeight: 600, lineHeight: 1.5, marginTop: 5, overflowWrap: 'anywhere' }}>{value ?? '—'}</div></div>)}
+            {[['Completed by', row.completedBy], ['Start time', packingStartTimeValue(row, PACKING_TIMEZONE)], ['Time to complete', row.timeTakenSec > 0 ? formatPackingDuration(row.timeTakenSec) : 'Not available'], ['End time', packingEndTimeValue(row, PACKING_TIMEZONE)]].map(([name, value]) => <div key={name} style={{ minWidth: 0, padding: '10px 11px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}><div style={label}>{name}</div><div style={{ ...mono, fontSize: 13, fontWeight: 600, lineHeight: 1.5, marginTop: 5, overflowWrap: 'anywhere' }}>{value ?? '—'}</div></div>)}
           </div>
         </div>
       </div>;
@@ -548,25 +519,26 @@ function LiveStationHeader({ channel, rows }) {
   </div>;
 }
 
-function PackingOverview({ rows: allRows, selectedZone, setSelectedZone, streamChannels, activeCameraIndex, setActiveCameraIndex, periodLabel, dateRange }) {
+function PackingOverview({ rows: allRows, streamChannels, activeCameraIndex, setActiveCameraIndex, periodLabel, dateRange, onOpenAlerts }) {
   const activeChannel = streamChannels[activeCameraIndex];
   const rows = useMemo(() => allRows.filter((row) => activeChannel && sameChannel(row, activeChannel)).sort((a, b) => new Date(b.time) - new Date(a.time)), [allRows, activeChannel]);
-  const stats = packingStats(rows);
   const zones = packingWorkerIds(rows);
-  useEffect(() => {
-    if (!zones.includes(selectedZone)) setSelectedZone(zones[0] || '');
-  }, [selectedZone, setSelectedZone, zones.join('|')]);
-  const [activitySort, setActivitySort] = useState({ key: 'time', direction: 'desc' });
-  const zoneRows = [...rows.filter((row) => packingWorkerId(row) === selectedZone)].sort((a, b) => {
+  const [activitySort, setActivitySort] = useState({ key: 'startTime', direction: 'desc' });
+  const zoneRows = [...rows].sort((a, b) => {
     const key = activitySort.key;
-    const left = key === 'snapshot' ? (a.Image || a.image || a.imageUrl || a.incidentImageUrl ? 1 : 0) : key === 'boxNumber' || key === 'timeTakenSec' ? Number(a[key]) || 0 : key === 'time' ? new Date(a.time).getTime() : String(a[key] || '').toLowerCase();
-    const right = key === 'snapshot' ? (b.Image || b.image || b.imageUrl || b.incidentImageUrl ? 1 : 0) : key === 'boxNumber' || key === 'timeTakenSec' ? Number(b[key]) || 0 : key === 'time' ? new Date(b.time).getTime() : String(b[key] || '').toLowerCase();
+    const sortValue = (row) => key === 'snapshot' ? (row.Image || row.image || row.imageUrl || row.incidentImageUrl ? 1 : 0)
+      : key === 'timeTakenSec' ? Number(row[key]) || 0
+      : key === 'date' || key === 'startTime' ? new Date(packingStartTimestamp(row) || 0).getTime()
+      : key === 'endTime' ? new Date(packingEndTimestamp(row) || 0).getTime()
+      : String(row[key] || '').toLowerCase();
+    const left = sortValue(a);
+    const right = sortValue(b);
     const result = left < right ? -1 : left > right ? 1 : 0;
     return activitySort.direction === 'asc' ? result : -result;
   });
   const changeActivitySort = (key) => setActivitySort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
   const sortHeader = (key, text) => key === 'snapshot' ? <span>{text}</span> : <PackingSortHeader column={key} sort={activitySort} onSort={changeActivitySort}>{text}</PackingSortHeader>;
-  const activityPagination = useSolderPagination(zoneRows, JSON.stringify([activeChannel && channelKey(activeChannel), selectedZone, activitySort.key, activitySort.direction, zoneRows.map((row) => row.id)]), 5);
+  const activityPagination = useSolderPagination(zoneRows, JSON.stringify([activeChannel && channelKey(activeChannel), activitySort.key, activitySort.direction, zoneRows.map((row) => row.id)]), 5);
   const completedStats = packingStats(allRows.filter((row) => row.status === 'completed'));
   const activeCameraRows = rows;
   const activeCameraStats = packingStats(activeCameraRows);
@@ -580,7 +552,6 @@ function PackingOverview({ rows: allRows, selectedZone, setSelectedZone, streamC
       workers: packingWorkerIds(stationRows),
     };
   }), [streamChannels, allRows]);
-  const selectedZones = stations[activeCameraIndex]?.workers || [];
   const [activityPreview, setActivityPreview] = useState(null);
   const moveCamera = (offset) => setActiveCameraIndex((index) => streamChannels.length ? (index + offset + streamChannels.length) % streamChannels.length : 0);
   return <>
@@ -616,43 +587,43 @@ function PackingOverview({ rows: allRows, selectedZone, setSelectedZone, streamC
         </div>
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <ZoneCompletionCards rows={activeCameraRows} />
-          <RecentPackingActivity rows={activeCameraRows} onOpen={setActivityPreview} />
+          <RecentPackingActivity rows={activeCameraRows} onOpen={setActivityPreview} onOpenAlerts={onOpenAlerts} />
         </div>
     </div>
-     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 8 }}><span style={{ ...mono, fontSize: 11, fontWeight: 700, color: '#a855f7' }}>02</span><span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 19 }}>Conveyor Count &amp; Packing Activity</span><span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Boxes counted per {packingPeriod(dateRange).label} · operators share the work</span></div>
-    <div style={{ minWidth: 0, width: '100%' }}>
-      <PackingActivityCharts rows={rows} stats={stats} dateRange={dateRange} />
-    </div>
+    <WorkerComparison rows={rows} cameraName={activeChannel ? channelCameraLabel(activeChannel, rows) : 'the selected camera'} dateRange={dateRange} />
      <HourlyPackingLog rows={rows} dateRange={dateRange} />
     <Panel pad={false}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '16px 18px 13px' }}>
-        <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Packing workers</span>
-        <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Select a worker to inspect its latest packing activity</span>
-        <span style={{ marginLeft: 'auto', ...mono, fontSize: 10, color: 'var(--tx3)' }}>{zones.length} ACTIVE WORKERS</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--bd)' }}><span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Latest packing activity</span><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{zones.length ? zones.length + ' workers' : 'All workers'}</span></div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', ...mono, fontSize: 11.5 }}>
+          <thead><tr style={{ color: 'var(--tx3)', fontSize: 9, letterSpacing: '.07em', textAlign: 'left' }}>
+            {[
+              ['snapshot', 'SNAPSHOT'], ['boxId', 'BOX ID'], ['completedBy', 'COMPLETED BY'],
+              ['nvrName', 'NVR'], ['camera', 'CAMERA NAME'],
+              ['date', 'DATE'], ['startTime', 'START TIME'], ['endTime', 'END TIME'],
+              ['timeTakenSec', 'TIME TO COMPLETE'],
+            ].map(([key, label]) => <th key={key} style={{ padding: '7px 14px', fontWeight: 500, whiteSpace: 'nowrap' }}>{sortHeader(key, label)}</th>)}
+          </tr></thead>
+          <tbody>{zoneRows.length ? activityPagination.pageRows.map((row) => {
+            const channel = streamChannels.find((item) => sameChannel(row, item));
+            const cameraName = channel ? channelCameraLabel(channel, rows) : (row.camera || 'Packing camera');
+            const nvrName = channel ? channelNvrLabel(channel) : (row.nvrName || 'NVR');
+            const image = row.Image || row.image || row.imageUrl || row.incidentImageUrl;
+            return <tr key={row.id} style={{ borderTop: '1px solid var(--bd)' }}>
+              <td style={{ padding: '5px 14px' }}>{image ? <button type="button" onClick={() => setActivityPreview(row)} aria-label={`Open snapshot for ${row.boxId}`} style={{ display: 'block', padding: 0, border: 0, background: 'transparent', cursor: 'pointer' }}><img src={mediaUrl(image)} alt={`Snapshot for ${row.boxId}`} style={{ width: 104, height: 58, display: 'block', objectFit: 'cover', borderRadius: 6, background: '#0b1120', cursor: 'pointer' }} /></button> : <span style={{ color: 'var(--tx3)' }}>No snapshot</span>}</td>
+              <td style={{ padding: '8px 14px', fontWeight: 700 }}>{row.boxId}</td>
+              <td style={{ padding: '8px 14px', fontFamily: 'var(--disp)', fontWeight: 600 }}>{row.completedBy}</td>
+              <td style={{ padding: '8px 14px' }}>{nvrName}</td>
+              <td style={{ padding: '8px 14px' }}>{cameraName}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingDateValue(row, PACKING_TIMEZONE)}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingStartTimeValue(row, PACKING_TIMEZONE)}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingEndTimeValue(row, PACKING_TIMEZONE)}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{formatPackingDuration(row.timeTakenSec)}</td>
+            </tr>;
+          }) : <tr><td colSpan={9} style={{ padding: 18, textAlign: 'center', color: 'var(--tx3)' }}>No packing activity in this period.</td></tr>}</tbody>
+        </table>
       </div>
-      <div style={{ display: 'flex', gap: 12, padding: '0 18px 18px', overflowX: 'auto', overflowY: 'hidden', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}>
-        {zones.map((zone, index) => {
-          const source = rows.filter((row) => packingWorkerId(row) === zone);
-          const zoneData = packingStats(source);
-          const latest = source.reduce((last, row) => !last || new Date(row.time) > new Date(last.time) ? row : last, null);
-          const active = selectedZone === zone;
-          const color = ['#3b82f6', '#a855f7', '#14b8a6'][index % 3];
-          return <button key={zone} type="button" onClick={() => setSelectedZone(zone)} aria-pressed={active} style={{ flex: '0 0 340px', width: 340, minWidth: 0, boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', padding: 16, borderRadius: 14, color: 'var(--tx)', background: active ? `linear-gradient(180deg, ${color}18, var(--bg2))` : 'var(--bg2)', border: `1px solid ${active ? color : 'var(--bd)'}`, boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} /><span style={{ fontWeight: 700, fontSize: 14 }}>{zone}</span></div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px 12px', marginTop: 16 }}>
-              <div><div style={label}>Last completed box</div><div style={{ ...mono, fontSize: 14, fontWeight: 700, marginTop: 5, overflowWrap: 'anywhere' }}>{latest?.boxId || '—'}</div></div>
-              <div><div style={label}>Box number</div><div style={{ ...mono, fontSize: 18, fontWeight: 700, color, marginTop: 4 }}>{latest?.boxNumber ?? '—'}</div></div>
-              <div><div style={label}>Last packing time</div><div style={{ ...mono, fontSize: 13, fontWeight: 600, marginTop: 5 }}>{latest?.timeTakenSec > 0 ? formatPackingDuration(latest.timeTakenSec) : 'Not available'}</div></div>
-              <div><div style={label}>Average time to complete</div><div style={{ ...mono, fontSize: 13, fontWeight: 600, marginTop: 5 }}>{source.length ? formatPackingDuration(zoneData.avgTime) : '—'}</div></div>
-            </div>
-            <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--bd)', color: 'var(--tx2)', fontSize: 11 }}>{latest ? `Last completed · ${formatTime(latest.time)}` : 'No packing activity in this period'}</div>
-          </button>;
-        })}
-      </div>
-    </Panel>
-    <Panel pad={false}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--bd)' }}><span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Latest packing activity</span><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{selectedZone}</span></div>
-      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', minWidth: 1120, borderCollapse: 'collapse', ...mono, fontSize: 11.5 }}><thead><tr style={{ color: 'var(--tx3)', fontSize: 9, letterSpacing: '.07em', textAlign: 'left' }}>{[['snapshot', 'SNAPSHOT'], ['boxId', 'BOX ID'], ['completedBy', 'COMPLETED BY'], ['nvrName', 'NVR'], ['camera', 'CAMERA NAME'], ['boxNumber', 'BOX NUMBER'], ['timeTakenSec', 'TIME TO COMPLETE'], ['time', 'DATE & TIME']].map(([key, text]) => <th key={key} style={{ padding: '7px 14px', fontWeight: 500 }}>{sortHeader(key, text)}</th>)}</tr></thead><tbody>{zoneRows.length ? activityPagination.pageRows.map((row) => { const channel = streamChannels.find((item) => sameChannel(row, item)); const cameraName = channel ? channelCameraLabel(channel, rows) : (row.camera || 'Packing camera'); const nvrName = channel ? channelNvrLabel(channel) : (row.nvrName || 'NVR'); const image = row.Image || row.image || row.imageUrl || row.incidentImageUrl; return <tr key={row.id} style={{ borderTop: '1px solid var(--bd)' }}><td style={{ padding: '5px 14px' }}>{image ? <button type="button" onClick={() => setActivityPreview(row)} aria-label={`Open snapshot for ${row.boxId}`} style={{ display: 'block', padding: 0, border: 0, background: 'transparent', cursor: 'pointer' }}><img src={mediaUrl(image)} alt={`Snapshot for ${row.boxId}`} style={{ width: 104, height: 58, display: 'block', objectFit: 'cover', borderRadius: 6, background: '#0b1120', cursor: 'pointer' }} /></button> : <span style={{ color: 'var(--tx3)' }}>No snapshot</span>}</td><td style={{ padding: '8px 14px', fontWeight: 700 }}>{row.boxId}</td><td style={{ padding: '8px 14px', fontFamily: 'var(--disp)', fontWeight: 600 }}>{row.completedBy}</td><td style={{ padding: '8px 14px' }}>{nvrName}</td><td style={{ padding: '8px 14px' }}>{cameraName}</td><td style={{ padding: '8px 14px' }}>{row.boxNumber}</td><td style={{ padding: '8px 14px' }}>{formatPackingDuration(row.timeTakenSec)}</td><td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{row.time ? moment.tz(row.time, PACKING_TIMEZONE).format('DD MMM YYYY, hh:mm A') : '—'}</td></tr>; }) : <tr><td colSpan={8} style={{ padding: 18, textAlign: 'center', color: 'var(--tx3)' }}>No packing activity in this period.</td></tr>}</tbody></table></div><div style={{ padding: '0 18px' }}><SolderPagination pagination={activityPagination} label="Latest packing activity" pageSizes={[5, 10, 25, 50, 100]} /></div>
+      <div style={{ padding: '0 18px' }}><SolderPagination pagination={activityPagination} label="Latest packing activity" pageSizes={[5, 10, 25, 50, 100]} /></div>
     </Panel>
     {activityPreview && <ImagePreviewModal previewImage={mediaUrl(activityPreview.Image || activityPreview.image || activityPreview.imageUrl || activityPreview.incidentImageUrl)} imageKey={activityPreview.id} loading={false} setLoading={() => {}} hasPrevious={false} hasNext={false} onClose={() => setActivityPreview(null)} initialFullscreen={false} />}
   </>;
@@ -691,6 +662,7 @@ export default function BoxPackingLogs() {
   const [analytics, setAnalytics] = useState(isAnalyticsRoute);
   const today = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
   const [dateRange, setDateRange] = useState({ startDate: today, endDate: today });
+  const [timeRange, setTimeRange] = useState({ fromTime: '', toTime: '' });
   const selectedPeriodLabel = dateRange.startDate === dateRange.endDate
     ? moment.tz(dateRange.startDate, 'Asia/Kolkata').format('DD MMM YYYY')
     : `${moment.tz(dateRange.startDate, 'Asia/Kolkata').format('DD MMM YYYY')} – ${moment.tz(dateRange.endDate, 'Asia/Kolkata').format('DD MMM YYYY')}`;
@@ -700,7 +672,6 @@ export default function BoxPackingLogs() {
   const [analyticsStatus, setAnalyticsStatus] = useState('all');
   const [analyticsZone, setAnalyticsZone] = useState('all');
   const [view, setView] = useState(routeView);
-  const [selectedZone, setSelectedZone] = useState('');
   const [dbRows, setDbRows] = useState([]);
   const [streamChannels, setStreamChannels] = useState([]);
   const [activeCameraIndex, setActiveCameraIndex] = useState(0);
@@ -723,7 +694,7 @@ export default function BoxPackingLogs() {
         const now = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
         return dateRange.startDate <= now && dateRange.endDate >= now;
       },
-      refresh: () => fetchIncidentLogs({ endpoint: BOX_PACKING_CONFIG.endpoint, skip: 0, limit: 500, startDate: dateRange.startDate, endDate: dateRange.endDate, sortField: 'timeOfIncident', sortOrder: 'desc' })
+      refresh: () => fetchIncidentLogs({ endpoint: BOX_PACKING_CONFIG.endpoint, skip: 0, limit: 500, startDate: dateRange.startDate, endDate: dateRange.endDate, fromTime: timeRange.fromTime && timeRange.toTime ? timeRange.fromTime : '', toTime: timeRange.fromTime && timeRange.toTime ? timeRange.toTime : '', sortField: 'timeOfIncident', sortOrder: 'desc' })
       .then((res) => {
         if (!active) return;
         const payload = res?.data?.body?.data;
@@ -742,7 +713,7 @@ export default function BoxPackingLogs() {
       .finally(() => { if (active) setDbLoading(false); }),
     });
     return () => { active = false; stop(); };
-  }, [dateRange.startDate, dateRange.endDate, socket, user?.adminId]);
+  }, [dateRange.startDate, dateRange.endDate, timeRange.fromTime, timeRange.toTime, socket, user?.adminId]);
   useEffect(() => {
     let active = true;
     Promise.allSettled([getChannels({ limit: 500, engines: 'boxPackingDetectionSettings' }), getNvrs(0, 500)])
@@ -796,9 +767,9 @@ export default function BoxPackingLogs() {
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%', gap: 12, padding: '5px 0' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999, border: `1px solid ${OK}66`, background: `${OK}1a` }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: OK }} /><span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: OK }}>LIVE</span></span><PresetDateRangePicker startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /></div>
     </div>
     <div style={{ width: '100%', padding: 'clamp(12px, 3vw, 22px)', boxSizing: 'border-box' }}><div style={{ maxWidth: 1560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
-     {showAlerts ? <BoxPackingAlertLogs rows={dbRows} periodLabel={selectedPeriodLabel} timezone="Asia/Kolkata" startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onDateRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /> : view === 'reports' || isReportsRoute ? <BoxPackingReports rows={dbRows} channels={filteredStreamChannels} range={dateRange} today={today} timezone="Asia/Kolkata" onRangeChange={({ startDate, endDate }) => setDateRange({ startDate, endDate })} /> : <>
+     {showAlerts ? <BoxPackingAlertLogs rows={dbRows} periodLabel={selectedPeriodLabel} timezone="Asia/Kolkata" timeRange={timeRange} onTimeRangeChange={setTimeRange} startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onDateRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /> : view === 'reports' || isReportsRoute ? <BoxPackingReports rows={dbRows} channels={filteredStreamChannels} range={dateRange} today={today} timezone="Asia/Kolkata" timeRange={timeRange} onTimeRangeChange={setTimeRange} onRangeChange={({ startDate, endDate }) => setDateRange({ startDate, endDate })} /> : <>
      {!showAnalytics && <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}><span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 21 }}>Box Packing Overview</span><span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Completed packing activity, box counts and confirmation evidence</span></div>}
-     {view === 'overview' ? <PackingOverview rows={rows} stats={stats} selectedZone={selectedZone} setSelectedZone={setSelectedZone} streamChannels={filteredStreamChannels} activeCameraIndex={activeCameraIndex} setActiveCameraIndex={setActiveCameraIndex} periodLabel={selectedPeriodLabel} dateRange={dateRange} /> : null}
+     {view === 'overview' ? <PackingOverview rows={rows} streamChannels={filteredStreamChannels} activeCameraIndex={activeCameraIndex} setActiveCameraIndex={setActiveCameraIndex} periodLabel={selectedPeriodLabel} dateRange={dateRange} onOpenAlerts={() => { setView('alerts'); navigate('/box-packing/alerts'); }} /> : null}
      {showAnalytics && view === 'analytics' ? <>
        <div style={{ display: 'flex', alignItems: 'center', gap: 13, flexWrap: 'wrap', padding: '14px 20px', borderRadius: 18, color: '#fff', background: 'linear-gradient(125deg, #2563eb 0%, #4f46e5 52%, #7c3aed 100%)', boxShadow: '0 12px 28px rgba(79,70,229,.22)', position: 'relative', overflow: 'visible' }}><div style={{ position: 'absolute', width: 300, height: 300, right: 90, top: -205, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,.22), transparent 68%)' }} /><div style={{ position: 'absolute', width: 200, height: 200, left: -70, bottom: -155, borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,211,238,.22), transparent 70%)' }} /><div style={{ flex: 1, minWidth: 280, position: 'relative' }}><div style={{ ...mono, fontSize: 9, letterSpacing: '.14em', color: '#e0e7ff', display: 'flex', alignItems: 'center', gap: 6 }}><Sparkles size={12} /> PACKING OPERATIONS INTELLIGENCE</div><div style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 21, marginTop: 4 }}>Box Packing Analytics</div><div style={{ fontSize: 11, color: '#eef2ff', marginTop: 2 }}>Throughput, cycle time and review queue across packing workers.</div></div><div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', position: 'relative' }}><PresetDateRangePicker startDate={analyticsRange.startDate} endDate={analyticsRange.endDate} maxDate={today} onRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setAnalyticsRange({ startDate: nextStart, endDate: nextEnd }); }} /><AnalyticsFilters open={analyticsFiltersOpen} setOpen={setAnalyticsFiltersOpen} status={analyticsStatus} setStatus={setAnalyticsStatus} zone={analyticsZone} setZone={setAnalyticsZone} zones={analyticsZones} /><button type="button" onClick={() => setAnalyticsRefresh((value) => value + 1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 15px', borderRadius: 9, border: '1px solid rgba(255,255,255,.38)', color: '#fff', background: 'rgba(255,255,255,.13)', cursor: 'pointer', fontSize: 14, fontWeight: 700, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.15)' }}><RefreshCw size={16} />Refresh</button></div></div>
        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}><AnalyticsMetric icon={PackageCheck} label="Completed events" value={analyticsStats.total - analyticsStats.review} sub="Confirmed packing cycles" color="#2563eb" points="0,19 11,19 20,11 29,16 39,8 49,13 58,4 64,4" /><AnalyticsMetric icon={Boxes} label="Boxes packed" value={analyticsStats.boxes} sub="Across all workers" color="#00a878" points="0,20 10,20 18,14 27,17 37,8 46,13 55,5 64,3" /><AnalyticsMetric icon={ShieldAlert} label="Review queue" value={analyticsStats.review} sub="Events needing attention" color="#f97316" points="0,7 10,10 19,8 29,16 38,12 47,19 56,14 64,18" /><AnalyticsMetric icon={Clock3} label="Average time to complete" value={`${analyticsStats.avgTime}s`} sub="Average time to complete" color="#7c3aed" points="0,17 10,16 19,18 29,11 38,14 47,8 56,12 64,5" /></div>

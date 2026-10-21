@@ -36,6 +36,7 @@ import { exportIncidentCenter } from './incidentCenterExport';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 const LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 140px 110px 70px 90px 100px 135px 160px';
+const PACKING_LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 120px 105px 105px 120px 90px 100px 110px 160px';
 const DELETE_BATCH_SIZE = 250;
 
 const formatDoorDuration = (seconds) => {
@@ -1338,7 +1339,7 @@ const LIST_SEVERITY_COLORS = {
 
 function IncidentListRow({
   item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
-  hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete,
+  hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, listColumns = LIST_ROW_COLUMNS,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1353,6 +1354,7 @@ function IncidentListRow({
   const isDoorDetection = item.incidentType === 'doorDetection';
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
+  const packingList = listColumns === PACKING_LIST_ROW_COLUMNS;
   const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
   const zoneRows = item.incidentType === 'deskSolarShoulderDetection' && Array.isArray(item.zones)
     ? item.zones.filter((zone) => zone && typeof zone === 'object')
@@ -1387,7 +1389,7 @@ function IncidentListRow({
         onClick={handleRowClick}
         className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
         style={{
-          display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS,
+          display: 'grid', gridTemplateColumns: listColumns,
           gap: 12, alignItems: 'center', minWidth: 1420, padding: packing ? '10px 12px' : '14px 12px',
           background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
           borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
@@ -1429,9 +1431,9 @@ function IncidentListRow({
           <span title={nvr} style={{ fontSize: 11.5, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
         </div>
 
-        {['zone', 'presenceSec', 'done'].map((field) => (
+        {(packing ? (packingList ? ['completedBy', 'startTime', 'endTime', 'packingTime'] : ['completedBy', 'startTime', 'packingTime']) : ['zone', 'presenceSec', 'done']).map((field) => (
           <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: packing ? 'var(--tx)' : 'var(--tx2)', fontWeight: packing ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>
-            {packing ? <span>{({ zone: packing.completedBy, presenceSec: packing.packingTime, done: packing.boxNumber })[field]}</span> : isDoorDetection ? (
+            {packing ? <span>{({ completedBy: packing.completedBy, startTime: packing.startTime, endTime: packing.endTime, packingTime: packing.packingTime })[field]}</span> : isDoorDetection ? (
               <span style={{ fontWeight: 500, textTransform: field === 'done' ? 'capitalize' : undefined }}>
                 {{
                   zone: item.zoneName || item.zone || '—',
@@ -1454,7 +1456,7 @@ function IncidentListRow({
         </div>
 
         <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
-        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident) || '--'}</div>
+        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{packing ? packing.date : (shortDateTime(item.timeOfIncident) || '--')}</div>
 
         <div role="cell" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
@@ -2699,15 +2701,16 @@ export default function IncidentCenter() {
             <div data-tour="incidents-list" role="table" aria-label="Incidents" style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 12, background: 'var(--bg1solid)', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
               <div
                 role="row"
-                style={{ display: 'grid', gridTemplateColumns: LIST_ROW_COLUMNS, gap: 12, alignItems: 'center', minWidth: 1420, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
+                style={{ display: 'grid', gridTemplateColumns: packingOnly ? PACKING_LIST_ROW_COLUMNS : LIST_ROW_COLUMNS, gap: 12, alignItems: 'center', minWidth: packingOnly ? 1540 : 1420, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
               >
                 <span role="columnheader">Select</span>
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
                 <span role="columnheader">{doorOnly ? 'Door' : hasDoor ? 'Door / Zone' : packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
-                <span role="columnheader">{doorOnly ? 'Door Open Duration' : hasDoor ? 'Door Open Duration / Presence (s)' : packingOnly ? 'Time to complete' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
-                <span role="columnheader">{doorOnly ? 'Door Status' : hasDoor ? 'Door Status / Done' : packingOnly ? 'Box number' : hasPacking ? 'Done / Box number' : 'Done'}</span>
+                <span role="columnheader">{doorOnly ? 'Door Open Duration' : hasDoor ? 'Door Open Duration / Presence (s)' : packingOnly ? 'Start time' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
+                {packingOnly && <><span role="columnheader">End time</span><span role="columnheader">Time to complete</span></>}
+                {!packingOnly && <span role="columnheader">{doorOnly ? 'Door Status' : hasDoor ? 'Door Status / Done' : hasPacking ? 'Done / Time to complete' : 'Done'}</span>}
                 <span role="columnheader">Severity</span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader">Time of Incident</span>
@@ -2729,6 +2732,7 @@ export default function IncidentCenter() {
                   deleteMode={isDeleteMode}
                   selectedForDelete={selectedForDelete.includes(item._id || item.id)}
                   onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
+                  listColumns={packingOnly ? PACKING_LIST_ROW_COLUMNS : LIST_ROW_COLUMNS}
                 />
               ))}
             </div>

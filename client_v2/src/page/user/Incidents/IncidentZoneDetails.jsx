@@ -14,7 +14,7 @@ export default function IncidentZoneDetails({ item, variant = 'card', compact = 
         <dd style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono, monospace)' }} title={String(packing.boxId)}>{packing.boxId}</dd>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, paddingTop: 10 }}>
-        {[['Completed by', packing.completedBy], ['Time to complete', packing.packingTime], ['Box number', packing.boxNumber]].map(([label, value]) => (
+        {[['Completed by', packing.completedBy], ['Date', packing.date], ['Start time', packing.startTime], ['End time', packing.endTime], ['Time to complete', packing.packingTime]].map(([label, value]) => (
           <div key={label} style={{ minWidth: 0 }}>
             <dt style={{ color: 'var(--tx2)', fontSize: 11, lineHeight: 1.2 }}>{label}</dt>
             <dd style={{ margin: '5px 0 0', color: 'var(--tx)', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={String(value)}>{value}</dd>
@@ -23,7 +23,7 @@ export default function IncidentZoneDetails({ item, variant = 'card', compact = 
       </div>
     </dl>;
     return <dl aria-label="Box packing details" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))', width: '100%', gap: 6, margin: '4px 0 0', fontSize: 11 }}>
-      {[['Box ID', packing.boxId], ['Completed by', packing.completedBy], ['Box number', packing.boxNumber], ['Time to complete', packing.packingTime]].map(([label, value]) => <div key={label} style={{ minWidth: 0, padding: '6px 8px', borderRadius: 6, background: 'rgba(99,102,241,.12)', border: '1px solid rgba(165,180,252,.2)' }}>
+      {[['Box ID', packing.boxId], ['Completed by', packing.completedBy], ['Date', packing.date], ['Start time', packing.startTime], ['End time', packing.endTime], ['Time to complete', packing.packingTime]].map(([label, value]) => <div key={label} style={{ minWidth: 0, padding: '6px 8px', borderRadius: 6, background: 'rgba(99,102,241,.12)', border: '1px solid rgba(165,180,252,.2)' }}>
         <dt style={{ color: 'rgba(255,255,255,.7)', marginBottom: 3, fontSize: 10 }}>{label}</dt>
         <dd style={{ margin: 0, fontWeight: 600, color: label === 'Time to complete' ? '#c4b5fd' : '#fff', overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums' }}>{value}</dd>
       </div>)}

@@ -102,7 +102,7 @@ const mapRow = (item, index) => {
     ...incidentPackingExportFields(item),
     Severity: severityLabel(item?.severity),
     Status: statusOf(item),
-    'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, 'DD/MM/YYYY hh:mm A'),
+    'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, item?.incidentType === 'boxPackingDetection' ? 'DD/MM/YYYY' : 'DD/MM/YYYY hh:mm A'),
     'Vehicle Number': text(item?.vehicleNumber),
     Image: item?.Image ? mediaUrl(item.Image) : '--',
   };
@@ -207,6 +207,9 @@ const exportListPdf = (rows, showVehicleNumber) => {
     Image: 20,
     'Box ID': 28,
     'Completed by': 26,
+    Date: 24,
+    'Start time': 22,
+    'End time': 22,
     'Time to complete': 24,
   };
   const totalWidth = columns.reduce((sum, column) => sum + columnWidths[column], 0);

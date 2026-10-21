@@ -537,7 +537,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
               {packingZones(row.zones).length ? packingZones(row.zones).map((zone, index) => (
                 <div key={`${zone.zone}-${index}`} className="flex flex-wrap items-center justify-between gap-1 text-xs">
                   <span className="min-w-0 break-words text-[var(--tx)]">{zone.zone ?? '--'}</span>
-                  <span className="text-[var(--tx2)]">Box {zone.boxNumber ?? '--'} · {packingSeconds(zone.timeTakenSec)}</span>
+                  <span className="text-[var(--tx2)]">{packingSeconds(zone.timeTakenSec)}</span>
                 </div>
               )) : <span className="text-xs text-[var(--tx3)]">No zone details</span>}
             </div>

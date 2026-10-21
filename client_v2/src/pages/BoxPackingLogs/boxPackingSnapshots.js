@@ -37,9 +37,11 @@ const saveBlob = (blob, name) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-export async function downloadBoxPackingSnapshotsZip(rows = []) {
+export async function downloadBoxPackingSnapshotsZip(rows = [], onProgress) {
   const images = rows.filter((row) => row.Image || row.image || row.imageUrl || row.incidentImageUrl);
   if (!images.length) return;
+  const reportProgress = typeof onProgress === 'function' ? onProgress : () => {};
+  reportProgress(0);
   // Box IDs repeat between cameras. A page can contain several W1-0008
   // records, so give every selected snapshot its own ZIP entry.
   const zipEntries = images.map((row, index) => {
@@ -48,26 +50,36 @@ export async function downloadBoxPackingSnapshotsZip(rows = []) {
     const name = `${String(index + 1).padStart(3, '0')}-${imageName(row, url)}`;
     return { row, path, name };
   });
-  const apiBase = String(import.meta.env.VITE_BACKEND || '/production-api').replace(/\/$/, '');
-  const response = await fetch(`${apiBase}/uploads/zip`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files: zipEntries.map(({ path, name }) => ({ path, name })) }),
-  });
-  if (response.ok) {
-    saveBlob(await response.blob(), 'box-packing-snapshots.zip');
-    return;
+  // The ZIP endpoint accepts at most 100 files. Older running servers may also
+  // fail while constructing an archive, so assemble one locally when needed.
+  if (!onProgress && zipEntries.length <= 100) {
+    const apiBase = String(import.meta.env.VITE_BACKEND || '/production-api').replace(/\/$/, '');
+    try {
+      const response = await fetch(`${apiBase}/uploads/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: zipEntries.map(({ path, name }) => ({ path, name })) }),
+      });
+      if (response.ok) {
+        saveBlob(await response.blob(), 'box-packing-snapshots.zip');
+        return;
+      }
+    } catch {
+      // The individual snapshot URLs can still be available when ZIP is not.
+    }
   }
-  if (response.status !== 404) throw new Error(`ZIP server returned ${response.status}.`);
 
   const files = {};
-  for (const entry of zipEntries) {
+  for (const [index, entry] of zipEntries.entries()) {
     const { blob, name } = await getImage(entry.row);
     const extension = name.slice(name.lastIndexOf('.'));
     const zipName = entry.name.replace(/\.[^.]+$/, extension);
     files[zipName] = new Uint8Array(await blob.arrayBuffer());
+    reportProgress(((index + 1) / zipEntries.length) * 95);
   }
+  reportProgress(98);
   saveBlob(new Blob([zipSync(files, { level: 0 })], { type: 'application/zip' }), 'box-packing-snapshots.zip');
+  reportProgress(100);
 }
 
 export async function downloadBoxPackingSnapshot(row) {

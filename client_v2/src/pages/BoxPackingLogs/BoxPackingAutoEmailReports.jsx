@@ -36,7 +36,6 @@ function toPreviewRows(rows, reportType, timezone) {
   const normalized = rows.map((row) => {
     const worker = packingWorkerDetails(row);
     return { ...row,
-      boxNumber: worker.boxNumber,
       timeTakenSec: worker.timeTakenSec,
       time: row.recordedAt || (row.time && moment(row.time, 'DD/MM/YYYY hh:mm A', true).isValid() ? moment.tz(row.time, 'DD/MM/YYYY hh:mm A', timezone).toISOString() : row.time),
       cameraName: row.cameraName || row.camera, nvrName: row.nvrName || row.nvr, Image: row.Image || row.image,
@@ -49,7 +48,7 @@ function PreviewPanel({ preview, reportType = 'comparison', timezone = 'Asia/Kol
   const selectedType = REPORT_COLUMNS[preview?.reportType || reportType] ? (preview?.reportType || reportType) : 'total';
   const columns = REPORT_COLUMNS[selectedType];
   const records = preview?.packingRecords || toPreviewRows(preview?.rows || [], selectedType, timezone);
-  const sorting = usePackingSort(records, { key: null, direction: 'asc' }, (row, key) => key === 'Date & time' ? (row[key] === '—' ? null : moment.tz(row[key], 'DD MMM YYYY, hh:mm A', timezone).valueOf()) : row[key]);
+  const sorting = usePackingSort(records, { key: null, direction: 'asc' }, (row, key) => key === 'Date' ? (row[key] === '—' ? null : moment.tz(row[key], 'DD MMM YYYY', timezone).valueOf()) : row[key]);
   const cell = { padding: '10px 12px', borderBottom: '1px solid var(--bd)' };
   return <div style={{ border: '1px solid var(--bd2)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg2)' }}>
     <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--bd)', background: 'linear-gradient(135deg, rgba(59,130,246,.1), rgba(168,85,247,.1))' }}><div style={{ fontWeight: 700 }}>Box Packing report preview · {reportTypeLabel[selectedType]}</div><div style={{ marginTop: 3, fontSize: 11, color: 'var(--tx3)' }}>{preview?.period || preview?.label || 'Current report period'} · {records.length} report rows</div></div>
