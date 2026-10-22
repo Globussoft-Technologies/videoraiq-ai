@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
+import { Loader2, Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import useStreamSlot from '../hooks/useStreamSlot';
 import { streamUrl } from '../lib/stream';
@@ -90,6 +90,9 @@ export default function CameraStream({
   cursor,
 }) {
   const videoRef = useRef(null);
+  const frozenFrameRef = useRef(null);
+  const [hasFrozenFrame, setHasFrozenFrame] = useState(false);
+  const [frozenAt, setFrozenAt] = useState(null);
   const hostRef  = useRef(null);
   const [error,   setError]   = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -171,6 +174,13 @@ export default function CameraStream({
     setError(false);
   }, [enabled, url]);
 
+  useEffect(() => {
+    setHasFrozenFrame(false);
+    setFrozenAt(null);
+    const canvas = frozenFrameRef.current;
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
+  }, [enabled, url]);
+
   /* Don't let one unreachable camera hold the queue hostage. */
   useEffect(() => {
     if (!enabled) return undefined;
@@ -185,13 +195,34 @@ export default function CameraStream({
   const handleStarted = useCallback(() => { setError(false); }, []);
   const handlePlaying = useCallback(() => { setError(false); setPlaying(true); setLastLive(true); markSettled(); }, [markSettled]);
 
+  const handleBuffering = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = frozenFrameRef.current;
+    if (video && canvas && video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+      try {
+        const context = canvas.getContext('2d');
+        if (context) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0);
+          setHasFrozenFrame(true);
+          setFrozenAt(new Date());
+        }
+      } catch { /* Keep an existing frame if this video cannot be copied. */ }
+    }
+    setPlaying(false);
+  }, []);
+
   useHlsPlayer(videoRef, url, {
     enabled,
     onError:   handleError,
     onStarted: handleStarted,
+    onBeforeReconnect: handleBuffering,
   });
 
   const live = enabled && lastLive;
+  const reconnecting = enabled && lastLive && !playing;
+  const statusColor = reconnecting ? '#a78bfa' : live ? '#22c55e' : '#ef4444';
 
   /* Report status upward only once this tile has an actual opinion. While it is
      queued (or the page is paused) the grid keeps the camera's last known
@@ -221,7 +252,8 @@ export default function CameraStream({
       autoPlay
       playsInline
       onPlaying={handlePlaying}
-      onWaiting={() => setPlaying(false)}
+      onWaiting={handleBuffering}
+      onStalled={handleBuffering}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url && enabled ? 'block' : 'none' }}
     />
   );
@@ -229,6 +261,11 @@ export default function CameraStream({
   const streamContent = (
     <>
       {videoElement}
+      <canvas
+        ref={frozenFrameRef}
+        aria-hidden="true"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: enabled && hasFrozenFrame && !playing ? 'block' : 'none', pointerEvents: 'none' }}
+      />
       {children}
     </>
   );
@@ -258,7 +295,14 @@ export default function CameraStream({
       )}
 
       {/* Offline / queued / connecting placeholder */}
-      {(!url || !enabled || error || !playing) && (
+      {enabled && hasFrozenFrame && !playing ? (
+        <div role="status" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 8, background: 'rgba(6,8,13,.65)', color: '#c4b5fd', fontSize: 11 }}>
+            <Loader2 size={18} className="animate-spin" color="#a78bfa" />
+            Reconnecting…
+          </div>
+        </div>
+      ) : (!url || !enabled || error || !playing) && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,.3)' }}>
           {unavailableContent && (!url || error) ? unavailableContent : <><VideoOff size={22} strokeWidth={1.4} />
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.5px' }}>
@@ -282,7 +326,7 @@ export default function CameraStream({
               {label}
             </span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'rgba(255,255,255,.75)', background: 'rgba(6,8,13,.55)', padding: '2px 7px', borderRadius: 4, backdropFilter: 'blur(4px)' }}>
-              {fmtTimestamp(now)}
+              {fmtTimestamp(enabled && hasFrozenFrame && !playing && frozenAt ? frozenAt : now)}
             </span>
           </div>
 
@@ -291,15 +335,15 @@ export default function CameraStream({
             position: 'absolute', top: 8, right: 10,
             display: 'flex', alignItems: 'center', gap: 5,
             fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700,
-            color: live ? '#22c55e' : '#ef4444',
+            color: statusColor,
             background: 'rgba(6,8,13,.65)', padding: '3px 8px', borderRadius: 4, backdropFilter: 'blur(4px)',
             letterSpacing: '.5px',
           }}>
             <span
-              className={live ? 'vq-blink' : ''}
-              style={{ width: 6, height: 6, borderRadius: '50%', background: live ? '#22c55e' : '#ef4444', boxShadow: live ? '0 0 5px #22c55e' : 'none', flexShrink: 0 }}
+              className={live && !reconnecting ? 'vq-blink' : ''}
+              style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, boxShadow: live && !reconnecting ? '0 0 5px #22c55e' : 'none', flexShrink: 0 }}
             />
-            {live ? 'LIVE' : 'OFFLINE'}
+            {reconnecting ? 'RECONNECTING' : live ? 'LIVE' : 'OFFLINE'}
           </div>
 
           {/* Bottom-left: camera name + site */}

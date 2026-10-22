@@ -10,7 +10,7 @@ import getAccessToken from "@/utils/getAccessToken";
 export default function useHlsPlayer(
   videoRef,
   url,
-  { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted } = {}
+  { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted, onBeforeReconnect } = {}
 ) {
   const hlsRef = useRef(null);
   const retryTimerRef = useRef(null);
@@ -19,6 +19,8 @@ export default function useHlsPlayer(
 
   const onErrorRef = useRef(onError);
   const onStartedRef = useRef(onStarted);
+  const onBeforeReconnectRef = useRef(onBeforeReconnect);
+  onBeforeReconnectRef.current = onBeforeReconnect;
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
   useEffect(() => { onStartedRef.current = onStarted; }, [onStarted]);
 
@@ -59,6 +61,8 @@ export default function useHlsPlayer(
 
     const startPlayer = () => {
       if (disposed) return;
+      // Preserve the displayed frame before destroying MSE clears the video.
+      if (hlsRef.current) onBeforeReconnectRef.current?.();
       cleanup();
       const token = getAccessToken();
 
