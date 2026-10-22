@@ -17,6 +17,7 @@ const MODULE_KEYS = {
     "measurementCalibration",
   ],
   solarLineQc: ["solderLine", "solderAlertLogs", "operatorReports"],
+  boxPackingQc: ["boxPacking", "packingAlertLogs", "boxPackingReports"],
 };
 
 const normalizeModuleConfig = (moduleConfig = {}) => Object.fromEntries(
@@ -24,7 +25,9 @@ const normalizeModuleConfig = (moduleConfig = {}) => Object.fromEntries(
     moduleKey,
     Object.fromEntries(pageKeys.map((pageKey) => [
       pageKey,
-      moduleConfig?.[moduleKey]?.[pageKey] === true,
+      moduleKey === "boxPackingQc"
+        ? moduleConfig?.[moduleKey]?.[pageKey] !== false
+        : moduleConfig?.[moduleKey]?.[pageKey] === true,
     ])),
   ]),
 );

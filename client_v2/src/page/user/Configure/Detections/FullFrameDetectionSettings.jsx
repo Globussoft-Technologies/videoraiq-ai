@@ -31,11 +31,11 @@ import {
  */
 export const FULL_FRAME_CONFIGS = {
   blurredCameraDetectionSettings: {
-    title: 'Blurred Camera Detection',
-    subtitle: 'Full-frame monitoring for sustained camera focus and image-clarity loss',
+    title: 'Camera Tampering Detection',
+    subtitle: 'Full-frame monitoring for a covered, blurred or tampered camera',
     icon: ScanEye,
     iconColor: '#0ea5e9',
-    namePrefix: 'Blurred Camera',
+    namePrefix: 'Camera Tampering',
     incidentType: 'blurredCameraDetection',
     defaults: {
       trigger_notification: true,

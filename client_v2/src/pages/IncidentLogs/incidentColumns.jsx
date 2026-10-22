@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { Activity, AlertTriangle, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { tamperTypeOf } from './incidentExport';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -276,23 +277,9 @@ export const buildColumns = (config, { onSort, onPreview }) => {
 
   if (config.showBlurredCameraFields) {
     cols.push({
-      accessorKey: 'isBlurred',
-      header: 'Is Blurred',
-      cell: ({ row }) => {
-        const value = row.original.isBlurred;
-        if (typeof value !== 'boolean') return <span className={styles.text}>--</span>;
-        return (
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              value
-                ? 'bg-[var(--crit)]/15 text-[var(--crit)]'
-                : 'bg-[var(--ok)]/15 text-[var(--ok)]'
-            }`}
-          >
-            {value ? 'True' : 'False'}
-          </span>
-        );
-      },
+      accessorKey: 'tamperType',
+      header: 'Tamper Type',
+      cell: ({ row }) => <span className={styles.text}>{tamperTypeOf(row.original)}</span>,
     });
   }
 
@@ -493,8 +480,8 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showBlurredCameraFields && (
           <IncidentCardRow
             icon={Activity}
-            label="Is Blurred"
-            value={typeof row.isBlurred === 'boolean' ? (row.isBlurred ? 'True' : 'False') : '--'}
+            label="Tamper Type"
+            value={tamperTypeOf(row)}
           />
         )}
         {config.showIndustrialFields && (

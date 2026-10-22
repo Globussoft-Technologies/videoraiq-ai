@@ -63,7 +63,7 @@ export const ENGINE_LABEL_MAP = {
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
-  blurredCameraDetectionSettings: 'Blurred Camera Detection',
+  blurredCameraDetectionSettings: 'Camera Tampering Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
 };

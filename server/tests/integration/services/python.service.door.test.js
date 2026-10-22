@@ -1,8 +1,9 @@
 /**
- * Door open/close detection, Node -> DS (DS door contract §3): the detector
- * sent on POST /stream and /detectors/update, the checks Node makes before
- * calling DS, and the update -> start fallback when DS says door detection
- * isn't running. axios, NVR lookup and host resolution are mocked.
+ * Door open/close detection, Node -> DS (DS door contract §3, DS's live start
+ * payload of 2026-10-22): the detector sent on POST /stream and
+ * /detectors/update, the stop, the checks Node makes before calling DS, and
+ * the update -> start fallback when DS says door detection isn't running.
+ * axios, NVR lookup and host resolution are mocked.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -23,30 +24,43 @@ vi.mock("../../../utils/adminEndpoints.js", () => ({
 const axios = (await import("axios")).default;
 const { default: PythonService, buildDoorDetector } = await import("../../../services/python.service.js");
 
-const door = [[88, 75], [1081, 18], [1152, 1048], [246, 1063]];
-const configs = [{ name: "Main Door", threshold_sec: 300, telegramChatIds: ["x"] }];
+const door = [[631, 216], [773, 193], [811, 435], [672, 445]];
+const configs = [{ name: "Stock Door", threshold_sec: 300, telegramChatIds: ["x"] }];
 const settings = { door_alert_mode: "closed", trigger_notification: false };
 const doorSent = () => axios.post.mock.calls.at(-1)[1].detectors.find((d) => d.name === "doorDetectionSettings");
 
 beforeEach(() => vi.clearAllMocks());
 
 describe("door detector sent to DS", () => {
-  it("POST /stream carries the contract's fields, points unchanged", async () => {
+  it("POST /stream sends DS's start payload, points unchanged", async () => {
     axios.post.mockResolvedValueOnce({ data: { status: "ok" } });
     await PythonService.startNewDetection({
       camera_id: "c1", nvr_id: "n1", admin_id: "a1", stream_url: "https://stream.test/x.m3u8",
-      detection_modes: ["door"], zones: [door], zone_configs: configs, severity: "high", confidence_thresholds: settings,
+      detection_modes: ["door"], zones: [door], zone_configs: configs, severity: "moderate",
+      confidence_thresholds: { door_alert_mode: "open", trigger_notification: true },
     });
     expect(axios.post.mock.calls[0][0]).toBe("http://ds.test/stream");
-    expect(axios.post.mock.calls[0][1].stream_url).toBe("https://stream.test/x.m3u8");
-    expect(doorSent()).toEqual({
-      name: "doorDetectionSettings",
-      zones: [door],
-      zone_configs: [{ name: "Main Door", threshold_sec: 300 }],
-      door_alert_mode: "closed",
-      severity: "high",
-      trigger_notification: false,
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "c1",
+      nvr_id: "n1",
+      admin_id: "a1",
+      stream_url: "https://stream.test/x.m3u8",
+      detectors: [{
+        name: "doorDetectionSettings",
+        zones: [door],
+        zone_configs: [{ name: "Stock Door", threshold_sec: 300 }],
+        door_alert_mode: "open",
+        severity: "moderate",
+        trigger_notification: true,
+      }],
     });
+  });
+
+  it("POST /stream/stop stops only door detection", async () => {
+    axios.post.mockResolvedValueOnce({ data: { status: "ok" } });
+    await PythonService.stopNewDetection("c1", "n1", ["door"], "a1");
+    expect(axios.post.mock.calls[0][0]).toBe("http://ds.test/stream/stop");
+    expect(axios.post.mock.calls[0][1]).toEqual({ camera_id: "c1", nvr_id: "n1", detectors: ["doorDetectionSettings"] });
   });
 
   it("POST /detectors/update sends the same complete door object", async () => {
@@ -94,6 +108,6 @@ describe("door detector sent to DS", () => {
       channel, "a1", "doorDetectionSettings", [door], [], configs, 0, "moderate", [], settings, {}, {}, {},
     );
     expect(axios.post.mock.calls.map(([url]) => url)).toEqual(["http://ds.test/detectors/update", "http://ds.test/stream"]);
-    expect(doorSent().door_alert_mode).toBe("closed");
+    expect(doorSent()).toMatchObject({ door_alert_mode: "closed", trigger_notification: false });
   });
 });

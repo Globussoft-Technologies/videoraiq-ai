@@ -76,7 +76,7 @@ const MODULE_LABELS = {
   personFallSickLogs: 'Person Fall/Sick Logs',
   workingAtHeightLogs: 'Working at Height Logs',
   stockCountingLogs: 'Loading/Unloading Stock Logs',
-  blurredCameraLogs: 'Blurred Camera Logs',
+  blurredCameraLogs: 'Camera Tampering Logs',
   deskSolarShoulderLogs: 'Solder Line (Solar Line QC)',
   oilLeakageLogs: 'Oil Leakage Logs',
   equipmentOilLeakageLogs: 'Equipment Oil Leakage Logs',

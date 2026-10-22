@@ -449,7 +449,7 @@ describe("PythonService.startNewDetection", () => {
       admin_id: "blur-admin",
       stream_url: "rtsp://blur.test/stream",
       detectors: [{
-        name: "blurredCameraDetectionSettings",
+        name: "cameraTamperingDetectionSettings",
         severity: "high",
         trigger_notification: true,
       }],

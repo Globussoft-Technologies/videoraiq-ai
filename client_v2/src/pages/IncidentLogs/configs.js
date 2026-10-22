@@ -328,9 +328,9 @@ export const STOCK_COUNTING_CONFIG = {
 export const BLURRED_CAMERA_CONFIG = {
   ...industrialDetectionConfig({
     endpoint: '/incidents/logs/blurred-camera-detection',
-    title: 'Blurred Camera Detection Logs',
-    fileName: 'blurred_camera_detection_logs',
-    sheetName: 'Blurred Camera Logs',
+    title: 'Camera Tampering Detection Logs',
+    fileName: 'camera_tampering_detection_logs',
+    sheetName: 'Camera Tampering Logs',
     storagePrefix: 'blurred_camera',
     permissionKey: 'blurredCameraLogs',
   }),

@@ -2,8 +2,9 @@
  * Door open/close incidents, DS -> Node (DS door contract §5): one incident
  * per door per episode. The first alert creates it; repeat alerts and the
  * resolved post update it; a retried post changes and notifies nothing.
- * Episodes are keyed by eventId, or without one by camera + door + stateSince.
- * v2 and v1 createIncidents; socket and alert fan-out mocked.
+ * DS sends no eventId, so episodes are keyed by camera + door + stateSince
+ * (an eventId wins if DS ever adds one). v2 and v1 createIncidents; socket
+ * and alert fan-out mocked.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCollections, connectMongo, disconnectMongo } from "../dbSetup.js";
@@ -36,7 +37,7 @@ beforeEach(async () => {
   nvr = await NVR.create({ userId: "door-u", nvrName: "NVR", brand: "hikvision", domain: "http://nvr.test", location: "HQ", localNvrId: "door-nvr" });
   const setting = await DoorDetectionSetting.create({
     userId: "door-u", settingType: "doorDetectionSettings", name: "Door", enabled: true,
-    settings: { zone_configs: [{ name: "Main Door", threshold_sec: 300 }] },
+    settings: { zone_configs: [{ name: "Stock Door", threshold_sec: 300 }] },
   });
   channel = await Channel.create({
     nvrId: nvr._id, userId: "door-u", streamingPath: "/s", localChannelId: "1", name: "Lobby", isAdded: true,
@@ -44,15 +45,15 @@ beforeEach(async () => {
   });
 });
 
-// The contract's alert/resolved posts (§5.1 / §5.2), with overrides.
+// DS's live alert post (2026-10-22): no eventId, Image an Oracle storage key.
+const image = "/oracle/uploads/images/door-open-close/1792649709973-0a4085c0-doorDetection_cam_20261022_114511.jpg";
 const post = (extra = {}) => ({
   incidentType: "doorDetection", incidentName: "Door Open Too Long",
-  description: "Main Door has been open for 5 min (alert after 5 min).", timeOfIncident: "2026-10-16T04:35:00Z",
+  description: "Stock Door has been open for 5 min (alert after 5 min).", timeOfIncident: "2026-10-22T06:10:11Z",
   videoLink: "", cameraId: String(channel._id), nvrId: String(nvr._id), channelId: String(channel._id), adminId: String(admin._id),
-  Image: "uploads/images/door_1.jpg", zone: "Main Door", zoneName: "Main Door", type: "gauge", severity: "moderate",
+  Image: image, zone: "Stock Door", zoneName: "Stock Door", type: "gauge", severity: "moderate",
   alertThreshold: 400, triggerNotification: true, count: 1, doorStatus: "open", isResolved: false,
-  stateSince: "2026-10-16T04:30:00Z", thresholdSec: 300, durationSec: 300, alertCount: 1,
-  eventId: "door_lobby_0_1792125000",
+  stateSince: "2026-10-22T06:05:11Z", thresholdSec: 300, durationSec: 300, alertCount: 1,
   ...extra,
 });
 const send = async (body, Service = V2) => {
@@ -60,18 +61,21 @@ const send = async (body, Service = V2) => {
   await Service.createIncidents(req, res, next);
   return payload(res);
 };
-const repeat = { alertCount: 2, durationSec: 600, description: "Main Door has been open for 10 min (alert after 5 min).", timeOfIncident: "2026-10-16T04:40:00Z" };
+const repeat = { alertCount: 2, durationSec: 600, description: "Stock Door has been open for 10 min (alert after 5 min).", timeOfIncident: "2026-10-22T06:15:11Z" };
 const resolved = {
   isResolved: true, alertCount: 2, durationSec: 750, triggerNotification: false, incidentName: "Door Open Alert Resolved",
-  description: "Main Door was open for 12 min 30 s and is now closed.", timeOfIncident: "2026-10-16T04:42:30Z",
+  description: "Stock Door was open for 12 min 30 s and is now closed.", timeOfIncident: "2026-10-22T06:17:41Z",
 };
 
 describe("one incident per door per episode (v2)", () => {
   it("first alert creates the incident and notifies", async () => {
     await send(post());
     const [incident] = await DoorStatusIncident.find().lean();
-    expect(incident).toMatchObject({ eventId: "door_lobby_0_1792125000", doorStatus: "open", zoneName: "Main Door", alertCount: 1, isResolved: false, thresholdSec: 300 });
-    expect(incident.lastAlertAt.toISOString()).toBe("2026-10-16T04:35:00.000Z");
+    expect(incident).toMatchObject({
+      eventId: `${channel._id}:Stock Door:2026-10-22T06:05:11Z`, Image: image,
+      doorStatus: "open", zoneName: "Stock Door", alertCount: 1, isResolved: false, thresholdSec: 300,
+    });
+    expect(incident.lastAlertAt.toISOString()).toBe("2026-10-22T06:10:11.000Z");
     expect(alertV2).toHaveBeenCalledTimes(1);
   });
 
@@ -92,19 +96,27 @@ describe("one incident per door per episode (v2)", () => {
     await send(post(resolved));
     const [incident] = await DoorStatusIncident.find().lean();
     expect(incident).toMatchObject({ isResolved: true, durationSec: 750, alertCount: 2, incidentName: "Door Open Alert Resolved", resolved: false });
-    expect(incident.stateEndedAt.toISOString()).toBe("2026-10-16T04:42:30.000Z");
-    expect(incident.timeOfIncident.toISOString()).toBe("2026-10-16T04:35:00.000Z");
+    expect(incident.stateEndedAt.toISOString()).toBe("2026-10-22T06:17:41.000Z");
+    expect(incident.timeOfIncident.toISOString()).toBe("2026-10-22T06:10:11.000Z");
     expect(alertV2).toHaveBeenCalledTimes(2);
     expect((await send(post(resolved))).data.duplicate).toBe(true);
   });
 
-  it("without an eventId, groups by camera + door + stateSince; another door or episode is its own incident", async () => {
-    await send(post({ eventId: undefined }));
-    await send(post({ eventId: undefined, ...repeat }));
-    await send(post({ eventId: undefined, zone: "Back Door", zoneName: "Back Door" }));
-    await send(post({ eventId: undefined, stateSince: "2026-10-16T06:00:00Z" }));
+  it("groups by camera + door + stateSince; another door or episode is its own incident", async () => {
+    await send(post());
+    await send(post(repeat));
+    await send(post({ zone: "Back Door", zoneName: "Back Door" }));
+    await send(post({ stateSince: "2026-10-22T08:00:00Z" }));
     const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
-    expect(incidents.map((i) => [i.zoneName, i.alertCount])).toEqual([["Main Door", 2], ["Back Door", 1], ["Main Door", 1]]);
+    expect(incidents.map((i) => [i.zoneName, i.alertCount])).toEqual([["Stock Door", 2], ["Back Door", 1], ["Stock Door", 1]]);
+  });
+
+  it("keys on an eventId if DS sends one", async () => {
+    await send(post({ eventId: "door_stock_0_1792649111" }));
+    await send(post({ eventId: "door_stock_0_1792649111", ...repeat, stateSince: "2026-10-22T06:05:12Z" }));
+    const incidents = await DoorStatusIncident.find().lean();
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]).toMatchObject({ eventId: "door_stock_0_1792649111", alertCount: 2 });
   });
 
   it("accepts DS's uppercase status too", async () => {

@@ -215,7 +215,8 @@ const buildFireSmokeDetector = (
 });
 
 const buildBlurredCameraDetector = (severity, settings = {}) => ({
-  name: "blurredCameraDetectionSettings",
+  // DS's name since its 2026-10-22 rename (was blurredCameraDetectionSettings).
+  name: "cameraTamperingDetectionSettings",
   severity: severity ?? "high",
   trigger_notification: settings.trigger_notification ?? true,
 });

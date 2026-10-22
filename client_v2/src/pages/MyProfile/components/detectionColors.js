@@ -60,7 +60,7 @@ const SHORT_LABELS = {
   unauthorizedAnimalEntryDetectionSettings: 'Animal Entry',
   spillsDirtyMessyAreasDetectionSettings: 'Messy Area',
   loadingUnloadingStockCountingSettings: 'Stock Counting',
-  blurredCameraDetectionSettings: 'Blurred Camera',
+  blurredCameraDetectionSettings: 'Camera Tampering',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder',
   boxPackingDetectionSettings: 'Box Packing',
   lightingVisibilitySiteConditionsDetectionSettings: 'Lighting / Visibility / Site Conditions Detection',

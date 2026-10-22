@@ -81,7 +81,7 @@ const fetchAllForExport = async (config, params) => {
       count: item.count ?? '--',
       alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
-      isBlurred: typeof item.isBlurred === 'boolean' ? (item.isBlurred ? 'True' : 'False') : '--',
+      tamperType: tamperTypeOf(item),
       evidenceScore: evidenceScoreStr,
       stockMovement: item.stockMovement || '--',
       stockCountBefore: item.stockCountBefore ?? '--',
@@ -136,7 +136,7 @@ const buildExportColumns = (config) => {
   }
 
   if (config.showBlurredCameraFields) {
-    cols.push({ key: 'isBlurred', label: 'Is Blurred' });
+    cols.push({ key: 'tamperType', label: 'Tamper Type' });
   }
 
   if (config.showLightingFields) {
@@ -347,7 +347,7 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     if (config.showBlurredCameraFields) {
-      details.push(['Is Blurred', 'isBlurred']);
+      details.push(['Tamper Type', 'tamperType']);
     }
     if (config.showDoorFields) {
       details.push(
@@ -527,3 +527,7 @@ export const handleIncidentExport = async (format, config, params) => {
   if (format === 'pdf') await exportToPDF(config, params);
   if (format === 'pdf-grid') await exportToGridPDF(config, params);
 };
+
+/** Camera tampering kind, e.g. "covered"; an older blur-only incident reads as "blurred". */
+export const tamperTypeOf = (item) =>
+  item?.tamperType || (item?.isBlurred === true ? 'blurred' : item?.isBlurred === false ? 'cleared' : '--');

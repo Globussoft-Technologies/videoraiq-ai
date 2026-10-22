@@ -192,7 +192,8 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
           let mailResponse = await MailResponse.fireSmokeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "personFallSickDetection") {
           let mailResponse = await MailResponse.personFallSickDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
-        } else if (INDUSTRIAL_INCIDENT_TYPES.includes(detectionType)) {
+        // Camera tampering (stored as blurredCameraDetection) had no email; it uses the generic one.
+        } else if (INDUSTRIAL_INCIDENT_TYPES.includes(detectionType) || detectionType === "blurredCameraDetection") {
           let mailResponse = await MailResponse.industrialDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {
           let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)

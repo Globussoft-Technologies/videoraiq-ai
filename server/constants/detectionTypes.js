@@ -57,7 +57,7 @@ export const DETECTION_TYPES = {
   unauthorizedAnimalEntryDetectionSettings: "Unauthorized Animal Entry Detection",
   spillsDirtyMessyAreasDetectionSettings: "Spills, Dirty or Messy Areas Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
-  blurredCameraDetectionSettings: "Blurred Camera Detection",
+  blurredCameraDetectionSettings: "Camera Tampering Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
   hygieneSanitationFoodSafetyDetectionSettings: "Hygiene, Sanitation & Food Safety Detection",
@@ -209,6 +209,11 @@ export const TYPE_MAP = {
   lightingVisibilitySiteConditionsDetectionSettings: "lightingVisibilitySiteConditionsDetection",
 };
 
+// Incident types DS posts under a newer name than the one we store.
+export const INCIDENT_TYPE_ALIASES = Object.freeze({
+  cameraTamperingDetection: "blurredCameraDetection",
+});
+
 export const DETECTION_MODES_MAP = {
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
@@ -315,7 +320,8 @@ export const DS_DETECTOR_BY_MODE = {
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
-  blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
+  // DS renamed it Camera Tampering (2026-10-22); our stored key stays.
+  blurredCameraDetectionSettings: "cameraTamperingDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
   hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
@@ -395,7 +401,8 @@ export const DS_LOGIC_BY_MODE = {
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
-  blurredCameraDetectionSettings: "blurredCameraDetectionSettings",
+  // DS renamed it Camera Tampering (2026-10-22); our stored key stays.
+  blurredCameraDetectionSettings: "cameraTamperingDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
   boxPackingDetectionSettings: "boxPackingDetectionSettings",
   hygieneSanitationFoodSafetyDetectionSettings: "hygieneSanitationFoodSafetyDetectionSettings",
@@ -1658,7 +1665,7 @@ export const blurredCameraDetectionSettings = {
   channelId: ["664f89e8a9d345001ee326b1"],
   NVRId: "664f895da9d345001ee326a9",
   settingType: "blurredCameraDetectionSettings",
-  name: "Blurred Camera Detection",
+  name: "Camera Tampering Detection",
   enabled: true,
   alerts: [],
   settings: {

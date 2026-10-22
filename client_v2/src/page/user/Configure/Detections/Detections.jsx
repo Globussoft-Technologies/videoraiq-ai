@@ -898,7 +898,7 @@ export default function Detections() {
             : detectionType === 'loadingUnloadingStockCountingSettings'
             ? 'loading unloading stock counting inventory movement'
             : detectionType === 'blurredCameraDetectionSettings'
-            ? 'blurred camera blur image clarity focus obstruction'
+            ? 'camera tampering covered blocked blurred camera blur image clarity focus obstruction'
             : '';
         const haystack = [
           m.name,
@@ -1145,7 +1145,7 @@ export default function Detections() {
           createResponse;
 
         if (!createdSetting?._id) {
-          throw new Error('Blurred Camera Detection settings could not be created.');
+          throw new Error('Camera Tampering Detection settings could not be created.');
         }
 
         existingEntry = { id: createdSetting, enabled: false };

@@ -30,7 +30,7 @@ const incidentDefinitions = [
   ['waste-disposal', 'getSandDustWasteScrapDisposalDetectionLogs', [field('count', 'Count', 'number'), field('alertThreshold', 'Alert Threshold', 'number')]],
   ['animal-entry', 'getUnauthorizedAnimalEntryDetectionLogs', [field('count', 'Count', 'number'), field('alertThreshold', 'Alert Threshold', 'number')]],
   ['messy-area', 'getSpillsDirtyMessyAreasDetectionLogs', [field('count', 'Count', 'number'), field('alertThreshold', 'Alert Threshold', 'number')]],
-  ['blurred-camera', 'getBlurredCameraDetectionLogs', [field('isBlurred', 'Blurred', 'boolean'), field('evidenceScore', 'Evidence Score', 'number')]],
+  ['blurred-camera', 'getBlurredCameraDetectionLogs', [field('tamperType', 'Tamper Type'), field('isBlurred', 'Blurred', 'boolean'), field('evidenceScore', 'Evidence Score', 'number')]],
 ];
 
 const dynamicLogs = new Map(incidentDefinitions.map(([key, handler, extraFields]) => [key, {

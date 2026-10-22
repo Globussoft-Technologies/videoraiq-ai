@@ -298,6 +298,7 @@ const IncidentLogsPage = ({ config }) => {
         isFallDetected: item.isFallDetected,
         evidenceScore: item.evidenceScore,
         isBlurred: item.isBlurred,
+        tamperType: item.tamperType,
         stockMovement: item.stockMovement,
         stockCountBefore: item.stockCountBefore,
         stockCountAfter: item.stockCountAfter,

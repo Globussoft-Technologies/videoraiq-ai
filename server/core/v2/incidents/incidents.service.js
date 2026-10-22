@@ -24,6 +24,7 @@ import {
 } from "../../../utils/vehicleTagging.js";
 import {
   ALERT_FEED_EXCLUDED_TYPES,
+  INCIDENT_TYPE_ALIASES,
   INDUSTRIAL_INCIDENT_TYPES,
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
@@ -374,6 +375,9 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
+      // A type DS renamed is stored under our existing one (e.g. camera tampering).
+      const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
+      if (aliasedType) req.body.incidentType = aliasedType;
       const hygieneValidation = incidentsValidate.validateHygieneIncident(req.body);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.validationFailResp(hygieneValidation.error.message, "Validation Failed!"));
@@ -835,6 +839,7 @@ class IncidentsService {
       } else if (incidentType === "blurredCameraDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;
+        newIncident.tamperType = req?.body?.tamperType;
         newIncident.isBlurred = req?.body?.isBlurred;
         newIncident.count = req?.body?.count ?? 1;
         newIncident.alertThreshold = req?.body?.alertThreshold ?? 80;

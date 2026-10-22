@@ -673,6 +673,8 @@ const LoadingUnloadingStockCountingIncident = Incident.discriminator(
 );
 
 const BlurredCameraDetectionSchema = new Schema({
+  // Camera tampering kind from DS, e.g. "covered".
+  tamperType: { type: String, default: undefined },
   isBlurred: { type: Boolean, default: undefined },
   count: { type: Number, default: 1, min: 0 },
   alertThreshold: { type: Number, default: 80 },

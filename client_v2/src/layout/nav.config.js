@@ -117,7 +117,7 @@ const stevinrockLogItems = [
       { key: 'stock-counting-analytics', label: 'Analytics', path: 'logs/stock-counting/analytics', icon: BarChart3 },
     ],
   },
-  { key: 'blurred-camera', label: 'Blurred Camera Logs', path: 'logs/blurred-camera', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'blurredCameraLogs', logsConfigKey: 'blurredCameraLogs' },
+  { key: 'blurred-camera', label: 'Camera Tampering Logs', path: 'logs/blurred-camera', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'blurredCameraLogs', logsConfigKey: 'blurredCameraLogs' },
 ];
 
 /**
@@ -318,7 +318,7 @@ export const VIEW_META = {
   'box-packing-alerts': { title: 'Box Packing Alert Logs', sub: 'Packing alerts, count variance and confirmation evidence' },
   'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, worker comparison and review summaries' },
   'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
-  'blurred-camera': { title: 'Blurred Camera Logs', sub: 'Camera focus and image-clarity incidents' },
+  'blurred-camera': { title: 'Camera Tampering Logs', sub: 'Covered, blurred or tampered camera incidents' },
   'door-detection': { title: 'Door Logs', sub: 'Door open/closed duration detections' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   'hygiene-analytics': { title: 'Hygiene & Food Safety', sub: 'Risk trends, incident evidence and period reports' },

@@ -44,7 +44,7 @@ export const DETECTION_TYPES = {
   equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
-  blurredCameraDetectionSettings: "Blurred Camera Detection",
+  blurredCameraDetectionSettings: "Camera Tampering Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
 }
@@ -86,7 +86,7 @@ export const DETECTION_TYPES2 = {
   equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
   vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
-  blurredCameraDetectionSettings: "Blurred Camera Detection",
+  blurredCameraDetectionSettings: "Camera Tampering Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
 }
@@ -124,7 +124,7 @@ export const DETECTION_DESCRIPTIONS = {
   equipmentOilLeakageDetectionSettings: "Oil leakage from industrial equipment",
   vehicleFuelOilLeakageDetectionSettings: "Fuel or oil leakage from vehicles",
   loadingUnloadingStockCountingSettings: "Track stock quantities during loading and unloading",
-  blurredCameraDetectionSettings: "Detect sustained loss of camera image clarity",
+  blurredCameraDetectionSettings: "Detect a covered, blurred or tampered camera view",
   deskSolarShoulderDetectionSettings: "Alert when a solder-line workstation is left empty",
   boxPackingDetectionSettings: "Track box packing at the packing desk and seats",
 };
