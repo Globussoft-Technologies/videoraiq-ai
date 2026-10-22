@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
+import { useTimezone } from '@/context/TimezoneContext';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { useLogsConfig } from '@/context/LogsConfigContext';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
@@ -38,7 +40,7 @@ const statusMeta = {
   review: { label: 'NEEDS REVIEW', color: WARN, icon: ShieldAlert },
 };
 
-const formatTime = (value) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }).format(new Date(value));
+const formatTime = (value) => new Intl.DateTimeFormat('en-IN', { timeZone: getConfiguredTimezone(), hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }).format(new Date(value));
 const cameraNameOf = (item) => item?.channelData?.customName || item?.channelData?.name || item?.cameraName || item?.camera || item?.channelName || 'Packing Camera';
 const nvrNameOf = (item) => item?.nvrData?.nvrName || item?.nvrData?.name || item?.nvrName || item?.nvr || item?.channelData?.nvrName || 'NVR';
 
@@ -208,7 +210,7 @@ function HourlyPackingLog({ rows, dateRange }) {
     }));
     downloadBoxPackingXlsx(rows, {
       title: `Box Packing ${period.label} Activity`, filenamePrefix: 'box-packing-activity-report',
-      reportType: 'activity', timezone: PACKING_TIMEZONE,
+      reportType: 'activity', timezone: getConfiguredTimezone(),
       periodLabel: `${dateRange.startDate} – ${dateRange.endDate}`,
       columns: [periodColumn, 'Boxes packed', 'Average time to complete', 'Total workers'], records,
     });
@@ -234,15 +236,14 @@ function HourlyPackingLog({ rows, dateRange }) {
   </Panel>;
 }
 
-const PACKING_TIMEZONE = 'Asia/Kolkata';
 
 function formatPackingHour(hour) {
   return `${String(hour).padStart(2, '0')}:00`;
 }
 
 function packingPeriod(range) {
-  const start = moment.tz(range?.startDate, PACKING_TIMEZONE).startOf('day');
-  const end = moment.tz(range?.endDate, PACKING_TIMEZONE).startOf('day');
+  const start = moment.tz(range?.startDate, getConfiguredTimezone()).startOf('day');
+  const end = moment.tz(range?.endDate, getConfiguredTimezone()).startOf('day');
   const days = Math.max(1, end.diff(start, 'days') + 1);
   if (days <= 1) return { unit: 'hour', label: 'hour', tableLabel: 'HOUR' };
   if (days <= 31) return { unit: 'day', label: 'day', tableLabel: 'DAY' };
@@ -251,7 +252,7 @@ function packingPeriod(range) {
 }
 
 function packingBucket(value, period) {
-  const date = moment.tz(value, PACKING_TIMEZONE);
+  const date = moment.tz(value, getConfiguredTimezone());
   if (period.unit === 'hour') return { key: date.format('HH'), label: formatPackingHour(date.hour()) };
   if (period.unit === 'day') return { key: date.format('YYYY-MM-DD'), label: date.format('DD MMM') };
   if (period.unit === 'month') return { key: date.format('YYYY-MM'), label: date.format('MMM YYYY') };
@@ -484,7 +485,7 @@ function RecentPackingActivity({ rows, onOpen, onOpenAlerts }) {
         <div style={{ flex: '2 1 230px', minWidth: 0 }}>
           <div style={label}>Box ID</div><div style={{ marginTop: 5, fontFamily: 'var(--disp)', fontSize: 23, fontWeight: 800, overflowWrap: 'anywhere' }}>{row.boxId}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '15px 12px', marginTop: 17 }}>
-            {[['Completed by', row.completedBy], ['Start time', packingStartTimeValue(row, PACKING_TIMEZONE)], ['Time to complete', row.timeTakenSec > 0 ? formatPackingDuration(row.timeTakenSec) : 'Not available'], ['End time', packingEndTimeValue(row, PACKING_TIMEZONE)]].map(([name, value]) => <div key={name} style={{ minWidth: 0, padding: '10px 11px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}><div style={label}>{name}</div><div style={{ ...mono, fontSize: 13, fontWeight: 600, lineHeight: 1.5, marginTop: 5, overflowWrap: 'anywhere' }}>{value ?? '—'}</div></div>)}
+            {[['Completed by', row.completedBy], ['Start time', packingStartTimeValue(row, getConfiguredTimezone())], ['Time to complete', row.timeTakenSec > 0 ? formatPackingDuration(row.timeTakenSec) : 'Not available'], ['End time', packingEndTimeValue(row, getConfiguredTimezone())]].map(([name, value]) => <div key={name} style={{ minWidth: 0, padding: '10px 11px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}><div style={label}>{name}</div><div style={{ ...mono, fontSize: 13, fontWeight: 600, lineHeight: 1.5, marginTop: 5, overflowWrap: 'anywhere' }}>{value ?? '—'}</div></div>)}
           </div>
         </div>
       </div>;
@@ -615,9 +616,9 @@ function PackingOverview({ rows: allRows, streamChannels, activeCameraIndex, set
               <td style={{ padding: '8px 14px', fontFamily: 'var(--disp)', fontWeight: 600 }}>{row.completedBy}</td>
               <td style={{ padding: '8px 14px' }}>{nvrName}</td>
               <td style={{ padding: '8px 14px' }}>{cameraName}</td>
-              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingDateValue(row, PACKING_TIMEZONE)}</td>
-              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingStartTimeValue(row, PACKING_TIMEZONE)}</td>
-              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingEndTimeValue(row, PACKING_TIMEZONE)}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingDateValue(row, getConfiguredTimezone())}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingStartTimeValue(row, getConfiguredTimezone())}</td>
+              <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{packingEndTimeValue(row, getConfiguredTimezone())}</td>
               <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>{formatPackingDuration(row.timeTakenSec)}</td>
             </tr>;
           }) : <tr><td colSpan={9} style={{ padding: 18, textAlign: 'center', color: 'var(--tx3)' }}>No packing activity in this period.</td></tr>}</tbody>
@@ -660,12 +661,22 @@ export default function BoxPackingLogs() {
   const [query, setQuery] = useState('');
   const [grid, setGrid] = useState(true);
   const [analytics, setAnalytics] = useState(isAnalyticsRoute);
-  const today = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
+  const { timezone } = useTimezone();
+  const today = moment.tz(timezone).format('YYYY-MM-DD');
   const [dateRange, setDateRange] = useState({ startDate: today, endDate: today });
+  const previousTimezone = useRef(timezone);
+  useEffect(() => {
+    if (previousTimezone.current !== timezone) {
+      const previousToday = moment.tz(previousTimezone.current).format('YYYY-MM-DD');
+      setDateRange((current) => current.startDate === previousToday && current.endDate === previousToday
+        ? { startDate: today, endDate: today } : current);
+      previousTimezone.current = timezone;
+    }
+  }, [timezone, today]);
   const [timeRange, setTimeRange] = useState({ fromTime: '', toTime: '' });
   const selectedPeriodLabel = dateRange.startDate === dateRange.endDate
-    ? moment.tz(dateRange.startDate, 'Asia/Kolkata').format('DD MMM YYYY')
-    : `${moment.tz(dateRange.startDate, 'Asia/Kolkata').format('DD MMM YYYY')} – ${moment.tz(dateRange.endDate, 'Asia/Kolkata').format('DD MMM YYYY')}`;
+    ? moment.tz(dateRange.startDate, timezone).format('DD MMM YYYY')
+    : `${moment.tz(dateRange.startDate, timezone).format('DD MMM YYYY')} – ${moment.tz(dateRange.endDate, timezone).format('DD MMM YYYY')}`;
   const [analyticsRange, setAnalyticsRange] = useState({ startDate: today, endDate: today });
   const [analyticsRefresh, setAnalyticsRefresh] = useState(0);
   const [analyticsFiltersOpen, setAnalyticsFiltersOpen] = useState(false);
@@ -691,7 +702,7 @@ export default function BoxPackingLogs() {
     const stop = watchPackingIncidents({
       socket, adminId: user?.adminId,
       isLive: () => {
-        const now = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
+        const now = moment.tz(timezone).format('YYYY-MM-DD');
         return dateRange.startDate <= now && dateRange.endDate >= now;
       },
       refresh: () => fetchIncidentLogs({ endpoint: BOX_PACKING_CONFIG.endpoint, skip: 0, limit: 500, startDate: dateRange.startDate, endDate: dateRange.endDate, fromTime: timeRange.fromTime && timeRange.toTime ? timeRange.fromTime : '', toTime: timeRange.fromTime && timeRange.toTime ? timeRange.toTime : '', sortField: 'timeOfIncident', sortOrder: 'desc' })
@@ -713,7 +724,7 @@ export default function BoxPackingLogs() {
       .finally(() => { if (active) setDbLoading(false); }),
     });
     return () => { active = false; stop(); };
-  }, [dateRange.startDate, dateRange.endDate, timeRange.fromTime, timeRange.toTime, socket, user?.adminId]);
+  }, [dateRange.startDate, dateRange.endDate, timeRange.fromTime, timeRange.toTime, socket, user?.adminId, timezone]);
   useEffect(() => {
     let active = true;
     Promise.allSettled([getChannels({ limit: 500, engines: 'boxPackingDetectionSettings' }), getNvrs(0, 500)])
@@ -767,7 +778,7 @@ export default function BoxPackingLogs() {
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%', gap: 12, padding: '5px 0' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999, border: `1px solid ${OK}66`, background: `${OK}1a` }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: OK }} /><span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: OK }}>LIVE</span></span><PresetDateRangePicker startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /></div>
     </div>
     <div style={{ width: '100%', padding: 'clamp(12px, 3vw, 22px)', boxSizing: 'border-box' }}><div style={{ maxWidth: 1560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
-     {showAlerts ? <BoxPackingAlertLogs rows={dbRows} periodLabel={selectedPeriodLabel} timezone="Asia/Kolkata" timeRange={timeRange} onTimeRangeChange={setTimeRange} startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onDateRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /> : view === 'reports' || isReportsRoute ? <BoxPackingReports rows={dbRows} channels={filteredStreamChannels} range={dateRange} today={today} timezone="Asia/Kolkata" timeRange={timeRange} onTimeRangeChange={setTimeRange} onRangeChange={({ startDate, endDate }) => setDateRange({ startDate, endDate })} /> : <>
+     {showAlerts ? <BoxPackingAlertLogs rows={dbRows} periodLabel={selectedPeriodLabel} timezone={timezone} timeRange={timeRange} onTimeRangeChange={setTimeRange} startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onDateRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /> : view === 'reports' || isReportsRoute ? <BoxPackingReports rows={dbRows} channels={filteredStreamChannels} range={dateRange} today={today} timezone={timezone} timeRange={timeRange} onTimeRangeChange={setTimeRange} onRangeChange={({ startDate, endDate }) => setDateRange({ startDate, endDate })} /> : <>
      {!showAnalytics && <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}><span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 21 }}>Box Packing Overview</span><span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Completed packing activity, box counts and confirmation evidence</span></div>}
      {view === 'overview' ? <PackingOverview rows={rows} streamChannels={filteredStreamChannels} activeCameraIndex={activeCameraIndex} setActiveCameraIndex={setActiveCameraIndex} periodLabel={selectedPeriodLabel} dateRange={dateRange} onOpenAlerts={() => { setView('alerts'); navigate('/box-packing/alerts'); }} /> : null}
      {showAnalytics && view === 'analytics' ? <>

@@ -126,7 +126,8 @@ function ImageDownload({ row }) {
 
 function Snapshot({ row, onOpen, width = '100%', timezone = 'Asia/Kolkata' }) {
   const image = hasImage(row) ? mediaUrl(row.Image || row.image || row.imageUrl || row.incidentImageUrl) : null;
-  const timestamp = row.time ? new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', timeZone: timezone }).format(new Date(row.time)) : '--';
+  const start = packingStartTimestamp(row);
+  const timestamp = start ? new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', timeZone: timezone }).format(new Date(start)) : '--';
   return <div style={{ position: 'relative', width, aspectRatio: '16 / 9', borderRadius: 10, overflow: 'hidden', background: '#0a0e15', border: '1px solid var(--bd2)' }}>
     {image ? <button type="button" onClick={() => onOpen(false)} aria-label={`Open snapshot for ${row.boxId}`} title="Open snapshot" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 0, background: 'transparent', cursor: 'pointer' }}><img src={image} alt={`Snapshot for ${row.boxId}`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} /></button> : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, color: '#94a3b8', fontSize: 11 }}><ImageOff size={20} />No snapshot</div>}
     <span style={{ position: 'absolute', right: 8, bottom: 8, ...mono, fontSize: 10, color: '#fff', background: 'rgba(6,8,13,.76)', borderRadius: 5, padding: '3px 7px', pointerEvents: 'none' }}>{timestamp}</span>

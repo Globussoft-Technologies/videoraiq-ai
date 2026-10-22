@@ -1,4 +1,5 @@
 // DS sends zones keyed by name; stored incidents contain a normalized array.
+import { packingIncidentDetails } from '@/helpers/packingIncidentDetails';
 // Keep actual zone values, including zero, without assuming worker names/counts.
 export function packingZones(zones) {
   if (Array.isArray(zones)) return zones;

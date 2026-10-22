@@ -1456,7 +1456,7 @@ function IncidentListRow({
         </div>
 
         <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
-        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{packing ? packing.date : (shortDateTime(item.timeOfIncident) || '--')}</div>
+        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident) || '--'}</div>
 
         <div role="cell" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button

@@ -102,7 +102,7 @@ const mapRow = (item, index) => {
     ...incidentPackingExportFields(item),
     Severity: severityLabel(item?.severity),
     Status: statusOf(item),
-    'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, item?.incidentType === 'boxPackingDetection' ? 'DD/MM/YYYY' : 'DD/MM/YYYY hh:mm A'),
+    'Time of Incident': formatUtcInConfiguredTimezone(item?.timeOfIncident || item?.createdAt, 'DD/MM/YYYY hh:mm A'),
     'Vehicle Number': text(item?.vehicleNumber),
     Image: item?.Image ? mediaUrl(item.Image) : '--',
   };

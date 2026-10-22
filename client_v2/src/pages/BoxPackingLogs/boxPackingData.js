@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { getConfiguredTimezone } from '@/utils/timezone';
 import { packingStationKey } from './packingIdentity.js';
 
 // completedBy is the backend's productivity worker identifier. Never use a
@@ -34,15 +35,15 @@ export const packingEndTimestamp = (row) => {
   const value = new Date(start);
   return Number.isNaN(value.getTime()) ? null : new Date(value.getTime() + seconds * 1000).toISOString();
 };
-export const packingDateValue = (row, timezone = 'Asia/Kolkata') => {
+export const packingDateValue = (row, timezone = getConfiguredTimezone()) => {
   const start = packingStartTimestamp(row);
   return start && moment.tz(start, timezone).isValid() ? moment.tz(start, timezone).format('DD MMM YYYY') : '—';
 };
-export const packingStartTimeValue = (row, timezone = 'Asia/Kolkata') => {
+export const packingStartTimeValue = (row, timezone = getConfiguredTimezone()) => {
   const start = packingStartTimestamp(row);
   return start && moment.tz(start, timezone).isValid() ? moment.tz(start, timezone).format('hh:mm A') : '—';
 };
-export const packingEndTimeValue = (row, timezone = 'Asia/Kolkata') => {
+export const packingEndTimeValue = (row, timezone = getConfiguredTimezone()) => {
   const end = packingEndTimestamp(row);
   return end && moment.tz(end, timezone).isValid() ? moment.tz(end, timezone).format('hh:mm A') : '—';
 };
