@@ -24,7 +24,7 @@ export const packingAverageSeconds = (rows) => {
 };
 
 export const packingDurationSeconds = (row) => Number(row?.timeTakenSec ?? packingCompletedZone(row)?.timeTakenSec) || 0;
-export const packingStartTimestamp = (row) => row?.startTime || row?.start_time || row?.time || row?.recordedAt || row?.timeOfIncident || row?.createdAt;
+export const packingStartTimestamp = (row) => row?.startTime || row?.start_time || row?.recordedAt || row?.timeOfIncident || row?.time || row?.createdAt;
 export const packingEndTimestamp = (row) => {
   const explicit = row?.endTime || row?.end_time;
   if (explicit) return explicit;

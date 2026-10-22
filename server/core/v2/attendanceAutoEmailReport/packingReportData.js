@@ -24,7 +24,7 @@ const zonesOf = (row) => {
 };
 const completedZone = (row) => zonesOf(row).find((entry) => String(entry.zone || '').trim() === String(row.completedBy || '').trim());
 const secondsOf = (row) => Number(row.timeTakenSec ?? completedZone(row)?.timeTakenSec) || 0;
-const startOf = (row) => row.startTime || row.start_time || row.time || row.recordedAt || row.timeOfIncident || row.createdAt;
+const startOf = (row) => row.startTime || row.start_time || row.recordedAt || row.timeOfIncident || row.time || row.createdAt;
 const endOf = (row) => {
   const explicit = row.endTime || row.end_time;
   if (explicit) return explicit;

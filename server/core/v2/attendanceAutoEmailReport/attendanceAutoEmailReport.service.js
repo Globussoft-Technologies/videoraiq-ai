@@ -1138,10 +1138,9 @@ function emailHtml(report, details) {
 </html>`;
 }
 
-// Downloaded files are always named "attendance-report" (the media backend
-// prepends its own timestamp + id), so the report title never leaks into the
-// filename.
+// Use a fixed module name rather than the user-supplied report title.
 function safeReportName(report) {
+  if (report?.contentType === "incidents" && (report?.incidentTypes || []).length === 1 && report.incidentTypes[0] === "boxPackingDetection") return "box-packing-report";
   return report?.contentType === "incidents" ? "incident-report" : "attendance-report";
 }
 

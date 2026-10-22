@@ -151,14 +151,19 @@ class UploadService {
             const contentType = getManualMimeType(fileName);
 
             res.setHeader("Content-Type", contentType);
-            // Attendance email-report files are downloads, not previews — give
-            // them a clean name ("AttendanceReport.pdf" / ".csv") instead of the
-            // internal storage leaf ("1788…-<uuid>-attendance-report.pdf").
             const reportMatch = /\/reports\/.*\.(pdf|csv)$/i.exec(mediaPath);
-            if (reportMatch) {
+            const requestedName = String(req.query?.download || "");
+            const namedIncidentReport = reportMatch
+                && /\/reports\/[^/]+\/[^/]+$/i.test(mediaPath)
+                && /(?:^|-)report\.(pdf|csv)$/i.test(requestedName)
+                && !/^attendance-report\.(pdf|csv)$/i.test(requestedName)
+                && fileName.toLowerCase().endsWith(`-${requestedName.toLowerCase()}`);
+            if (namedIncidentReport) {
+                res.setHeader("Content-Disposition", contentDispositionFor(requestedName, fileName));
+            } else if (reportMatch) {
                 res.setHeader("Content-Disposition", `attachment; filename="AttendanceReport.${reportMatch[1].toLowerCase()}"`);
             } else {
-                res.setHeader("Content-Disposition", contentDispositionFor(req.query.download, fileName));
+                res.setHeader("Content-Disposition", contentDispositionFor(req.query?.download, fileName));
             }
             res.setHeader("Accept-Ranges", "bytes");
             res.setHeader("Access-Control-Allow-Origin", "*");
