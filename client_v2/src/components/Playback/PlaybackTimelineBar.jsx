@@ -214,6 +214,11 @@ export default function PlaybackTimelineBar({
   const pendingScrollLeftRef = useRef(null);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [containerWidth, setContainerWidth] = useState(1000);
+  const [nowMs, setNowMs] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [hoverMs, setHoverMs] = useState(null);
   const [hoverX, setHoverX] = useState(0);
   const [hoverAnchor, setHoverAnchor] = useState(null);
@@ -633,7 +638,7 @@ export default function PlaybackTimelineBar({
     framePreviewAbortRef.current?.abort();
   }, []);
 
-  const futureStartMs = Math.max(0, Math.min(DAY_MS, Date.now() - dayStart));
+  const futureStartMs = Math.max(0, Math.min(DAY_MS, nowMs - dayStart));
   const recordingRanges = useMemo(() => {
     // NVR searches can return touching or overlapping recording fragments.
     // Draw their coverage once so fragment borders do not stack into stripes.
@@ -679,9 +684,9 @@ export default function PlaybackTimelineBar({
   const visibleThumbs = useMemo(() => {
     const list = [];
     for (let t = Math.floor(bufferedStartMs / thumbStepMs) * thumbStepMs; t <= bufferedEndMs; t += thumbStepMs) {
-      if (t < 0 || t >= DAY_MS) continue;
+      if (t < 0 || t >= futureStartMs) continue;
       const leftPct = (t / DAY_MS) * 100;
-      const widthPct = (Math.min(thumbStepMs, DAY_MS - t) / DAY_MS) * 100;
+      const widthPct = (Math.min(thumbStepMs, futureStartMs - t) / DAY_MS) * 100;
       const future = t >= futureStartMs;
       const recorded = !future && isRecorded(t);
       const frameUrl = recorded ? getNearestFrame(t) : null;
@@ -756,7 +761,7 @@ export default function PlaybackTimelineBar({
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); setHoverAnchor(null); }} onPointerMove={handlePointerMove} className="vq-pbtl-scroll relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
-        {isHovering && hoverMs !== null && (
+        {isHovering && hoverMs !== null && hoverMs <= futureStartMs && (
           <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-40 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
         <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)', cursor: isHovering && hoverMs !== null && isFutureSeek(dayStart, hoverMs) ? 'not-allowed' : 'pointer' }}>
@@ -792,7 +797,7 @@ export default function PlaybackTimelineBar({
               <span className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 pointer-events-none" style={{ backgroundColor: marker.color }} />
             </button>
           ))}
-          {isHovering && hoverX > 0 && <div className="absolute top-0 bottom-0 w-[1px] bg-white/50 pointer-events-none z-25" style={{ left: `${hoverX}px` }} />}
+          {isHovering && hoverX > 0 && hoverMs !== null && hoverMs <= futureStartMs && <div className="absolute top-0 bottom-0 w-[1px] bg-white/50 pointer-events-none z-25" style={{ left: `${hoverX}px` }} />}
           <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,1)]" style={{ left: `${cursorPct}%` }}>
             {cursorVisible && (
               <div className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-red-600 text-white font-mono text-[10px] font-bold shadow-lg whitespace-nowrap border border-red-400/50 text-center" style={{ left: cursorLabelOffset, width: timeLabelWidth }}>{formatClock(cursorMs, true)}</div>

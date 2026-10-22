@@ -22,7 +22,7 @@ export function lightingSettings(settings = {}) {
   return {
     zone_name: settings.zone_name ?? 'Scrap Yard',
     trigger_notification: settings.trigger_notification ?? true,
-    lighting_categories: [...(settings.lighting_categories ?? ['weatherSiteHazard'])],
+    lighting_categories: [...(settings.lighting_categories ?? LIGHTING_CATEGORY_OPTIONS.map(option => option.id))],
     ...Object.fromEntries(LIGHTING_CONTROLS.map(control => [control.key, settings[control.key] ?? control.defaultValue])),
   };
 }
@@ -57,4 +57,23 @@ export function lightingPayload(settings) {
 
 export function lightingCategoryLabel(category) {
   return LIGHTING_CATEGORY_OPTIONS.find(option => option.id === category)?.label || category;
+}
+
+export function lightingZoneSettings(zone = {}, settings = {}) {
+  return {
+    lighting_categories: [...(zone.lighting_categories ?? settings.lighting_categories ?? LIGHTING_CATEGORY_OPTIONS.map(option => option.id))],
+    ...Object.fromEntries(LIGHTING_CONTROLS.map(control => [control.key, zone[control.key] ?? settings[control.key] ?? control.defaultValue])),
+  };
+}
+
+export function lightingZoneErrors(zone) {
+  const { zone_name, ...errors } = lightingErrors({ ...zone, zone_name: zone.name || 'Zone' });
+  return errors;
+}
+
+export function lightingZonePayload(zone) {
+  return {
+    lighting_categories: [...zone.lighting_categories],
+    ...Object.fromEntries(LIGHTING_CONTROLS.map(control => [control.key, Number(zone[control.key])])),
+  };
 }

@@ -28,19 +28,10 @@ const FAST_FORWARD_TICK_MS = 500;
 const MANIFEST_RETRY_MS = 1000;
 const MANIFEST_RETRY_LIMIT = 20;
 const SECURUS_MANIFEST_RETRY_LIMIT = 4;
-const SECURUS_RECOVERY_DELAY_MS = 500;
-const SECURUS_RECOVERY_LIMIT = 3;
 const DAHUA_MANIFEST_RETRY_LIMIT = 4;
-const DAHUA_RECOVERY_DELAY_MS = 500;
-const DAHUA_RECOVERY_LIMIT = 3;
-const GENERIC_HLS_RECOVERY_DELAY_MS = 500;
-const GENERIC_HLS_RECOVERY_LIMIT = 3;
-const DASH_RECOVERY_DELAY_MS = 500;
-const DASH_RECOVERY_LIMIT = 2;
 const PLAYBACK_PREVIEW_CACHE_LIMIT = 100;
 const PLAYBACK_PREVIEW_WINDOW_MS = 5 * 1000;
 const HONEYWELL_MUTEX_RETRY_MS = 5000;
-const HONEYWELL_MUTEX_RETRY_LIMIT = 18; // ~90s, past the NVR's ~60s session timeout
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtClock(ms) {
@@ -123,31 +114,17 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   // so only a seek into the already-buffered part can reuse the session
   // (see bufferedSeekOffset); any other seek opens a new one via loadAt.
   const loadedRangeMsRef = useRef(null); // { start, end } in cursorMs terms, or null
-  // Auto-reopens after a DASH failure since playback last ran; capped so a dead
-  // NVR ends in the "Press play to retry" state instead of a reload loop.
-  const dashRecoveriesRef = useRef(0);
-  // Securus files are short and switching the native DVRIP media socket at a
-  // file boundary can occasionally leave hls.js at a dead playlist edge. A
-  // manual Play already fixes that by opening a new backend session; keep a
-  // bounded automatic equivalent so normal playback does not require a click.
-  const securusRecoveriesRef = useRef(0);
-  // Dahua and CP Plus use the same recorder protocol. Their stream-server HLS
-  // session can occasionally stop producing segments even though the NVR is
-  // still serving the recording. Recreate that session transparently before
-  // asking the user to press Play.
-  const dahuaRecoveriesRef = useRef(0);
-  // Other stream-server-backed HLS brands (Hikvision, Prama, Hanwha and
-  // compatible recorders) need the same bounded session replacement when a
-  // playlist or media segment stops progressing.
-  const genericHlsRecoveriesRef = useRef(0);
+  const recoveryAttemptsRef = useRef(0);
+  const recoveryFrameRef = useRef(null);
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
       onPlaying: (value) => {
-        if (value) dashRecoveriesRef.current = 0;
-        if (value) securusRecoveriesRef.current = 0;
-        if (value) dahuaRecoveriesRef.current = 0;
-        if (value) genericHlsRecoveriesRef.current = 0;
+        if (value) {
+          recoveryAttemptsRef.current = 0;
+          setRecovering(false);
+        }
         playbackProgressRef.current.playing = value;
         setPlaying(value);
       },
@@ -166,6 +143,13 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     };
   }, []);
 
+  useEffect(() => {
+    setRecovering(false);
+    recoveryAttemptsRef.current = 0;
+    const canvas = recoveryFrameRef.current;
+    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+  }, [channelId, +day]);
+
   // Reset per channel/date
   useEffect(() => {
     setCursorMs(0);
@@ -180,10 +164,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     hoverThumbnailCacheRef.current.clear();
     setThumbnailCache(new Map());
     loadedRangeMsRef.current = null;
-    dashRecoveriesRef.current = 0;
-    securusRecoveriesRef.current = 0;
-    dahuaRecoveriesRef.current = 0;
-    genericHlsRecoveriesRef.current = 0;
+    recoveryAttemptsRef.current = 0;
   }, [channelId, +day]);
 
   useEffect(() => () => {
@@ -328,17 +309,14 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         setSourceRevision((revision) => revision + 1);
       } catch (err) {
         if (token !== seekTokenRef.current) return;
-        // The previous session only frees on the NVR's own timeout (~60s once its
-        // segments stop) — keep retrying so a seek resumes by itself, like Play would.
-        if (err?.response?.status === 409 && mutexRetries < HONEYWELL_MUTEX_RETRY_LIMIT) {
-          toast.info('Waiting for the NVR to release the previous playback…', {
-            id: 'honeywell-playback-mutex',
-            position: 'bottom-right',
-            duration: HONEYWELL_MUTEX_RETRY_MS + 1000,
-          });
+        const status = err?.response?.status;
+        if (!status || status === 409 || status === 408 || status === 429 || status >= 500) {
+          const delay = Math.min(30000, HONEYWELL_MUTEX_RETRY_MS * (mutexRetries + 1));
           scrubTimerRef.current = setTimeout(() => {
-            if (token === seekTokenRef.current) loadAt(requestedMs, mutexRetries + 1, incidentStart);
-          }, HONEYWELL_MUTEX_RETRY_MS);
+            if (token === seekTokenRef.current && transportRef.current?.wantsPlayback) {
+              loadAt(requestedMs, mutexRetries + 1, incidentStart);
+            }
+          }, delay);
           return;
         }
         transportRef.current?.pause();
@@ -404,125 +382,37 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
       if (dash) { try { dash.destroy(); } catch { /* noop */ } }
     };
-    const recoverSecurusPlayback = () => {
-      if (!isSecurusPlayback || !isCurrent() ||
-          !transportRef.current?.wantsPlayback ||
-          securusRecoveriesRef.current >= SECURUS_RECOVERY_LIMIT) {
-        return false;
-      }
-
-      // Preserve the point the user had reached before replacing this HLS
-      // session. startSecurusPlaybackSession removes the previous backend
-      // session for the same camera/browser key before opening the new one.
-      const resumeAtMs = Math.min(
-        DAY_MS - 1,
-        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
-      );
-      securusRecoveriesRef.current += 1;
-      recoveryScheduled = true;
-      failed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      playbackProgressRef.current = { playing: false, buffering: true };
-      setPlaying(false);
-      setBuffering(true);
-      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
-      retryTimer = setTimeout(() => {
-        if (!cancelled && seekToken === seekTokenRef.current &&
-            transportRef.current?.wantsPlayback) {
-          loadAtRef.current?.(resumeAtMs);
-        }
-      }, SECURUS_RECOVERY_DELAY_MS);
-      return true;
-    };
-    const recoverDahuaPlayback = () => {
-      if (!isDahuaProtocolNvr || !isCurrent() ||
-          !transportRef.current?.wantsPlayback ||
-          dahuaRecoveriesRef.current >= DAHUA_RECOVERY_LIMIT) {
-        return false;
-      }
-
-      // Requesting playback again makes the stream server replace the failed
-      // Dahua/CP Plus HLS session. Resume from the frame the user had reached,
-      // so this behaves like an invisible Play retry rather than a new seek.
-      const resumeAtMs = Math.min(
-        DAY_MS - 1,
-        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
-      );
-      dahuaRecoveriesRef.current += 1;
-      recoveryScheduled = true;
-      failed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      playbackProgressRef.current = { playing: false, buffering: true };
-      setPlaying(false);
-      setBuffering(true);
-      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
-      retryTimer = setTimeout(() => {
-        if (!cancelled && seekToken === seekTokenRef.current &&
-            transportRef.current?.wantsPlayback) {
-          loadAtRef.current?.(resumeAtMs);
-        }
-      }, DAHUA_RECOVERY_DELAY_MS);
-      return true;
-    };
-    const recoverGenericHlsPlayback = () => {
-      if (isDashPlayback || isSecurusPlayback || isDahuaProtocolNvr || !isCurrent() ||
-          !transportRef.current?.wantsPlayback ||
-          genericHlsRecoveriesRef.current >= GENERIC_HLS_RECOVERY_LIMIT) {
-        return false;
-      }
-
-      const resumeAtMs = Math.min(
-        DAY_MS - 1,
-        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
-      );
-      genericHlsRecoveriesRef.current += 1;
-      recoveryScheduled = true;
-      failed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      playbackProgressRef.current = { playing: false, buffering: true };
-      setPlaying(false);
-      setBuffering(true);
-      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
-      retryTimer = setTimeout(() => {
-        if (!cancelled && seekToken === seekTokenRef.current &&
-            transportRef.current?.wantsPlayback) {
-          loadAtRef.current?.(resumeAtMs);
-        }
-      }, GENERIC_HLS_RECOVERY_DELAY_MS);
-      return true;
-    };
-    const recoverDashPlayback = () => {
-      if (!isDashPlayback || !isCurrent() ||
-          !transportRef.current?.wantsPlayback || dashRecoveriesRef.current >= DASH_RECOVERY_LIMIT) {
-        return false;
-      }
-
-      const resumeAtMs = Math.min(
-        DAY_MS - 1,
-        streamStartMsRef.current + Math.max(0, Number(video.currentTime) || 0) * 1000,
-      );
-      dashRecoveriesRef.current += 1;
-      recoveryScheduled = true;
-      failed = true;
-      playbackProgressRef.current = { playing: false, buffering: true };
-      setPlaying(false);
-      setBuffering(true);
-      if (dash) { try { dash.destroy(); } catch { /* noop */ } }
-      retryTimer = setTimeout(() => {
-        if (!cancelled && seekToken === seekTokenRef.current &&
-            transportRef.current?.wantsPlayback) {
-          loadAtRef.current?.(resumeAtMs);
-        }
-      }, DASH_RECOVERY_DELAY_MS);
-      return true;
-    };
     const recoverCurrentPlayback = () => {
-      // Destroying an HLS/DASH instance can emit one last native media error.
-      // The replacement is already queued, so keep that teardown event from
-      // converting the accepted recovery into a terminal player failure.
+      // Teardown can emit another media error while replacement is queued.
       if (recoveryScheduled) return true;
-      if (isDashPlayback) return recoverDashPlayback();
-      return recoverSecurusPlayback() || recoverDahuaPlayback() || recoverGenericHlsPlayback();
+      if (!isCurrent() || !transportRef.current?.wantsPlayback) return false;
+      const resumeAtMs = Math.min(DAY_MS - 1, Math.max(0,
+        frameRecordingTime(video.currentTime, fragmentAnchorsRef.current, streamStartMsRef.current)
+          ?? streamStartMsRef.current,
+      ));
+      const canvas = recoveryFrameRef.current;
+      if (canvas && video.readyState >= 2 && video.videoWidth > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        try { canvas.getContext('2d').drawImage(video, 0, 0); } catch { /* frame unavailable */ }
+      }
+      setRecovering(true);
+      recoveryScheduled = true;
+      failed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      playbackProgressRef.current = { playing: false, buffering: true };
+      setPlaying(false);
+      setBuffering(true);
+      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      if (dash) { try { dash.destroy(); } catch { /* noop */ } }
+      // Retry every brand with capped backoff while the user still wants playback.
+      const delay = Math.min(30000, 1000 * 2 ** Math.min(recoveryAttemptsRef.current++, 5));
+      retryTimer = setTimeout(() => {
+        if (!cancelled && seekToken === seekTokenRef.current && transportRef.current?.wantsPlayback) {
+          loadAtRef.current?.(resumeAtMs, 0, true);
+        }
+      }, delay);
+      return true;
     };
     playbackRecoveryRef.current = recoverCurrentPlayback;
 
@@ -546,7 +436,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
           console.error('DASH playback error', event);
           // A segment the NVR couldn't produce: reopen a session at the current
           // point and keep playing, as pressing Play would.
-          if (recoverDashPlayback()) return;
+          if (recoverCurrentPlayback()) return;
           failPlayback(event?.error);
         });
       }).catch((error) => {
@@ -624,9 +514,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
             retryTimer = setTimeout(attach, MANIFEST_RETRY_MS);
             return;
           }
-          if (recoverSecurusPlayback()) return;
-          if (recoverDahuaPlayback()) return;
-          if (recoverGenericHlsPlayback()) return;
+          if (recoverCurrentPlayback()) return;
           failPlayback();
         });
       };
@@ -678,9 +566,24 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
-    return observePlaybackClock(video, {
+    let lastFrameAt = performance.now();
+    let lastMediaTime = null;
+    const stallTimer = setInterval(() => {
+      if (!transportRef.current?.wantsPlayback || video.ended) {
+        lastFrameAt = performance.now();
+        return;
+      }
+      if (performance.now() - lastFrameAt >= 2000 && !playbackProgressRef.current.buffering) {
+        playbackProgressRef.current.buffering = true;
+        setBuffering(true);
+      }
+    }, 500);
+    const stopObserving = observePlaybackClock(video, {
       canAdvance: () => clockAnchoredRef.current && transportRef.current?.wantsPlayback,
       onTime: (mediaTime) => {
+        if (mediaTime === lastMediaTime) return;
+        lastMediaTime = mediaTime;
+        lastFrameAt = performance.now();
         // A displayed frame proves playback resumed even if a prior buffering
         // event left the UI flags stale. Explicit Pause is guarded above.
         if (!playbackProgressRef.current.playing || playbackProgressRef.current.buffering) {
@@ -695,6 +598,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
         setCursorMs((previous) => Math.floor(previous / 1000) === Math.floor(next / 1000) ? previous : next);
       },
     });
+    return () => {
+      clearInterval(stallTimer);
+      stopObserving();
+    };
   }, [videoUrl, sourceRevision]);
 
   const currentZoomConfig = TIMELINE_ZOOM_LEVELS[timelineZoomLevel] || TIMELINE_ZOOM_LEVELS[0];
@@ -787,8 +694,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       setCursorMs(clamped);
       streamStartMsRef.current = clamped;
       lastSeekMsRef.current = clamped;
-      dashRecoveriesRef.current = 0; // a fresh user action gets fresh retries
-      securusRecoveriesRef.current = 0;
+      recoveryAttemptsRef.current = 0; // a fresh user action gets fresh retries
 
       // Already buffered in the current DASH session — just move the playhead.
       // Anything else opens a new session at the target (loadAt autoplays).
@@ -865,9 +771,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
             style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }}
           />
         </FullscreenZoomSurface>
-        {(videoState !== 'ready' || buffering) && (
+        <canvas ref={recoveryFrameRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: recovering ? 'block' : 'none', pointerEvents: 'none' }} />
+        {(videoState !== 'ready' || buffering || recovering) && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
-            {(videoState === 'loading' || buffering) && <BufferingIndicator />}
+            {(videoState === 'loading' || buffering || recovering) && <BufferingIndicator title="Buffering..." subtitle="Waiting for the next frame" size={48} compact />}
             {videoState === 'error' && (
               <span>Couldn't play this recording. Press play to retry.</span>
             )}

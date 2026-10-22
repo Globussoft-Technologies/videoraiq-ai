@@ -155,12 +155,13 @@ export function createPlaybackTransport(video, {
       onPlaying(false);
       onBuffering(true);
     },
-    attach() { active = true; },
+    attach() { active = true; scheduleStallRecovery(); },
     play() {
       recoveryAttempts = 0;
       wantsPlayback = true;
       if (video.ended) video.currentTime = 0;
       onBuffering(video.readyState < 3);
+      scheduleStallRecovery();
       resume();
     },
     pause() {

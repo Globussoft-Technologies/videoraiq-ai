@@ -375,3 +375,14 @@ test('disposal ignores pending play failures and removes media listeners', async
   await settled();
   assert.deepEqual(state, before);
 });
+
+ test('a source that never becomes ready is reopened automatically', async () => {
+  let recoveries = 0;
+  const { transport } = setup({ stallRecoveryMs: 5, onRecoveryNeeded: () => { recoveries += 1; return true; } });
+  transport.prepare({ autoplay: true });
+  transport.attach();
+  await recovered();
+  assert.equal(recoveries, 1);
+  assert.equal(transport.wantsPlayback, true);
+  transport.destroy();
+});

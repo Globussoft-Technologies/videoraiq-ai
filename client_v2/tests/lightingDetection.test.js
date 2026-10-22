@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { lightingZoneSettings, lightingZonePayload, lightingZoneErrors } from '../src/helpers/lightingDetection.js';
 import { lightingSettings, lightingErrors, lightingPayload, lightingInputValue, lightingStoredValue, LIGHTING_CATEGORY_OPTIONS } from '../src/helpers/lightingDetection.js';
 
 test('duration inputs show minutes and submit seconds without changing confidence', () => {
@@ -25,7 +26,7 @@ test('lighting defaults and serialization preserve the supplied detector setting
   assert.deepEqual(lightingErrors(settings), {});
   assert.deepEqual(lightingPayload(settings), {
     zone_name: 'Scrap Yard', trigger_notification: true,
-    lighting_categories: ['weatherSiteHazard'], lighting_interval_sec: 3600,
+    lighting_categories: LIGHTING_CATEGORY_OPTIONS.map(option => option.id), lighting_interval_sec: 3600,
     lighting_min_confidence: 0.6, lighting_cooldown_sec: 21600,
   });
   const all = lightingSettings({ lighting_categories: LIGHTING_CATEGORY_OPTIONS.map(option => option.id), trigger_notification: false, lighting_cooldown_sec: 0 });
@@ -33,7 +34,8 @@ test('lighting defaults and serialization preserve the supplied detector setting
   assert.equal(lightingPayload(all).trigger_notification, false);
   assert.equal(lightingPayload(all).lighting_cooldown_sec, 0);
   all.lighting_categories.pop();
-  assert.deepEqual(settings.lighting_categories, ['weatherSiteHazard']);
+  assert.deepEqual(settings.lighting_categories, LIGHTING_CATEGORY_OPTIONS.map(option => option.id));
+  assert.deepEqual(lightingSettings({ lighting_categories: ['weatherSiteHazard'] }).lighting_categories, ['weatherSiteHazard']);
 });
 
 test('UI rejects unsupported selections, blank fields and values outside the detector limits', () => {
@@ -49,4 +51,18 @@ test('UI rejects unsupported selections, blank fields and values outside the det
   }
   assert.ok(lightingErrors(lightingSettings({ zone_name: ' ' })).zone_name);
   assert.deepEqual(lightingErrors(lightingSettings({ lighting_interval_sec: 600, lighting_min_confidence: 0.5, lighting_cooldown_sec: 86400 })), {});
+});
+
+test('zones preserve independent overrides and inherit legacy shared settings', () => {
+  const shared = { lighting_categories: ['weatherSiteHazard'], lighting_interval_sec: 1200 };
+  const first = lightingZoneSettings({ lighting_categories: ['lowVisibility'], lighting_cooldown_sec: 0 }, shared);
+  const second = lightingZoneSettings({}, shared);
+  assert.deepEqual(first.lighting_categories, ['lowVisibility']);
+  assert.equal(first.lighting_cooldown_sec, 0);
+  assert.equal(second.lighting_cooldown_sec, 21600);
+  assert.equal(second.lighting_interval_sec, 1200);
+  first.lighting_categories.push('roadSurfaceDamage');
+  assert.deepEqual(second.lighting_categories, ['weatherSiteHazard']);
+  assert.deepEqual(lightingZoneErrors(first), {});
+  assert.deepEqual(lightingZonePayload(first), first);
 });

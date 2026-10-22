@@ -9,7 +9,7 @@ import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
   OpBadge, StatusPill, Chip, Waiting, NoPeriodData, SnapshotPreview,
 } from './ui';
-import { downloadXlsx } from './exports';
+import { downloadXlsx, downloadPdf } from './exports';
 import { buildSolderReportRows } from './reportRows.js';
 import { downloadSnapshot } from './snapshots';
 import DownloadButton from './DownloadButton';
@@ -573,13 +573,29 @@ function HourSection({ s, model, range }) {
     sortRows(buildSolderReportRows('hourly', s), sorting.sort),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
   );
+  const exportHourlyPdf = () => downloadPdf({
+    title: 'Hourly activity log',
+    subtitle: [s.name, range?.startDate, range?.endDate].filter(Boolean).join(' | '),
+    rows: [
+      ...sortRows(buildSolderReportRows('hourly', s), sorting.sort),
+      {
+        Hour: 'TOTAL', Panels: s.sum.panels,
+        'Completed joints': s.sum.joints, 'Missed joints': s.sum.missed,
+        ...Object.fromEntries(s.ops.map(operator => [`${operator.code} joints`, operator.joints])),
+      },
+    ],
+    filename: `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
+  });
   if (!s.sum.hasThroughput) return <Panel><NoPeriodData /></Panel>;
   return (
     <Panel pad={false}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--bd)' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Hourly activity log</span>
         <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Panel counts, completed joints and missed joints per hour</span>
-        <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={{ ...btnGhost, marginLeft: 'auto' }}>XLSX</DownloadButton>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+          <DownloadButton disabled={!s.hourly.length} action={exportHourlyPdf} description="hourly PDF report" style={btnGhost}>PDF</DownloadButton>
+          <DownloadButton disabled={!s.hourly.length} action={exportHourly} description="hourly Excel report" style={btnGhost}>XLSX</DownloadButton>
+        </div>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', ...mono, fontSize: 12 }}>

@@ -12,9 +12,9 @@ export const HYGIENE_CATEGORY_OPTIONS = [
 ];
 
 export const HYGIENE_CONTROLS = [
-  { key: 'hygiene_interval_sec', label: 'Check interval', defaultValue: 180, min: 1, max: 600, step: 1, unit: 's' },
-  { key: 'hygiene_min_confidence', label: 'Minimum confidence', defaultValue: 0.6, min: 0, max: 1, step: 0.01, unit: '' },
-  { key: 'hygiene_cooldown_sec', label: 'Alert cooldown', defaultValue: 1800, min: 0, max: 7200, step: 1, unit: 's' },
+  { key: 'hygiene_interval_sec', label: 'Check interval', defaultValue: 180, min: 60, max: 3600, step: 1, unit: 's' },
+  { key: 'hygiene_min_confidence', label: 'Minimum confidence', defaultValue: 0.6, min: 0.5, max: 1, step: 0.01, unit: '' },
+  { key: 'hygiene_cooldown_sec', label: 'Alert cooldown', defaultValue: 1800, min: 0, max: 86400, step: 1, unit: 's' },
 ];
 
 // Zone overrides win over detection-wide values. Keep zero confidence and
@@ -40,10 +40,10 @@ export function hygieneZoneErrors(zone = {}) {
     const raw = zone[control.key];
     const value = Number(raw);
     if (raw == null || String(raw).trim() === '' || !Number.isFinite(value) || value < control.min
-      || (control.key === 'hygiene_min_confidence' && value > 1)) {
+      || value > control.max) {
       errors[control.key] = control.key === 'hygiene_min_confidence'
-        ? 'Enter a confidence between 0 and 1.'
-        : `Enter a value of at least ${control.min} seconds.`;
+        ? `Enter a confidence between ${control.min} and ${control.max}.`
+        : `Enter a value between ${control.min} and ${control.max} seconds.`;
     }
   }
   return errors;

@@ -2,12 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { getTimezones, getSavedTimezone, updateSavedTimezone } from '../../../helpers/configure';
+import { getTimezones, getSavedTimezone } from '../../../helpers/configure';
 
 /*
  * Per-zone scheduling controls (ported from V1's zonemarking/ZoneScheduleFields),
  * restyled to the V2 token system:
- *   - TimezoneField: a single GLOBAL time zone (GET pre-fills, PUT saves).
+ *   - TimezoneField: the GLOBAL time zone from Settings (read-only).
  *   - ZoneScheduleFields: a collapsible per-zone "Schedule" with a From–To time
  *     range in 12-hour format ({ hour, minute, meridiem }).
  * On save, a zone's schedule becomes zone_configs[i].startTime / .endTime
@@ -348,65 +348,56 @@ export default function ZoneScheduleFields({
   );
 }
 
-/**
- * Standalone GLOBAL Time Zone field. Fetches the admin's saved timezone (GET) to
- * pre-select, saves the new choice (PUT) on change. Shown once per Zone Settings
- * panel / Save modal, NOT per-zone.
- */
-export function TimezoneField({ disabled, controlHeight = 34 }) {
+/** Read-only global time zone shared by every detection zone form. */
+export function TimezoneField({ controlHeight = 34 }) {
   const timezones = useTimezones();
   const [value, setValue] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const message = 'Time zone can be managed from the Settings page.';
 
   useEffect(() => {
     let alive = true;
     getSavedTimezone()
-      .then((saved) => { if (alive && saved) setValue(saved); })
-      .catch(() => {});
+      .then(saved => { if (alive) setValue(saved || ''); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
-  const handleChange = async (tz) => {
-    const prev = value;
-    setValue(tz); // optimistic
-    setSaving(true);
-    try {
-      await updateSavedTimezone(tz);
-      toast.success(tz ? 'Time zone updated' : 'Time zone cleared');
-    } catch (err) {
-      setValue(prev);
-      toast.error(err?.response?.data?.body?.message || (tz ? 'Failed to update time zone' : 'Failed to clear time zone'));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const explain = () => toast.info(message);
+  // Keep the saved value visible even if the options have not loaded.
+  const options = value && !timezones.includes(value)
+    ? [...timezones, value]
+    : timezones;
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>Time Zone</label>
-        {!disabled && value && (
-          <button
-            type="button"
-            onClick={() => handleChange('')}
-            disabled={saving}
-            style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--blue)', background: 'none', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}
-          >
-            Reset
-          </button>
-        )}
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Time Zone</label>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Time zone: ${value || (loading ? 'Loading' : 'Not set')}. ${message}`}
+        title={message}
+        onClick={explain}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            explain();
+          }
+        }}
+        style={{ cursor: 'not-allowed', borderRadius: 7 }}
+      >
+        <div style={{ pointerEvents: 'none' }}>
+          <Dropdown
+            value={value}
+            options={options}
+            placeholder={loading ? 'Loading time zone?' : 'Not set'}
+            disabled
+            width="100%"
+            height={controlHeight}
+          />
+        </div>
       </div>
-      <Dropdown
-        value={value}
-        options={timezones}
-        placeholder={timezones.length ? 'Select time zone' : 'Loading time zones…'}
-        disabled={disabled || saving || !timezones.length}
-        onChange={handleChange}
-        width="100%"
-        height={controlHeight}
-        searchable
-        minMenuWidth={260}
-      />
     </div>
   );
 }

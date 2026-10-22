@@ -21,20 +21,31 @@ export default function HygieneZoneFields({ zone, onChange, errors = {}, disable
         </div>
         {errors.hygiene_categories && <p role="alert" style={{ margin: '5px 0 0', color: '#ef4444', fontSize: 11 }}>{errors.hygiene_categories}</p>}
       </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={() => HYGIENE_CONTROLS.forEach(control => onChange(control.key, control.defaultValue))}
+          aria-label="Reset all three hygiene sliders to defaults"
+          title="Reset check interval, minimum confidence and alert cooldown to defaults"
+          style={{ padding: '2px 0 2px 8px', border: 0, background: 'transparent', color: 'var(--blue)', fontSize: 11, cursor: disabled ? 'default' : 'pointer' }}
+        >
+          Reset
+        </button>
+      </div>
       {HYGIENE_CONTROLS.map(control => {
         const value = zone[control.key] ?? control.defaultValue;
         const inputId = `${id}-${control.key}`;
         return (
           <div key={control.key}>
             <label htmlFor={inputId} style={{ display: 'block', marginBottom: 5, fontSize: 11, color: 'var(--tx2)' }}>
-              {control.label}{control.unit ? ' (seconds)' : ' (0–1)'}
+              {control.label}{control.unit ? ' (seconds)' : ' (0.5–1)'}
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input
                 id={inputId}
                 type="range"
                 min={control.min}
-                max={Math.max(control.max, Number(value) || control.max)}
+                max={control.max}
                 step={control.step}
                 value={value === '' ? control.min : value}
                 onChange={event => onChange(control.key, Number(event.target.value))}
@@ -46,7 +57,7 @@ export default function HygieneZoneFields({ zone, onChange, errors = {}, disable
                 type="number"
                 aria-label={`${control.label} value`}
                 min={control.min}
-                max={control.key === 'hygiene_min_confidence' ? 1 : undefined}
+                max={control.max}
                 step={control.step}
                 value={value}
                 onChange={event => onChange(control.key, event.target.value === '' ? '' : Number(event.target.value))}

@@ -7,7 +7,7 @@ import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_ALERT_MODE_OPTIONS, DOOR_MIN_THRESHOLD_SEC } from '../constants';
 import LightingFields from '../components/LightingFields';
-import { lightingSettings, lightingErrors, lightingPayload } from '../../../../../helpers/lightingDetection';
+import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
@@ -50,10 +50,10 @@ export default function SaveDetectionAreaModal({
   const [priority, setPriority] = useState(initialPriority || 'moderate');
   const [zoneDrafts, setZoneDrafts] = useState(() => zones.map(zone => ({
     ...zone,
+    ...(isLighting ? lightingZoneSettings(zone, initialLightingSettings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: zone.fireOutsideZoneEnabled ?? initialFireOutsideZoneEnabled } : {}),
   })));
   const [errors, setErrors] = useState({});
-  const [lighting, setLighting] = useState(() => lightingSettings(initialLightingSettings));
   // Check-In / Check-Out: one detection-wide entry/exit mode, seeded from the
   // first zone (they're all kept in sync).
   const [checkInOutMode, setCheckInOutMode] = useState(initialCheckInOutMode || zones[0]?.countMode || 'entry');
@@ -94,10 +94,13 @@ export default function SaveDetectionAreaModal({
   };
 
   const handleSubmit = () => {
-    const nextErrors = isLighting ? lightingErrors(lighting) : {};
+    const nextErrors = {};
     if (!detectionName.trim()) nextErrors.detectionName = true;
     if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
+      if (isLighting) {
+        for (const [field, message] of Object.entries(lightingZoneErrors(z))) nextErrors[`zone-${i}-${field}`] = message;
+      }
       if (isHygiene) {
         for (const [field, message] of Object.entries(hygieneZoneErrors(z))) {
           nextErrors[`zone-${i}-${field}`] = message;
@@ -145,7 +148,6 @@ export default function SaveDetectionAreaModal({
       detectionName: detectionName.trim(),
       priority,
       zones: outZones,
-      ...(isLighting ? { lighting: { ...lightingPayload(lighting), trigger_notification: true } } : {}),
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
       ...(isDoor ? { doorAlertMode } : {}),
     });
@@ -183,7 +185,7 @@ export default function SaveDetectionAreaModal({
                   inside the banner — forcing one line overflows the dialog and gives
                   the whole thing a horizontal scrollbar. */}
               <div style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.35, fontWeight: 800, color: 'var(--tx)' }}>
-                Please select the Telegram channel, Time Zone and Time Range for Telegram alerts.
+                Please select the Telegram channel and Time Range for Telegram alerts. Time zone is managed from the Settings page.
               </div>
             </div>
             )}
@@ -197,7 +199,6 @@ export default function SaveDetectionAreaModal({
           display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto',
           overscrollBehavior: 'contain', padding: '0 22px 4px', minHeight: 0,
         }}>
-          {isLighting && <LightingFields value={lighting} errors={errors} disabled={saving} onChange={(field, value) => { setLighting(previous => ({ ...previous, [field]: value })); setErrors(previous => ({ ...previous, [field]: undefined })); }} />}
           <div style={{ display: 'grid', gap: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
@@ -325,6 +326,9 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isLighting && <LightingFields value={z} showZoneName={false} disabled={saving}
+                onChange={(field, value) => updateZoneField(i, field, value)}
+                errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))} />}
               {isHygiene && (
                 <HygieneZoneFields
                   zone={z}

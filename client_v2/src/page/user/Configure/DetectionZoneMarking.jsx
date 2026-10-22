@@ -31,7 +31,7 @@ import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPan
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
-import { LIGHTING_SETTING_TYPE, lightingSettings, lightingErrors, lightingPayload } from '../../../helpers/lightingDetection';
+import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import {
   createZoneDetectionSetting,
@@ -351,6 +351,7 @@ export default function DetectionZoneMarking({
   const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
     name: `Zone ${index + 1}`,
     ...(isHygiene ? hygieneZoneSettings({}, activeType.setting?.settings) : {}),
+    ...(isLighting ? lightingZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
     threshold: '0',
@@ -544,6 +545,9 @@ export default function DetectionZoneMarking({
         nextErrors[`zone-${index}-${field}`] = message;
       }
     }
+    if (isLighting) {
+      for (const [field, message] of Object.entries(lightingZoneErrors(zone))) nextErrors[`zone-${index}-${field}`] = message;
+    }
     const nameLabel = activeType?.settingType === 'lineCrossingSettings' ? 'Line Name' : 'Zone Name';
     const selectedTelegramChatIds = Array.isArray(zone?.telegramChatIds)
       ? zone.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
@@ -572,8 +576,7 @@ export default function DetectionZoneMarking({
           trigger_notification: activeType.setting?.settings?.trigger_notification ?? true,
         }
       : null;
-    const sharedLighting = isLighting ? lightingPayload(lighting || lightingSettings(activeType.setting?.settings)) : null;
-    if (isLighting && Object.keys(lightingErrors(sharedLighting)).length) throw new Error('Please check lighting settings before saving.');
+    if (isLighting && nextZones.some(zone => Object.keys(lightingZoneErrors(zone)).length)) throw new Error('Please check lighting settings for each zone before saving.');
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
     const fields = extraFieldsFor(activeType.settingType);
     const usesLineMode = activeType.settingType === 'lineCrossingSettings' || isCheckInOut;
@@ -608,6 +611,7 @@ export default function DetectionZoneMarking({
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       name: z.name,
       ...(isHygiene ? hygieneZonePayload(z) : {}),
+      ...(isLighting ? lightingZonePayload(z) : {}),
       ...(isFireSmoke ? { fire_outside_zone_enabled: z.fireOutsideZoneEnabled ?? activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
       telegramChatId: isCheckInOut
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
@@ -663,7 +667,6 @@ export default function DetectionZoneMarking({
           ...(auxiliaryLineExtras || {}),
           ...(isStockCounting ? { trigger_notification: setting.settings?.trigger_notification ?? true } : {}),
           ...(doorSettings || {}),
-          ...(sharedLighting || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -699,7 +702,6 @@ export default function DetectionZoneMarking({
           ...(auxiliaryLineExtras || {}),
           ...(isStockCounting ? { trigger_notification: true } : {}),
           ...(doorSettings || {}),
-          ...(sharedLighting || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -1535,6 +1537,7 @@ export default function DetectionZoneMarking({
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
                 isFireSmoke={isFireSmoke}
+                isLighting={isLighting}
                 isHygiene={isHygiene}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
@@ -1667,6 +1670,7 @@ export default function DetectionZoneMarking({
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
                 isFireSmoke={isFireSmoke}
+                isLighting={isLighting}
                 isHygiene={isHygiene}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
