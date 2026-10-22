@@ -434,7 +434,7 @@ class IncidentsController {
 
   async getVehicleCheckInOutLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in in range, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. When startDate/endDate are given, only vehicles with a crossing inside that range are returned. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.'
+    #swagger.description = 'Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row shows the first check-in, custody, crossing counts and latest event time. With startDate/endDate, custody and counts use all crossings through endDate; vehicles still in custody carry forward from earlier days, alongside vehicles with activity in the selected range. Visits completed before startDate are excluded. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.'
     #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
     #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }

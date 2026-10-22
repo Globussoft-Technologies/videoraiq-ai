@@ -282,6 +282,25 @@ describe("PythonService.startNewDetection", () => {
     });
   });
 
+  it("sends independent lighting settings for each zone", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+    const zones = [[[0, 0], [10, 0], [10, 10]], [[20, 20], [30, 20], [30, 30]]];
+    await PythonService.startNewDetection({
+      camera_id: "lighting-camera", nvr_id: "nvr", admin_id: "admin",
+      stream_url: "rtsp://lighting.test/stream",
+      detection_modes: ["lightingVisibilitySiteConditionsDetectionSettings"],
+      zones,
+      zone_configs: [
+        { name: "Yard", lighting_categories: ["lowVisibility"], lighting_interval_sec: 600, lighting_min_confidence: 0.5, lighting_cooldown_sec: 0 },
+        { name: "Road", lighting_categories: ["roadSurfaceDamage"], lighting_interval_sec: 1200, lighting_min_confidence: 0.8, lighting_cooldown_sec: 3600 },
+      ],
+    });
+    const detectors = axios.post.mock.calls[0][1].detectors;
+    expect(detectors).toHaveLength(2);
+    expect(detectors[0]).toMatchObject({ zones: [zones[0]], zone_name: "Yard", lighting_categories: ["lowVisibility"], lighting_interval_sec: 600, lighting_min_confidence: 0.5, lighting_cooldown_sec: 0 });
+    expect(detectors[1]).toMatchObject({ zones: [zones[1]], zone_name: "Road", lighting_categories: ["roadSurfaceDamage"], lighting_interval_sec: 1200, lighting_min_confidence: 0.8, lighting_cooldown_sec: 3600 });
+  });
+
   it("sends each stock zone with its own activity mode", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 

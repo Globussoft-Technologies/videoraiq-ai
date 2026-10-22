@@ -1275,9 +1275,9 @@ const hygieneCategoryField = (defaultValue) => ({
   },
 });
 const hygieneNumericFields = {
-  hygiene_interval_sec: { type: Number, min: 1 },
-  hygiene_min_confidence: { type: Number, min: 0, max: 1 },
-  hygiene_cooldown_sec: { type: Number, min: 0 },
+  hygiene_interval_sec: { type: Number, min: 60, max: 3600 },
+  hygiene_min_confidence: { type: Number, min: 0.5, max: 1 },
+  hygiene_cooldown_sec: { type: Number, min: 0, max: 86400 },
 };
 const HygieneSanitationFoodSafetyDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
 HygieneSanitationFoodSafetyDetectionSchema.add({
@@ -1298,11 +1298,17 @@ const HygieneSanitationFoodSafetyDetectionSetting = DetectionSetting.discriminat
 const LightingVisibilitySiteConditionsDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
 LightingVisibilitySiteConditionsDetectionSchema.add({
   zone_name: { type: String, default: "default" },
-  lighting_categories: { type: [String], default: ["weatherSiteHazard"] },
-  lighting_interval_sec: { type: Number, default: 3600, min: 1 },
-  lighting_min_confidence: { type: Number, default: 0.6, min: 0, max: 1 },
-  lighting_cooldown_sec: { type: Number, default: 21600, min: 0 },
+  lighting_categories: { type: [String], default: ["lowVisibility", "roadSurfaceDamage", "weatherSiteHazard"] },
+  lighting_interval_sec: { type: Number, default: 3600, min: 600, max: 86400 },
+  lighting_min_confidence: { type: Number, default: 0.6, min: 0.5, max: 1 },
+  lighting_cooldown_sec: { type: Number, default: 21600, min: 0, max: 86400 },
   trigger_notification: { type: Boolean, default: true },
+});
+LightingVisibilitySiteConditionsDetectionSchema.path("zone_configs").schema.add({
+  lighting_categories: { type: [String], default: undefined },
+  lighting_interval_sec: { type: Number, min: 600, max: 86400 },
+  lighting_min_confidence: { type: Number, min: 0.5, max: 1 },
+  lighting_cooldown_sec: { type: Number, min: 0, max: 86400 },
 });
 const LightingVisibilitySiteConditionsDetectionSetting = DetectionSetting.discriminator(
   "lightingVisibilitySiteConditionsDetectionSettings",

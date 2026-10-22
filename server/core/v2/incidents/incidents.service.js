@@ -3996,11 +3996,9 @@ console.log(result,'result');
           .endOf("day")
           .toDate();
 
-        // Only crossings inside the selected range. Custody is still derived,
-        // but from just those events, and the post-group filter below keeps
-        // only vehicles that actually have an event in range -- a car that
-        // checked in before the range and never checked out is not shown here.
-        match.timeOfIncident = { $gte: windowStart, $lte: windowEnd };
+        // Include earlier crossings to carry open visits forward. Stop at the
+        // selected day's end so later checkouts cannot change historical custody.
+        match.timeOfIncident = { $lte: windowEnd };
         activeWindow = { windowStart, windowEnd };
       }
 
@@ -4093,15 +4091,17 @@ console.log(result,'result');
       ];
 
       if (activeWindow) {
-        // Every remaining event is already inside the window (matched above),
-        // so the vehicle is in range by construction. Still guard on
-        // lastEventAt so nothing outside the range can leak through.
+        // Show vehicles still on site plus vehicles with activity in range.
+        // Completed visits from before the range do not belong in this view.
         basePipeline.push({
           $match: {
-            lastEventAt: {
-              $gte: activeWindow.windowStart,
-              $lte: activeWindow.windowEnd,
-            },
+            $or: [
+              { custody: true },
+              { lastEventAt: {
+                $gte: activeWindow.windowStart,
+                $lte: activeWindow.windowEnd,
+              } },
+            ],
           },
         });
       }

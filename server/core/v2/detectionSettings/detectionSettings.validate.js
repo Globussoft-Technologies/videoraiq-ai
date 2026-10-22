@@ -132,9 +132,9 @@ class DetectionSettingsValidation {
     if (settingType !== "hygieneSanitationFoodSafetyDetectionSettings") return { error: null };
     const fields = {
       hygiene_categories: Joi.array().items(Joi.string().valid(...HYGIENE_CATEGORIES)).min(1).unique(),
-      hygiene_interval_sec: Joi.number().min(1),
-      hygiene_min_confidence: Joi.number().min(0).max(1),
-      hygiene_cooldown_sec: Joi.number().min(0),
+      hygiene_interval_sec: Joi.number().min(60).max(3600),
+      hygiene_min_confidence: Joi.number().min(0.5).max(1),
+      hygiene_cooldown_sec: Joi.number().min(0).max(86400),
     };
     return Joi.object({
       ...fields,
@@ -145,13 +145,17 @@ class DetectionSettingsValidation {
 
   validateLightingSettings(settingType, settings = {}) {
     if (settingType !== "lightingVisibilitySiteConditionsDetectionSettings") return { error: null };
+    const fields = {
+      lighting_categories: Joi.array().items(Joi.string().valid("lowVisibility", "roadSurfaceDamage", "weatherSiteHazard")).min(1).unique(),
+      lighting_interval_sec: Joi.number().min(600).max(86400),
+      lighting_min_confidence: Joi.number().min(0.5).max(1),
+      lighting_cooldown_sec: Joi.number().min(0).max(86400),
+    };
     return Joi.object({
+      ...fields,
       zone_name: Joi.string().trim(),
-      lighting_categories: Joi.array().items(Joi.string().trim().min(1)).min(1).unique(),
-      lighting_interval_sec: Joi.number().min(1),
-      lighting_min_confidence: Joi.number().min(0).max(1),
-      lighting_cooldown_sec: Joi.number().min(0),
       trigger_notification: Joi.boolean(),
+      zone_configs: Joi.array().items(Joi.object(fields).unknown(true)),
     }).unknown(true).validate(settings, { convert: false });
   }
 

@@ -62,15 +62,21 @@ const appendIndustrialDetectors = (
         continue;
       }
       if (name === "lightingVisibilitySiteConditionsDetectionSettings") {
-        detectors.push({
-          name,
-          zones: zones || [],
-          zone_name: stockSettings.zone_name ?? plainZoneConfig(zone_configs?.[0])?.name,
-          trigger_notification: stockSettings.trigger_notification ?? true,
-          lighting_categories: stockSettings.lighting_categories ?? ["weatherSiteHazard"],
-          lighting_interval_sec: stockSettings.lighting_interval_sec ?? 3600,
-          lighting_min_confidence: stockSettings.lighting_min_confidence ?? 0.6,
-          lighting_cooldown_sec: stockSettings.lighting_cooldown_sec ?? 21600,
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];
+        polygons.forEach((polygon, index) => {
+          const config = plainZoneConfig(configs[index]) || {};
+          detectors.push({
+            name,
+            zones: [polygon],
+            zone_name: config.name ?? stockSettings.zone_name ?? `Zone ${index + 1}`,
+            severity: severity ?? "high",
+            trigger_notification: stockSettings.trigger_notification ?? true,
+            lighting_categories: config.lighting_categories ?? stockSettings.lighting_categories ?? ["lowVisibility", "roadSurfaceDamage", "weatherSiteHazard"],
+            lighting_interval_sec: config.lighting_interval_sec ?? stockSettings.lighting_interval_sec ?? 3600,
+            lighting_min_confidence: config.lighting_min_confidence ?? stockSettings.lighting_min_confidence ?? 0.6,
+            lighting_cooldown_sec: config.lighting_cooldown_sec ?? stockSettings.lighting_cooldown_sec ?? 21600,
+          });
         });
         continue;
       }

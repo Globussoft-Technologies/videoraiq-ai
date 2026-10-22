@@ -153,6 +153,28 @@ describe("vehicle check-in/out logs — grouping", () => {
 });
 
 describe("vehicle check-in/out logs — custody", () => {
+  it("accumulates 19 vehicles across days and removes them only on checkout", async () => {
+    for (const [day, count] of [[19, 5], [20, 4], [21, 10]]) {
+      for (let i = 0; i < count; i++) {
+        await crossing(`CAR${day}${i}`, true, 9, {
+          timeOfIncident: new Date(`2026-09-${day}T09:00:00.000Z`),
+        });
+      }
+    }
+    const query = { startDate: "2026-09-22", endDate: "2026-09-22", custody: "true" };
+    expect((await list(query)).inCustodyCount).toBe(19);
+
+    await crossing("CAR190", false, 10, {
+      timeOfIncident: new Date("2026-09-22T10:00:00.000Z"),
+    });
+    expect((await list(query)).inCustodyCount).toBe(18);
+    expect((await list({ ...query, startDate: "2026-09-21", endDate: "2026-09-21" })).inCustodyCount).toBe(19);
+    const returned = await list({ ...query, custody: "false" });
+    expect(returned.totalCount).toBe(1);
+    expect(returned.data[0].vehicleNumber).toBe("CAR190");
+    expect(returned.data[0].checkInCount).toBe(1);
+  });
+
   it("is in custody when checked in and never checked out", async () => {
     await crossing("MH12AB1234", true, 9);
 

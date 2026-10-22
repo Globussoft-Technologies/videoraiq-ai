@@ -1733,7 +1733,7 @@ export const lightingVisibilitySiteConditionsDetectionSettings = {
       "Lighting / Visibility / Site Conditions Detection",
     ).settings,
     zone_name: "Scrap Yard",
-    lighting_categories: ["weatherSiteHazard"],
+    lighting_categories: ["lowVisibility", "roadSurfaceDamage", "weatherSiteHazard"],
     lighting_interval_sec: 3600,
     lighting_min_confidence: 0.6,
     lighting_cooldown_sec: 21600,
