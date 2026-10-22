@@ -10,10 +10,10 @@ const responseCache = new Map();
  *
  * @param {Function} fetcher  async () => data  (memoize with useCallback at call site)
  * @param {Array}    deps     dependency list that triggers a refetch
- * @param {Object}   opts     { enabled, initialData, pollMs, cacheKey }
+ * @param {Object}   opts     { enabled, initialData, pollMs, cacheKey, pollSilent }
  */
 export function useApi(fetcher, deps = [], opts = {}) {
-  const { enabled = true, initialData = null, pollMs = 0, cacheKey = '' } = opts;
+  const { enabled = true, initialData = null, pollMs = 0, cacheKey = '', pollSilent = false } = opts;
   const hasCachedData = !!cacheKey && responseCache.has(cacheKey);
   const [data, setData] = useState(() => (
     hasCachedData ? responseCache.get(cacheKey) : initialData
@@ -65,7 +65,13 @@ export function useApi(fetcher, deps = [], opts = {}) {
     // of making the screen look empty (or, worse, showing false/zero defaults).
     run({ silent: !!cacheKey && responseCache.has(cacheKey) });
     let id;
-    if (pollMs > 0) id = setInterval(run, pollMs);
+    let polling = false;
+    if (pollMs > 0) id = setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try { await run({ silent: pollSilent }); }
+      finally { polling = false; }
+    }, pollMs);
     return () => {
       mounted.current = false;
       // Also invalidate requests when an enabled flag or cache scope changes.
@@ -80,7 +86,7 @@ export function useApi(fetcher, deps = [], opts = {}) {
     // mount (deps like [page, search] don't change), so data never loads
     // until something else changes deps — e.g. a hard refresh never fetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, enabled, cacheKey]);
+  }, [...deps, enabled, cacheKey, pollMs, pollSilent]);
 
   const isEmpty =
     !loading &&

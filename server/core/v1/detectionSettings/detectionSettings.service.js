@@ -1,3 +1,4 @@
+import { acquireDetectionControlLease } from '../../../services/detectionControlLease.js';
 import Admin from "../admin/admin.model.js";
 import {
   dsLogicNamesFor,
@@ -1343,6 +1344,10 @@ class DetectionSettingService {
             ? "POST /stream (start)"
             : "POST /stream/stop";
       try {
+        if (await Admin.exists({ _id: adminId, 'detectionControlLock.expiresAt': { $gt: new Date() },
+          'detectionControlLock.token': { $ne: req.detectionControlToken || null } })) {
+          throw new Error('Another detection action is running. The saved schedule will be applied after it finishes.');
+        }
         if (scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk) {
           backendResponse = await pythonService.toggleCamerasBulk(
             adminId,
@@ -1362,6 +1367,8 @@ class DetectionSettingService {
             severity,
             confidence_thresholds,
             line_crossing_settings,
+            undefined,
+            req.detectionControlToken,
           ]);
         }
       } catch (error) {
@@ -1422,6 +1429,7 @@ class DetectionSettingService {
   async applyAllDetectionSchedules() {
     if (scheduleRunnerActive) return;
     scheduleRunnerActive = true;
+    const detectionLeases = new Map();
 
     try {
       // Loaded once per tick and reused for every camera below, so the whole
@@ -1690,7 +1698,37 @@ class DetectionSettingService {
         }
       }
 
+      const workAdminIds = new Set([
+        ...[...globalBulkOps.values()].map(group => String(group.adminId)),
+        ...[...workByChannel.values()].map(work => String(work.req.verified.userData.adminId)),
+      ]);
+      for (const adminId of workAdminIds) {
+        detectionLeases.set(adminId, await acquireDetectionControlLease(adminId, 'schedule'));
+      }
+
       for (const group of globalBulkOps.values()) {
+        const detectionLease = detectionLeases.get(String(group.adminId));
+        if (!detectionLease) continue;
+        await detectionLease.assertOwned();
+        const refreshed = new Map();
+        for (const item of group.items) {
+          const id = String(item.channel._id);
+          if (!refreshed.has(id)) refreshed.set(id, await Channel.findById(id).populate('nvrId').populate(toPopulateDetections));
+        }
+        const eligible = new Set();
+        for (const [id, camera] of refreshed) {
+          if (camera && cameraCanBulkToggle(await cameraDetectorTargetStates(camera, { index: globalScheduleIndex }), group.operation)) eligible.add(id);
+        }
+        group.items = group.items.filter(item => {
+          const id = String(item.channel._id);
+          const camera = refreshed.get(id);
+          if (!eligible.has(id) || !camera?.detections?.[item.settingType]?.id) return false;
+          item.channel = camera;
+          item.detectionSetting = camera.detections[item.settingType].id;
+          return true;
+        });
+        group.cameraIds = new Set(group.items.map(item => String(item.channel._id)));
+        if (!group.items.length) continue;
         const endpoint = GLOBAL_SCHEDULE_BULK_ENDPOINTS[group.operation];
         const enable = group.operation === "resume";
         const cameraIds = [...group.cameraIds];
@@ -1772,11 +1810,17 @@ class DetectionSettingService {
         while (cursor < channelWork.length) {
           const { channel, req, detectionSettings } = channelWork[cursor];
           cursor += 1;
+          const detectionLease = detectionLeases.get(String(req.verified.userData.adminId));
+          if (!detectionLease) continue;
+          req.detectionControlToken = detectionLease.token;
+          await detectionLease.assertOwned();
+          const freshChannel = await Channel.findById(channel._id).populate('nvrId').populate(toPopulateDetections);
+          if (!freshChannel) continue;
           // Sequential within the camera — see comment above.
           for (const detectionSetting of detectionSettings) {
             await this.applyDetectionScheduleState(
               req,
-              channel,
+              freshChannel,
               detectionSetting,
               undefined,
               "schedule-runner",
@@ -1785,12 +1829,16 @@ class DetectionSettingService {
           }
         }
       };
-      await Promise.all(
+      const results = await Promise.allSettled(
         Array.from({ length: Math.min(SCHEDULE_RUNNER_CONCURRENCY, channelWork.length) }, runNext),
       );
+      for (const result of results) {
+        if (result.status === 'rejected') logger.error('Schedule worker failed:', result.reason);
+      }
     } catch (error) {
       logger.error("Failed to apply detection schedules:", error);
     } finally {
+      await Promise.allSettled([...detectionLeases.values()].filter(Boolean).map(lease => lease.release()));
       scheduleRunnerActive = false;
     }
   }

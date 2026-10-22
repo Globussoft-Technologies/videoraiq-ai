@@ -3,14 +3,21 @@ import DetectionSettingsController from "./detectionSettings.controller.js";
 import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck } from '../../../middlewares/permissionMiddleware.js';
 
 
+import rateLimit from 'express-rate-limit';
+import { verifyResetPassword, consumeResetApproval, bulkDetectionControl, getBulkDetectionState } from '../../../services/detectionBulkControl.js';
+
 const router = express.Router();
+const passwordLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+router.post('/verify-reset-password', editAccessCheck, passwordLimit, verifyResetPassword);
+router.get('/bulk-control', viewAccessCheck, getBulkDetectionState);
+router.post('/bulk-control', editAccessCheck, bulkDetectionControl);
 
 router.get("/", viewAccessCheck,DetectionSettingsController.getAllDetectionSettings);
 router.post("/",createAccessCheck, DetectionSettingsController.createDetectionSettings);
 router.get("/examples",viewAccessCheck, DetectionSettingsController.getDetectionExamples);
 router.get("/types",viewAccessCheck, DetectionSettingsController.getDetectionTypes);
-router.post("/reset-all", editAccessCheck, DetectionSettingsController.resetAllDetections);
-router.post("/reset-camera-types", editAccessCheck, DetectionSettingsController.resetAllCameraTypes);
+router.post("/reset-all", editAccessCheck, consumeResetApproval, DetectionSettingsController.resetAllDetections);
+router.post("/reset-camera-types", editAccessCheck, consumeResetApproval, DetectionSettingsController.resetAllCameraTypes);
 router.get("/:id/schedule", viewAccessCheck, DetectionSettingsController.getDetectionSchedule);
 router.get("/:id/schedule/:channelId", viewAccessCheck, DetectionSettingsController.getCameraDetectionSchedule);
 router.put("/:id/schedule/:channelId", editAccessCheck, DetectionSettingsController.updateCameraDetectionSchedule);

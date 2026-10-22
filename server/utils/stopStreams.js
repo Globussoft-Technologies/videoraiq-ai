@@ -20,8 +20,23 @@ const postToStreamServices = (
       .then(({ detectionUrl, attendanceUrl }) => {
         // Object detection service
         if (detectionUrl) {
-          axios
-            .post(`${detectionUrl}${detectionPath}`, body, opts)
+          Promise.resolve().then(async () => {
+            let detectionBody = body;
+            if (detectionPath === '/stream/resume-all') {
+              const { default: Admin } = await import('../core/v1/admin/admin.model.js');
+              const { default: Channel } = await import('../core/v1/channels/channels.model.js');
+              const owner = await Admin.findById(adminId).select('user_id').lean();
+              if (!owner) return;
+              const cameras = await Channel.find({ userId: owner.user_id })
+                .setOptions({ includeInactive: true }).select('_id detectionBulkPaused').lean();
+              if (cameras.some(camera => camera.detectionBulkPaused)) {
+                const ids = cameras.filter(camera => !camera.detectionBulkPaused).map(camera => String(camera._id));
+                if (!ids.length) return;
+                detectionBody = { ...body, camera_id: ids };
+              }
+            }
+            return axios.post(`${detectionUrl}${detectionPath}`, detectionBody, opts);
+          })
             .catch((err) =>
               logger.error(
                 `[${tag}] detection failed for admin ${adminId}:`,

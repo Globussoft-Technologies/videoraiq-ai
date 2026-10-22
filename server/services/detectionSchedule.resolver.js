@@ -391,6 +391,9 @@ export const resolveDesiredDetectionState = async (
   settingType,
   { index } = {},
 ) => {
+  if (channel?.detectionBulkPaused && settingType !== 'faceAuthenticationSettings') {
+    return { active: false, source: 'bulk-pause', schedule: channel?.detections?.[settingType]?.schedule };
+  }
   const cameraSchedule = channel?.detections?.[settingType]?.schedule;
 
   const globalIndex =

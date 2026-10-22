@@ -129,6 +129,8 @@ const detectionFields = {
 // ! old
 const ChannelSchema = new mongoose.Schema(
   {
+    detectionBulkPaused: { type: Boolean, default: false },
+    detectionResumeTypes: { type: [String], default: [] },
     nvrId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "NVR",

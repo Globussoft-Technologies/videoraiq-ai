@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import mongoose from 'mongoose';
 import express from 'express';
@@ -153,7 +154,11 @@ describe('admin-wide detection reset', () => {
       next();
     });
     app.use('/api/v2/detection-settings', router);
-    const res = await request(app).post(`/api/v2/detection-settings/${path}`).send({ confirm: true });
+    const resetToken = 'verified-reset-token';
+    await Admin.updateOne({ _id: owner._id }, { $set: { detectionResetApproval: {
+      hash: createHash('sha256').update(resetToken).digest('hex'), expiresAt: new Date(Date.now() + 60000),
+    } } });
+    const res = await request(app).post(`/api/v2/detection-settings/${path}`).send({ confirm: true, resetToken });
     expect(res.status).toBe(200);
     expect(res.body.body.status).toBe('success');
     expect(res.body.body).not.toHaveProperty('data');

@@ -89,6 +89,8 @@ class ChannelService {
     try {
       const cameraId = req.params.id;
       const updates = { ...req.body };
+      delete updates.detectionBulkPaused;
+      delete updates.detectionResumeTypes;
 
       let existingChannel = await Channel.findById(cameraId);
       if (!existingChannel) {
@@ -1438,6 +1440,9 @@ class ChannelService {
         .populate(toPopulateDetections);
       if (!channel) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
+      }
+      if (enable && channel.detectionBulkPaused && detectionType !== 'faceAuthenticationSettings') {
+        return res.status(409).json(Response.userFailResp('Resume all detections before enabling an individual detector'));
       }
       // Check if detection setting exists and is linked
       const existingLink = channel?.detections?.[detectionType];

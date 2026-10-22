@@ -1,3 +1,4 @@
+import { acquireDetectionControlLease } from '../../../services/detectionControlLease.js';
 import Admin from "../admin/admin.model.js";
 import {
   dsLogicNamesFor,
@@ -704,7 +705,10 @@ class DetectionSettingService {
     }
 
     let stoppedAll = false;
+    let detectionLease;
     try {
+      detectionLease = await acquireDetectionControlLease(user.adminId, 'reset');
+      if (!detectionLease) return res.status(409).json(Response.userFailResp('Another detection action is running'));
       // Scope comes exclusively from authentication, never request IDs/filters.
       const owner = await Admin.findOne({ _id: user.adminId, user_id: String(user.user_id) }).select("_id").lean();
       if (!owner) return res.status(403).json(Response.accessDeniedResp("Admin account mismatch"));
@@ -729,6 +733,7 @@ class DetectionSettingService {
       // the current page filters. Removing links also removes local schedules
       // and overrides. Face-auth belongs to the separate camera-type action.
       await Channel.updateMany(scope, [{ $set: {
+        detectionBulkPaused: false, detectionResumeTypes: [],
         detections: { $arrayToObject: { $filter: {
           input: { $objectToArray: { $ifNull: ["$detections", {}] } },
           as: "link", cond: { $eq: ["$$link.k", "faceAuthenticationSettings"] },
@@ -736,6 +741,7 @@ class DetectionSettingService {
         control: { $cond: [{ $eq: ["$detections.faceAuthenticationSettings.enabled", true] }, 1, 0] },
       } }]);
       await DetectionSetting.deleteMany({ ...scope, settingType: { $ne: "faceAuthenticationSettings" } });
+      await Admin.updateOne({ _id: user.adminId }, { $unset: { detectionBulkJob: 1 } });
       return res.status(200).json(Response.userSuccessResp("All object detections stopped and settings reset successfully"));
     } catch (error) {
       logger.error(`Reset all detections failed for admin ${user.adminId}: ${error.message}`);
@@ -745,6 +751,8 @@ class DetectionSettingService {
           : "Could not reset all detections. Please retry.",
         error.message,
       ));
+    } finally {
+      if (detectionLease) await detectionLease.release().catch(error => logger.error(`Reset lock release failed: ${error.message}`));
     }
   }
 
@@ -1534,6 +1542,10 @@ class DetectionSettingService {
             ? "POST /stream (start)"
             : "POST /stream/stop";
       try {
+        if (await Admin.exists({ _id: adminId, 'detectionControlLock.expiresAt': { $gt: new Date() },
+          'detectionControlLock.token': { $ne: req.detectionControlToken || null } })) {
+          throw new Error('Another detection action is running. The saved schedule will be applied after it finishes.');
+        }
         if (scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk) {
           backendResponse = await pythonService.toggleCamerasBulk(
             adminId,

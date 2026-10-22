@@ -1,3 +1,5 @@
+import Admin from '../core/v1/admin/admin.model.js';
+import { assertDetectionServiceSuccess } from './detectionServiceResult.js';
 import logger from "../utils/logger.js";
 import getStreamingUrl, {
   buildRTSPUrl,
@@ -308,7 +310,7 @@ const pickVehicleCheckInOutSettings = (settings = {}) => {
 class PythonService {
   // Explicit admin resets target one DS service. The schedule runner's bulk
   // helper below deliberately targets both and must not be used for these.
-  async stopAdminPipelines(admin_id, target) {
+  async stopAdminPipelines(admin_id, target, cameraIds = []) {
     if (!admin_id || !['detections', 'camera-types'].includes(target)) {
       throw new Error('admin_id and a valid reset target are required');
     }
@@ -316,15 +318,13 @@ class PythonService {
     const base = String(target === 'detections' ? endpoints.detectionUrl : endpoints.attendanceUrl).replace(/\/+$/, '');
     const faceBase = base.endsWith('/face-auth') ? base : `${base}/face-auth`;
     const url = target === 'detections' ? `${base}/stream/stop-all` : `${faceBase}/api/v1/cameras/stop-all`;
-    const response = await axios.post(url, { admin_id: String(admin_id) }, {
+    const payload = { admin_id: String(admin_id) };
+    if (cameraIds.length) payload.camera_id = cameraIds.length === 1 ? String(cameraIds[0]) : cameraIds.map(String);
+    const response = await axios.post(url, payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 45000,
     });
-    const data = response.data;
-    if (data?.success === false || ['failed', 'failure', 'error'].includes(String(data?.status || '').toLowerCase())) {
-      throw new Error(data?.message || 'The detection service could not stop all cameras');
-    }
-    return data;
+    return assertDetectionServiceSuccess(response.data);
   }
 
   async toggleCamerasBulk(admin_id, camera_ids = [], enable = true) {
@@ -360,11 +360,13 @@ class PythonService {
       // silently kept detection pipelines running past their stop time.
       const [detectionResult, attendanceResult] = await Promise.allSettled([
         axios.post(detectionEndpoint, payload, {
+          timeout: 45000,
           headers: {
             "Content-Type": "application/json",
           },
         }),
         axios.post(attendanceEndpoint, payload, {
+          timeout: 45000,
           headers: {
             "Content-Type": "application/json",
           },
@@ -487,7 +489,15 @@ class PythonService {
     confidence_thresholds = {},
     line_crossing_settings = {},
     vehicle_check_in_out_settings = {},
+    detectionControlToken = null,
   ) {
+    if (await Admin.exists({ _id: admin_id, 'detectionControlLock.expiresAt': { $gt: new Date() },
+      'detectionControlLock.token': { $ne: detectionControlToken } })) {
+      throw new Error('Another detection action is running. Please retry after it finishes.');
+    }
+    if (enable && channel?.detectionBulkPaused && type !== 'faceAuthenticationSettings') {
+      throw new Error('Resume all detections before starting a detector on a paused camera');
+    }
     if (enable) {
       // ! old
       const nvr = await NVR.findById(channel?.nvrId?._id);
@@ -874,12 +884,13 @@ class PythonService {
 
       const { detectionUrl } = await resolveAdminEndpoints(admin_id);
       const response = await axios.post(`${detectionUrl}/stream`, newPayload, {
+        timeout: 45000,
         headers: {
           "Content-Type": "application/json",
         },
       });
 
-      return response.data;
+      return assertDetectionServiceSuccess(response.data);
     } catch (error) {
       logger.error(
         "Error starting detection:",
@@ -1456,12 +1467,13 @@ class PythonService {
         `${detectionUrl}/stream/stop`,
         payload,
         {
+          timeout: 45000,
           headers: {
             "Content-Type": "application/json",
           },
         },
       );
-      return response.data;
+      return assertDetectionServiceSuccess(response.data);
     } catch (error) {
       logger.error(
         "Error stopping detection:",

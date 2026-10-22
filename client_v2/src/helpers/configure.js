@@ -145,8 +145,8 @@ export const resetDetectionThresholdsBatch = async ({ channelId, detectionSettin
   return unwrap(res);
 };
 
-const resetAdminConfiguration = async (action) => {
-  const res = await axios.post(`${Api_url}/detection-settings/${action}`, { confirm: true }, {
+const resetAdminConfiguration = async (action, resetToken) => {
+  const res = await axios.post(`${Api_url}/detection-settings/${action}`, { confirm: true, resetToken }, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': getAccessToken() },
   });
   if (res.data?.body?.status !== 'success') {
@@ -156,8 +156,27 @@ const resetAdminConfiguration = async (action) => {
   return unwrap(res);
 };
 
-export const resetAllDetections = () => resetAdminConfiguration('reset-all');
-export const resetAllCameraTypes = () => resetAdminConfiguration('reset-camera-types');
+export const resetAllDetections = (token) => resetAdminConfiguration('reset-all', token);
+export const resetAllCameraTypes = (token) => resetAdminConfiguration('reset-camera-types', token);
+export const verifyDetectionResetPassword = async (password) => {
+  const res = await axios.post(`${Api_url}/detection-settings/verify-reset-password`, { password }, {
+    headers: { 'x-access-token': getAccessToken() },
+  });
+  return unwrap(res);
+};
+export const getBulkDetectionState = async () => {
+  const res = await axios.get(`${Api_url}/detection-settings/bulk-control`, {
+    headers: { 'x-access-token': getAccessToken() }, timeout: 15000,
+  });
+  return unwrap(res);
+};
+export const bulkDetectionControl = async (action) => {
+  const res = await axios.post(`${Api_url}/detection-settings/bulk-control`, { action, confirm: true }, {
+    headers: { 'x-access-token': getAccessToken() }, timeout: 30000,
+  });
+  window.dispatchEvent(new Event('vq-detection-toggle-change'));
+  return unwrap(res);
+};
 
 /** Create a brand-new DetectionSetting for a camera that has never had this
  * type configured — same POST /detection-settings V1 uses on first save. */

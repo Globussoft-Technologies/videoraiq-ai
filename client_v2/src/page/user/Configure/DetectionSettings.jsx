@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart, ScanLine, CameraOff, Info } from 'lucide-react';
+import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart, ScanLine, CameraOff, Info, Pause, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
 import { useAuth } from '@/context/AuthContext';
-import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch, resetAllDetections, resetAllCameraTypes } from '../../../helpers/configure';
+import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch, resetAllDetections, resetAllCameraTypes, verifyDetectionResetPassword, bulkDetectionControl, getBulkDetectionState } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import MultiSelect from '../../../components/MultiSelect';
 import CameraStream from '../../../components/CameraStream';
@@ -857,6 +857,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
             <span style={{ fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {camera.customName || camera.name}
+              {camera.detectionBulkPaused && <span className="ml-2 rounded bg-[var(--bg2)] px-2 py-0.5 text-[10px] font-medium text-[var(--tx3)]">{Object.entries(camera.detections || {}).some(([type, link]) => type !== 'faceAuthenticationSettings' && link?.enabled) ? 'Pause pending' : 'Paused'}</span>}
             </span>
             <button
               type="button"
@@ -995,8 +996,26 @@ export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }
   const [resetLoadingId, setResetLoadingId] = useState('');
   const [resetMenuOpen, setResetMenuOpen] = useState(false);
   const [resetAllTarget, setResetAllTarget] = useState(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetPasswordEditable, setResetPasswordEditable] = useState(false);
+  const [resetToken, setResetToken] = useState('');
+  const [verifyingReset, setVerifyingReset] = useState(false);
+  const [bulkAction, setBulkAction] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const bulkInFlight = useRef(false);
+  const observedBulkJob = useRef(null);
+  const seenBulkErrors = useRef(new Set());
   const [resettingAll, setResettingAll] = useState(false);
   const resetAllInFlight = useRef(false);
+
+  const bulkStateApi = useApi(getBulkDetectionState, [], { enabled: canResetAll, pollMs: 2000, pollSilent: true });
+  const bulkPaused = bulkStateApi.data?.paused === true;
+  const bulkJob = bulkStateApi.data?.job;
+  const bulkBusy = bulkLoading || bulkJob?.status === 'running';
+  const nextBulkAction = bulkStateApi.data?.nextAction || (bulkPaused ? 'resume' : 'pause');
+  const retryBulk = bulkJob?.status === 'failed';
+
 
   const nvrsApi = useApi(() => getNvrs(0, 100), []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
@@ -1008,6 +1027,42 @@ export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }
     () => getChannels({ skip: page * LIMIT, limit: LIMIT, nvrId: nvrFilter, search, camType: camTypeFilter, engines: engineFilter }),
     [page, nvrFilter, search, camTypeFilter, engineFilter],
   );
+  useEffect(() => {
+    if (!bulkJob?.id) return;
+    if (observedBulkJob.current?.id !== bulkJob.id) {
+      observedBulkJob.current = { id: bulkJob.id, notify: bulkJob.status === 'running', finished: false };
+      seenBulkErrors.current.clear();
+    }
+    const observed = observedBulkJob.current;
+    if (!observed.notify) return;
+    const verb = bulkJob.action === 'pause' ? 'Pause' : 'Resume';
+    for (const event of bulkJob.events || []) {
+      if (seenBulkErrors.current.has(event.id)) continue;
+      seenBulkErrors.current.add(event.id);
+      toast.error(`Could not ${bulkJob.action} ${event.cameraName}${event.detectionName ? ` / ${event.detectionName}` : ''}: ${event.error}`, {
+        description: `Attempt ${event.attempt} of ${bulkJob.maxAttempts}${event.attempt < bulkJob.maxAttempts ? '. This camera will be retried.' : '. Retry failed cameras to try again.'}`,
+      });
+    }
+    const toastId = `bulk-detection-${bulkJob.id}`;
+    if (bulkJob.status === 'running') {
+      toast.loading(`${verb}: ${bulkJob.completed} of ${bulkJob.total} cameras completed`, {
+        id: toastId, description: `Attempt ${Math.max(1, bulkJob.attempt)} of ${bulkJob.maxAttempts}`,
+      });
+    } else if (!observed.finished) {
+      observed.finished = true;
+      const failed = (bulkJob.items || []).filter(item => item.status !== 'success').length;
+      if (bulkJob.status === 'success') {
+        toast.success(`${verb} completed for ${bulkJob.total} cameras. Zones and settings preserved.`, { id: toastId });
+      } else {
+        toast.error(`${verb}: ${failed} camera${failed === 1 ? '' : 's'} still failed.`, {
+          id: toastId, description: bulkJob.message || 'Use Retry failed to retry only the unfinished cameras.',
+        });
+      }
+      channelsApi.refetch({ silent: true });
+      window.dispatchEvent(new Event('vq-detection-toggle-change'));
+    }
+  }, [bulkJob]);
+
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
@@ -1100,13 +1155,44 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
     setResetSelection([]);
   };
 
+  const handleVerifyResetPassword = async () => {
+    if (verifyingReset || !resetPassword) return;
+    setVerifyingReset(true);
+    try {
+      const result = await verifyDetectionResetPassword(resetPassword);
+      setResetToken(result.token);
+      setResetPassword('');
+      setShowResetPassword(false);
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Password verification failed');
+    } finally { setVerifyingReset(false); }
+  };
+
+  const handleBulkDetectionControl = async () => {
+    if (!canResetAll || !bulkAction || bulkInFlight.current) return;
+    bulkInFlight.current = true;
+    setBulkLoading(true);
+    try {
+      const result = await bulkDetectionControl(bulkAction);
+      observedBulkJob.current = { id: result.job.id, notify: true, finished: false };
+      seenBulkErrors.current.clear();
+      bulkStateApi.setData(previous => ({ ...previous, job: result.job }));
+      setBulkAction(null);
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Bulk action failed. Please retry.');
+    } finally {
+      try { await Promise.all([channelsApi.refetch({ silent: true }), bulkStateApi.refetch({ silent: true })]); }
+      finally { bulkInFlight.current = false; setBulkLoading(false); }
+    }
+  };
+
   const handleResetAllDetections = async () => {
-    if (!canResetAll || !resetAllTarget || resetAllInFlight.current) return;
+    if (!canResetAll || !resetAllTarget || !resetToken || resetAllInFlight.current) return;
     const cameraTypesOnly = resetAllTarget === 'camera-types';
     resetAllInFlight.current = true;
     setResettingAll(true);
     try {
-      await (cameraTypesOnly ? resetAllCameraTypes() : resetAllDetections());
+      await (cameraTypesOnly ? resetAllCameraTypes(resetToken) : resetAllDetections(resetToken));
       // Clear old badges immediately; refetch also reapplies active filters.
       channelsApi.setData(previous => previous ? {
         ...previous,
@@ -1127,6 +1213,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
     } catch (error) {
       toast.error(error?.response?.data?.body?.message || error?.message || 'Failed to reset all detections.');
     } finally {
+      setResetToken('');
       resetAllInFlight.current = false;
       setResettingAll(false);
     }
@@ -1284,7 +1371,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
                 type="button"
                 aria-label="Reset configuration"
                 aria-expanded={resetMenuOpen}
-                disabled={resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
+                disabled={bulkBusy || resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
                 className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))', background: resetMenuOpen ? 'var(--bg2)' : undefined }}
               >
@@ -1306,7 +1393,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
                     key={target}
                     type="button"
                     disabled={resettingAll}
-                    onClick={() => { setResetMenuOpen(false); setResetAllTarget(target); }}
+                    onClick={() => { setResetMenuOpen(false); setResetToken(''); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); setResetAllTarget(target); }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[var(--bg2)] focus-visible:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--blue)]/30 disabled:opacity-50"
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[var(--crit)]" style={{ background: 'color-mix(in srgb, var(--crit) 9%, transparent)' }}>
@@ -1326,12 +1413,37 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             </PopoverContent>
           </Popover>
         )}
+        {canResetAll && (
+          <button type="button" aria-haspopup="dialog"
+            aria-label={retryBulk ? `Retry failed ${nextBulkAction}` : nextBulkAction === 'resume' ? 'Resume all detections' : 'Pause all detections'}
+            disabled={bulkBusy || bulkStateApi.loading || Boolean(bulkStateApi.error) || !bulkStateApi.data?.cameraCount || resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
+            onClick={() => setBulkAction(nextBulkAction)}
+            className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))' }}>
+            {bulkBusy || bulkStateApi.loading ? <Loader2 size={15} className="animate-spin" /> : nextBulkAction === 'resume' ? <Play size={15} /> : <Pause size={15} />}
+            {bulkBusy ? `${bulkJob?.action === 'resume' ? 'Resuming' : 'Pausing'} ${bulkJob?.completed || 0}/${bulkJob?.total || 0}` : retryBulk ? 'Retry failed' : nextBulkAction === 'resume' ? 'Resume all' : 'Pause all'}
+          </button>
+        )}
         <ZoneStatusLegend />
         {/* <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
           {total} total
         </span> */}
       </div>
 
+      {bulkJob && (bulkJob.status === 'running' || bulkJob.status === 'failed') && (
+        <div role="status" aria-live="polite" className="mb-3 rounded-xl border border-[var(--bd)] bg-[var(--bg1)] p-3 text-xs text-[var(--tx2)]">
+          <p className="font-semibold">{bulkJob.action === 'pause' ? 'Pause' : 'Resume'}: {bulkJob.completed} of {bulkJob.total} cameras completed. Attempt {Math.max(1, bulkJob.attempt)} of {bulkJob.maxAttempts}.</p>
+          {bulkJob.message && <p className="mt-1 text-[var(--crit)]">{bulkJob.message}</p>}
+          {bulkJob.status === 'failed' && <>
+            <p className="mt-1">Retry failed will retry only the unfinished cameras. Saved zones and settings are preserved.</p>
+            <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+              {(bulkJob.items || []).filter(item => item.status !== 'success').map(item => (
+                <li key={item.cameraId} className="text-[var(--crit)]">{item.cameraName}: {item.error || 'Action did not complete'}</li>
+              ))}
+            </ul>
+          </>}
+        </div>
+      )}
       <div
         className="vq-scroll"
         role="region"
@@ -1382,7 +1494,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               onCheckTypeChange={handleCheckTypeChange}
               checkTypeSaving={checkTypeSavingId === camera._id}
               resetLoading={resetLoadingId === camera._id}
-              canEdit={canEditDetections && !resettingAll}
+              canEdit={canEditDetections && !resettingAll && !bulkBusy}
             />
           ))}
         </AsyncBoundary>
@@ -1430,7 +1542,42 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
       )}
 
       <ConfirmationModal
-        open={Boolean(resetAllTarget)}
+        open={Boolean(bulkAction)}
+        title={retryBulk ? 'Retry failed cameras?' : bulkAction === 'pause' ? 'Pause all detections?' : 'Resume all detections?'}
+        message={retryBulk ? `Retry ${bulkAction} for the unfinished cameras only? Each failed camera gets up to 3 attempts. Zones and settings will be preserved.` : bulkAction === 'pause'
+          ? 'Pause object detection on every camera in your account, including cameras outside the current filters? Zones and settings will be preserved. Detection stays paused until you resume it. Face authentication is unaffected.'
+          : 'Resume previously running object detections on all paused cameras using their saved zones and settings? Scheduled detections will follow their schedules. Face authentication is unaffected.'}
+        confirmLabel={retryBulk ? 'Retry failed' : bulkAction === 'pause' ? 'Pause all' : 'Resume all'}
+        loading={bulkLoading}
+        onClose={() => !bulkLoading && setBulkAction(null)}
+        onConfirm={handleBulkDetectionControl}
+      />
+      <ConfirmationModal
+        open={Boolean(resetAllTarget) && !resetToken}
+        title="Verify password to reset"
+        message={<div className="space-y-3 text-left">
+          <p>Enter your account password to continue. You will confirm the reset next.</p>
+          <div className="relative">
+            <input type={showResetPassword ? 'text' : 'password'} autoComplete="off"
+              name="detection-reset-verification" aria-label="Account password"
+              data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
+              readOnly={!resetPasswordEditable} onFocus={() => setResetPasswordEditable(true)}
+              value={resetPassword} onChange={event => setResetPassword(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Enter') handleVerifyResetPassword(); }}
+              className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] py-2 pl-3 pr-10 text-[var(--tx)]" />
+            <button type="button" aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showResetPassword} onClick={() => setShowResetPassword(value => !value)}
+              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg text-[var(--tx3)] hover:text-[var(--tx)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/30">
+              {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>}
+        confirmLabel="Verify password" loading={verifyingReset}
+        onClose={() => { if (!verifyingReset) { setResetAllTarget(null); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); } }}
+        onConfirm={handleVerifyResetPassword}
+      />
+      <ConfirmationModal
+        open={Boolean(resetAllTarget) && Boolean(resetToken)}
         title={resetAllTarget === 'camera-types' ? 'Reset all camera types?' : 'Reset all detections?'}
         message={<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {resetAllTarget === 'camera-types' ? <p>This will stop face authentication on every camera in your account and reset all camera types to None, including cameras outside the current filters.</p> : <>

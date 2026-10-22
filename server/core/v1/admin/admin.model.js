@@ -49,6 +49,9 @@ const adminSchema = new mongoose.Schema({
   // plan expiry. Set when stop-all fires; cleared (and resume-all fired) when the
   // admin logs in again with an active plan.
   streamsStopped: { type: Boolean, default: false },
+  detectionResetApproval: { hash: String, expiresAt: Date },
+  detectionControlLock: { token: String, kind: String, expiresAt: Date },
+  detectionBulkJob: { type: mongoose.Schema.Types.Mixed, default: null },
   // Per-admin IANA timezone. Existing null values are resolved to the same
   // fallback by verifyToken; new admins persist the default explicitly.
   timezone: { type: String, default: "Asia/Kolkata" },
