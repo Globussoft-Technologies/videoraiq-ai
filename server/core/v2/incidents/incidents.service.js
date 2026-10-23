@@ -3458,8 +3458,6 @@ console.log(result,'result');
     // (all/tagged/untagged) filter and lets free-text `search` match the
     // tagged user's name, not just the plate.
     attachVehicleOwners = false,
-    // Box Packing displays startTime as the row's time of day.
-    usePackingStartTime = false,
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -3531,9 +3529,7 @@ console.log(result,'result');
       const timeOfDay = {
         $dateToString: {
           format: "%H:%M",
-          date: usePackingStartTime
-            ? { $ifNull: ["$startTime", { $ifNull: ["$start_time", "$timeOfIncident"] }] }
-            : "$timeOfIncident",
+          date: "$timeOfIncident",
           timezone: getRequestTimezone(req),
         },
       };
@@ -4985,7 +4981,7 @@ console.log(result,'result');
         ? { ...req, verified: { ...req.verified, authorizedChannel: undefined } }
         : req;
       return await this._fetchIncidentLogs({
-        req: request, res, incidentType: 'boxPackingDetection', extraMatch, postLookupSearch: true, usePackingStartTime: true,
+        req: request, res, incidentType: 'boxPackingDetection', extraMatch, postLookupSearch: true,
         searchFields: ['boxId', 'completedBy', 'zones.zone', 'endTimeSource', 'detectedVia', 'confirmationReason'],
       });
     } catch (error) {

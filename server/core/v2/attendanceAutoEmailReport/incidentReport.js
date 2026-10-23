@@ -6,6 +6,7 @@ import PDFDocument from "pdfkit";
 import moment from "moment-timezone";
 import { Incident } from "../incidents/incidents.model.js";
 import Admin from "../admin/admin.model.js";
+import Channel from "../channels/channels.model.js";
 
 const MAX_ROWS = 10000;
 const BLUE = "#3b82f6";
@@ -127,7 +128,13 @@ export async function incidentRowsForReport(report, summary) {
   const reportType = report.reportType || "total";
   const packingOnly = incidentTypes.length === 1 && incidentTypes[0] === "boxPackingDetection";
   const selectedRows = rows.filter((row) => !packingOnly || reportType !== "review" || isPackingReviewRow(row));
-  const packing = packingOnly ? packingReportData(selectedRows, reportType, summary.timezone) : null;
+  const packingChannels = packingOnly ? await Channel.find({
+    userId: String(admin.user_id), isAdded: true,
+    "detections.boxPackingDetectionSettings.enabled": true,
+  }).select("_id name customName nvrId detections.boxPackingDetectionSettings")
+    .populate({ path: "detections.boxPackingDetectionSettings.id", select: "settings" })
+    .populate({ path: "nvrId", select: "nvrName name" }).lean() : [];
+  const packing = packingOnly ? packingReportData(selectedRows, reportType, summary.timezone, packingChannels) : null;
   return {
     ...summary,
     rows: selectedRows,
