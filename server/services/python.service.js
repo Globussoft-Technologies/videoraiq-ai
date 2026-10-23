@@ -238,16 +238,22 @@ export const buildDoorDetector = (zones, zone_configs, severity, settings = {}) 
   if (!polygons.length) {
     throw new Error("Door detection has no door points for this camera yet. The AI team sets each door camera up first.");
   }
+  if (!polygons.every((polygon) => Array.isArray(polygon) && polygon.length >= 3 && polygon.every((point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)))) {
+    throw new Error("Invalid door configuration: each door needs at least three coordinate pairs.");
+  }
   if (configs.length !== polygons.length) {
     throw new Error(`Door detection needs a name and duration for each door (${polygons.length} doors, ${configs.length} configured).`);
   }
   const short = configs.find((config) => !(Number(config?.threshold_sec) >= 60));
   if (short) throw new Error(`${short?.name || "Each door"} needs an alert duration of at least 1 minute.`);
+  if (settings.door_alert_mode !== undefined && !["open", "closed", "all"].includes(settings.door_alert_mode)) {
+    throw new Error("Invalid alert mode.");
+  }
   return {
     name: "doorDetectionSettings",
     zones: polygons,
     zone_configs: configs.map(({ name, threshold_sec }) => ({ name, threshold_sec: Number(threshold_sec) })),
-    door_alert_mode: ["open", "closed", "all"].includes(settings.door_alert_mode) ? settings.door_alert_mode : "open",
+    door_alert_mode: settings.door_alert_mode ?? "open",
     severity: severity || "moderate",
     trigger_notification: settings.trigger_notification ?? true,
   };
