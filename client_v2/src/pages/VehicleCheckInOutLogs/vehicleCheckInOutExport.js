@@ -67,6 +67,9 @@ const rangeNote = (filters) =>
     : 'All dates';
 
 const custodyNote = (filters) =>
+  `${filters?.viewMode === 'arrivals' ? 'Arrivals in date range' : 'Carry-forward custody'} | ${custodyFilterNote(filters)}`;
+
+const custodyFilterNote = (filters) =>
   filters?.custody === 'true'
     ? 'In custody only'
     : filters?.custody === 'false'
@@ -101,7 +104,7 @@ const parentRow = (row, serial) => [
 // columns. Shared by the PDF table and the Excel Vehicles sheet.
 const childRow = (c) => [
   '', // S.No
-  `- ${c.checkin ? 'Check-In' : 'Check-Out'}`, // Vehicle Number column
+  `- ${c.manualCheckout?.by ? 'Manual Check-Out' : c.checkin ? 'Check-In' : 'Check-Out'}`, // Vehicle Number column
   '', // Custody
   '', // In / Out
   dash(c?.nvrData?.nvrName), // NVR Name
@@ -114,7 +117,7 @@ const childRow = (c) => [
 const CROSSING_HEADERS = ['Direction', 'Time', 'NVR Name', 'Camera Name', 'Zone', 'Image'];
 
 const crossingCells = (c) => [
-  c.checkin ? 'Check-In' : 'Check-Out',
+  c.manualCheckout?.by ? 'Manual Check-Out' : c.checkin ? 'Check-In' : 'Check-Out',
   fmt(c.timeOfIncident),
   dash(c?.nvrData?.nvrName),
   c?.channelData?.customName || c?.channelData?.name || '--',

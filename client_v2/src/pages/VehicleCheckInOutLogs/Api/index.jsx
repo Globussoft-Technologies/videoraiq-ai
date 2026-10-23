@@ -30,6 +30,7 @@ export const fetchVehicleCheckInOutLogs = ({
   // Export path: returns each vehicle's crossings inline, so the export makes
   // one request instead of one per vehicle.
   includeHistory,
+  viewMode,
 } = {}) =>
   axios.post(
     `${HOST}/incidents/logs/vehicle-check-in-out`,
@@ -49,6 +50,7 @@ export const fetchVehicleCheckInOutLogs = ({
         ...(sortField && { sortField }),
         ...(sortOrder && { sortOrder }),
         ...(includeHistory ? { includeHistory: 'true' } : {}),
+        ...(viewMode && { viewMode }),
       },
       headers: headers(),
     },
@@ -77,6 +79,9 @@ export const fetchVehicleCheckInOutHistory = ({ vehicleKey, startDate, endDate }
 
 export const getNVRs = () =>
   axios.post(`${HOST}/authorizedChannels/getNVRS`, {}, { headers: headers() });
+
+export const manuallyCheckoutVehicles = (vehicles, reason) =>
+  axios.post(`${HOST}/incidents/logs/vehicle-check-in-out/manual-checkout`, { vehicles, reason }, { headers: headers() });
 
 export const getChannels = (data) =>
   axios.post(`${HOST}/authorizedChannels/getChannels`, data, { headers: headers() });

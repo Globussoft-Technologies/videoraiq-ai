@@ -31,10 +31,12 @@ import PageLoader from '@/components/PageLoader';
 import { usePermissions } from '@/context/PermissionContext';
 import {
   fetchVehicleCheckInOutLogs,
+  manuallyCheckoutVehicles,
   getNVRs,
   getChannels,
   getVehicleNumbers,
 } from './Api';
+import ManualCheckoutDialog from './ManualCheckoutDialog';
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
@@ -151,6 +153,7 @@ const VehicleCheckInOutLogs = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [custody, setCustody] = useState('');
+  const [viewMode, setViewMode] = useState('custody');
   const [nvrIds, setNvrIds] = useState([]);
   const [channelIds, setChannelIds] = useState([]);
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -180,12 +183,37 @@ const VehicleCheckInOutLogs = () => {
   const [expanded, setExpanded] = useState({});
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [exporting, setExporting] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const [checkoutRows, setCheckoutRows] = useState([]);
+  const [checkoutReason, setCheckoutReason] = useState('');
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const canView = permissions?.logs?.vehicleCheckInOutLogs?.view
     ?? permissions?.logs?.carLogs?.view
     ?? permissions?.logs?.view
     ?? true;
+
+  const canEdit = canView && (permissions?.logs?.vehicleCheckInOutLogs?.edit
+    ?? permissions?.logs?.carLogs?.edit ?? permissions?.logs?.global?.edit ?? permissions?.logs?.edit ?? false);
+  const selectable = rows.filter(row => row.custody);
+  const beginCheckout = vehicles => { setCheckoutReason(''); setCheckoutRows(vehicles); };
+  const confirmCheckout = async () => {
+    if (checkingOut) return;
+    setCheckingOut(true);
+    try {
+      const response = await manuallyCheckoutVehicles(checkoutRows.map(row => ({ vehicleKey: row.vehicleKey, lastCheckInAt: row.lastCheckInAt })), checkoutReason);
+      const results = response?.data?.body?.data?.results || [];
+      const completed = results.filter(item => item.status === 'checked-out').length;
+      const skipped = results.length - completed;
+      if (completed) toast.success(`${completed} vehicle${completed === 1 ? '' : 's'} manually checked out`);
+      if (skipped) toast.info(`${skipped} vehicle${skipped === 1 ? '' : 's'} skipped because custody changed or access is unavailable. The list has been refreshed.`);
+      setCheckoutRows([]);
+      await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Check-out failed. Refresh the list before retrying.');
+    } finally { setCheckingOut(false); }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -213,9 +241,11 @@ const VehicleCheckInOutLogs = () => {
         // preview can walk every crossing image without an expand or a
         // second request.
         includeHistory: true,
+        viewMode,
       });
       const data = res?.data?.body?.data;
       setRows(data?.data || []);
+      setSelected([]);
       setTotalCount(data?.totalCount || 0);
       setInCustodyCount(data?.inCustodyCount || 0);
       // Any open sub-rows belong to the previous result set.
@@ -228,7 +258,7 @@ const VehicleCheckInOutLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort]);
+  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode]);
 
   useEffect(() => {
     load();
@@ -236,7 +266,7 @@ const VehicleCheckInOutLogs = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [nvrIds, channelIds, vehicleNumber, custody, sort]);
+  }, [nvrIds, channelIds, vehicleNumber, custody, sort, viewMode]);
 
   // First click on a column sorts asc; re-clicking the same column flips it.
   const toggleSort = (field) =>
@@ -277,10 +307,10 @@ const VehicleCheckInOutLogs = () => {
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
 
   useEffect(() => {
-    if (!autoRefresh || refreshInterval <= 0) return undefined;
+    if (!autoRefresh || refreshInterval <= 0 || checkoutRows.length || checkingOut) return undefined;
     const id = setInterval(load, refreshInterval * 1000);
     return () => clearInterval(id);
-  }, [autoRefresh, refreshInterval, load]);
+  }, [autoRefresh, refreshInterval, load, checkoutRows.length, checkingOut]);
 
   // Crossings arrive with the row (includeHistory), so expanding is just a
   // visual toggle — no request.
@@ -309,13 +339,14 @@ const VehicleCheckInOutLogs = () => {
       startDate,
       endDate,
       custody,
+      viewMode,
       nvrIds,
       channelIds,
       search: debouncedSearch || vehicleNumber,
       sortField: sort.field,
       sortOrder: sort.order,
     }),
-    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort],
+    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode],
   );
 
   const nvrOptions = useMemo(
@@ -499,6 +530,19 @@ const VehicleCheckInOutLogs = () => {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-xs text-[var(--tx2)]">
+            View
+            <select value={viewMode} onChange={event => { setViewMode(event.target.value); setPage(1); setSelected([]); }}
+              className="h-9 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] cursor-pointer">
+              <option value="custody">Carry-forward custody</option>
+              <option value="arrivals">Arrivals in date range</option>
+            </select>
+          </label>
+          <span className="text-[11px] text-[var(--tx3)]">
+            {viewMode === 'arrivals' ? 'Vehicles, IN/OUT counts and crossings from the selected dates. Custody is as of the range end.' : 'Includes older vehicles still in custody and vehicles active during the selected dates.'}
+          </span>
+        </div>
         {/* Custody filter */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex p-1 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)]">
@@ -521,8 +565,13 @@ const VehicleCheckInOutLogs = () => {
             ))}
           </div>
 
+          {canEdit && selected.length > 0 && <button type="button" disabled={loading || checkingOut}
+            onClick={() => beginCheckout(rows.filter(row => row.custody && selected.includes(row.vehicleKey)))}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--violet)] text-white text-xs cursor-pointer disabled:opacity-50">
+            <LogOut className="w-4 h-4" />Check out selected ({selected.length})
+          </button>}
           <span className="text-[11px] text-[var(--tx3)] ml-auto">
-            {totalCount} vehicle{totalCount === 1 ? '' : 's'}
+            {totalCount} vehicle{totalCount === 1 ? '' : 's'}{viewMode === 'arrivals' ? ' arrived in range' : ''}
             {custody === '' && <> · {inCustodyCount} in custody</>}
           </span>
         </div>
@@ -538,6 +587,10 @@ const VehicleCheckInOutLogs = () => {
           <table className="w-full border-collapse min-w-[1000px]">
             <thead className="bg-[var(--bg2)]">
               <tr className="border-b border-[var(--bd)]">
+                {canEdit && <th className={th}><input type="checkbox" aria-label="Select all in-custody vehicles on this page"
+                  disabled={loading || checkingOut || !selectable.length}
+                  checked={selectable.length > 0 && selectable.every(row => selected.includes(row.vehicleKey))}
+                  onChange={event => setSelected(event.target.checked ? selectable.map(row => row.vehicleKey) : [])} /></th>}
                 <th className={`${th} w-10`} />
                 <th className={th}>Image</th>
                 <SortTh label="Vehicle Number" field="vehicleNumber" sort={sort} onSort={toggleSort} />
@@ -547,6 +600,7 @@ const VehicleCheckInOutLogs = () => {
                 <SortTh label="Camera Name" field="cameraName" sort={sort} onSort={toggleSort} />
                 <SortTh label="First Check-In" field="firstCheckIn" sort={sort} onSort={toggleSort} />
                 <SortTh label="Last Updated" field="lastUpdated" sort={sort} onSort={toggleSort} />
+                {canEdit && <th className={th}>Action</th>}
               </tr>
             </thead>
 
@@ -560,6 +614,10 @@ const VehicleCheckInOutLogs = () => {
                       onClick={() => toggleRow(row)}
                       className="border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer"
                     >
+                      {canEdit && <td className={td} onClick={event => event.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Select ${row.vehicleNumber || 'vehicle'}`} disabled={!row.custody || loading || checkingOut}
+                          checked={selected.includes(row.vehicleKey)} onChange={event => setSelected(previous => event.target.checked ? [...previous, row.vehicleKey] : previous.filter(key => key !== row.vehicleKey))} />
+                      </td>}
                       <td className={`${td} text-[var(--tx3)]`}>
                         {open ? (
                           <ChevronDown className="w-4 h-4" />
@@ -598,11 +656,16 @@ const VehicleCheckInOutLogs = () => {
                         {fmtFirstCheckIn(row)}
                       </td>
                       <td className={`${td} whitespace-nowrap`}><Elapsed value={row.lastEventAt} /></td>
+                      {canEdit && <td className={td}>{row.custody && <button type="button" disabled={loading || checkingOut}
+                        onClick={event => { event.stopPropagation(); beginCheckout([row]); }}
+                        className="inline-flex items-center gap-1 text-xs text-[var(--violet)] whitespace-nowrap cursor-pointer disabled:opacity-50">
+                        <LogOut className="w-3.5 h-3.5" />Check out
+                      </button>}</td>}
                     </tr>
 
                     {open && (
                       <tr className="border-b border-[var(--bd)]">
-                        <td colSpan={9} className="p-0">
+                        <td colSpan={canEdit ? 11 : 9} className="p-0">
                           <div className="bg-[var(--bg2)] px-6 py-4">
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] mb-2">
                               All crossings for {dash(row.vehicleNumber)}
@@ -620,6 +683,10 @@ const VehicleCheckInOutLogs = () => {
                                     className="flex flex-wrap items-center gap-4 px-4 py-2.5"
                                   >
                                     <DirectionChip checkin={sub.checkin} />
+                                    {sub.manualCheckout?.by && <span className="text-[11px] text-[var(--violet)]"
+                                      title={`By ${sub.manualCheckout.email || sub.manualCheckout.by}${sub.manualCheckout.reason ? `: ${sub.manualCheckout.reason}` : ''}`}>
+                                      Manual ? {sub.manualCheckout.email || sub.manualCheckout.by}{sub.manualCheckout.reason ? ` ? ${sub.manualCheckout.reason}` : ''}
+                                    </span>}
                                     <span className="text-xs text-[var(--tx)] whitespace-nowrap">
                                       {fmtTime(sub.timeOfIncident)}
                                     </span>
@@ -654,7 +721,7 @@ const VehicleCheckInOutLogs = () => {
 
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-16 text-center">
+                  <td colSpan={canEdit ? 11 : 9} className="px-4 py-16 text-center">
                     <SearchX className="w-7 h-7 mx-auto text-[var(--tx3)] mb-2" />
                     <p className="text-sm text-[var(--tx2)]">
                       No vehicle check-in/out logs for this range.
@@ -802,6 +869,8 @@ const VehicleCheckInOutLogs = () => {
         )}
       </div>
 
+      <ManualCheckoutDialog vehicles={checkoutRows} reason={checkoutReason} setReason={setCheckoutReason} busy={checkingOut}
+        onCancel={() => setCheckoutRows([])} onConfirm={confirmCheckout} />
       {previewImage && (
         <ImagePreviewModal
           previewImage={previewImage}
