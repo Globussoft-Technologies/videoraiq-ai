@@ -856,6 +856,14 @@ const CarModelDetectionIncident = Incident.discriminator('carModelDetection', ca
 
 // Vehicle Check-In / Check-Out
 const vehicleCheckInOutSchema = new Schema({
+  manualVehicleKey: String,
+  manualCheckoutOf: { type: Schema.Types.ObjectId },
+  manualCheckout: {
+    by: String,
+    email: String,
+    reason: String,
+    at: Date,
+  },
   count: { type: Number, default: 0 },
   vehicleNumber: { type: String, default: null },
   // Which way the vehicle crossed the configured line: true is an arrival,

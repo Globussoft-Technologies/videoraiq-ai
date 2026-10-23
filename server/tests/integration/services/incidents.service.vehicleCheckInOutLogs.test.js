@@ -424,3 +424,154 @@ describe("vehicle check-in/out history", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+
+describe("vehicle arrival date view", () => {
+  const range = { startDate: '2026-09-04', endDate: '2026-09-04', viewMode: 'arrivals', includeHistory: 'true' };
+  it('separates new arrivals from carried custody and prior-day departures', async () => {
+    await crossing('OLD', true, 9, { timeOfIncident: new Date('2026-09-02T09:00:00Z') });
+    await crossing('DEPARTING', true, 9, { timeOfIncident: new Date('2026-09-02T09:00:00Z') });
+    await crossing('DEPARTING', false, 10);
+    await crossing('TODAY', true, 9);
+    const arrivals = await list(range);
+    expect(arrivals.totalCount).toBe(1);
+    expect(arrivals.inCustodyCount).toBe(1);
+    expect(arrivals.data[0].vehicleNumber).toBe('TODAY');
+    expect((await list({ ...range, viewMode: 'custody' })).totalCount).toBe(3);
+  });
+  it('counts a returning vehicle once and limits its counts and history to the range', async () => {
+    await crossing('REVISIT', true, 9, { timeOfIncident: new Date('2026-09-02T09:00:00Z') });
+    await crossing('REVISIT', false, 9, { timeOfIncident: new Date('2026-09-02T12:00:00Z') });
+    const firstToday = await crossing('REVISIT', true, 9);
+    await crossing('REVISIT', false, 10);
+    await crossing('REVISIT', true, 11);
+    const result = await list(range);
+    expect(result.totalCount).toBe(1);
+    const row = result.data[0];
+    expect(row.checkInCount).toBe(2);
+    expect(row.checkOutCount).toBe(1);
+    expect(row.totalEvents).toBe(3);
+    expect(row.crossings).toHaveLength(3);
+    expect(+new Date(row.timeOfIncident)).toBe(+firstToday.timeOfIncident);
+    expect(row.custody).toBe(true);
+  });
+  it('keeps historical custody correct when a checkout happens after the range', async () => {
+    await crossing('TODAY', true, 9);
+    await crossing('TODAY', false, 9, { timeOfIncident: new Date('2026-09-05T12:00:00Z') });
+    expect((await list({ ...range, custody: 'true' })).totalCount).toBe(1);
+    expect((await list({ ...range, custody: 'false' })).totalCount).toBe(0);
+  });
+});
+
+describe("manual vehicle checkout", () => {
+  const checkout = async (vehicles, options = {}) => {
+    const ctx = serviceCtx({ user_id: USER_ID, ...options, body: { vehicles, reason: 'Exit missed by camera', ...options.body } });
+    await IncidentsService.manualVehicleCheckout(ctx.req, ctx.res, ctx.next);
+    expect(ctx.next.calls).toEqual([]);
+    return { ...ctx, result: payload(ctx.res)?.data };
+  };
+  const selection = row => ({ vehicleKey: row.vehicleKey, lastCheckInAt: row.lastCheckInAt });
+
+  it("appends an audited departure without editing the original arrival", async () => {
+    const arrival = await crossing('MH12AB1234', true, 9);
+    const row = (await list()).data[0];
+    const { result } = await checkout([selection(row)]);
+    expect(result.results[0].status).toBe('checked-out');
+    const returned = (await list({ includeHistory: 'true' })).data[0];
+    expect(returned.custody).toBe(false);
+    expect(returned.checkInCount).toBe(1);
+    expect(returned.checkOutCount).toBe(1);
+    expect(+new Date(returned.timeOfIncident)).toBe(+arrival.timeOfIncident);
+    const manual = returned.crossings.find(event => event.manualCheckout?.by);
+    expect(manual.manualCheckout).toMatchObject({ by: USER_ID, reason: 'Exit missed by camera' });
+    expect(manual.Image).toBeNull();
+    expect((await VehicleCheckInOutIncident.findById(arrival._id)).checkin).toBe(true);
+  });
+
+  it("rechecks all history, skipping returned and stale selections in a bulk request", async () => {
+    await crossing('ACTIVE', true, 9);
+    await crossing('RETURNED', true, 9);
+    await crossing('STALE', true, 9);
+    const rows = (await list()).data;
+    await crossing('RETURNED', false, 10);
+    await crossing('STALE', true, 11);
+    const { result } = await checkout(rows.map(selection), { query: { startDate: '2026-09-04', endDate: '2026-09-04' } });
+    expect(result.results.filter(item => item.status === 'checked-out')).toHaveLength(1);
+    expect(result.results.filter(item => item.status === 'skipped')).toHaveLength(2);
+    expect(byPlate((await list()).data, 'STALE').custody).toBe(true);
+  });
+
+  it("does not duplicate a manual departure on concurrent requests or retries", async () => {
+    await crossing('ACTIVE', true, 9);
+    const vehicles = (await list()).data.map(selection);
+    await Promise.all([checkout(vehicles), checkout(vehicles)]);
+    await checkout(vehicles);
+    expect(await VehicleCheckInOutIncident.countDocuments({ manualCheckoutOf: { $exists: true } })).toBe(1);
+    expect((await list()).data[0].checkOutCount).toBe(1);
+  });
+
+  it("a new arrival after manual checkout returns the vehicle to custody", async () => {
+    await crossing('ACTIVE', true, 9);
+    await checkout((await list()).data.map(selection));
+    await crossing('ACTIVE', true, 10, { timeOfIncident: new Date(Date.now() + 10000) });
+    expect((await list()).data[0].custody).toBe(true);
+  });
+
+  it("keeps an unreadable vehicle separate and includes its manual event in history", async () => {
+    await crossing(null, true, 9);
+    await crossing(null, true, 10);
+    const row = (await list()).data[0];
+    await checkout([selection(row)]);
+    const rows = (await list()).data;
+    expect(rows).toHaveLength(2);
+    expect(rows.filter(item => item.custody)).toHaveLength(1);
+    const events = await history(row.vehicleKey);
+    expect(events.data).toHaveLength(2);
+    expect(events.data.some(event => event.manualCheckout?.by === USER_ID)).toBe(true);
+  });
+
+  it("cannot check out another tenant's vehicle", async () => {
+    await crossing('OTHER', true, 9, { userId: 'other-tenant' });
+    const { result } = await checkout([{ vehicleKey: 'OTHER', lastCheckInAt: '2026-09-04T09:00:00Z' }]);
+    expect(result.results[0].status).toBe('skipped');
+    expect(await VehicleCheckInOutIncident.countDocuments({ checkin: false })).toBe(0);
+  });
+
+  it("denies members without edit permission or a camera authorization scope", async () => {
+    await crossing('ACTIVE', true, 9);
+    const vehicles = (await list()).data.map(selection);
+    for (const options of [
+      { memberId: 'member', authorizedChannel: { channels: [CHANNEL_ID] }, permissionConfig: [{ permissionConfig: { logs: { vehicleCheckInOutLogs: { edit: false } } } }] },
+      { memberId: 'member', permissionConfig: [{ permissionConfig: { logs: { vehicleCheckInOutLogs: { edit: true } } } }] },
+    ]) {
+      const { res } = await checkout(vehicles, options);
+      expect(res.statusCode).toBe(403);
+    }
+    expect(await VehicleCheckInOutIncident.countDocuments({ checkin: false })).toBe(0);
+  });
+
+  it("restricts editable members to their authorized cameras and records their identity", async () => {
+    const otherChannel = new mongoose.Types.ObjectId();
+    await crossing('ALLOWED', true, 9);
+    await crossing('BLOCKED', true, 9, { channelId: otherChannel });
+    const vehicles = (await list()).data.map(selection);
+    const { result } = await checkout(vehicles, {
+      memberId: 'member-123', user_email: 'member@example.com',
+      authorizedChannel: { channels: [CHANNEL_ID] },
+      permissionConfig: [{ permissionConfig: { logs: { vehicleCheckInOutLogs: { edit: true } } } }],
+    });
+    expect(result.results.find(item => item.vehicleKey === 'ALLOWED').status).toBe('checked-out');
+    expect(result.results.find(item => item.vehicleKey === 'BLOCKED').status).toBe('skipped');
+    const event = await VehicleCheckInOutIncident.findOne({ checkin: false });
+    expect(event.manualCheckout.by).toBe('member-123');
+    expect(event.manualCheckout.email).toBe('member@example.com');
+  });
+
+  it("rejects invalid or duplicated selections before writing", async () => {
+    for (const vehicles of [[], [{ vehicleKey: 'A', lastCheckInAt: 'invalid' }], Array(101).fill({ vehicleKey: 'A', lastCheckInAt: new Date().toISOString() }), [{ vehicleKey: 'A', lastCheckInAt: new Date().toISOString() }, { vehicleKey: 'A', lastCheckInAt: new Date().toISOString() }]]) {
+      const { res } = await checkout(vehicles);
+      expect(res.statusCode).toBe(400);
+    }
+    expect(await VehicleCheckInOutIncident.countDocuments({})).toBe(0);
+  });
+});

@@ -450,6 +450,10 @@ class IncidentsController {
     return await incidentsService.getVehicleCheckInOutLogs(req, res, next);
   }
 
+  async manualVehicleCheckout(req, res, next) {
+    return await incidentsService.manualVehicleCheckout(req, res, next);
+  }
+
   async getVehicleCheckInOutHistory(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Every crossing for one vehicle - the sub-rows behind an expanded row in the Vehicle Check-In / Check-Out log. Takes the vehicleKey returned by the list endpoint, so an unreadable-plate row expands to its own single event rather than to every other unreadable plate.'

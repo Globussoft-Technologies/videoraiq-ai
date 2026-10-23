@@ -6,6 +6,7 @@ import logger from "../../../utils/logger.js";
 import nvrModel from "../NVR/nvr.model.js";
 import incidentsValidate from "./incidents.validate.js";
 import mongoose from "mongoose";
+import { createHash } from "node:crypto";
 import { HYGIENE_CATEGORIES } from '../../../constants/hygieneDetection.js';
 import axios from "axios";
 import Response from "../../../utils/response.js";
@@ -3936,6 +3937,10 @@ console.log(result,'result');
    * and each stands alone rather than being merged into one phantom vehicle.
    */
   static get VEHICLE_GROUP_KEY() {
+    return { $ifNull: ["$manualVehicleKey", this.VEHICLE_PLATE_GROUP_KEY] };
+  }
+
+  static get VEHICLE_PLATE_GROUP_KEY() {
     return {
       $let: {
         vars: { plate: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } } },
@@ -3968,6 +3973,7 @@ console.log(result,'result');
       const { skip = 0, limit = 10, custody, search, sortField, sortOrder } = req.query || {};
       // Export path: return each vehicle's crossings alongside the row.
       const includeHistory = String(req.query?.includeHistory) === "true";
+      const arrivalsOnly = req.query?.viewMode === "arrivals";
       const match = this._vehicleCheckInOutMatch(req);
       let activeWindow = null;
 
@@ -4015,6 +4021,10 @@ console.log(result,'result');
             checkInCount: { $sum: { $cond: ["$checkin", 1, 0] } },
             checkOutCount: { $sum: { $cond: ["$checkin", 0, 1] } },
             totalEvents: { $sum: 1 },
+            ...(arrivalsOnly && activeWindow ? {
+              periodIn: { $sum: { $cond: [{ $and: ["$checkin", { $gte: ["$timeOfIncident", activeWindow.windowStart] }] }, 1, 0] } },
+              periodOut: { $sum: { $cond: [{ $and: [{ $eq: ["$checkin", false] }, { $gte: ["$timeOfIncident", activeWindow.windowStart] }] }, 1, 0] } },
+            } : {}),
             ...(includeHistory
               ? {
                   crossings: {
@@ -4024,6 +4034,7 @@ console.log(result,'result');
                       timeOfIncident: "$timeOfIncident",
                       zone: "$zone",
                       severity: "$severity",
+                      manualCheckout: "$manualCheckout",
                       Image: "$Image",
                       nvrData: "$nvrData",
                       channelData: "$channelData",
@@ -4035,7 +4046,9 @@ console.log(result,'result');
         },
         {
           $addFields: {
-            row: { $ifNull: [{ $arrayElemAt: ["$checkIns", 0] }, "$firstEvent"] },
+            row: { $ifNull: [{ $arrayElemAt: [arrivalsOnly && activeWindow ? {
+              $filter: { input: "$checkIns", as: "event", cond: { $gte: ["$$event.timeOfIncident", activeWindow.windowStart] } },
+            } : "$checkIns", 0] }, "$firstEvent"] },
             // Still here if it has checked in and either never checked out, or
             // its latest check-in is more recent than its latest check-out --
             // which is what a return visit looks like.
@@ -4060,13 +4073,15 @@ console.log(result,'result');
                 {
                   vehicleKey: "$_id",
                   custody: "$custody",
-                  checkInCount: "$checkInCount",
-                  checkOutCount: "$checkOutCount",
-                  totalEvents: "$totalEvents",
+                  checkInCount: arrivalsOnly && activeWindow ? "$periodIn" : "$checkInCount",
+                  checkOutCount: arrivalsOnly && activeWindow ? "$periodOut" : "$checkOutCount",
+                  totalEvents: arrivalsOnly && activeWindow ? { $add: ["$periodIn", "$periodOut"] } : "$totalEvents",
                   lastCheckInAt: "$lastCheckInAt",
                   lastCheckOutAt: "$lastCheckOutAt",
                   lastEventAt: "$lastEvent.timeOfIncident",
-                  ...(includeHistory ? { crossings: "$crossings" } : {}),
+                  ...(includeHistory ? { crossings: arrivalsOnly && activeWindow ? {
+                    $filter: { input: "$crossings", as: "event", cond: { $gte: ["$$event.timeOfIncident", activeWindow.windowStart] } },
+                  } : "$crossings" } : {}),
                 },
               ],
             },
@@ -4079,7 +4094,9 @@ console.log(result,'result');
         // Show vehicles still on site plus vehicles with activity in range.
         // Completed visits from before the range do not belong in this view.
         basePipeline.push({
-          $match: {
+          $match: arrivalsOnly ? {
+            lastCheckInAt: { $gte: activeWindow.windowStart, $lte: activeWindow.windowEnd },
+          } : {
             $or: [
               { custody: true },
               { lastEventAt: {
@@ -4188,6 +4205,80 @@ console.log(result,'result');
    * unreadable-plate row expands to exactly its own single event instead of
    * matching every other unreadable plate on the page.
    */
+  async manualVehicleCheckout(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      if (!user?.user_id) return res.status(401).json(Response.userFailResp("Authentication required", "Unauthorized"));
+      if (user.memberId) {
+        const logs = req.verified?.permissionConfig?.[0]?.permissionConfig?.logs;
+        const canEdit = logs?.vehicleCheckInOutLogs?.edit ?? logs?.carLogs?.edit ?? logs?.global?.edit ?? logs?.edit ?? false;
+        if (!canEdit || !Array.isArray(req.verified?.authorizedChannel?.channels)) {
+          return res.status(403).json(Response.accessDeniedResp("You do not have permission to manually check out vehicles"));
+        }
+      }
+      const { vehicles, reason = "" } = req.body || {};
+      if (!Array.isArray(vehicles) || !vehicles.length || vehicles.length > 100
+        || typeof reason !== "string" || reason.trim().length > 500
+        || vehicles.some(item => !item || typeof item.vehicleKey !== "string" || !item.vehicleKey.trim()
+          || item.vehicleKey.length > 120 || !item.lastCheckInAt || !Number.isFinite(Date.parse(item.lastCheckInAt)))
+        || new Set(vehicles.map(item => item.vehicleKey)).size !== vehicles.length) {
+        return res.status(400).json(Response.validationFailResp("Provide 1–100 distinct vehicles with their latest check-in time and a reason of up to 500 characters", "Validation failed"));
+      }
+      // Ignore UI date/search filters: custody must be checked against all history.
+      const match = this._vehicleCheckInOutMatch({ ...req, query: {} });
+      const now = new Date();
+      const groups = await VehicleCheckInOutIncident.aggregate([
+        { $match: { ...match, $expr: { $in: [IncidentsService.VEHICLE_GROUP_KEY, vehicles.map(item => item.vehicleKey)] } } },
+        { $sort: { timeOfIncident: 1, _id: 1 } },
+        { $group: {
+          _id: IncidentsService.VEHICLE_GROUP_KEY,
+          latest: { $last: "$$ROOT" },
+          lastCheckInAt: { $max: { $cond: ["$checkin", "$timeOfIncident", null] } },
+          lastCheckOutAt: { $max: { $cond: ["$checkin", null, "$timeOfIncident"] } },
+        } },
+      ]);
+      const byKey = new Map(groups.map(group => [group._id, group]));
+      const results = [];
+      for (const item of vehicles) {
+        const group = byKey.get(item.vehicleKey);
+        const arrival = group?.lastCheckInAt;
+        if (!arrival || (group.lastCheckOutAt && arrival <= group.lastCheckOutAt)) {
+          results.push({ vehicleKey: item.vehicleKey, status: "skipped", message: "No longer in custody or unavailable" });
+          continue;
+        }
+        if (+arrival !== Date.parse(item.lastCheckInAt) || +group.latest.timeOfIncident > +now) {
+          results.push({ vehicleKey: item.vehicleKey, status: "skipped", message: "Vehicle history changed; refresh and try again" });
+          continue;
+        }
+        const source = group.latest;
+        // The same arrival always produces the same ID. Concurrent clicks and
+        // retries cannot append duplicate manual departures (uses Mongo's _id index).
+        const id = new mongoose.Types.ObjectId(createHash("sha256").update(`manual-checkout:${user.user_id}:${source._id}`).digest("hex").slice(0, 24));
+        const event = {
+          userId: String(user.user_id), nvrId: source.nvrId, channelId: source.channelId,
+          cameraId: source.cameraId, liveDemoData: source.liveDemoData,
+          incidentName: "Manual Vehicle Check-Out", description: reason.trim() || "Vehicle manually marked as checked out",
+          timeOfIncident: now, checkin: false, severity: "info", triggerNotification: false,
+          vehicleNumber: source.vehicleNumber, model_name: source.model_name,
+          color: source.color, company: source.company, year: source.year, zone: source.zone,
+          manualVehicleKey: item.vehicleKey, manualCheckoutOf: source._id,
+          manualCheckout: { by: String(user.memberId || user.user_id), email: user.user_email || "", reason: reason.trim(), at: now },
+        };
+        try {
+          await VehicleCheckInOutIncident.updateOne({ _id: id }, { $setOnInsert: event }, { upsert: true, runValidators: true });
+          results.push({ vehicleKey: item.vehicleKey, status: "checked-out" });
+        } catch (error) {
+          if (error.code !== 11000) throw error;
+          results.push({ vehicleKey: item.vehicleKey, status: "skipped", message: "Already manually checked out" });
+        }
+      }
+      return res.status(200).json(Response.userSuccessResp("Manual check-out processed", { results }));
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to manually check out vehicles. Refresh before retrying.", 500));
+    }
+  }
+
   async getVehicleCheckInOutHistory(req, res, next) {
     try {
       const data = req?.verified?.userData;
@@ -4215,7 +4306,7 @@ console.log(result,'result');
             .status(400)
             .json(Response.validationFailResp("Invalid vehicleKey", "Validation failed"));
         }
-        match._id = new mongoose.Types.ObjectId(id);
+        match.$or = [{ _id: new mongoose.Types.ObjectId(id) }, { manualVehicleKey: vehicleKey }];
       } else {
         const escaped = vehicleKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         match.vehicleNumber = { $regex: `^${escaped}$`, $options: "i" };

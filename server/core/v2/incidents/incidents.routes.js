@@ -238,6 +238,10 @@ router.post(
 );
 // The sub-rows behind one expanded vehicle.
 router.post(
+  "/logs/vehicle-check-in-out/manual-checkout",
+  (req, res, next) => incidentsController.manualVehicleCheckout(req, res, next),
+);
+router.post(
   "/logs/vehicle-check-in-out/history",
   viewAccessCheck,
   incidentsController.getVehicleCheckInOutHistory,
