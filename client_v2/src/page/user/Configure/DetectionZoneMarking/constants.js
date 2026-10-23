@@ -110,7 +110,7 @@ export const DOOR_DETECTION_SETTING_TYPE = 'doorDetectionSettings';
 export const DOOR_MIN_THRESHOLD_SEC = 60;
 export const DOOR_DEFAULT_THRESHOLD_SEC = 300;
 export const DOOR_ALERT_MODE_OPTIONS = [
-  { value: 'open', label: 'Left open' },
-  { value: 'closed', label: 'Left closed' },
-  { value: 'all', label: 'Left open or closed' },
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'all', label: 'Both' },
 ];

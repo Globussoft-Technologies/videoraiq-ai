@@ -23,10 +23,9 @@ import {
   DOOR_DETECTION_SETTING_TYPE,
   DOOR_MIN_THRESHOLD_SEC,
 } from './DetectionZoneMarking/constants';
-import { allTypesFor, extraFieldsFor, lineFor, parseDoorSetup, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
+import { allTypesFor, extraFieldsFor, lineFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
 import DetectionTypeDropdown from './DetectionZoneMarking/components/DetectionTypeDropdown';
 import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
-import DoorSetupBar from './DetectionZoneMarking/components/DoorSetupBar';
 import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
@@ -117,7 +116,7 @@ export default function DetectionZoneMarking({
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
-  // Door points come from the AI team (pasted, never drawn or moved).
+  // Door zones use the same drawing workflow as other area detectors.
   const isDoor = activeType?.settingType === DOOR_DETECTION_SETTING_TYPE;
   // A line only needs its 2 endpoints (+ inside reference point) to be savable;
   // every other type still needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
@@ -126,6 +125,9 @@ export default function DetectionZoneMarking({
   // Saved/committed zones for this camera+type â€” each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
   const [zones, setZones] = useState([]);
+  const [doorAlertModeDraft, setDoorAlertModeDraft] = useState('open');
+  const [doorSeverityDraft, setDoorSeverityDraft] = useState('moderate');
+  const [doorNotificationDraft, setDoorNotificationDraft] = useState(true);
   const savedDetectionMode = normalizeUiCountMode(
     activeType?.setting?.settings?.count_mode ?? zones[0]?.countMode,
   );
@@ -156,6 +158,9 @@ export default function DetectionZoneMarking({
   // Load this type's saved zones whenever the selected detection type changes.
   useEffect(() => {
     setZones(zonesFor(activeType?.setting, camera._id, activeType?.settingType));
+    setDoorAlertModeDraft(activeType?.setting?.settings?.door_alert_mode || 'open');
+    setDoorSeverityDraft(activeType?.setting?.settings?.levelOfImportance || 'moderate');
+    setDoorNotificationDraft(activeType?.setting?.settings?.trigger_notification ?? true);
     setDraftZones([]);
     setPoints([]);
     presetAreaRef.current = false;
@@ -349,12 +354,12 @@ export default function DetectionZoneMarking({
   };
 
   const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
-    name: `Zone ${index + 1}`,
+    name: `${isDoor ? 'Door' : 'Zone'} ${index + 1}`,
     ...(isHygiene ? hygieneZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isLighting ? lightingZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
-    threshold: '0',
+    threshold: isDoor ? String(DOOR_DEFAULT_THRESHOLD_SEC) : '0',
     company: '',
     telegramChatIds: [],
     telegramChatId: '',
@@ -364,22 +369,6 @@ export default function DetectionZoneMarking({
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
     points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
   });
-
-  // The AI team's door points replace the doors wholesale; a door keeps its
-  // saved name and duration when its points are re-sent.
-  const handleLoadDoorSetup = (text) => {
-    const { zones: doors, error } = parseDoorSetup(text, camera._id);
-    if (error) return error;
-    setDraftZones(doors.map((door, i) => ({
-      ...makeZoneFromPoints(door.points, i),
-      name: zones[i]?.name || door.name,
-      threshold: zones[i]?.threshold && Number(zones[i].threshold) >= DOOR_MIN_THRESHOLD_SEC
-        ? zones[i].threshold
-        : String(DOOR_DEFAULT_THRESHOLD_SEC),
-    })));
-    setPoints([]);
-    return null;
-  };
 
   // â”€â”€ Check-In / Check-Out crossing line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Two clicks place the endpoints, a third places the inside reference point,
@@ -548,7 +537,7 @@ export default function DetectionZoneMarking({
     if (isLighting) {
       for (const [field, message] of Object.entries(lightingZoneErrors(zone))) nextErrors[`zone-${index}-${field}`] = message;
     }
-    const nameLabel = activeType?.settingType === 'lineCrossingSettings' ? 'Line Name' : 'Zone Name';
+    const nameLabel = isDoor ? 'Door Name' : activeType?.settingType === 'lineCrossingSettings' ? 'Line Name' : 'Zone Name';
     const selectedTelegramChatIds = Array.isArray(zone?.telegramChatIds)
       ? zone.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
       : (String(zone?.telegramChatId || '').trim() ? [String(zone.telegramChatId).trim()] : []);
@@ -558,7 +547,7 @@ export default function DetectionZoneMarking({
     if (!String(zone?.name || '').trim()) nextErrors[`zone-${index}-name`] = `${nameLabel} is required.`;
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
-    else if (isDoor && Number(zone?.threshold) < DOOR_MIN_THRESHOLD_SEC) nextErrors[`zone-${index}-threshold`] = 'A door alert needs at least 1 minute.';
+    else if (isDoor && (!Number.isInteger(Number(zone?.threshold)) || Number(zone?.threshold) < DOOR_MIN_THRESHOLD_SEC || Number(zone?.threshold) % 60 !== 0)) nextErrors[`zone-${index}-threshold`] = 'Enter a whole number of minutes, at least 1.';
     if (fields.includes('company') && String(zone?.company ?? '').trim() === '') nextErrors[`zone-${index}-company`] = 'Company is required.';
     if (hasSchedule && !hasTelegramChannel) {
       nextErrors[`zone-${index}-telegramChatId`] = 'Please select at least one Telegram channel when a schedule is configured.';
@@ -569,11 +558,11 @@ export default function DetectionZoneMarking({
     return nextErrors;
   };
 
-  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, lighting }) => {
+  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting }) => {
     const doorSettings = isDoor
       ? {
           door_alert_mode: doorAlertMode || activeType.setting?.settings?.door_alert_mode || 'open',
-          trigger_notification: activeType.setting?.settings?.trigger_notification ?? true,
+          trigger_notification: doorNotification ?? activeType.setting?.settings?.trigger_notification ?? true,
         }
       : null;
     if (isLighting && nextZones.some(zone => Object.keys(lightingZoneErrors(zone)).length)) throw new Error('Please check lighting settings for each zone before saving.');
@@ -732,10 +721,7 @@ export default function DetectionZoneMarking({
       toast.error('Draw the crossing line and its inside reference point before saving.');
       return;
     }
-    // Freshly pasted door points replace the saved doors, not add to them.
-    const nextZones = isDoor && draftZones.length
-      ? draftZones
-      : points.length >= minPointsToSave
+    const nextZones = points.length >= minPointsToSave
       ? [...zones, ...draftZones, makeZoneFromPoints(points, zones.length + draftZones.length)]
       : [...zones, ...draftZones];
     setPendingZones(
@@ -746,10 +732,15 @@ export default function DetectionZoneMarking({
     setShowSaveModal(true);
   };
 
-  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, lighting }) => {
+  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, doorNotification, lighting }) => {
     setSaving(true);
     try {
-      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, lighting });
+      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, doorNotification, lighting });
+      if (isDoor) {
+        setDoorAlertModeDraft(doorAlertMode);
+        setDoorSeverityDraft(priority);
+        setDoorNotificationDraft(doorNotification);
+      }
       setZones(editedZones);
       setDraftZones([]);
       setPoints([]);
@@ -782,13 +773,18 @@ export default function DetectionZoneMarking({
     const requiredErrors = validateZoneRequiredFields(zones[index], index);
     if (Object.keys(requiredErrors).length) {
       setZoneFieldErrors(prev => ({ ...prev, ...requiredErrors }));
+      if (isDoor) toast.error(Object.values(requiredErrors)[0]);
       return;
     }
     const err = scheduleError(zones[index]?.schedule);
     if (err) { toast.error(err); return; }
     setSavingZoneIndex(index);
     try {
-      await persistZones({ nextZones: zones, lineOverride: effectiveLine });
+      await persistZones({
+        nextZones: zones,
+        lineOverride: effectiveLine,
+        ...(isDoor ? { priority: doorSeverityDraft, doorAlertMode: doorAlertModeDraft, doorNotification: doorNotificationDraft } : {}),
+      });
       toast.success('Zone updated.');
       onSaved?.();
     } catch (err) {
@@ -1121,7 +1117,7 @@ export default function DetectionZoneMarking({
                 Crossing is always exactly 2 points, so the +/- stepper (which
                 adjusts a polygon's point cap) doesn't apply and is hidden. */}
             <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
-              {!isLineCrossing && !isBlurredCameraDetection && !isDoor && (
+              {!isLineCrossing && !isBlurredCameraDetection && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); decreaseMaxPoints(); }}
@@ -1156,7 +1152,7 @@ export default function DetectionZoneMarking({
                 shape renders in blue so it's visually distinct while drawing. Line Crossing draws
                 an open line (polyline, no fill) instead of a closed filled polygon â€” it's a
                 crossing line, not an area. */}
-            {isFullscreen && !isBlurredCameraDetection && !isDoor && (
+            {isFullscreen && !isBlurredCameraDetection && (
               <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 8 }}>
                 <button
                   type="button"
@@ -1451,9 +1447,7 @@ export default function DetectionZoneMarking({
                   background: 'rgba(8,11,17,.6)', border: '1px solid rgba(255,255,255,.15)',
                   borderRadius: 20, padding: '6px 14px',
                 }}>
-                  {isDoor
-                    ? 'door points come from the AI team: paste them below'
-                    : hasAuxiliaryLine
+                  {hasAuxiliaryLine
                     ? 'click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the gate zones'
                     : isLineCrossing
                     ? 'click "Draw Line", then click two line endpoints and one inside reference point'
@@ -1463,16 +1457,7 @@ export default function DetectionZoneMarking({
             )}
           </div>
 
-          {!isBlurredCameraDetection && isDoor && (
-            <DoorSetupBar
-              key={`${selectedType}-${zones.length}`}
-              doorCount={draftZones.length || zones.length}
-              saving={saving}
-              onLoad={handleLoadDoorSetup}
-              onSave={handleOpenSaveModal}
-            />
-          )}
-          {!isBlurredCameraDetection && !isDoor && <ZoneToolbar
+          {!isBlurredCameraDetection && <ZoneToolbar
             activeType={activeType}
             isLineCrossing={isLineCrossing}
             isCheckInOut={hasAuxiliaryLine}
@@ -1531,7 +1516,7 @@ export default function DetectionZoneMarking({
                 onSave={handleSaveZoneName}
                 onDelete={requestDeleteZone}
                 savingIndex={savingZoneIndex}
-                canDelete={canDeleteDetection && !isDoor}
+                canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
@@ -1539,6 +1524,11 @@ export default function DetectionZoneMarking({
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isHygiene={isHygiene}
+                isDoor={isDoor}
+                doorAlertMode={doorAlertModeDraft}
+                onDoorAlertModeChange={setDoorAlertModeDraft}
+                doorNotification={doorNotificationDraft}
+                onDoorNotificationChange={setDoorNotificationDraft}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1664,7 +1654,7 @@ export default function DetectionZoneMarking({
                 onSave={handleSaveZoneName}
                 onDelete={requestDeleteZone}
                 savingIndex={savingZoneIndex}
-                canDelete={canDeleteDetection && !isDoor}
+                canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
@@ -1672,6 +1662,11 @@ export default function DetectionZoneMarking({
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isHygiene={isHygiene}
+                isDoor={isDoor}
+                doorAlertMode={doorAlertModeDraft}
+                onDoorAlertModeChange={setDoorAlertModeDraft}
+                doorNotification={doorNotificationDraft}
+                onDoorNotificationChange={setDoorNotificationDraft}
                 laneName={laneNameDraft}
                 onLaneNameChange={handleLaneNameDraftChange}
                 laneNameError={laneNameError}
@@ -1696,7 +1691,7 @@ export default function DetectionZoneMarking({
           isLighting={isLighting}
           initialLightingSettings={activeType.setting?.settings}
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
-          initialPriority={activeType.setting?.settings?.levelOfImportance || (isHygiene ? 'high' : 'moderate')}
+          initialPriority={isDoor ? doorSeverityDraft : (activeType.setting?.settings?.levelOfImportance || (isHygiene ? 'high' : 'moderate'))}
           initialLaneName={laneNameDraft}
           initialCheckInOutMode={savedDetectionMode}
           initialFireOutsideZoneEnabled={activeType.setting?.settings?.fire_outside_zone_enabled ?? false}
@@ -1707,7 +1702,8 @@ export default function DetectionZoneMarking({
           isStockCounting={isStockCounting}
           isFireSmoke={isFireSmoke}
           isDoor={isDoor}
-          initialDoorAlertMode={activeType.setting?.settings?.door_alert_mode || 'open'}
+          initialDoorAlertMode={doorAlertModeDraft}
+          initialDoorNotification={doorNotificationDraft}
           isHygiene={isHygiene}
           saving={saving}
       onCancel={() => setShowSaveModal(false)}

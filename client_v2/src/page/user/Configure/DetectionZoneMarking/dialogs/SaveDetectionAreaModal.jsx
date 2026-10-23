@@ -5,7 +5,9 @@ import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
-import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_ALERT_MODE_OPTIONS, DOOR_MIN_THRESHOLD_SEC } from '../constants';
+import DoorAlertDurationInput from '../components/DoorAlertDurationInput';
+import DoorAlertRules from '../components/DoorAlertRules';
+import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC } from '../constants';
 import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
@@ -38,6 +40,7 @@ export default function SaveDetectionAreaModal({
   isFireSmoke = false,
   isDoor = false,
   initialDoorAlertMode = 'open',
+  initialDoorNotification = true,
   isHygiene = false,
   isLighting = false,
   initialLightingSettings,
@@ -61,6 +64,7 @@ export default function SaveDetectionAreaModal({
   // each drawn zone's own name below.
   const [laneName, setLaneName] = useState(initialLaneName || '');
   const [doorAlertMode, setDoorAlertMode] = useState(initialDoorAlertMode);
+  const [doorNotification, setDoorNotification] = useState(initialDoorNotification);
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
   // Check-In / Check-Out keeps its detection-wide mode and shares the same
   // per-zone Telegram channels and alert schedule as the other area types.
@@ -118,7 +122,7 @@ export default function SaveDetectionAreaModal({
       }
       if (extraFields.includes('threshold') && String(z.threshold ?? '').trim() === '') {
         nextErrors[`zone-${i}-threshold`] = true;
-      } else if (isDoor && Number(z.threshold) < DOOR_MIN_THRESHOLD_SEC) {
+      } else if (isDoor && (!Number.isInteger(Number(z.threshold)) || Number(z.threshold) < DOOR_MIN_THRESHOLD_SEC || Number(z.threshold) % 60 !== 0)) {
         nextErrors[`zone-${i}-threshold`] = 'A door alert needs at least 1 minute.';
       }
       if (extraFields.includes('company') && !String(z.company ?? '').trim()) {
@@ -149,7 +153,7 @@ export default function SaveDetectionAreaModal({
       priority,
       zones: outZones,
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
-      ...(isDoor ? { doorAlertMode } : {}),
+      ...(isDoor ? { doorAlertMode, doorNotification } : {}),
     });
   };
 
@@ -159,16 +163,17 @@ export default function SaveDetectionAreaModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        width: '100%', maxWidth: (isLineCrossing || isCheckInOut) ? 520 : 440, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+        width: '100%', maxWidth: (isLineCrossing || isCheckInOut || isDoor) ? 520 : 440, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
         maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '22px 22px 16px' }}>
           <div style={{ display: 'grid', gap: 10, minWidth: 0, flex: 1 }}>
             <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>
-              {isCheckInOut ? 'Save Check-In / Check-Out' : isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}
+              {isDoor ? 'Door detection settings' : isCheckInOut ? 'Save Check-In / Check-Out' : isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}
             </span>
-            {showZoneExtras && (
+            {isDoor && <span style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.4 }}>Choose when a door should alert. The drawn area supplies its door points.</span>}
+            {showZoneExtras && !isDoor && (
             <div
               style={{
                 display: 'flex',
@@ -245,23 +250,9 @@ export default function SaveDetectionAreaModal({
               </div>
 
             {isDoor && (
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Alert when a door is</label>
-                <select
-                  value={doorAlertMode}
-                  onChange={e => setDoorAlertMode(e.target.value)}
-                  style={{
-                    width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
-                    outline: 'none', cursor: 'pointer',
-                  }}
-                >
-                  {DOOR_ALERT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--tx3)' }}>
-                  Alerts once a door stays that way for its duration, again after each further duration, and notes when it changes back.
-                </div>
-              </div>
+              <DoorAlertRules mode={doorAlertMode} onModeChange={setDoorAlertMode}
+                notification={doorNotification} onNotificationChange={setDoorNotification}
+                saving={saving} />
             )}
 
             {/* Check-In / Check-Out: Line Name + Mode share one card, Line
@@ -307,10 +298,10 @@ export default function SaveDetectionAreaModal({
           </div>
 
           {zoneDrafts.map((z, i) => (
-            <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)' }}>{areaLabel} {i + 1}</div>
+            <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isDoor ? `Door ${i + 1}` : `${areaLabel} ${i + 1}`}</div>
               <div>
-                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>{areaLabel} Name *</label>
+                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>{isDoor ? 'Door' : areaLabel} Name *</label>
                 <input
                   value={z.name}
                   onChange={e => updateZoneField(i, 'name', e.target.value)}
@@ -377,6 +368,7 @@ export default function SaveDetectionAreaModal({
               )}
               {showZoneExtras && (
               <div>
+                {isDoor && <div style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.4, marginBottom: 8 }}>Optional Telegram delivery: select a channel, then set its active time range below.</div>}
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
                   Telegram Channels
                 </label>
@@ -434,7 +426,10 @@ export default function SaveDetectionAreaModal({
                   )}
                 </div>
               )}
-              {extraFields.includes('threshold') && (
+              {isDoor && (
+                <DoorAlertDurationInput value={z.threshold} onChange={value => updateZoneField(i, 'threshold', value)} error={errors[`zone-${i}-threshold`]} />
+              )}
+              {extraFields.includes('threshold') && !isDoor && (
                 <ThresholdDurationInput
                   value={z.threshold}
                   onChange={value => updateZoneField(i, 'threshold', value)}

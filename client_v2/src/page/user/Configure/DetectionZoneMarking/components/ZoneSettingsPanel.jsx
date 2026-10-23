@@ -3,6 +3,8 @@ import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
 import ThresholdDurationInput from './ThresholdDurationInput';
+import DoorAlertDurationInput from './DoorAlertDurationInput';
+import DoorAlertRules from './DoorAlertRules';
 import { CAR_COMPANIES } from '../constants';
 import HygieneZoneFields from './HygieneZoneFields';
 import LightingFields from './LightingFields';
@@ -29,6 +31,11 @@ export default function ZoneSettingsPanel({
   isFireSmoke = false,
   isHygiene = false,
   isLighting = false,
+  isDoor = false,
+  doorAlertMode = 'open',
+  onDoorAlertModeChange,
+  doorNotification = true,
+  onDoorNotificationChange,
   laneName = '',
   onLaneNameChange,
   laneNameError = '',
@@ -47,9 +54,9 @@ export default function ZoneSettingsPanel({
   telegramChannels = [],
 }) {
   const [expanded, setExpanded] = useState(null);
-  const areaLabel = isLineCrossing ? 'line' : 'zone';
-  const areaTitle = isLineCrossing ? 'Line Settings' : 'Zone Settings';
-  const nameLabel = isLineCrossing ? 'Line Name' : 'Zone Name';
+  const areaLabel = isDoor ? 'door' : isLineCrossing ? 'line' : 'zone';
+  const areaTitle = isDoor ? 'Door Settings' : isLineCrossing ? 'Line Settings' : 'Zone Settings';
+  const nameLabel = isDoor ? 'Door Name' : isLineCrossing ? 'Line Name' : 'Zone Name';
   // Line Crossing keeps its per-line mode; Check-In / Check-Out has a single
   // detection-wide mode rendered once in the panel header.
   const showPerZoneMode = isLineCrossing;
@@ -70,6 +77,13 @@ export default function ZoneSettingsPanel({
       {showZoneExtras && (
         <div style={{ marginBottom: 12 }}>
           <TimezoneField />
+        </div>
+      )}
+      {isDoor && (
+        <div style={{ marginBottom: 12 }}>
+          <DoorAlertRules mode={doorAlertMode} onModeChange={onDoorAlertModeChange}
+            notification={doorNotification} onNotificationChange={onDoorNotificationChange}
+            saving={savingIndex !== null} onSave={() => onSave(0)} />
         </div>
       )}
       {isCheckInOut && (
@@ -271,7 +285,10 @@ export default function ZoneSettingsPanel({
                       )}
                     </div>
                   )}
-                  {extraFields.includes('threshold') && (
+                  {isDoor && (
+                    <DoorAlertDurationInput value={z.threshold} onChange={value => onUpdateField(i, 'threshold', value)} error={errors[`zone-${i}-threshold`]} compact />
+                  )}
+                  {extraFields.includes('threshold') && !isDoor && (
                     <ThresholdDurationInput
                       value={z.threshold}
                       onChange={value => onUpdateField(i, 'threshold', value)}
