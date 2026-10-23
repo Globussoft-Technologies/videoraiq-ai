@@ -877,7 +877,7 @@ async getLogs(req, res, next) {
                                 ]
                               }
                             },
-                            in: { _id: "$$s.channel", name: "$$ch.name" }
+                            in: { _id: "$$s.channel", name: "$$ch.name", checkType: "$$ch.checkType" }
                           }
                         }
                       }

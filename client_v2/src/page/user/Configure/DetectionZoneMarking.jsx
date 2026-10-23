@@ -193,10 +193,14 @@ export default function DetectionZoneMarking({
   const url = streamUrl({ ...camera, streamingUrl: streamPath });
   const snapshotUrl = mediaUrl(camera?.latestSnapshot?.path);
   const [snapshotFailed, setSnapshotFailed] = useState(false);
+  const [snapshotNoticeClosed, setSnapshotNoticeClosed] = useState(false);
+  const [snapshotNoticeExpanded, setSnapshotNoticeExpanded] = useState(false);
   const [streamTimedOut, setStreamTimedOut] = useState(false);
   const showSnapshot = shouldShowSnapshot({ snapshotUrl, snapshotFailed, url, videoState, streamTimedOut });
   useEffect(() => {
     setSnapshotFailed(false);
+    setSnapshotNoticeClosed(false);
+    setSnapshotNoticeExpanded(false);
   }, [snapshotUrl, cameraId]);
   useEffect(() => {
     setVideoState(url ? 'loading' : 'error');
@@ -1087,11 +1091,32 @@ export default function DetectionZoneMarking({
                   onError={() => { setSnapshotFailed(true); setVideoSize({ w: 0, h: 0 }); }}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                 />
-                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 3, padding: '5px 9px', borderRadius: 6, background: 'rgba(0,0,0,.75)', color: '#fff', fontSize: 12, pointerEvents: 'none' }}>
-                  {camera.latestSnapshot.source === 'playback'
-                    ? `Playback frame ${camera.latestSnapshot.recordingTimeEstimated ? 'near' : 'at'} ${shortDateTime(camera.latestSnapshot.recordedAt)} · Saved ${shortDateTime(camera.latestSnapshot.capturedAt)}`
-                    : `Snapshot captured at ${shortDateTime(camera.latestSnapshot.capturedAt)}`}
-                </div>
+                {!snapshotNoticeClosed && (
+                  <div
+                    onPointerDown={event => event.stopPropagation()}
+                    onClick={event => event.stopPropagation()}
+                    style={{ position: 'absolute', bottom: 10, left: 10, maxWidth: 'calc(100% - 20px)', zIndex: 3, padding: '7px 9px', borderRadius: 8, background: 'rgba(15,23,42,.4)', backdropFilter: 'blur(3px)', color: '#fff', fontSize: 12, border: '1px solid rgba(255,255,255,.2)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>Live stream unavailable. Configure zones using this snapshot.</span>
+                      <button type="button" aria-label={snapshotNoticeExpanded ? 'Collapse snapshot details' : 'Expand snapshot details'}
+                        aria-expanded={snapshotNoticeExpanded} onClick={() => setSnapshotNoticeExpanded(previous => !previous)}
+                        style={{ flexShrink: 0, display: 'flex', padding: 3, background: 'transparent', border: 0, color: 'inherit', cursor: 'pointer' }}>
+                        <ChevronDown size={15} style={{ transform: snapshotNoticeExpanded ? 'rotate(180deg)' : undefined }} />
+                      </button>
+                      <button type="button" aria-label="Close snapshot notice" onClick={() => setSnapshotNoticeClosed(true)}
+                        style={{ flexShrink: 0, display: 'flex', padding: 3, background: 'transparent', border: 0, color: 'inherit', cursor: 'pointer' }}>
+                        <X size={15} />
+                      </button>
+                    </div>
+                    {snapshotNoticeExpanded && <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5 }}>
+                      This is a saved image, not a live view. You can draw and save detection zones on it.
+                      <div>{camera.latestSnapshot.source === 'playback'
+                        ? `Playback frame ${camera.latestSnapshot.recordingTimeEstimated ? 'near' : 'at'} ${shortDateTime(camera.latestSnapshot.recordedAt)} ? Saved ${shortDateTime(camera.latestSnapshot.capturedAt)}`
+                        : `Snapshot captured at ${shortDateTime(camera.latestSnapshot.capturedAt)}`}</div>
+                    </div>}
+                  </div>
+                )}
               </>
             )}
 

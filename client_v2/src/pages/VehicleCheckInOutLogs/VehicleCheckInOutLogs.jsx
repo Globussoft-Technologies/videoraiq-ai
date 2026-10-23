@@ -154,6 +154,7 @@ const VehicleCheckInOutLogs = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [custody, setCustody] = useState('');
   const [viewMode, setViewMode] = useState('custody');
+  const effectiveCustody = viewMode === 'custody' ? 'true' : custody;
   const [nvrIds, setNvrIds] = useState([]);
   const [channelIds, setChannelIds] = useState([]);
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -231,7 +232,7 @@ const VehicleCheckInOutLogs = () => {
         limit: pageSize,
         startDate,
         endDate,
-        custody,
+        custody: effectiveCustody,
         nvrIds,
         channelIds,
         search: debouncedSearch || vehicleNumber,
@@ -258,7 +259,7 @@ const VehicleCheckInOutLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode]);
+  }, [page, pageSize, startDate, endDate, effectiveCustody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode]);
 
   useEffect(() => {
     load();
@@ -338,7 +339,7 @@ const VehicleCheckInOutLogs = () => {
     () => ({
       startDate,
       endDate,
-      custody,
+      custody: effectiveCustody,
       viewMode,
       nvrIds,
       channelIds,
@@ -346,7 +347,7 @@ const VehicleCheckInOutLogs = () => {
       sortField: sort.field,
       sortOrder: sort.order,
     }),
-    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode],
+    [startDate, endDate, effectiveCustody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode],
   );
 
   const nvrOptions = useMemo(
@@ -533,20 +534,20 @@ const VehicleCheckInOutLogs = () => {
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-2 text-xs text-[var(--tx2)]">
             View
-            <select value={viewMode} onChange={event => { setViewMode(event.target.value); setPage(1); setSelected([]); }}
+            <select value={viewMode} onChange={event => { setViewMode(event.target.value); setCustody(''); setPage(1); setSelected([]); }}
               className="h-9 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] cursor-pointer">
               <option value="custody">Carry-forward custody</option>
               <option value="arrivals">Arrivals in date range</option>
             </select>
           </label>
           <span className="text-[11px] text-[var(--tx3)]">
-            {viewMode === 'arrivals' ? 'Vehicles, IN/OUT counts and crossings from the selected dates. Custody is as of the range end.' : 'Includes older vehicles still in custody and vehicles active during the selected dates.'}
+            {viewMode === 'arrivals' ? 'Vehicles, IN/OUT counts and crossings from the selected dates. Custody is as of the range end.' : 'Vehicles still in custody as of the range end, including arrivals from earlier dates.'}
           </span>
         </div>
         {/* Custody filter */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex p-1 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)]">
-            {CUSTODY_TABS.map((tab) => (
+            {CUSTODY_TABS.filter(tab => viewMode !== 'custody' || tab.id !== 'false').map((tab) => (
               <button
                 key={tab.id || 'all'}
                 type="button"

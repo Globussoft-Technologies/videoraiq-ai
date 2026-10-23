@@ -295,7 +295,8 @@ export const renderAccessCard = (
     ? moment.utc(item.date).tz(region).format('DD/MM/YYYY')
     : '--/--/----';
   const accessTimeStr = formatAccessTime(item.enteredIn, item.exitTiming, region);
-  const inTimeStr = item.enteredIn ? moment.utc(item.enteredIn).tz(region).format('hh:mm A') : '--';
+  const captureTime = item.enteredIn || item.exitTiming || item.timestamp?.[0];
+  const inTimeStr = captureTime ? moment.utc(captureTime).tz(region).format('hh:mm A') : '--';
 
   return (
     <div

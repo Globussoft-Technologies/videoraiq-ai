@@ -1,3 +1,4 @@
+import { getAccessTimes } from './accessTimes';
 import moment from 'moment-timezone';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -24,7 +25,7 @@ export const formatAccessTime = (enteredIn, exitTiming, region) => {
   const inMoment = enteredIn ? moment.utc(enteredIn).tz(region) : null;
   const outMoment = exitTiming ? moment.utc(exitTiming).tz(region) : null;
 
-  if (!inMoment) return '--';
+  if (!inMoment) return outMoment ? outMoment.format('hh:mm A') : '--';
 
   let diffText = '';
   if (inMoment && outMoment) {
@@ -103,8 +104,7 @@ const exportToExcel = async (params) => {
 
   const excelData = allLogs.map((log, index) => {
     const sessions = log.sessions || [];
-    const enteredIn = sessions?.length ? sessions[0].timestamp : null;
-    const exitTiming = sessions?.length > 1 ? sessions[sessions.length - 1].timestamp : null;
+    const { enteredIn, exitTiming } = getAccessTimes(sessions);
 
     return {
       ID: index + 1,
@@ -159,8 +159,7 @@ const exportToPDF = async (params) => {
 
   const rows = allLogs.map((log, index) => {
     const sessions = log.sessions || [];
-    const enteredIn = sessions?.length ? sessions[0].timestamp : null;
-    const exitTiming = sessions?.length > 1 ? sessions[sessions.length - 1].timestamp : null;
+    const { enteredIn, exitTiming } = getAccessTimes(sessions);
 
     return [
       index + 1,

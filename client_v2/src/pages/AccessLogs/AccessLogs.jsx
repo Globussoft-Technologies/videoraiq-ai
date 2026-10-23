@@ -1,3 +1,4 @@
+import { getAccessTimes } from './accessTimes';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -265,8 +266,7 @@ const AccessLogs = () => {
           date: log.date || '--',
           location: log.userInfo?.location || log.nvrInfo?.location || '--',
           cameraName: sessions[0]?.channel?.name || '--',
-          enteredIn: sessions.length > 0 ? sessions[0].timestamp : null,
-          exitTiming: sessions.length > 1 ? sessions[sessions.length - 1].timestamp : null,
+          ...getAccessTimes(sessions),
           image,
           email: log.userInfo?.email || '--',
           emp_id: log.userInfo?.emp_id || '--',
