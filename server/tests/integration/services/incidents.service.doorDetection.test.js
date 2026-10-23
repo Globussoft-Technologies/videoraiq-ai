@@ -1,8 +1,7 @@
 /**
  * Door open/close incidents, DS -> Node (DS door contract §5): one incident
- * per door per episode. The first alert creates it; repeat alerts and the
- * resolved post update it; a retried post changes and notifies nothing.
- * DS sends no eventId, so episodes are keyed by camera + door + stateSince
+ * per DS post (each alert and the resolved post); a retried post is stored
+ * and notified once. DS sends no eventId, so episodes are keyed by camera + door + stateSince
  * (an eventId wins if DS ever adds one). v2 and v1 createIncidents; socket
  * and alert fan-out mocked.
  */
@@ -67,56 +66,56 @@ const resolved = {
   description: "Stock Door was open for 12 min 30 s and is now closed.", timeOfIncident: "2026-10-22T06:17:41Z",
 };
 
-describe("one incident per door per episode (v2)", () => {
+describe("one incident per door post (v2)", () => {
   it("first alert creates the incident and notifies", async () => {
     await send(post());
     const [incident] = await DoorStatusIncident.find().lean();
     expect(incident).toMatchObject({
-      eventId: `${channel._id}:Stock Door:2026-10-22T06:05:11Z`, Image: image,
+      eventId: `${channel._id}:Stock Door:2026-10-22T06:05:11Z:1:alert`, Image: image,
       doorStatus: "open", zoneName: "Stock Door", alertCount: 1, isResolved: false, thresholdSec: 300,
     });
     expect(incident.lastAlertAt.toISOString()).toBe("2026-10-22T06:10:11.000Z");
     expect(alertV2).toHaveBeenCalledTimes(1);
   });
 
-  it("a repeat alert updates the same incident and notifies again; a retry of it does nothing", async () => {
+  it("a repeat alert is a new incident and notifies again; a retry of it does nothing", async () => {
     await send(post());
     await send(post(repeat));
     const retry = await send(post(repeat));
     expect(retry.data.duplicate).toBe(true);
-    const incidents = await DoorStatusIncident.find().lean();
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]).toMatchObject({ alertCount: 2, durationSec: 600, description: repeat.description });
+    const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
+    expect(incidents.map((i) => [i.alertCount, i.durationSec])).toEqual([[1, 300], [2, 600]]);
+    expect(incidents[1].description).toBe(repeat.description);
     expect(alertV2).toHaveBeenCalledTimes(2);
   });
 
-  it("the resolved post closes the episode without notifying", async () => {
+  it("the resolved post is its own incident and does not notify", async () => {
     await send(post());
     await send(post(repeat));
     await send(post(resolved));
-    const [incident] = await DoorStatusIncident.find().lean();
-    expect(incident).toMatchObject({ isResolved: true, durationSec: 750, alertCount: 2, incidentName: "Door Open Alert Resolved", resolved: false });
-    expect(incident.stateEndedAt.toISOString()).toBe("2026-10-22T06:17:41.000Z");
-    expect(incident.timeOfIncident.toISOString()).toBe("2026-10-22T06:10:11.000Z");
+    const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
+    expect(incidents).toHaveLength(3);
+    expect(incidents[2]).toMatchObject({ isResolved: true, durationSec: 750, alertCount: 2, incidentName: "Door Open Alert Resolved", resolved: false });
+    expect(incidents[2].stateEndedAt.toISOString()).toBe("2026-10-22T06:17:41.000Z");
     expect(alertV2).toHaveBeenCalledTimes(2);
     expect((await send(post(resolved))).data.duplicate).toBe(true);
   });
 
-  it("groups by camera + door + stateSince; another door or episode is its own incident", async () => {
+  it("keys posts by camera + door + stateSince", async () => {
     await send(post());
     await send(post(repeat));
     await send(post({ zone: "Back Door", zoneName: "Back Door" }));
     await send(post({ stateSince: "2026-10-22T08:00:00Z" }));
+    expect((await send(post())).data.duplicate).toBe(true);
     const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
-    expect(incidents.map((i) => [i.zoneName, i.alertCount])).toEqual([["Stock Door", 2], ["Back Door", 1], ["Stock Door", 1]]);
+    expect(incidents.map((i) => [i.zoneName, i.alertCount])).toEqual([["Stock Door", 1], ["Stock Door", 2], ["Back Door", 1], ["Stock Door", 1]]);
   });
 
   it("keys on an eventId if DS sends one", async () => {
     await send(post({ eventId: "door_stock_0_1792649111" }));
     await send(post({ eventId: "door_stock_0_1792649111", ...repeat, stateSince: "2026-10-22T06:05:12Z" }));
-    const incidents = await DoorStatusIncident.find().lean();
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]).toMatchObject({ eventId: "door_stock_0_1792649111", alertCount: 2 });
+    const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
+    expect(incidents.map((i) => i.eventId)).toEqual(["door_stock_0_1792649111:1:alert", "door_stock_0_1792649111:2:alert"]);
   });
 
   it("accepts DS's uppercase status too", async () => {
@@ -130,9 +129,10 @@ describe("v1 endpoint (the one the contract names)", () => {
     await send(post(), V1);
     await send(post(repeat), V1);
     await send(post(resolved), V1);
-    const incidents = await DoorStatusIncident.find().lean();
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]).toMatchObject({ isResolved: true, alertCount: 2, durationSec: 750 });
+    await send(post(resolved), V1);
+    const incidents = await DoorStatusIncident.find().sort({ _id: 1 }).lean();
+    expect(incidents).toHaveLength(3);
+    expect(incidents[2]).toMatchObject({ isResolved: true, alertCount: 2, durationSec: 750 });
     expect(alertV1).toHaveBeenCalledTimes(2);
   });
 });

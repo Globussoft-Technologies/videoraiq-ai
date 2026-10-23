@@ -108,6 +108,8 @@ function isCarModelDetection(item) {
 function detectionDetails(item) {
   const type = String(item?.incidentType || item?.detectionType || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const details = [];
+  // Door alerts say everything in their title; count/zone chips add nothing.
+  if (type === 'doordetection') return details;
 
   if (type === 'linecrossing' || type.includes('linecross')) {
     const entry = item?.totalEntry ?? item?.entry ?? item?.entryCount ?? item?.atoB;

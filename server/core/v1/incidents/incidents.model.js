@@ -295,8 +295,8 @@ const SafetyHelmetIncident = Incident.discriminator('personalProtectiveEquipment
 
 
 // A door left open (or closed) too long, per DS's door contract. One incident
-// per door per episode: DS's alerts (every threshold) and its resolved post
-// share an eventId and update this document (see doorIncident.js).
+// per DS post: each alert (every threshold) and the resolved post. Posts of one
+// episode share stateSince; eventId names the post (see doorIncident.js).
 const DoorStatusSchema = new Schema({
   eventId: { type: String, default: null },
   zoneName: { type: String, default: null },

@@ -124,7 +124,7 @@ const DetectionModelMap = {
   guardSleepingDetection: GuardSleepingDetectionSetting,
 };
 import JobsService from "../jobs/jobs.service.js";
-import { applyDoorEpisodePost, normalizeDoorPost } from "./doorIncident.js";
+import { findDoorRetry, normalizeDoorPost } from "./doorIncident.js";
 
 const normalizeVehicleObstructionPayload = (body = {}) => {
   const vehicleNumber = body.vehicleNumber == null ? "" : String(body.vehicleNumber).trim();
@@ -241,29 +241,14 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
-      // Door open/close: a repeat alert or the resolved post updates the
-      // episode's incident (doorIncident.js); the first alert falls through
-      // and is created below. A retried post changes and notifies nothing.
+      // Door open/close: every alert and the resolved post is its own
+      // incident, created below (doorIncident.js). A retried post is not.
       if (incidentType === "doorDetection") {
         normalizeDoorPost(req.body);
-        const episode = channelId
-          ? await applyDoorEpisodePost(Model, { userId, channelId, body: req.body })
-          : null;
-        if (episode) {
-          const incidentObj = { ...episode.incident.toObject(), channelName: channel?.name };
-          if (episode.applied) {
-            void sendPayloadToUser(userId, `cameradetection_${isAdminExist?._id}`, incidentObj);
-            if (triggerNotification !== false) {
-              void triggerAlertOnIncident({ detectionType: incidentType, nvrId, channelId, saved: episode.incident, adminId })
-                .catch((err) => logger.error(err));
-              void sendIncidentPush({ admin: isAdminExist, incident: incidentObj });
-            }
-          }
+        const retried = channelId && await findDoorRetry(Model, { userId, channelId, body: req.body });
+        if (retried) {
           return res.status(200).json(
-            Response.userSuccessResp(episode.applied ? "Incident updated" : "Incident already processed", {
-              Incident: incidentObj,
-              duplicate: !episode.applied,
-            }),
+            Response.userSuccessResp("Incident already processed", { Incident: retried.toObject(), duplicate: true }),
           );
         }
       }
