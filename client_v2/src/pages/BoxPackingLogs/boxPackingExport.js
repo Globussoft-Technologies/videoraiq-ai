@@ -128,7 +128,9 @@ export const downloadBoxPackingXlsx = (rows = [], options = {}) => {
 };
 
 export const downloadBoxPackingCsv = (rows = [], options = {}) => {
-  const records = removeReviewFields(options.records ?? reportRecords(rows, options.timezone || 'Asia/Kolkata', options.reportType || 'total'));
+  const timezone = options.timezone || 'Asia/Kolkata';
+  const reportType = options.reportType || 'total';
+  const records = removeReviewFields(normalizePackingRecords(options.records ?? reportRecords(rows, timezone, reportType), rows, timezone, reportType));
   const worksheet = XLSX.utils.json_to_sheet(records.map((row) => ({ ...row, ...(row.Snapshot ? { Snapshot: packingMediaUrls(row.Snapshot).link } : {}) })), { header: options.columns || Object.keys(records[0] || {}) });
   const csv = XLSX.utils.sheet_to_csv(worksheet);
   const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });

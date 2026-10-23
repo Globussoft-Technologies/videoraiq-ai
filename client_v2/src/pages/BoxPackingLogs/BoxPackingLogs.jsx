@@ -12,7 +12,7 @@ import PageLoader from '@/components/PageLoader';
 import { ErrorState } from '@/components/States';
 import AccessDenied from '@/components/AccessDenied';
 import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Boxes, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, Filter, Info, LayoutGrid, List, Maximize2, Package, PackageCheck, RefreshCw, RotateCcw, Rows3, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
-import { formatPackingDuration, packingStats, packingWorkerIds, packingWorkerId, packingCompletedZone, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue } from './boxPackingData';
+import { formatPackingDuration, packingStats, packingWorkerIds, packingWorkerId, packingCompletedZone, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue, packingZonesForChannel } from './boxPackingData';
 import { samePackingCamera, packingStationKey, packingNvrId } from './packingIdentity';
 import { downloadBoxPackingCsv, downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
 import { BOX_PACKING_CONFIG } from '@/pages/IncidentLogs/configs';
@@ -170,6 +170,9 @@ function AnalyticsFilters({ open, setOpen, zone, setZone, zones }) {
 function PackingVideo({ row, channel, fill = false }) {
   const hostRef = useRef(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showZones, setShowZones] = useState(false);
+  const configuredZones = useMemo(() => packingZonesForChannel(channel), [channel]);
+  const zoneOverlay = configuredZones?.width > 0 && configuredZones?.height > 0 ? configuredZones : null;
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(document.fullscreenElement === hostRef.current);
     document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -180,7 +183,23 @@ function PackingVideo({ row, channel, fill = false }) {
     else await hostRef.current?.requestFullscreen?.();
   };
   return <div className="box-packing-camera-frame" ref={hostRef} onDoubleClick={toggleFullscreen} style={{ position: fill && !fullscreen ? 'absolute' : 'relative', inset: fill && !fullscreen ? 0 : undefined, minHeight: fullscreen ? '100vh' : 0, aspectRatio: fullscreen || fill ? 'auto' : '16 / 9', height: fullscreen || fill ? '100%' : 'auto', overflow: 'hidden', background: '#090d16', borderRadius: fullscreen ? 0 : 12, cursor: fullscreen ? 'default' : 'pointer' }}>
-    {channel ? <CameraStream channel={channel} unavailableLabel="Not streaming" unavailableContent={<PackingStreamUnavailable />} rounded={false} minH={fill ? 0 : 320} fit={fill ? 'contain' : 'cover'} immediate clickToMaximize={false} showOverlay={false} cursor={fullscreen ? 'default' : 'pointer'} enableFullscreenZoom isFullscreen={fullscreen} enableZoom={fullscreen} zoomToolbarStyle={{ top: 14, right: fullscreen ? 58 : 14 }} /> : <div style={{ minHeight: 450, display: 'grid', placeItems: 'center', color: 'var(--tx3)' }}>Not streaming</div>}
+    {channel ? <CameraStream channel={channel} unavailableLabel="Not streaming" unavailableContent={<PackingStreamUnavailable />} rounded={false} minH={fill ? 0 : 320} fit={zoneOverlay || fill ? 'contain' : 'cover'} immediate clickToMaximize={false} showOverlay={false} cursor={fullscreen ? 'default' : 'pointer'} enableFullscreenZoom isFullscreen={fullscreen} enableZoom={fullscreen} zoomToolbarStyle={{ top: 14, right: fullscreen ? 58 : 14 }}>
+      {zoneOverlay && showZones && <svg aria-label="Configured packing zones" role="img" viewBox={`0 0 ${zoneOverlay.width} ${zoneOverlay.height}`} preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        {zoneOverlay.zones.map((zone, index) => {
+          const fontSize = Math.max(zoneOverlay.width / 70, 12);
+          const tagHeight = fontSize * 1.7;
+          const tagWidth = Math.max(zone.name.length * fontSize * .65 + fontSize, fontSize * 2.5);
+          const [labelX, labelY] = zone.points[0];
+          return <g key={`${zone.name}-${index}`}>
+            <polygon points={zone.points.map(([x, y]) => `${x},${y}`).join(' ')} fill="rgba(245, 158, 11, .22)" stroke="#f59e0b" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+            {zone.points.map(([x, y], pointIndex) => <circle key={pointIndex} cx={x} cy={y} r={Math.max(zoneOverlay.width / 180, 4)} fill="#fff" stroke="#f59e0b" strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
+            <rect x={labelX - 4} y={Math.max(0, labelY - tagHeight - 8)} width={tagWidth} height={tagHeight} rx={fontSize * .3} fill="#ef4444" />
+            <text x={labelX - 4 + tagWidth / 2} y={Math.max(0, labelY - tagHeight - 8) + tagHeight * .7} textAnchor="middle" fill="#fff" fontSize={fontSize} fontWeight="700">{zone.name}</text>
+          </g>;
+        })}
+      </svg>}
+    </CameraStream> : <div style={{ minHeight: 450, display: 'grid', placeItems: 'center', color: 'var(--tx3)' }}>Not streaming</div>}
+    {/* {zoneOverlay && <button type="button" aria-pressed={showZones} onClick={(event) => { event.stopPropagation(); setShowZones((visible) => !visible); }} onDoubleClick={(event) => event.stopPropagation()} style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 20, padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,.35)', color: '#fff', background: 'rgba(6,8,13,.76)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>{showZones ? 'Hide zones' : 'Show zones'}</button>} */}
     {fullscreen && <button type="button" onClick={toggleFullscreen} title="Close fullscreen" aria-label="Close fullscreen" style={{ position: 'absolute', right: 12, top: 12, zIndex: 40, width: 34, height: 34, display: 'grid', placeItems: 'center', color: '#fff', background: '#dc2626', border: '1px solid #fecaca', borderRadius: 7, cursor: 'pointer', boxShadow: '0 4px 14px rgba(127,29,29,.45)' }}><X size={17} /></button>}
     {!fullscreen && <button type="button" onClick={toggleFullscreen} title="Open fullscreen" aria-label="Open fullscreen" style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 20, width: 32, height: 32, display: 'grid', placeItems: 'center', color: '#fff', background: 'rgba(6,8,13,.76)', border: '1px solid rgba(255,255,255,.28)', borderRadius: 6, cursor: 'pointer' }}><Maximize2 size={16} /></button>}
   </div>;
@@ -529,8 +548,8 @@ function PackingOverview({ rows: allRows, streamChannels, activeCameraIndex, set
     const key = activitySort.key;
     const sortValue = (row) => key === 'snapshot' ? (row.Image || row.image || row.imageUrl || row.incidentImageUrl ? 1 : 0)
       : key === 'timeTakenSec' ? Number(row[key]) || 0
-      : key === 'date' || key === 'startTime' ? new Date(packingStartTimestamp(row) || 0).getTime()
-      : key === 'endTime' ? new Date(packingEndTimestamp(row) || 0).getTime()
+      : key === 'date' || key === 'endTime' ? new Date(packingEndTimestamp(row) || 0).getTime()
+      : key === 'startTime' ? new Date(packingStartTimestamp(row) || 0).getTime()
       : String(row[key] || '').toLowerCase();
     const left = sortValue(a);
     const right = sortValue(b);
@@ -688,6 +707,7 @@ export default function BoxPackingLogs() {
   const [activeCameraIndex, setActiveCameraIndex] = useState(0);
   const [dbLoading, setDbLoading] = useState(true);
   const [dbError, setDbError] = useState(null);
+  const hasLoadedRows = useRef(false);
   useEffect(() => {
     // The shell remains mounted when the sidebar changes route. Keep its
     // internal view in lockstep with the URL so the sidebar and top tabs never
@@ -697,8 +717,7 @@ export default function BoxPackingLogs() {
   }, [routeView]);
   useEffect(() => {
     let active = true;
-    setDbLoading(true);
-    let hasData = false;
+    if (!hasLoadedRows.current) setDbLoading(true);
     const stop = watchPackingIncidents({
       socket, adminId: user?.adminId,
       isLive: () => {
@@ -711,13 +730,13 @@ export default function BoxPackingLogs() {
         const payload = res?.data?.body?.data;
         const list = Array.isArray(payload) ? payload : payload?.data;
         setDbRows((Array.isArray(list) ? list : []).map(apiRowToPackingRow));
-        hasData = true;
+        hasLoadedRows.current = true;
         setDbError(null);
       })
       .catch((error) => {
         if (!active) return;
         // A transient background error must not replace a valid live view.
-        if (hasData) return;
+        if (hasLoadedRows.current) return;
         setDbRows([]);
         setDbError(error?.response?.data?.body?.message || error?.response?.data?.message || error?.message || 'Unable to load Box Packing data.');
       })
@@ -763,11 +782,11 @@ export default function BoxPackingLogs() {
   const analyticsZones = useMemo(() => [...new Set(dbRows.map(packingWorkerId))], [dbRows]);
   const analyticsRows = useMemo(() => dbRows.filter((row) => moment(row.time).isBetween(moment(analyticsRange.startDate).startOf('day'), moment(analyticsRange.endDate).endOf('day'), undefined, '[]')).filter((row) => analyticsStatus === 'all' || row.status === analyticsStatus).filter((row) => analyticsZone === 'all' || packingWorkerId(row) === analyticsZone), [dbRows, analyticsRange, analyticsRefresh, analyticsStatus, analyticsZone]);
   const analyticsStats = packingStats(analyticsRows);
-  if (loading) return <PageLoader />;
+  if (loading && !logs) return <PageLoader />;
   // With licensing disabled, the provider intentionally leaves logs null.
   if (IS_LICENSING_ENABLED && !logs) return <ErrorState error={new Error('Unable to load detection access.')} onRetry={refresh} minH={360} />;
   if (logs?.boxPackingLogs === false) return <AccessDenied message="Box Packing alerts are not enabled for your account." />;
-  if (dbLoading) return <PageLoader />;
+  if (dbLoading && !hasLoadedRows.current) return <PageLoader />;
   if (dbError) return <ErrorState error={new Error(dbError)} onRetry={() => window.location.reload()} minH={360} />;
   // The shared page supplies the production alert table, date range, filters,
   // auto-refresh, pagination and Excel/PDF export behavior.

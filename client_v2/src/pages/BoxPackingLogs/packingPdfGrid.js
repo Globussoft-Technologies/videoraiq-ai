@@ -25,10 +25,9 @@ export function drawPackingPdfGrid(doc, records, images, { linkFor = (url) => ur
     const image = images[index];
     if (image) {
       try {
-        const props = doc.getImageProperties(image), scale = Math.max(iw / props.width, ih / props.height);
+        const props = doc.getImageProperties(image), scale = Math.min(iw / props.width, ih / props.height);
         const w = props.width * scale, h = props.height * scale;
-        doc.saveGraphicsState(); doc.rect(ix, iy, iw, ih); doc.clip(); doc.discardPath();
-        try { doc.addImage(image, props.fileType, ix + (iw - w) / 2, iy + (ih - h) / 2, w, h, undefined, 'FAST'); } finally { doc.restoreGraphicsState(); }
+        doc.addImage(image, props.fileType, ix + (iw - w) / 2, iy + (ih - h) / 2, w, h, undefined, 'FAST');
       } catch { text('Snapshot unavailable', x + width / 2, iy + ih / 2, iw - 4, 7, [180, 188, 205], false, 'center'); }
     } else text('Snapshot unavailable', x + width / 2, iy + ih / 2, iw - 4, 7, [180, 188, 205], false, 'center');
     if (record.Snapshot) doc.link(ix, iy, iw, ih, { url: linkFor(record.Snapshot) });

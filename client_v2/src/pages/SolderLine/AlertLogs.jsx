@@ -3,7 +3,7 @@ import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
 import { clock, describeSolderAlert } from './solderLineData';
 import { BAD, WARN, OK, mono, label, Panel, OpBadge, Chip, NoPeriodData, SnapshotPreview } from './ui';
-import { downloadPdf, downloadXlsx } from './exports';
+import { downloadPdf, downloadXlsx, formatExportDates } from './exports';
 import { downloadSnapshot, downloadSnapshotsZip } from './snapshots';
 import DownloadButton from './DownloadButton';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
@@ -64,7 +64,9 @@ export default function AlertLogs({ model, rows, range }) {
       Snapshot: r.image ? mediaUrl(r.image) : '',
     };
   });
-  const fileName = `solder-alerts_${shown[0]?.start.format('YYYY-MM-DD') || 'empty'}`;
+  const dateRange = formatExportDates(range);
+  const exportSubtitle = [`${shown.length} alerts`, dateRange].filter(Boolean).join(' | ');
+  const fileName = `solder-alerts_${range?.startDate || 'empty'}_${range?.endDate || 'empty'}`;
 
   return (
     <>
@@ -85,8 +87,8 @@ export default function AlertLogs({ model, rows, range }) {
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
           <Chip on={grid} color="var(--blue)" onClick={() => setGrid(true)}><LayoutGrid size={13} />Grid</Chip>
           <DownloadButton disabled={!shown.some((r) => r.image)} action={() => downloadSnapshotsZip(shown)} description="snapshots ZIP" title="Download all filtered snapshots as ZIP" style={{ ...mono, fontSize: 10.5, fontWeight: 700 }}>SNAPSHOTS .ZIP</DownloadButton>
-          <DownloadButton disabled={!shown.length} action={() => downloadXlsx(exportRows(), fileName)} description="Excel report">XLSX</DownloadButton>
-          <DownloadButton disabled={!shown.length} action={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: `${shown.length} alerts`, rows: exportRows(), filename: fileName })} description="PDF report">PDF</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadXlsx(exportRows(), fileName, { title: 'Solder Alert Logs', subtitle: exportSubtitle })} description="Excel report">XLSX</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: exportSubtitle, rows: exportRows(), filename: fileName })} description="PDF report">PDF</DownloadButton>
         </span>
       </Panel>
 

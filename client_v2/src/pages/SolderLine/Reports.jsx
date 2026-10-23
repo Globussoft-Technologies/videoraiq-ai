@@ -8,7 +8,7 @@ import ReportTable from './ReportTable';
 import SortButton, { useTableSort } from './TableSort';
 import TotalReport from './TotalReport';
 import { mono, label, Panel, OpBadge, Chip, NoPeriodData } from './ui';
-import { downloadPdf, downloadXlsx } from './exports';
+import { downloadPdf, downloadXlsx, formatExportDates } from './exports';
 import DownloadButton from './DownloadButton';
 import AutoEmailReports from './AutoEmailReports';
 import SolderPagination, { useSolderPagination } from './SolderPagination';
@@ -104,7 +104,8 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
   const rows = sorting.rows;
   const pagination = useSolderPagination(rows, `${scope}:${sorting.resetKey}`);
   const fileName = s ? `solder-line_${s.name}_${type}_${range.startDate}_${range.endDate}`.replace(/\s+/g, '-') : 'solder-line';
-  const subtitle = s ? `${s.name} · ${s.zones.join(' & ')} · ${periodLabel}` : periodLabel;
+  const dateRange = formatExportDates(range);
+  const subtitle = s ? `${s.name} · ${s.zones.join(' & ')} · ${dateRange}` : dateRange;
   const btn = (primary) => ({ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: primary ? '#fff' : 'var(--tx)', border: primary ? 'none' : '1px solid var(--bd2)', background: primary ? 'linear-gradient(135deg, #3b82f6, #a855f7)' : 'var(--bg2)' });
 
   return (
@@ -145,7 +146,7 @@ export default function Reports({ model, selected, onSelect, range, today, onRan
             <div style={{ ...label, marginTop: 4 }}>Download</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               <DownloadButton disabled={!rows.length} action={() => downloadPdf({ title: typeMeta.t, subtitle, rows, filename: fileName })} description="PDF report" style={btn(true)}>PDF</DownloadButton>
-              <DownloadButton disabled={!rows.length} action={() => downloadXlsx(rows, fileName)} description="Excel report" style={btn(false)}>Excel</DownloadButton>
+              <DownloadButton disabled={!rows.length} action={() => downloadXlsx(rows, fileName, { title: typeMeta.t, subtitle })} description="Excel report" style={btn(false)}>Excel</DownloadButton>
             </div>
             <AutoEmailReports key={`${s?._id}:${type}`} station={s} reportType={type} title={typeMeta.t} />
           </Panel>

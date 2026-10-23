@@ -5,6 +5,7 @@ import { api, getApiErrorMessage } from '@/helpers/client';
 import { usePermissions } from '@/context/PermissionContext';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import MultiSelect from '@/components/MultiSelect';
+import SingleDatePicker from '@/components/SingleDatePicker';
 import ReportTable from './ReportTable';
 import TotalReport from './TotalReport';
 
@@ -21,15 +22,32 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
   const [saving, setSaving] = useState(false);
   const [action, setAction] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [recipientError, setRecipientError] = useState('');
+  const [validationShown, setValidationShown] = useState(false);
   const running = useRef(false);
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
   const recipientOptions = [...options.recipients, ...recipients.filter((email) => !options.recipients.some((r) => r.email === email)).map((email) => ({ email, unavailable: true }))];
+  const invalidRecipients = recipients.some((email) => !options.recipients.some((r) => r.email === email));
+  const validName = name.trim().length >= 2 && name.trim().length <= 120;
+  const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time || '');
+  const startDateError = schedule.frequency === 'custom' && !schedule.startDate ? 'Choose a start date.' : '';
+  const endDateError = schedule.frequency === 'custom'
+    ? !schedule.endDate ? 'Choose an end date.' : schedule.startDate && schedule.endDate < schedule.startDate ? 'End date must be on or after the start date.' : ''
+    : '';
+  const validDates = !startDateError && !endDateError;
+  const validDay = schedule.frequency !== 'monthly' || (Number.isInteger(schedule.dayOfMonth) && schedule.dayOfMonth >= 1 && schedule.dayOfMonth <= 28);
+  const validSchedule = Boolean(validName && validTime && validDates && validDay);
   const toggle = (values, value) => values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
   const payload = () => ({ title: name.trim(), schedule: { ...schedule, startDate: schedule.frequency === 'custom' ? schedule.startDate : null, endDate: schedule.frequency === 'custom' ? schedule.endDate : null }, recipients, formats, enabled });
   useEffect(() => { setPreview(null); }, [schedule, name, formats]);
   const runDraft = async (event, kind) => {
-    if (running.current || !event.currentTarget.form.reportValidity()) return;
+    if (running.current || !validSchedule || !formats.length) return;
+    if (kind === 'send-test' && (!recipients.length || invalidRecipients)) {
+      setRecipientError('Select at least one verified email recipient.');
+      return;
+    }
+    setRecipientError('');
     running.current = true; setSaving(true); setAction(kind);
     const controller = new AbortController();
     request.current = controller;
@@ -48,6 +66,13 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
   const submit = async (event) => {
     event.preventDefault();
     if (running.current) return;
+    setValidationShown(true);
+    if (!recipients.length || invalidRecipients) {
+      setRecipientError('Select at least one verified email recipient.');
+      return;
+    }
+    if (!validSchedule || !formats.length) return;
+    setRecipientError('');
     running.current = true; setSaving(true); setAction('save');
     const controller = new AbortController();
     request.current = controller;
@@ -55,13 +80,19 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
     finally { request.current = null; running.current = false; setSaving(false); setAction(null); }
   };
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,500px)] max-h-[85vh] overflow-y-auto p-6 border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)]">
-        <DialogTitle>Auto email reports</DialogTitle>
-        <DialogDescription className="text-[var(--tx3)]">{title} · {station.name}. Choose when to email this report automatically, even when the dashboard is closed.</DialogDescription>
-        <form onSubmit={submit} className="flex flex-col gap-4">
+    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent closeBtn="top-3 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 text-white opacity-100 hover:bg-white/25 hover:text-white [&_svg]:size-4" className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,760px)] max-w-[760px] max-h-[92vh] overflow-x-hidden overflow-y-auto p-0 border border-[var(--bd2)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-2xl">
+        <div className="relative flex items-center justify-between gap-4 px-6 py-4 pr-20 bg-gradient-to-r from-[var(--blue)] to-[var(--violet)] text-white">
+        <div className="min-w-0 flex-1">
+          <DialogTitle className="text-white">Auto email reports</DialogTitle>
+          <DialogDescription className="mt-1 text-white/85">{title} · {station.name}. Choose when to email this report automatically, even when the dashboard is closed.</DialogDescription>
+        </div>
+        <span className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold">SOLDER LINE</span>
+        </div>
+        <form noValidate onSubmit={submit} className="flex min-w-0 max-w-full flex-col gap-4 overflow-x-hidden p-6">
           <label className="flex flex-col gap-2 text-sm">Schedule name
             <input required minLength={2} maxLength={120} value={name} onChange={(e) => setName(e.target.value)} disabled={saving} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]" />
+            {validationShown && !validName && <span role="alert" className="text-xs text-[var(--crit)]">Enter a schedule name of 2 to 120 characters.</span>}
           </label>
           <label className="flex flex-col gap-2 text-sm">Frequency
             <select value={schedule.frequency} onChange={(e) => changeSchedule('frequency', e.target.value)} disabled={saving} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)] text-[var(--tx)]">
@@ -70,6 +101,7 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
           </label>
           <label className="flex flex-col gap-2 text-sm">Send time
             <input type="time" required value={schedule.time} onChange={(e) => changeSchedule('time', e.target.value)} disabled={saving} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]" />
+            {validationShown && !validTime && <span role="alert" className="text-xs text-[var(--crit)]">Choose a valid send time.</span>}
           </label>
           {schedule.frequency === 'weekly' && <label className="flex flex-col gap-2 text-sm">Day of week
             <select value={schedule.weekday} disabled={saving} onChange={(e) => changeSchedule('weekday', Number(e.target.value))} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]">
@@ -78,30 +110,32 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
           </label>}
           {schedule.frequency === 'monthly' && <label className="flex flex-col gap-2 text-sm">Day of month
             <input type="number" min={1} max={28} required disabled={saving} value={schedule.dayOfMonth} onChange={(e) => changeSchedule('dayOfMonth', Number(e.target.value))} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]" />
+            {validationShown && !validDay && <span role="alert" className="text-xs text-[var(--crit)]">Choose a day from 1 to 28.</span>}
           </label>}
-          {schedule.frequency === 'custom' && <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-2 text-sm">Start date<input type="date" required disabled={saving} value={schedule.startDate || ''} max={schedule.endDate || undefined} onChange={(e) => changeSchedule('startDate', e.target.value)} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]" /></label>
-            <label className="flex flex-col gap-2 text-sm">End date<input type="date" required disabled={saving} value={schedule.endDate || ''} min={schedule.startDate || undefined} onChange={(e) => changeSchedule('endDate', e.target.value)} className="p-2 rounded-lg border border-[var(--bd2)] bg-[var(--bg2)]" /></label>
+          {schedule.frequency === 'custom' && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-2 text-sm"><span>Start date <span className="text-[var(--crit)]">*</span></span><SingleDatePicker value={schedule.startDate || ''} maxDate={schedule.endDate || undefined} placeholder="Start date" onChange={(date) => changeSchedule('startDate', date)} />{validationShown && startDateError && <span role="alert" className="text-xs text-[var(--crit)]">{startDateError}</span>}</div>
+            <div className="flex flex-col gap-2 text-sm"><span>End date <span className="text-[var(--crit)]">*</span></span><SingleDatePicker value={schedule.endDate || ''} minDate={schedule.startDate || undefined} placeholder="End date" onChange={(date) => changeSchedule('endDate', date)} />{validationShown && endDateError && <span role="alert" className="text-xs text-[var(--crit)]">{endDateError}</span>}</div>
           </div>}
           <p className="text-xs text-[var(--tx3)]">Uses {options.timezone}. {schedule.frequency === 'custom' ? 'Emails the full selected date range once, on the day after the end date at your send time.' : `Includes the previous ${schedule.frequency === 'daily' ? '24 hours' : schedule.frequency === 'weekly' ? '7 days' : 'month'} up to your send time.`} The preview date selection does not affect this schedule.</p>
           <fieldset disabled={saving} className="flex flex-col gap-2">
-            <legend className="text-sm mb-2">Verified email recipients</legend>
+            <legend className="text-sm mb-2">Verified email recipients <span className="text-[var(--crit)]">*</span></legend>
             {!options.recipients.length && <p className="text-xs text-[var(--tx3)]">Add and verify an email in Recipients before scheduling.</p>}
-            <MultiSelect inlinePanel options={recipientOptions.map((r) => ({ id: r.email, label: `${r.email}${r.unavailable ? ' (no longer verified)' : ''}`, disabled: r.unavailable }))} value={recipients} onChange={setRecipients} placeholder="Select verified email recipients" searchPlaceholder="Search email recipients..." msg="No verified email recipients" />
-            {!recipients.length && <p className="text-xs text-[var(--tx3)]">Select at least one verified recipient to save a schedule or send test mail.</p>}
+            <div className={recipientError ? 'rounded-lg ring-1 ring-[var(--crit)]' : ''}><MultiSelect inlinePanel options={recipientOptions.map((r) => ({ id: r.email, label: `${r.email}${r.unavailable ? ' (no longer verified)' : ''}`, disabled: r.unavailable }))} value={recipients} onChange={(value) => { setRecipients(value); if (value.length) setRecipientError(''); }} placeholder="Select verified email recipients" searchPlaceholder="Search email recipients..." msg="No verified email recipients" /></div>
+            {recipientError && <p role="alert" className="text-xs text-[var(--crit)]">{recipientError}</p>}
+            {!recipients.length && !recipientError && <p className="text-xs text-[var(--tx3)]">Select at least one verified recipient to save a schedule or send test mail.</p>}
             {recipients.some((email) => !options.recipients.some((r) => r.email === email)) && <p role="alert" className="text-xs text-red-500">Some saved recipients are no longer verified. Use Clear all and select verified recipients again.</p>}
           </fieldset>
           <fieldset disabled={saving} className="flex gap-4">
-            <legend className="text-sm mb-2">Attachments</legend>
+            <legend className="text-sm mb-2">Attachments <span className="text-[var(--crit)]">*</span></legend>
             {['pdf', 'xlsx'].map((format) => <label key={format} className="flex items-center gap-2 text-sm cursor-pointer"><input className="cursor-pointer" type="checkbox" checked={formats.includes(format)} onChange={() => setFormats(toggle(formats, format))} />{format === 'pdf' ? 'PDF' : 'Excel'}</label>)}
           </fieldset>
-          {!formats.length && <p className="text-xs text-[var(--tx3)]">Select PDF or Excel to preview, save, or send this report.</p>}
+          {!formats.length && <p role={validationShown ? 'alert' : undefined} className={`text-xs ${validationShown ? 'text-[var(--crit)]' : 'text-[var(--tx3)]'}`}>Select PDF or Excel to preview, save, or send this report.</p>}
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input className="cursor-pointer" type="checkbox" disabled={saving} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />Enable automatic emails</label>
           <div className="flex flex-wrap gap-2">
-            <button type="button" style={button} disabled={saving || !formats.length} onClick={(e) => runDraft(e, 'preview')}>
+            <button type="button" style={{ ...button, color: 'var(--blue)', border: '1px solid rgba(59,130,246,.4)', background: 'rgba(59,130,246,.1)' }} disabled={saving || !formats.length || !validSchedule} onClick={(e) => runDraft(e, 'preview')}>
               {action === 'preview' ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}{action === 'preview' ? 'Preparing...' : 'Preview report'}
             </button>
-            <button type="button" style={button} disabled={saving || !formats.length || !recipients.length || recipients.some((email) => !options.recipients.some((r) => r.email === email))} onClick={(e) => runDraft(e, 'send-test')}>
+            <button type="button" style={{ ...button, color: 'var(--violet)', border: '1px solid rgba(168,85,247,.4)', background: 'rgba(168,85,247,.1)' }} disabled={saving || !formats.length || !validSchedule || !recipients.length || invalidRecipients} onClick={(e) => runDraft(e, 'send-test')}>
               {action === 'send-test' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{action === 'send-test' ? 'Sending...' : 'Send test mail'}
             </button>
           </div>
@@ -114,8 +148,8 @@ function Setup({ initial, options, station, title, reportType, onSave, onClose }
             </div>}
           </section>}
           <div className="flex justify-end gap-2">
-            <button type="button" style={button} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...button, background: 'var(--blue)', color: '#fff', opacity: saving ? 0.6 : 1 }} disabled={saving || name.trim().length < 2 || !recipients.length || !formats.length || !schedule.time || (schedule.frequency === 'custom' && (!schedule.startDate || !schedule.endDate || schedule.endDate < schedule.startDate)) || recipients.some((email) => !options.recipients.some((r) => r.email === email))}>
+            <button type="button" style={{ ...button, color: 'var(--crit)', border: '1px solid rgba(239,68,68,.35)', background: 'rgba(239,68,68,.08)' }} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...button, border: 0, background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', opacity: saving ? 0.6 : 1 }} disabled={saving}>
               {action === 'save' && <Loader2 size={14} className="animate-spin" />}{action === 'save' ? 'Saving...' : 'Save schedule'}
             </button>
           </div>
@@ -175,11 +209,13 @@ export default function AutoEmailReports({ station, reportType, title }) {
   };
   if (!access.view) return null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-      <button type="button" style={{ ...button, borderStyle: 'dashed', width: '100%', opacity: loading || !station || !access.create ? 0.5 : 1 }} disabled={loading || !station || !access.create || !options} onClick={() => setModal({})}>
+    <div className="flex w-full max-w-full flex-col gap-2" style={{ marginTop: 14, alignSelf: 'stretch', minWidth: 0 }}>
+      <button type="button" style={{ ...button, width: '100%', boxSizing: 'border-box', color: 'var(--blue)', border: '1px solid rgba(59,130,246,.35)', background: 'linear-gradient(135deg, rgba(59,130,246,.1), rgba(168,85,247,.12))', opacity: loading || !station || !access.create ? 0.5 : 1 }} disabled={loading || !station || !access.create || !options} onClick={() => setModal({})}>
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}Auto email reports
       </button>
       {error && <div role="alert" className="text-xs text-red-500">{error} <button type="button" onClick={() => setReload((r) => r + 1)} className="underline cursor-pointer">Retry</button></div>}
+      <div style={{ fontSize: 11, color: 'var(--tx3)' }}>{title} · {reports.length} saved schedule{reports.length === 1 ? '' : 's'}</div>
+      {!loading && !reports.length && !error && <p style={{ margin: 0, fontSize: 11, color: 'var(--tx3)' }}>No email schedules for {title.toLowerCase()} yet.</p>}
       {reports.map((report) => <div key={report._id} style={{ fontSize: 11, padding: 9, border: '1px solid var(--bd)', borderRadius: 8, color: 'var(--tx2)' }}>
         <div>{report.enabled ? 'Enabled' : 'Disabled'} · {report.title || 'Configure this schedule'} · {report.schedule ? `${report.schedule.frequency} at ${report.schedule.time}` : 'Choose frequency and time'} · {report.recipients.length} recipient{report.recipients.length === 1 ? '' : 's'}</div>
         {report.lastSentAt && <div className="mt-1 text-[var(--tx3)]">Last sent: {new Intl.DateTimeFormat('en-GB', { timeZone: options.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.lastSentAt))}</div>}

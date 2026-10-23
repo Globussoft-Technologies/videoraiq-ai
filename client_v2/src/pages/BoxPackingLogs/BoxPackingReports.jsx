@@ -7,7 +7,7 @@ import SnapshotCell from '@/pages/SolderLine/SnapshotCell';
 import SolderPagination, { useSolderPagination } from '@/pages/SolderLine/SolderPagination';
 import { mediaUrl } from '@/lib/format';
 import { downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
-import { formatPackingDuration, packingStartTimestamp, packingStats, packingWorkerIds } from './boxPackingData';
+import { formatPackingDuration, packingEndTimestamp, packingStats, packingWorkerIds } from './boxPackingData';
 import PackingZoneKpi from './PackingZoneKpi';
 import { buildPackingReportRecords, buildPackingReportStations, REPORT_COLUMNS } from './packingReportData';
 import { usePackingSort } from './PackingSort';
@@ -188,7 +188,7 @@ export default function BoxPackingReports({ rows = [], channels = [], range, onR
     const from = timeToMinutes(fromTime);
     const to = timeToMinutes(toTime);
     return rows.filter((row) => {
-      const timestamp = packingStartTimestamp(row);
+      const timestamp = packingEndTimestamp(row);
       if (!timestamp) return false;
       const value = moment.tz(timestamp, timezone);
       if (!value.isValid()) return false;

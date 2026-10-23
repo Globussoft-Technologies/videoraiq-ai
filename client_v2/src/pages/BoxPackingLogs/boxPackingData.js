@@ -10,6 +10,24 @@ export const packingWorkerId = (row) => {
     ? (String(value).trim() === 'Completed by not provided' ? '' : String(value).trim()) : '';
 };
 export const packingWorkerIds = (rows = []) => [...new Set(rows.map(packingWorkerId).filter(Boolean))];
+export const packingZonesForChannel = (channel) => {
+  const detections = channel?.detections;
+  const setting = Array.isArray(detections)
+    ? detections.find((entry) => entry?.settingType === 'boxPackingDetectionSettings' || entry?.id?.settingType === 'boxPackingDetectionSettings')
+    : detections?.boxPackingDetectionSettings;
+  const settings = setting?.settings || setting?.id?.settings;
+  const cameraId = String(channel?._id || channel?.id || '');
+  const raw = settings?.referencePoints?.[cameraId];
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const polygons = Array.isArray(raw[0]?.[0]) ? raw : [raw];
+  const zones = polygons.map((polygon, index) => ({
+    name: settings?.zone_configs?.[index]?.name || `Zone ${index + 1}`,
+    points: polygon.map((point) => Array.isArray(point) ? point : [point?.x, point?.y])
+      .filter(([x, y]) => Number.isFinite(Number(x)) && Number.isFinite(Number(y)))
+      .map(([x, y]) => [Number(x), Number(y)]),
+  })).filter((zone) => zone.points.length >= 3);
+  return zones.length ? { width: Number(settings?.videoResolution?.[0]), height: Number(settings?.videoResolution?.[1]), zones } : null;
+};
 export const packingWorkerCount = (rows = []) => new Set(rows.filter(packingWorkerId)
   .map((row) => JSON.stringify([packingStationKey(row), packingWorkerId(row)]))).size;
 
@@ -25,19 +43,19 @@ export const packingAverageSeconds = (rows) => {
 };
 
 export const packingDurationSeconds = (row) => Number(row?.timeTakenSec ?? packingCompletedZone(row)?.timeTakenSec) || 0;
-export const packingStartTimestamp = (row) => row?.startTime || row?.start_time || row?.recordedAt || row?.timeOfIncident || row?.time || row?.createdAt;
-export const packingEndTimestamp = (row) => {
-  const explicit = row?.endTime || row?.end_time;
-  if (explicit) return explicit;
-  const start = packingStartTimestamp(row);
+export const packingEndTimestamp = (row) => row?.timeOfIncident || row?.time || row?.recordedAt || row?.endTime || row?.end_time || row?.createdAt;
+export const packingStartTimestamp = (row) => {
+  const end = packingEndTimestamp(row);
   const seconds = packingDurationSeconds(row);
-  if (!start || !seconds) return null;
-  const value = new Date(start);
-  return Number.isNaN(value.getTime()) ? null : new Date(value.getTime() + seconds * 1000).toISOString();
+  if (end && Number.isFinite(seconds) && seconds > 0) {
+    const endMs = new Date(end).getTime();
+    if (Number.isFinite(endMs)) return new Date(endMs - seconds * 1000).toISOString();
+  }
+  return row?.startTime || row?.start_time || null;
 };
 export const packingDateValue = (row, timezone = getConfiguredTimezone()) => {
-  const start = packingStartTimestamp(row);
-  return start && moment.tz(start, timezone).isValid() ? moment.tz(start, timezone).format('DD MMM YYYY') : '—';
+  const end = packingEndTimestamp(row);
+  return end && moment.tz(end, timezone).isValid() ? moment.tz(end, timezone).format('DD MMM YYYY') : '—';
 };
 export const packingStartTimeValue = (row, timezone = getConfiguredTimezone()) => {
   const start = packingStartTimestamp(row);

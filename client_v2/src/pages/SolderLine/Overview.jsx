@@ -9,7 +9,7 @@ import {
   BAD, OK, WARN, CY, mono, label, Panel, PanelHead, SectionHead,
   OpBadge, StatusPill, Chip, Waiting, NoPeriodData, SnapshotPreview,
 } from './ui';
-import { downloadXlsx, downloadPdf } from './exports';
+import { downloadXlsx, downloadPdf, formatExportDates } from './exports';
 import { buildSolderReportRows } from './reportRows.js';
 import { downloadSnapshot } from './snapshots';
 import DownloadButton from './DownloadButton';
@@ -569,21 +569,25 @@ function HourSection({ s, model, range }) {
   });
   const pagination = useSolderPagination(sorting.rows, JSON.stringify([s._id, range?.startDate, range?.endDate, sorting.resetKey]));
   const rangeLabel = (h) => `${h}:00-${String(Number(h) + 1).padStart(2, '0')}:00`;
+  const exportTitle = 'Hourly activity log';
+  const exportSubtitle = [s.name, formatExportDates(range)].filter(Boolean).join(' | ');
+  const exportRows = () => [
+    ...sortRows(buildSolderReportRows('hourly', s), sorting.sort),
+    {
+      Hour: 'TOTAL', Panels: s.sum.panels,
+      'Completed joints': s.sum.joints, 'Missed joints': s.sum.missed,
+      ...Object.fromEntries(s.ops.map(operator => [`${operator.code} joints`, operator.joints])),
+    },
+  ];
   const exportHourly = () => downloadXlsx(
-    sortRows(buildSolderReportRows('hourly', s), sorting.sort),
+    exportRows(),
     `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
+    { title: exportTitle, subtitle: exportSubtitle },
   );
   const exportHourlyPdf = () => downloadPdf({
-    title: 'Hourly activity log',
-    subtitle: [s.name, range?.startDate, range?.endDate].filter(Boolean).join(' | '),
-    rows: [
-      ...sortRows(buildSolderReportRows('hourly', s), sorting.sort),
-      {
-        Hour: 'TOTAL', Panels: s.sum.panels,
-        'Completed joints': s.sum.joints, 'Missed joints': s.sum.missed,
-        ...Object.fromEntries(s.ops.map(operator => [`${operator.code} joints`, operator.joints])),
-      },
-    ],
+    title: exportTitle,
+    subtitle: exportSubtitle,
+    rows: exportRows(),
     filename: `solder-line_${s.name}_hourly_${model.isToday ? 'today' : 'range'}`,
   });
   if (!s.sum.hasThroughput) return <Panel><NoPeriodData /></Panel>;
