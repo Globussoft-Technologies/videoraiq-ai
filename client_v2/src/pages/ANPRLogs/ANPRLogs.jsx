@@ -326,8 +326,8 @@ const ANPRLogs = () => {
 
   const onSort = useCallback((field) => {
     dispatch({ type: 'SET_SORT_FIELD', value: field });
-    dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
-  }, [sortOrder]);
+    dispatch({ type: 'SET_SORT_ORDER', value: sortField === field && sortOrder === 'asc' ? 'desc' : 'asc' });
+  }, [sortField, sortOrder]);
 
   const onEdit = useMemo(
     () => (canEdit ? (r) => setEditRow(r) : undefined),
@@ -356,8 +356,8 @@ const ANPRLogs = () => {
   // The list's Tagged User column is read-only text; its tag/untag buttons
   // live in the Actions column beside Edit.
   const columns = useMemo(
-    () => buildColumns({ onSort, onPreview: openPreview, onEdit, onTagUser, onUntagUser, onViewUser }),
-    [onSort, openPreview, onEdit, onTagUser, onUntagUser, onViewUser]
+    () => buildColumns({ onSort, onPreview: openPreview, onEdit, onTagUser, onUntagUser, onViewUser, sortField, sortOrder }),
+    [onSort, openPreview, onEdit, onTagUser, onUntagUser, onViewUser, sortField, sortOrder]
   );
 
   const gridCard = useCallback(

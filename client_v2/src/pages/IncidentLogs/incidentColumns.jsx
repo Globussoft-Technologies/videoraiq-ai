@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -115,6 +115,14 @@ const IncidentCardRow = ({ icon: Icon, label, value, valueClassName = '', valueS
   </div>
 );
 
+const LightingCardMetaRow = ({ icon: Icon, label, value }) => (
+  <div className="flex min-w-0 items-start gap-2 text-[11px] leading-snug">
+    <Icon className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--tx3)]" aria-hidden="true" />
+    <span className="w-12 shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">{label}</span>
+    <span className="min-w-0 flex-1 break-words text-right font-medium text-[var(--tx)]" title={String(value || '--')}>{value || '--'}</span>
+  </div>
+);
+
 export const formatStatus = (value, config) => {
   if (!value || value === '--') return '--';
   if (config?.formatStatus) {
@@ -133,21 +141,29 @@ const statusClass = (value, config) => {
     : 'text-[var(--tx2)] bg-[var(--bg2)]';
 };
 
-const sortableHeader = (label, field, onSort, sortable) =>
+const sortableHeader = (label, field, onSort, sortable, sortField, sortOrder) =>
   sortable
-    ? () => (
+    ? () => {
+        const active = sortField === field;
+        const SortIcon = active ? (sortOrder === 'desc' ? ArrowDown : ArrowUp) : ArrowUpDown;
+        return (
         <button
+          type="button"
           onClick={() => onSort(field)}
-          className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] font-semibold text-[var(--tx)] hover:opacity-75 [font-family:var(--mono)]"
+          className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] font-semibold hover:opacity-75 [font-family:var(--mono)]"
+          style={{ color: active ? 'var(--blue)' : 'var(--tx)' }}
+          aria-label={`Sort by ${label}${active ? `, ${sortOrder === 'desc' ? 'descending' : 'ascending'}` : ''}`}
         >
           {label}
-          <ArrowUpDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+          <SortIcon className={`h-3 w-3 shrink-0 ${active ? '' : 'opacity-60'}`} aria-hidden="true" />
         </button>
-      )
+      );
+      }
     : label;
 
-export const buildColumns = (config, { onSort, onPreview }) => {
+export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }) => {
   const sortable = config.sortable !== false;
+  const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
   const cols = [
     {
       accessorKey: 'snap',
@@ -180,7 +196,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   if (config.showIncidentName !== false) {
     cols.push({
       accessorKey: 'incidentName',
-      header: sortableHeader('Incident Name', 'incidentName', onSort, sortable),
+      header: sortHeader('Incident Name', 'incidentName'),
       cell: ({ row }) => <span className={styles.text}>{row.original.incidentName}</span>,
     });
   }
@@ -188,7 +204,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   if (config.showStatus) {
     cols.push({
       accessorKey: 'currentStatus',
-      header: 'Current Status',
+      header: sortHeader('Current Status', 'currentStatus'),
       cell: ({ row }) => (
         <span
           className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusClass(
@@ -205,12 +221,12 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   cols.push(
     {
       accessorKey: 'nvrName',
-      header: sortableHeader('NVR Name', 'nvrData.nvrName', onSort, sortable),
+      header: sortHeader('NVR Name', 'nvrData.nvrName'),
       cell: ({ row }) => <span className={styles.text}>{row.original.nvrName}</span>,
     },
     {
       accessorKey: 'channelName',
-      header: config.showBlurredCameraFields ? sortableHeader('Camera Name', 'channelData.name', onSort, sortable) : 'Camera Name',
+      header: sortHeader('Camera Name', 'channelData.name'),
       cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
     },
   );
@@ -218,7 +234,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   if (config.showSeverity !== false) {
     cols.push({
       accessorKey: 'severity',
-      header: config.showBlurredCameraFields ? sortableHeader('Severity', 'severity', onSort, sortable) : 'Severity',
+      header: sortHeader('Severity', 'severity'),
       cell: ({ row }) => (
         <span
           className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${severityClass(
@@ -235,12 +251,12 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'fireCount',
-        header: 'Fire Objects',
+        header: sortHeader('Fire Objects', 'fireCount'),
         cell: ({ row }) => <span className={styles.text}>{row.original.fireCount ?? '--'}</span>,
       },
       {
         accessorKey: 'smokeCount',
-        header: 'Smoke Objects',
+        header: sortHeader('Smoke Objects', 'smokeCount'),
         cell: ({ row }) => <span className={styles.text}>{row.original.smokeCount ?? '--'}</span>,
       },
     );
@@ -250,12 +266,12 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'count',
-        header: 'People Detected',
+        header: sortHeader('People Detected', 'count'),
         cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span>,
       },
       {
         accessorKey: 'isFallDetected',
-        header: 'Fall Detected',
+        header: sortHeader('Fall Detected', 'isFallDetected'),
         cell: ({ row }) => {
           const isFall = row.original.isFallDetected === true || row.original.isFallDetected === 'true';
           return (
@@ -271,7 +287,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       },
       {
         accessorKey: 'evidenceScore',
-        header: 'Evidence Score',
+        header: sortHeader('Evidence Score', 'evidenceScore'),
         cell: ({ row }) => <span className={styles.text}>{formatEvidenceScore(row.original.evidenceScore)}</span>,
       },
     );
@@ -281,7 +297,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'description',
-        header: sortableHeader('Description', 'description', onSort, sortable),
+        header: sortHeader('Description', 'description'),
         cell: ({ row }) => <span className={`${styles.text} block min-w-[180px] max-w-[320px] whitespace-normal break-words`}>{row.original.description || '--'}</span>,
       },
     );
@@ -291,7 +307,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'count',
-        header: 'Objects Detected',
+        header: sortHeader('Objects Detected', 'count'),
         cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span>,
       },
     );
@@ -301,12 +317,12 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'zoneName',
-        header: sortableHeader('Door Name', 'zone', onSort, sortable),
+        header: sortHeader('Door Name', 'zone'),
         cell: ({ row }) => <span className={styles.text}>{row.original.zoneName || row.original.zone || '--'}</span>,
       },
       {
         accessorKey: 'doorStatus',
-        header: 'Door Status',
+        header: sortHeader('Door Status', 'doorStatus'),
         cell: ({ row }) => {
           const status = String(row.original.doorStatus || '').toLowerCase();
           const isOpen = status === 'open';
@@ -319,34 +335,34 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       },
       {
         accessorKey: 'durationSec',
-        header: sortableHeader('Door Open Duration', 'durationSec', onSort, sortable),
+        header: sortHeader('Door Open Duration', 'durationSec'),
         cell: ({ row }) => <span className={styles.text}>{formatDoorDuration(row.original.durationSec)}</span>,
       },
     );
   }
 
   if (config.showLightingFields || config.showHygieneFields) {
-    cols.push({ id: 'issuesDetected', header: 'Issues Detected', enableSorting: false,
+    cols.push({ id: 'issuesDetected', header: sortHeader('Issues Detected', 'violationCount'),
       cell: ({ row }) => <span className={styles.text}>{Number.isInteger(row.original.violationCount) && row.original.violationCount >= 0 ? row.original.violationCount : Array.isArray(row.original.violations) ? row.original.violations.length : 0}</span> });
-    cols.push({ accessorKey: 'zone', header: 'Zone', enableSorting: false,
+    cols.push({ accessorKey: 'zone', header: sortHeader('Zone', 'zone'),
       cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> });
   }
 
   if (config.showLightingFields) {
-    cols.push({ id: 'lightingDetails', header: 'Lighting / Site condition violations', enableSorting: false,
-      cell: ({ row }) => <IncidentHygieneDetails item={row.original} showIssueCount={false} showConfidence={false} showZone={false} /> });
+    cols.push({ id: 'lightingDetails', header: sortHeader('Lighting / Site condition violations', 'violationDetails'),
+      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} /></div> });
   }
 
   if (config.showHygieneFields) {
-    cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
-      cell: ({ row }) => <IncidentHygieneDetails item={row.original} showIssueCount={false} showConfidence={false} showZone={false} /> });
+    cols.push({ id: 'hygieneDetails', header: sortHeader('Hygiene violations', 'violationDetails'),
+      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} /></div> });
   }
 
   if (config.showBoxPackingFields) {
     cols.push(...BOX_PACKING_FIELDS.map(field => ({
       id: field.key,
       accessorFn: field.value,
-      header: sortableHeader(field.label, field.key, onSort, sortable),
+      header: sortHeader(field.label, field.key),
       cell: ({ row }) => <span className={`${styles.text} block whitespace-pre-line min-w-[90px] max-w-[260px] break-words`}>{field.value(row.original)}</span>,
     })));
   }
@@ -355,7 +371,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'vehicleNumber',
-        header: sortableHeader('Vehicle Number', 'vehicleNumber', onSort, sortable),
+        header: sortHeader('Vehicle Number', 'vehicleNumber'),
         cell: ({ row }) => (
           <span className="inline-flex rounded-md border border-[var(--bd2)] bg-[var(--bg2)] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.04em] text-[var(--tx)]">
             {row.original.vehicleNumber || 'Unknown'}
@@ -364,7 +380,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       },
       {
         accessorKey: 'direction',
-        header: 'Movement',
+        header: sortHeader('Movement', 'direction'),
         cell: ({ row }) => <span className={`${styles.text} capitalize`}>{row.original.direction || '--'}</span>,
       },
       {
@@ -374,17 +390,17 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       },
       {
         accessorKey: 'loadedBoxCount',
-        header: 'Loaded',
+        header: sortHeader('Loaded', 'loadedBoxCount'),
         cell: ({ row }) => <BoxCountCell count={row.original.loadedBoxCount} split={directionSplitLabel(row.original, 'loading')} />,
       },
       {
         accessorKey: 'unloadedBoxCount',
-        header: 'Unloaded',
+        header: sortHeader('Unloaded', 'unloadedBoxCount'),
         cell: ({ row }) => <BoxCountCell count={row.original.unloadedBoxCount} split={directionSplitLabel(row.original, 'unloading')} />,
       },
       {
         accessorKey: 'boxCount',
-        header: sortableHeader('Total Boxes', 'boxCount', onSort, sortable),
+        header: sortHeader('Total Boxes', 'boxCount'),
         cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.boxCount ?? 0}</span>,
       },
     );
@@ -393,7 +409,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   cols.push(
     {
       accessorKey: 'createdAt',
-      header: sortableHeader('Time of Incident', 'timeOfIncident', onSort, sortable),
+      header: sortHeader('Time of Incident', 'timeOfIncident'),
       cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
     }
   );
@@ -419,7 +435,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
 };
 
 export const renderIncidentCard = (row, config, { onPreview }) => (
-  <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
+  <div className={`bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0 ${(config.showLightingFields || config.showHygieneFields) ? 'flex flex-col' : ''}`}>
     <div
       className={`relative shrink-0 overflow-hidden bg-[#0a0e15] flex items-center justify-center ${config.showBoxPackingFields ? 'h-[190px]' : ''}`}
       style={config.showBoxPackingFields ? undefined : { aspectRatio: config.gridVariant === 'details' ? '6 / 3' : '4 / 3' }}
@@ -476,7 +492,63 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
       )}
     </div>
 
-    {config.gridVariant === 'details' ? (
+    {config.showLightingFields ? (
+      <div className="flex flex-1 flex-col gap-3 p-3.5">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--blue)]/10 text-[var(--blue)]">
+            <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
+            <div className="mt-0.5 text-[12px] font-semibold leading-snug text-[var(--tx)] break-words">{row.incidentName || '--'}</div>
+          </div>
+        </div>
+        <div className="min-w-0 rounded-[10px] bg-[var(--bg2)] px-3 py-2.5">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+            <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+            Site condition violation
+          </div>
+          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} />
+        </div>
+        <div className="flex min-w-0 items-center gap-2 text-[11px]">
+          <span className="shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">Zone</span>
+          <span className="min-w-0 rounded-md bg-[var(--bg2)] px-2 py-0.5 font-medium text-[var(--tx)] break-words">{row.zone || '--'}</span>
+        </div>
+        <div className="mt-auto space-y-2 border-t border-[var(--bd)] pt-2.5">
+          <LightingCardMetaRow icon={Server} label="NVR" value={row.nvrName} />
+          <LightingCardMetaRow icon={Video} label="Camera" value={row.channelName} />
+          <LightingCardMetaRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
+        </div>
+      </div>
+    ) : config.showHygieneFields ? (
+      <div className="flex flex-1 flex-col gap-3 p-3.5">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--blue)]/10 text-[var(--blue)]">
+            <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
+            <div className="mt-0.5 break-words text-[12px] font-semibold leading-snug text-[var(--tx)]">{row.incidentName || '--'}</div>
+          </div>
+        </div>
+        <div className="min-w-0 rounded-[10px] bg-[var(--bg2)] px-3 py-2.5">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+            <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+            Hygiene violations
+          </div>
+          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showConfidence={false} showZone={false} />
+        </div>
+        <div className="flex min-w-0 items-center gap-2 text-[11px]">
+          <span className="shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">Zone</span>
+          <span className="min-w-0 break-words rounded-md bg-[var(--bg2)] px-2 py-0.5 font-medium text-[var(--tx)]">{row.zone || '--'}</span>
+        </div>
+        <div className="mt-auto space-y-2 border-t border-[var(--bd)] pt-2.5">
+          <LightingCardMetaRow icon={Server} label="NVR" value={row.nvrName} />
+          <LightingCardMetaRow icon={Video} label="Camera" value={row.channelName} />
+          <LightingCardMetaRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
+        </div>
+      </div>
+    ) : config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
         {config.showIncidentName !== false && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />

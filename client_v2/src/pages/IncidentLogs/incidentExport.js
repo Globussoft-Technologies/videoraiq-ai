@@ -64,7 +64,6 @@ const fetchAllForExport = async (config, params) => {
         violations: (item.violations || []).map(violation => [
           violation.categoryName || (config.showLightingFields ? lightingCategoryLabel : hygieneCategoryLabel)(violation.category),
           violation.description,
-          String(violation.severity || '').toLowerCase() === 'moderate' ? 'Medium' : violation.severity,
         ].filter(Boolean).join(' - ')).join('\n'),
       } : {}),
       incidentName: item.incidentName || '--',

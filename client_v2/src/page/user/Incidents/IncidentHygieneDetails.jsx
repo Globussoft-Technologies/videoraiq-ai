@@ -2,7 +2,7 @@ import { LIGHTING_INCIDENT_TYPE, lightingCategoryLabel } from '../../../helpers/
 import { hygieneCategoryLabel } from '../../../helpers/hygieneDetection';
 import { severity } from '../../../lib/format';
 
-export default function IncidentHygieneDetails({ item, variant = 'card', compact = false, showIssueCount = true, showViolationSeverity = true, showConfidence = true, showZone = true }) {
+export default function IncidentHygieneDetails({ item, variant = 'card', compact = false, showIssueCount = true, showViolationSeverity = true, showConfidence = true, showZone = true, showViolationSeparator = true, scrollable = true }) {
   const dark = variant === 'lightbox';
   const isLighting = item.incidentType === LIGHTING_INCIDENT_TYPE;
   const categoryLabel = isLighting ? lightingCategoryLabel : hygieneCategoryLabel;
@@ -36,7 +36,7 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
           <ul
             aria-label="Detected issues"
             tabIndex={!dark && violations.length > 0 ? 0 : undefined}
-            style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 6, ...(!dark ? { maxHeight: 100, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', overscrollBehaviorY: 'contain' } : {}) }}
+            style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 6, ...(!dark && scrollable ? { maxHeight: 100, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', overscrollBehaviorY: 'contain' } : {}) }}
           >
             {violations.map((violation, index) => {
               const level = severity(violation.severity);
@@ -44,7 +44,7 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
                 ? `${Math.round(violation.confidence * 100)}% confidence`
                 : null;
               return (
-                <li key={`${violation.category}-${index}`} style={{ borderTop: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'var(--bd)'}`, paddingTop: 6, overflowWrap: 'anywhere' }}>
+                <li key={`${violation.category}-${index}`} style={{ ...(showViolationSeparator ? { borderTop: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'var(--bd)'}`, paddingTop: 6 } : {}), overflowWrap: 'anywhere' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ flex: '1 1 160px', lineHeight: 1.4 }}>{index + 1}. {violation.categoryName || categoryLabel(violation.category) || 'Issue'}</strong>
                     {showViolationSeverity && violation.severity && <span style={{ color: level.color, fontSize: 10, fontWeight: 700, border: '1px solid currentColor', borderRadius: 4, padding: '2px 5px', alignSelf: 'flex-start' }}>{level.short}</span>}

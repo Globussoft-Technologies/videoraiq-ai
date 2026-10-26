@@ -575,10 +575,10 @@ const IncidentLogsPage = ({ config }) => {
 
   const columns = useMemo(
     () => {
-      const allColumns = buildColumns(config, { onSort, onPreview: openPreview });
+      const allColumns = buildColumns(config, { onSort, onPreview: openPreview, sortField, sortOrder });
       return config.showStockCountingFields ? stockMovementColumns(allColumns, stockDirection) : allColumns;
     },
-    [config, onSort, openPreview, stockDirection]
+    [config, onSort, openPreview, stockDirection, sortField, sortOrder]
   );
 
   const gridCard = useCallback(

@@ -12,6 +12,9 @@ import {
   Server,
   Video,
   Clock,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { styles } from './anprState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
@@ -211,7 +214,15 @@ export const buildColumns = ({
   onTagUser,
   onUntagUser,
   onViewUser,
-}) => [
+  sortField,
+  sortOrder,
+}) => {
+  const sortHeader = (label, field) => () => {
+    const active = sortField === field;
+    const SortIcon = active ? (sortOrder === 'desc' ? ArrowDown : ArrowUp) : ArrowUpDown;
+    return <button type="button" onClick={() => onSort(field)} className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] hover:opacity-75 [font-family:var(--mono)]" style={{ color: active ? 'var(--blue)' : 'var(--tx)' }} aria-label={`Sort by ${label}${active ? `, ${sortOrder === 'desc' ? 'descending' : 'ascending'}` : ''}`}>{label}<SortIcon className="h-3 w-3 shrink-0" aria-hidden="true" /></button>;
+  };
+  return [
   {
     accessorKey: 'snap',
     header: 'Snap',
@@ -240,7 +251,7 @@ export const buildColumns = ({
   },
   {
     accessorKey: 'vehicleNumber',
-    header: 'Vehicle Number',
+    header: sortHeader('Vehicle Number', 'vehicleNumber'),
     cell: ({ row }) => (
       <span
         className="inline-block text-[11px] font-bold tracking-[0.06em] text-[var(--tx)] bg-[var(--bg2)] border border-[var(--bd)] px-2.5 py-1 rounded-[6px]"
@@ -257,36 +268,22 @@ export const buildColumns = ({
   },
   {
     accessorKey: 'incidentName',
-    header: () => (
-      <button
-        onClick={() => onSort('incidentName')}
-        className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-      >
-        Incident Name
-      </button>
-    ),
+    header: sortHeader('Incident Name', 'incidentName'),
     cell: ({ row }) => <span className={styles.text}>{row.original.incidentName}</span>,
   },
   {
     accessorKey: 'nvrName',
-    header: () => (
-      <button
-        onClick={() => onSort('nvrData.nvrName')}
-        className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-      >
-        NVR Name
-      </button>
-    ),
+    header: sortHeader('NVR Name', 'nvrData.nvrName'),
     cell: ({ row }) => <span className={styles.text}>{row.original.nvrName}</span>,
   },
   {
     accessorKey: 'channelName',
-    header: 'Camera Name',
+    header: sortHeader('Camera Name', 'channelData.name'),
     cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
   },
   {
     accessorKey: 'severity',
-    header: 'Severity',
+    header: sortHeader('Severity', 'severity'),
     cell: ({ row }) => (
       <span
         className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${severityClass(
@@ -299,14 +296,7 @@ export const buildColumns = ({
   },
   {
     accessorKey: 'timeOfIncident',
-    header: () => (
-      <button
-        onClick={() => onSort('timeOfIncident')}
-        className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-      >
-        Time of Incident
-      </button>
-    ),
+    header: sortHeader('Time of Incident', 'timeOfIncident'),
     cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.timeOfIncident)}</span>,
   },
   ...(typeof onEdit === 'function' ||
@@ -338,7 +328,8 @@ export const buildColumns = ({
         },
       ]
     : []),
-];
+  ];
+};
 
 /**
  * Grid-view card for a single ANPR log row — image-forward "plate overlay"
