@@ -76,7 +76,7 @@ export async function consumeResetApproval(req, res, next) {
   const user = req.verified?.userData;
   const token = req.body?.resetToken;
   if (!user?.adminId || user.memberId || typeof token !== 'string' || !token) {
-    return res.status(403).json(Response.accessDeniedResp('Verify your password before resetting'));
+    return res.status(403).json(Response.accessDeniedResp('Verify your password before continuing'));
   }
   try {
     const approved = await Admin.findOneAndUpdate({
@@ -151,12 +151,16 @@ async function runBulkJob(owner, job, lease) {
               for (const [type, link] of Object.entries(camera.detections || {})) {
                 if (type === 'faceAuthenticationSettings' || !link?.id) continue;
                 const desired = await resolveDesiredDetectionState(view, type);
-                const enable = desired.schedule ? desired.active : camera.detectionResumeTypes.includes(type);
-                if (enable && link.enabled && item.completedTypes?.includes(type)) continue;
+                const scheduledEnable = desired.schedule ? desired.active : true;
                 item.detectionName = DETECTION_TYPES[type] || type;
                 const doc = await DetectionSetting.findOne({ _id: link.id, userId: String(owner.user_id) });
                 if (!doc) throw new Error(`Saved setting was not found for ${type}`);
                 const settings = doc.settings || {};
+                const zones = settings.referencePoints?.[item.cameraId];
+                const hasZones = Array.isArray(zones) ? zones.length > 0 : Boolean(zones && Object.keys(zones).length);
+                if (!hasZones) continue;
+                const enable = scheduledEnable;
+                if (enable && link.enabled && item.completedTypes?.includes(type)) continue;
                 if (enable) {
                   const verdict = await assertCanEnableDetection({ adminId: String(owner._id), userId: owner.user_id,
                     channelUserId: camera.userId, channelId: item.cameraId, settingType: type });
@@ -236,8 +240,20 @@ export async function bulkDetectionControl(req, res) {
     const filter = { userId: String(owner.user_id) };
     if (previous?.status === 'failed' && previous.action === action) {
       filter._id = { $in: previous.items.filter(item => item.status !== 'success').map(item => item.cameraId) };
-    } else if (action === 'resume') filter.detectionBulkPaused = true;
-    const cameras = await Channel.find(filter).setOptions({ includeInactive: true }).select('_id name customName');
+    }
+    let cameras = await Channel.find(filter).setOptions({ includeInactive: true }).select('_id name customName detections detectionBulkPaused');
+    if (action === 'resume') {
+      const settingIds = cameras.flatMap(camera => Object.entries(camera.detections || {})
+        .filter(([type, link]) => type !== 'faceAuthenticationSettings' && link?.id)
+        .map(([, link]) => link.id));
+      const settings = await DetectionSetting.find({ _id: { $in: settingIds }, userId: String(owner.user_id) }).select('settings').lean();
+      const byId = new Map(settings.map(setting => [String(setting._id), setting]));
+      cameras = cameras.filter(camera => camera.detectionBulkPaused || Object.entries(camera.detections || {}).some(([type, link]) => {
+        if (type === 'faceAuthenticationSettings' || !link?.id) return false;
+        const zones = byId.get(String(link.id))?.settings?.referencePoints?.[String(camera._id)];
+        return Array.isArray(zones) ? zones.length > 0 : Boolean(zones && Object.keys(zones).length);
+      }));
+    }
     const job = { id: randomBytes(16).toString('hex'), action, status: 'running', attempt: 0,
       maxAttempts: MAX_ATTEMPTS, startedAt: new Date().toISOString(), completed: 0,
       total: cameras.length, events: [], items: cameras.map(camera => ({

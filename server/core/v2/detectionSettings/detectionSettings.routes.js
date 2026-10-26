@@ -10,7 +10,7 @@ const router = express.Router();
 const passwordLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 router.post('/verify-reset-password', editAccessCheck, passwordLimit, verifyResetPassword);
 router.get('/bulk-control', viewAccessCheck, getBulkDetectionState);
-router.post('/bulk-control', editAccessCheck, bulkDetectionControl);
+router.post('/bulk-control', editAccessCheck, consumeResetApproval, bulkDetectionControl);
 
 router.get("/", viewAccessCheck,DetectionSettingsController.getAllDetectionSettings);
 router.post("/",createAccessCheck, DetectionSettingsController.createDetectionSettings);

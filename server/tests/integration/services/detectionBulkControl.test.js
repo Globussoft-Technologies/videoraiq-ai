@@ -42,6 +42,9 @@ beforeEach(async () => {
     detections: { mobilePhoneDetectionSettings: { id: setting._id, enabled: true },
       faceAuthenticationSettings: { id: new mongoose.Types.ObjectId(), enabled: true } },
   })));
+  setting.settings.referencePoints = Object.fromEntries((await Channel.find({ userId: owner.user_id }).setOptions({ includeInactive: true })).map(camera => [String(camera._id), [[1, 2], [3, 4], [5, 6]]]));
+  setting.markModified('settings');
+  await setting.save();
   await Channel.create({ userId: 'other', nvrId: new mongoose.Types.ObjectId(), isAdded: true,
     detections: { mobilePhoneDetectionSettings: { id: setting._id, enabled: true } } });
 });
@@ -100,16 +103,35 @@ describe('bulk detection pause and resume', () => {
     await control('pause');
     expect((await cameras())[0].detectionResumeTypes).toEqual(['mobilePhoneDetectionSettings']);
   });
-  it('resumes with saved configuration and leaves previously disabled detectors disabled', async () => {
+  it('resumes all cameras with saved zones including previously disabled detectors', async () => {
     const before = await cameras();
     before[1].detections.mobilePhoneDetectionSettings.enabled = false;
     await before[1].save();
     await control('pause');
     expect(payload(await control('resume')).status).toBe('success');
-    expect(python.handleDetectionStartStop).toHaveBeenCalledTimes(1);
+    expect(python.handleDetectionStartStop).toHaveBeenCalledTimes(2);
     const after = await cameras();
     expect(after.every(camera => !camera.detectionBulkPaused)).toBe(true);
-    expect(after.filter(camera => camera.detections.mobilePhoneDetectionSettings.enabled)).toHaveLength(1);
+    expect(after.filter(camera => camera.detections.mobilePhoneDetectionSettings.enabled)).toHaveLength(2);
+  });
+  it('does not start a linked detector without zones for that camera', async () => {
+    const [first] = await cameras();
+    delete setting.settings.referencePoints[String(first._id)];
+    setting.markModified('settings');
+    await setting.save();
+    await control('pause');
+    await control('resume');
+    expect(python.handleDetectionStartStop).toHaveBeenCalledTimes(1);
+    expect(String(python.handleDetectionStartStop.mock.calls[0][0]._id)).not.toBe(String(first._id));
+  });
+  it('attempts zoned cameras that were stopped without a bulk pause', async () => {
+    for (const camera of await cameras()) {
+      camera.detections.mobilePhoneDetectionSettings.enabled = false;
+      await camera.save();
+    }
+    await control('resume');
+    expect(python.handleDetectionStartStop).toHaveBeenCalledTimes(2);
+    expect((await cameras()).every(camera => camera.detections.mobilePhoneDetectionSettings.enabled)).toBe(true);
   });
   it('retries only the failed camera three times, preserves DS errors, and supports an explicit retry', async () => {
     const [first, second] = await cameras();
@@ -156,6 +178,25 @@ describe('bulk detection pause and resume', () => {
 });
 
 describe('reset password approval', () => {
+  it.each(['pause', 'resume'])('requires a fresh password approval for %s', async action => {
+    const missing = ctx({ action, confirm: true });
+    await consumeResetApproval(missing.req, missing.res, missing.next);
+    expect(missing.res.statusCode).toBe(403);
+    expect(missing.next.calls).toHaveLength(0);
+
+    auth.fetchUserDataByName.mockResolvedValue({ ok: true, user_id: owner.user_id });
+    const verification = ctx({ password: 'correct-password' });
+    await verifyResetPassword(verification.req, verification.res);
+    const resetToken = payload(verification.res).data.token;
+    const approved = ctx({ action, confirm: true, resetToken });
+    await consumeResetApproval(approved.req, approved.res, approved.next);
+    expect(approved.next.calls).toHaveLength(1);
+
+    const replay = ctx({ action, confirm: true, resetToken });
+    await consumeResetApproval(replay.req, replay.res, replay.next);
+    expect(replay.res.statusCode).toBe(403);
+    expect(replay.next.calls).toHaveLength(0);
+  });
   it('verifies the authenticated owner and issues a single-use approval', async () => {
     auth.fetchUserDataByName.mockResolvedValue({ ok: true, user_id: owner.user_id });
     const c = ctx({ password: 'correct-password' });
