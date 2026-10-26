@@ -1,43 +1,52 @@
 import Response from "../../../utils/response.js";
-import logger from "../../../utils/logger.js";
 import { monitoringSettings } from "./settings.js";
-import TelegramService from "../../../services/telegram.service.js";
-import { telegramChannels, selectedTelegramChannels, telegramBotIdentity } from "./telegramChannels.js";
+import { monitoringStore } from "./localStore.js";
+import { readInventory } from "./inventory.js";
 import { readMonitoringControl } from "./control.js";
+import { telegramChannels, monitoringChannels, selectedMonitoringChannel, telegramBotIdentity } from "./telegramChannels.js";
 
-const responseData = async recipient => {
-  const settings = monitoringSettings();
-  const control = await readMonitoringControl(settings);
-  return { code: recipient?.telegramLinkCode || null, channels: telegramChannels(recipient || {}),
-    selectedChatId: selectedTelegramChannels(recipient || {})[0]?.chatId || "",
-    botUsername: (await telegramBotIdentity()).username, botConfigured: true, collectorEnabled: control.enabled,
-    reminderMs: settings.reminderMs, checkIntervalMs: settings.intervalMs,
-    confirmationDelayMs: settings.intervalMs, recoveryConfirmations: settings.recoveryConfirmations,
-    cycleMs: settings.cycleMs, aliveIntervalMs: settings.aliveIntervalMs,
-    individualIntervalMs: settings.individualIntervalMs, verificationWindowMs: settings.verificationWindowMs };
-};
-
-function handler(action, message) {
+function handler(action) {
   return async (req, res) => {
     res.set("Cache-Control", "no-store");
     try {
-      await telegramBotIdentity();
-      return res.send(Response.SuccessResp(message, await action(req)));
-    }
-    catch (error) {
-      if (!error.status) logger.error("[STREAM_TELEGRAM] channel request failed");
-      const status = error.status || 500;
-      return res.status(status).send({ statusCode: status, body: { status: "failed",
-        message: error.status ? error.message : "Unable to load or update Telegram channels" } });
-    }
+      const settings = monitoringSettings(), snapshot = await readInventory(settings);
+      const recipient = snapshot.recipients.find(row => String(row._id) === String(req.superAdmin._id))
+        || { _id: String(req.superAdmin._id) };
+      const store = monitoringStore(settings);
+      if (action) await action(req, recipient, store);
+      const state = await store.read(), control = await readMonitoringControl(settings);
+      const identity = await telegramBotIdentity();
+      res.send(Response.SuccessResp("Telegram monitoring settings fetched", {
+        code: recipient.telegramLinkCode || null, readOnlyRecipients: true,
+        channels: monitoringChannels(recipient, state), availableChannels: telegramChannels(recipient),
+        selectedChatId: selectedMonitoringChannel(recipient, state)?.chatId || "",
+        botUsername: identity.username, botConfigured: true, collectorEnabled: control.enabled,
+        checkIntervalMs: settings.intervalMs, reportIntervalMs: settings.reportIntervalMs,
+      }));
+    } catch (error) { res.status(error.status || 503).json({ statusCode: error.status || 503,
+      body: { message: error.status ? error.message : "Telegram monitoring settings unavailable" } }); }
   };
 }
-
-export const getTelegramSettings = handler(async req =>
-  responseData(await TelegramService.getSuperAdminLinkCode(req.superAdmin._id)), "Telegram link code and channels fetched");
-
-export const selectTelegramChannel = handler(async req =>
-  responseData(await TelegramService.selectSuperAdminChannel(req.superAdmin._id, req.body?.chatId)), "Telegram delivery channel selected");
-
-export const unlinkTelegramChannel = handler(async req =>
-  responseData(await TelegramService.unlinkSuperAdminChannel(req.superAdmin._id, req.body?.chatId)), "Telegram channel disconnected");
+const requireChannel = (recipient, chatId) => {
+  if (!telegramChannels(recipient).some(channel => channel.chatId === chatId))
+    throw Object.assign(new Error("Select an existing linked channel"), { status: 400 });
+};
+export const getTelegramSettings = handler();
+export const selectTelegramChannel = handler(async (req, recipient, store) => {
+  const chatId = req.body?.chatId; requireChannel(recipient, chatId);
+  await store.update(value => {
+    const owner = String(recipient._id);
+    value.hiddenChannels[owner] = (value.hiddenChannels[owner] || []).filter(id => id !== chatId);
+    value.selections[owner] = chatId;
+  });
+});
+export const unlinkTelegramChannel = handler(async (req, recipient, store) => {
+  const chatId = req.body?.chatId; requireChannel(recipient, chatId);
+  await store.update(value => {
+    const owner = String(recipient._id);
+    const selected = selectedMonitoringChannel(recipient, value)?.chatId;
+    value.hiddenChannels[owner] = [...new Set([...(value.hiddenChannels[owner] || []), chatId])];
+    if (selected === chatId)
+      value.selections[owner] = monitoringChannels(recipient, value)[0]?.chatId || null;
+  });
+});

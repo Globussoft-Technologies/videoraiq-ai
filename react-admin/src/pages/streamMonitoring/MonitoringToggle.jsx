@@ -60,7 +60,7 @@ export default function MonitoringToggle({ onChanged }) {
     <div className="flex items-center justify-between gap-4">
       <div>
         <h2 id={headingId} className="text-sm font-semibold text-gray-900 dark:text-white">Stream monitoring and Telegram alerts</h2>
-        <p id={descriptionId} className="mt-1 max-w-2xl text-xs leading-5 text-gray-500 dark:text-gray-400">Controls all Superadmin stream checks and alerts. On resumes monitoring and delivery to selected Telegram channels. Off pauses both and preserves outage history.</p>
+        <p id={descriptionId} className="mt-1 max-w-2xl text-xs leading-5 text-gray-500 dark:text-gray-400">On checks streams every 2 minutes and sends Down reports every 10 minutes to selected Telegram channels. Off stops monitoring and stream alerts.</p>
       </div>
       <button type="button" role="switch" aria-checked={control?.enabled === true} aria-labelledby={headingId} aria-describedby={descriptionId}
         disabled={!control || busy} onClick={toggle}

@@ -56,6 +56,7 @@ const ClientConfig = () => {
   const [modulePermissions, setModulePermissions] = useState({
     mattressMeasurement: { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
     solarLineQc: { solderLine: false, solderAlertLogs: false, operatorReports: false },
+    boxPackingQc: { boxPacking: true, packingAlertLogs: true, boxPackingReports: true },
   })
   const [savingModule, setSavingModule] = useState(false)
 
@@ -119,6 +120,7 @@ const ClientConfig = () => {
     setModulePermissions({
       mattressMeasurement: data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
       solarLineQc: data.modules?.solarLineQc || { solderLine: false, solderAlertLogs: false, operatorReports: false },
+      boxPackingQc: data.modules?.boxPackingQc || { boxPacking: true, packingAlertLogs: true, boxPackingReports: true },
     })
     setDetections(dets)
     setTotalCameras(data.stats?.totalCameras ?? 0)

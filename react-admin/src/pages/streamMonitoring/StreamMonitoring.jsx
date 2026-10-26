@@ -19,14 +19,7 @@ const formatTime = value => value ? new Date(value).toLocaleString('en-GB', {
 function StreamBadge({ alive, camera }) {
   if (camera.monitoringPaused) return <span className="text-xs text-gray-400">Monitoring paused</span>
   if (camera.alertsMuted) return <span className="text-xs text-gray-400">Muted</span>
-  if (camera.state === 'RECOVERING' && camera.availability !== 'STARTING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming recovery</span>
-  if (camera.state === 'UNKNOWN' && camera.availability === 'REPORTED_RUNNING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming availability</span>
-  if (camera.availability === 'REPORTED_RUNNING') return <span title="The streaming service reports running; direct HLS availability has not been verified" className="text-xs text-emerald-600 dark:text-emerald-300">{camera.downSince ? 'Reported running · outage unverified' : 'Alive · status reported'}</span>
-  if (camera.availability === 'IDLE') return <span title="RTSP is online; HLS playback is intentionally idle and was not requested" className="text-xs text-emerald-600 dark:text-emerald-300">{camera.downSince ? 'Idle · outage unverified' : 'Available / Idle'}</span>
-  if (camera.availability === 'STARTING') return <span className="text-xs text-amber-600 dark:text-amber-300">Starting / Queued</span>
-  if (camera.state === 'SUSPECTED_DOWN') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming failure</span>
-  if (camera.state === 'RECOVERING') return <span className="text-xs text-amber-600 dark:text-amber-300">Confirming recovery</span>
-  if (alive === null) return <span title="Stream status is unavailable" className="text-xs text-gray-400">—</span>
+  if (alive === null) return <span title="Stream status is missing, stale or inconclusive" className="text-xs text-gray-400">Unknown</span>
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${alive
     ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'
     : 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-white/8 dark:text-gray-400 dark:ring-white/10'}`}>
@@ -87,7 +80,7 @@ function ClientStreams({ adminId, onAdminChange, monitoringEnabled }) {
         <StreamCount label="Streaming alive" value={error || monitoringEnabled === false || !data.enabled ? '—' : data.counts.alive} alive active={status === 'alive'} onClick={() => selectStatus('alive')} />
         <StreamCount label="Streaming down" value={error || monitoringEnabled === false || !data.enabled ? '—' : data.counts.down} alive={false} active={status === 'down'} onClick={() => selectStatus('down')} />
       </div>
-      <p className="mb-3 text-xs text-gray-400">The alive count includes available idle and status-reported feeds. These do not establish verified video playback.</p>
+      <p className="mb-3 text-xs text-gray-400">Status is checked every 2 minutes. RTSP online + running means Alive; RTSP offline + stalled means Down. Other, missing or stale results are Unknown. This status does not verify HLS or browser playback.</p>
       {status && <button type="button" onClick={() => selectStatus('')} className="mb-3 text-xs font-semibold text-purple-600 dark:text-purple-300">Show all streams</button>}
       {(!data.enabled || monitoringEnabled === false || data.statusUnavailable) && <p className="mb-4 text-xs text-gray-400 dark:text-gray-500">{!data.enabled || monitoringEnabled === false ? 'Stream monitoring and Telegram alerts are paused.' : 'Some stream statuses are unavailable and are excluded from the counts.'}</p>}
       <div className={`${panel} overflow-hidden`} aria-busy={loading}>
@@ -96,7 +89,7 @@ function ClientStreams({ adminId, onAdminChange, monitoringEnabled }) {
           <tbody>{!data.cameras.length ? <tr><td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-400">No streams match this selection.</td></tr> : data.cameras.map(camera => <tr key={camera.cameraId} className="border-b border-gray-100 last:border-b-0 dark:border-white/5">
             <td className="px-5 py-4"><p className="text-sm font-semibold text-gray-900 dark:text-white">{camera.name}</p><p className="mt-1 font-mono text-[10px] text-gray-400">{camera.channelId || '—'}</p></td>
             <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{camera.nvrName}</td>
-            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} camera={monitoringEnabled === false ? { monitoringPaused: true } : error ? {} : camera} /><button onClick={() => setDetails(camera)} className="mt-1 block text-[10px] text-purple-600 dark:text-purple-300">Details</button>{camera.remindersPaused && <span className="mt-1 block text-[10px] text-gray-400">Reminders paused</span>}</td>
+            <td className="px-5 py-4"><StreamBadge alive={error ? null : camera.alive} camera={monitoringEnabled === false ? { monitoringPaused: true } : error ? {} : camera} /><button onClick={() => setDetails(camera)} className="mt-1 block text-[10px] text-purple-600 dark:text-purple-300">Details</button>{camera.remindersPaused && <span className="mt-1 block text-[10px] text-gray-400">Alerts paused</span>}</td>
             <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400" title="First detected failure in this outage">{formatTime(!error ? camera.downSince : null)}</td>
           </tr>)}</tbody>
         </table></div>

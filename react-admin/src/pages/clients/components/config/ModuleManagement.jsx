@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Loader2, Move3d, Grid3x3 } from 'lucide-react'
+import { ChevronDown, Loader2, Move3d, Grid3x3, Package } from 'lucide-react'
 
 const MODULES = [
   {
@@ -20,6 +20,16 @@ const MODULES = [
       ['solderLine', 'JB Solder Line'],
       ['solderAlertLogs', 'Solder Alert Logs'],
       ['operatorReports', 'Operator Reports'],
+    ],
+  },
+  {
+    key: 'boxPackingQc',
+    label: 'BOX PACKING QC',
+    icon: Package,
+    pages: [
+      ['boxPacking', 'Box Packing'],
+      ['packingAlertLogs', 'Packing Alert Logs'],
+      ['boxPackingReports', 'Box Packing Reports'],
     ],
   },
 ]
@@ -48,7 +58,7 @@ function ModuleCard({ module, permissions = {}, saving, onChange }) {
           <ChevronDown size={17} className={`shrink-0 text-gray-400 transition-transform ${expanded ? '' : '-rotate-90'}`} />
         </button>
         {saving && <Loader2 size={16} className="animate-spin text-purple-500" aria-label="Saving module permissions" />}
-        <label className="flex shrink-0 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <input
             type="checkbox"
             checked={allGranted}

@@ -1,295 +1,85 @@
 import Response from "../../../utils/response.js";
-import logger from "../../../utils/logger.js";
 import { monitoringSettings } from "./settings.js";
-import { publicAdmin, readInventory } from "./inventory.js";
-import { MonitoringState, MonitoringOutage } from "./models.js";
-import { TelegramOutbox } from "./telegramModels.js";
-import { closeForLifecycle } from "./outageService.js";
-import { cancelOutage } from "./notificationOutbox.js";
-import { freshState, scheduledCheckAt } from "./stateMachine.js";
-import { isDeliveryVerified } from "./statusObservation.js";
-import { readMonitoringControl, observedSinceResume } from "./control.js";
+import { readInventory } from "./inventory.js";
+import { monitoringStore, cameraMuted } from "./localStore.js";
+import { readMonitoringControl } from "./control.js";
 
-const invalid = (message, status = 400) => {
-  throw Object.assign(new Error(message), { status });
-};
-const id = (value) => /^[a-f\d]{24}$/i.test(String(value));
-const pageNumber = (value, fallback, max) => {
-  if (value === undefined) return fallback;
-  if (!/^\d+$/.test(String(value))) invalid("Invalid pagination");
-  return Math.min(max, Number(value));
-};
-
-// One read-only endpoint supplies the NVR selector, counts, statuses and down times.
+const invalid = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
+const id = value => /^[a-f0-9]{24}$/i.test(String(value));
+const page = (value, fallback, max) => value == null ? fallback : /^\d+$/.test(String(value)) ? Math.min(max, Number(value)) : invalid("Invalid pagination");
+const fail = (res, error) => res.status(error.status || 503).json({ statusCode: error.status || 503,
+  body: { message: error.status ? error.message : "Monitoring information unavailable" } });
+async function context(req) {
+  if (!id(req.params.adminId)) invalid("Invalid admin ID");
+  const settings = monitoringSettings(), snapshot = await readInventory(settings, req.params.adminId);
+  if (!snapshot.admins.length) invalid("Client not found", 404);
+  return { settings, snapshot, store: monitoringStore(settings), control: await readMonitoringControl(settings) };
+}
+function currentReading(camera, saved, control, settings) {
+  const received = Date.parse(saved?.receivedAt), checked = Date.parse(saved?.checkedAt), now = Date.now();
+  return control.enabled && saved?.sourceKey === camera.sourceKey && Number.isFinite(received)
+    && now - received >= 0 && now - received <= settings.intervalMs + settings.timeoutMs
+    && (!control.changedAt || received >= Date.parse(control.changedAt))
+    && (saved.status === "UNKNOWN" || (Number.isFinite(checked) && now - checked >= -settings.sourceClockSkewMs
+      && now - checked <= settings.sourceMaxAgeMs));
+}
 export async function listCameras(req, res) {
   res.set("Cache-Control", "no-store");
   try {
-    if (!id(req.params.adminId)) invalid("Invalid adminId");
-    const nvrId = String(req.query.nvrId || "");
-    const status = String(req.query.status || "");
-    if (nvrId && !id(nvrId)) invalid("Invalid nvrId");
-    if (status && !["alive", "down"].includes(status))
-      invalid("Invalid stream status");
-    const skip = pageNumber(req.query.skip, 0, 1_000_000);
-    const limit = Math.max(1, pageNumber(req.query.limit, 20, 100));
-    const settings = monitoringSettings();
-    const control = await readMonitoringControl(settings);
-    const inventory = await readInventory(settings, req.params.adminId);
-    if (!inventory.admins.length) invalid("Client not found", 404);
-    if (nvrId && !inventory.nvrs.some((nvr) => String(nvr._id) === nvrId))
-      invalid("NVR does not belong to this client", 404);
-    const cameras = inventory.cameras.filter(
-      (camera) => !nvrId || String(camera.nvrId) === nvrId,
-    );
-    const states = cameras.length
-      ? await MonitoringState.find({
-          adminId: inventory.admins[0]._id,
-          cameraId: { $in: cameras.map((camera) => camera.cameraId) },
-        })
-          .select(
-            "adminId nvrId sourceKey alive observedAt downSince state availability latestResult lastSuccessfulCheckAt lastConclusiveAt remindersPaused activeOutage alertsMuted lifecycleReason",
-          )
-          .lean()
-      : [];
-    const byId = new Map(states.map((state) => [String(state._id), state]));
-    const counts = { alive: 0, down: 0 };
-    let statusUnavailable = false;
-    const now = Date.now();
-    const rows = cameras.map((camera) => {
-      const state = byId.get(String(camera.cameraId));
-      const usable =
-        control.enabled && observedSinceResume(state, control) &&
-        freshState(state, camera, now, settings) &&
-        !state.alertsMuted &&
-        !state.lifecycleReason &&
-        state.latestResult?.verdict !== "INCONCLUSIVE" &&
-        !(state.activeOutage && state.latestResult?.verdict === "DEFERRED");
-      const alive =
-        usable && typeof state.alive === "boolean" ? state.alive : null;
-      if (alive === null) statusUnavailable = true;
-      else counts[alive ? "alive" : "down"]++;
-      return {
-        cameraId: String(camera.cameraId),
-        name: camera.name,
-        channelId: camera.channelId,
-        nvrName: camera.nvrName,
-        alive,
-        downSince: state?.activeOutage?.startedAt || null,
-        state: state?.state || "UNKNOWN",
-        availability: state?.availability || null,
-        reason: state?.latestResult?.reason || null,
-        checkedAt: state?.observedAt || null,
-        nextCheckAt:
-          !control.enabled || state?.alertsMuted || state?.lifecycleReason
-            ? null
-            : scheduledCheckAt(state, settings),
-        lastSuccessfulCheckAt: state?.lastSuccessfulCheckAt || null,
-        remindersPaused: !control.enabled || state?.remindersPaused || false,
-        monitoringPaused: !control.enabled,
-        alertsMuted: state?.alertsMuted || false,
-        statusUnavailable: !usable,
-      };
+    const { settings, snapshot, store, control } = await context(req), state = await store.read();
+    const nvrId = String(req.query.nvrId || ""), filter = String(req.query.status || "");
+    if (nvrId && !snapshot.nvrs.some(nvr => nvr._id === nvrId)) invalid("NVR does not belong to client", 404);
+    if (filter && !["alive", "down"].includes(filter)) invalid("Invalid status filter");
+    const skip = page(req.query.skip, 0, 1000000), limit = Math.max(1, page(req.query.limit, 20, 100));
+    const counts = { alive: 0, down: 0, unknown: 0 };
+    const rows = snapshot.cameras.filter(camera => !nvrId || camera.nvrId === nvrId).map(camera => {
+      const saved = state.cameras[camera.cameraId], muted = cameraMuted(state, snapshot, camera.cameraId);
+      const usable = !muted && currentReading(camera, saved, control, settings);
+      const status = usable ? saved.status : "UNKNOWN";
+      const alive = status === "ALIVE" ? true : status === "DOWN" ? false : null;
+      counts[alive === null ? "unknown" : alive ? "alive" : "down"]++;
+      return { cameraId: camera.cameraId, name: camera.name, channelId: camera.channelId,
+        nvrName: camera.nvrName, alive, state: status, checkedAt: saved?.checkedAt || null,
+        downSince: usable ? saved.downSince : null, statusUnavailable: alive === null,
+        nextCheckAt: control.enabled && !muted ? state.scan?.nextAt || null : null,
+        monitoringPaused: !control.enabled, alertsMuted: muted, remindersPaused: !control.enabled || muted };
     });
-    const filtered = rows.filter(
-      (row) => !status || row.alive === (status === "alive"),
-    );
-    filtered.sort(
-      (a, b) =>
-        Number(a.alive !== false) - Number(b.alive !== false) ||
-        new Date(a.downSince || 0).getTime() -
-          new Date(b.downSince || 0).getTime() ||
-        a.name.localeCompare(b.name) ||
-        a.cameraId.localeCompare(b.cameraId),
-    );
-    return res.send(
-      Response.SuccessResp("Stream status fetched", {
-        admin: publicAdmin(inventory.admins[0]),
-        nvrs: inventory.nvrs.map((nvr) => ({
-          nvrId: String(nvr._id),
-          name: nvr.nvrName,
-        })),
-        counts,
-        cameras: filtered.slice(skip, skip + limit),
-        totalCount: filtered.length,
-        skip,
-        limit,
-        enabled: control.enabled,
-        statusUnavailable,
-      }),
-    );
-  } catch (error) {
-    if (!error.status)
-      logger.error(`[STREAM_MONITORING] read failed: ${error.message}`);
-    const status = error.status || 500;
-    return res
-      .status(status)
-      .send({
-        statusCode: status,
-        body: {
-          status: "failed",
-          message:
-            status === 500 ? "Unable to load stream status" : error.message,
-        },
-      });
-  }
+    const filtered = rows.filter(row => !filter || row.alive === (filter === "alive"));
+    filtered.sort((a, b) => Number(a.alive !== false) - Number(b.alive !== false) || a.name.localeCompare(b.name));
+    res.send(Response.SuccessResp("Stream status fetched", { admin: snapshot.admins[0],
+      nvrs: snapshot.nvrs.map(nvr => ({ nvrId: nvr._id, name: nvr.nvrName })), counts,
+      cameras: filtered.slice(skip, skip + limit), totalCount: filtered.length, skip, limit,
+      enabled: control.enabled, statusUnavailable: rows.some(row => row.statusUnavailable) }));
+  } catch (error) { fail(res, error); }
 }
-
-async function ownedCamera(req) {
-  if (!id(req.params.adminId) || !id(req.params.cameraId))
-    invalid("Invalid camera or admin ID");
-  const state = await MonitoringState.findOne({
-    _id: req.params.cameraId,
-    adminId: req.params.adminId,
-  }).lean();
-  if (!state) invalid("Monitoring record not found", 404);
-  return state;
-}
-const fail = (res, error) =>
-  res
-    .status(error.status || 500)
-    .send({
-      statusCode: error.status || 500,
-      body: {
-        status: "failed",
-        message: error.status
-          ? error.message
-          : "Unable to load monitoring details",
-      },
-    });
 export async function cameraDetails(req, res) {
   res.set("Cache-Control", "no-store");
   try {
-    const state = await ownedCamera(req);
-    const settings = monitoringSettings();
-    const control = await readMonitoringControl(settings);
-    const skip = pageNumber(req.query.skip, 0, 1000000),
-      limit = Math.max(1, pageNumber(req.query.limit, 20, 100));
-    const filter = { cameraId: state.cameraId, adminId: state.adminId };
-    const outages = await MonitoringOutage.find(filter)
-      .sort({ startedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-    const ids = outages.map((row) => row._id);
-    const notificationSkip = pageNumber(req.query.notificationSkip, 0, 1000000);
-    const notificationFilter = { outageId: { $in: ids } };
-    const notifications = await TelegramOutbox.find(notificationFilter)
-      .select(
-        "type outageId status createdAt sentAt nextAttemptAt errorCode sequence",
-      )
-      .sort({ createdAt: -1 })
-      .skip(notificationSkip)
-      .limit(20)
-      .lean();
-    const lastDelivery = state.activeOutage
-      ? await TelegramOutbox.findOne({
-          outageId: state.activeOutage.id,
-          type: { $in: ["DOWN", "REMINDER"] },
-          status: "SENT",
-        })
-          .sort({ sentAt: -1 })
-          .select("sentAt")
-          .lean()
-      : null;
-    return res.send(
-      Response.SuccessResp("Stream details fetched", {
-        state: state.state || "UNKNOWN",
-        latestResult: {
-          verdict: state.latestResult?.verdict || null,
-          reason: state.latestResult?.reason || null,
-          httpStatus: state.latestResult?.httpStatus || null,
-          sourceStatusAgeMs: state.latestResult?.sourceStatusAgeMs ?? null,
-          sourceObserved: state.latestResult?.sourceObserved ?? null,
-          outputFresh: state.latestResult?.outputFresh ?? null,
-        },
-        lastSuccessfulCheckAt: state.lastSuccessfulCheckAt || null,
-        lastConclusiveAt: state.lastConclusiveAt || null,
-        statusReceivedAt: state.observedAt || null,
-        nextCheckAt:
-          !control.enabled || state.alertsMuted || state.lifecycleReason
-            ? null
-            : scheduledCheckAt(state, settings),
-        checkIntervalMs: settings.intervalMs,
-        confirmationDelayMs: settings.intervalMs,
-        cycleMs: settings.cycleMs,
-        aliveIntervalMs: settings.aliveIntervalMs,
-        individualIntervalMs: settings.individualIntervalMs,
-        verificationWindowMs: settings.verificationWindowMs,
-        verification: state.verification || null,
-        reminderMs: settings.reminderMs,
-        recoveryConfirmations: settings.recoveryConfirmations,
-        remindersPaused: !control.enabled || !!state.remindersPaused,
-        enabled: control.enabled,
-        alertsMuted: !!state.alertsMuted,
-        outages,
-        notifications,
-        notificationTotal:
-          await TelegramOutbox.countDocuments(notificationFilter),
-        lastNotificationAt: lastDelivery?.sentAt || null,
-        nextReminderAt:
-          control.enabled && observedSinceResume(state, control) &&
-          lastDelivery?.sentAt &&
-          !state.remindersPaused &&
-          !state.alertsMuted &&
-          !state.lifecycleReason &&
-          state.state === "DOWN" &&
-          state.latestResult?.verdict === "FAILED" &&
-          isDeliveryVerified(state.latestResult, Date.now(), settings)
-            ? new Date(
-                new Date(lastDelivery.sentAt).getTime() + settings.reminderMs,
-              )
-            : null,
-        totalCount: await MonitoringOutage.countDocuments(filter),
-        skip,
-        limit,
-      }),
-    );
-  } catch (error) {
-    return fail(res, error);
-  }
+    const { settings, snapshot, store, control } = await context(req);
+    const camera = snapshot.cameras.find(row => row.cameraId === req.params.cameraId);
+    if (!camera) invalid("Camera not found for client", 404);
+    const state = await store.read(), saved = state.cameras[camera.cameraId];
+    const muted = cameraMuted(state, snapshot, camera.cameraId);
+    const usable = !muted && currentReading(camera, saved, control, settings);
+    const notifications = state.deliveries.filter(row => row.cameraIds.includes(camera.cameraId)).reverse();
+    const skip = page(req.query.notificationSkip, 0, 1000000);
+    res.send(Response.SuccessResp("Stream details fetched", { state: usable ? saved.status : "UNKNOWN",
+      latestResult: { rtspOnline: saved?.rtspOnline ?? null, streamStatus: saved?.streamStatus ?? null },
+      statusReceivedAt: saved?.receivedAt || null, checkedAt: saved?.checkedAt || null,
+      lastSuccessfulCheckAt: saved?.lastSuccessfulCheckAt || null, downSince: usable ? saved.downSince : null,
+      nextCheckAt: control.enabled && !muted ? state.scan?.nextAt || null : null,
+      checkIntervalMs: settings.intervalMs, reportIntervalMs: settings.reportIntervalMs,
+      enabled: control.enabled, alertsMuted: muted, remindersPaused: !control.enabled || muted,
+      notifications: notifications.slice(skip, skip + 20), notificationTotal: notifications.length,
+      lastNotificationAt: notifications.find(row => row.status === "SENT")?.sentAt || null }));
+  } catch (error) { fail(res, error); }
 }
 export async function setCameraPolicy(req, res) {
   try {
-    if (typeof req.body?.muted !== "boolean")
-      invalid("muted must be a boolean");
-    const state = await ownedCamera(req);
-    await MonitoringState.updateOne(
-      { _id: state._id },
-      {
-        $set: {
-          alertsMuted: req.body.muted,
-          nextCheckAt: new Date(),
-          ...(req.body.muted
-            ? {}
-            : {
-                lifecycleReason: null,
-                state: "UNKNOWN",
-                alive: null,
-                failureStreak: 0,
-                healthyStreak: 0,
-                inconclusiveStreak: 0,
-                firstFailureAt: null,
-                availability: null,
-                latestResult: null,
-                observedAt: null,
-                lastSourceCheckedAt: null,
-                verification: null,
-              }),
-        },
-        $inc: { revision: 1 },
-      },
-    );
-    if (req.body.muted) {
-      const latest = await MonitoringState.findById(state._id).lean();
-      await closeForLifecycle(latest, "CAMERA_MUTED");
-      if (state.activeOutage) await cancelOutage(state.activeOutage.id);
-    }
-    return res.send(
-      Response.SuccessResp("Monitoring policy updated", {
-        muted: req.body.muted,
-      }),
-    );
-  } catch (error) {
-    return fail(res, error);
-  }
+    if (typeof req.body?.muted !== "boolean") invalid("muted must be a boolean");
+    const { snapshot, store } = await context(req);
+    if (!snapshot.cameras.some(camera => camera.cameraId === req.params.cameraId)) invalid("Camera not found", 404);
+    await store.update(state => { state.mutes[req.params.cameraId] = req.body.muted; delete state.cameras[req.params.cameraId]; });
+    res.send(Response.SuccessResp("Monitoring policy updated", { muted: req.body.muted, alertsMuted: req.body.muted }));
+  } catch (error) { fail(res, error); }
 }

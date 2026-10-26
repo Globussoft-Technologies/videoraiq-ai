@@ -1,270 +1,143 @@
-import { randomUUID } from "node:crypto";
 import logger from "../../../utils/logger.js";
 import { monitoringSettings } from "./settings.js";
 import { readInventory } from "./inventory.js";
-import { MonitoringState, MonitoringCollector } from "./models.js";
-import { readStatuses } from "./statusAdapter.js";
-import {
-  recordObservation,
-  closeForLifecycle,
-  flushTransitions,
-} from "./outageService.js";
-import { recordMonitoringError } from "./monitoringErrors.js";
-import { createStreamTelegramSender } from "./telegramSender.js";
-import { scheduledCheckAt } from "./stateMachine.js";
-import { readMonitoringControl, observedSinceResume, subscribeMonitoringControl } from "./control.js";
+import { monitoringStore, acquireFileLease, cameraMuted } from "./localStore.js";
+import { readStatuses, summarize } from "./statusAdapter.js";
+import { sendDownReports, registerStreamMonitorWake } from "./telegramSender.js";
+import { readMonitoringControl, subscribeMonitoringControl } from "./control.js";
 
-const LEASE_MS = 90_000;
+function saveResults(state, rows, snapshot) {
+  const cameras = new Map(snapshot.cameras.map(camera => [camera.cameraId, camera]));
+  for (const [id, saved] of Object.entries(state.cameras)) {
+    if (!cameras.has(id) || cameras.get(id).sourceKey !== saved.sourceKey || cameraMuted(state, snapshot, id))
+      delete state.cameras[id];
+  }
+  for (const row of rows) {
+    if (cameras.get(row.cameraId)?.sourceKey !== row.sourceKey || cameraMuted(state, snapshot, row.cameraId)) continue;
+    const previous = state.cameras[row.cameraId];
+    state.cameras[row.cameraId] = { ...row,
+      downSince: row.status === "ALIVE" ? null : previous?.downSince || (row.status === "DOWN" ? row.checkedAt : null),
+      lastSuccessfulCheckAt: row.status === "ALIVE" ? row.checkedAt : previous?.lastSuccessfulCheckAt || null };
+  }
+}
 
 export function startStreamMonitoring() {
-  const settings = monitoringSettings();
-  const owner = randomUUID();
-  const sendAlerts = createStreamTelegramSender();
-  let stopped = false,
-    leaseUntil = 0,
-    timer,
-    renewing = false,
-    inventory,
-    inventoryAt = 0,
-    statusController,
-    cycling = false,
-    refreshingControl = false;
-  let control = { enabled: settings.enabled, revision: -1, changedAt: null };
-  const isActive = () => !stopped && control.enabled && Date.now() < leaseUntil;
-  function applyControl(next) {
-    if (stopped || next.revision < control.revision) return;
-    if (next.revision === control.revision && next.enabled === control.enabled) return;
-    control = next;
-    leaseUntil = 0;
-    statusController?.abort();
-    sendAlerts.pause();
-    inventoryAt = 0;
-    if (!cycling) {
-      clearTimeout(timer);
-      timer = setTimeout(cycle, 0);
-      timer.unref();
-    }
+  let settings;
+  try { settings = monitoringSettings(); }
+  catch {
+    logger.error("[STREAM_MONITORING] Invalid configuration; monitoring disabled");
+    return () => {}; // A monitoring configuration error must not stop other backend modules.
   }
-  const unsubscribeControl = subscribeMonitoringControl(applyControl);
-  // Poll even while a scan is running or monitoring is off. This is only a
-  // control-record read, never a camera-status or media request.
-  const controlTimer = setInterval(async () => {
-    if (stopped || refreshingControl) return;
-    refreshingControl = true;
-    try { applyControl(await readMonitoringControl(settings)); }
-    catch { leaseUntil = 0; statusController?.abort(); sendAlerts.pause(); }
-    finally { refreshingControl = false; }
+  const store = monitoringStore(settings);
+  let stopped = false, running = false, timer, controller, lease, renewing = false, checkingControl = false;
+  const wake = () => {
+    if (stopped || running) return;
+    clearTimeout(timer); timer = setTimeout(run, 0); timer.unref();
+  };
+  const unsubscribe = subscribeMonitoringControl(() => { controller?.abort(); wake(); });
+  const unregisterWake = registerStreamMonitorWake(wake);
+  const watch = setInterval(async () => {
+    if (stopped || checkingControl) return;
+    checkingControl = true;
+    try {
+      const control = await readMonitoringControl(settings);
+      if (!control.enabled || (controller && controller.revision !== control.revision)) controller?.abort();
+      wake();
+    } catch { controller?.abort(); }
+    finally { checkingControl = false; }
   }, 5000);
-  controlTimer.unref();
-  const renewal = setInterval(async () => {
-    if (!isActive() || renewing) return;
+  watch.unref();
+  const renew = setInterval(async () => {
+    if (!lease || renewing) return;
     renewing = true;
-    try {
-      const until = new Date(Date.now() + LEASE_MS);
-      const saved = await MonitoringCollector.updateOne(
-        { _id: "primary", owner, leaseUntil: { $gt: new Date() } },
-        { $set: { leaseUntil: until, heartbeatAt: new Date() } },
-      );
-      leaseUntil = saved.modifiedCount === 1 ? until.getTime() : 0;
-      if (!leaseUntil) statusController?.abort();
-    } catch {
-      leaseUntil = 0;
-      statusController?.abort();
-    } finally {
-      renewing = false;
-    }
-  }, 15_000);
-  renewal.unref();
+    const currentLease = lease;
+    try { if (!await currentLease.renew() && lease === currentLease) controller?.abort(); }
+    catch { if (lease === currentLease) controller?.abort(); }
+    finally { renewing = false; }
+  }, 10000);
+  renew.unref();
 
-  async function cycle() {
-    if (cycling || stopped) return;
-    cycling = true;
-    let delay = 5000;
-    const startedAt = Date.now();
-    const statistics = {
-      HEALTHY: 0,
-      FAILED: 0,
-      INCONCLUSIVE: 0,
-      DEFERRED: 0,
-      committed: 0,
-    };
+  async function run() {
+    if (stopped || running) return;
+    running = true;
+    let deadline, scanId;
     try {
-      if (stopped) return;
-      applyControl(await readMonitoringControl(settings));
+      const control = await readMonitoringControl(settings);
       if (!control.enabled) return;
-      const cycleRevision = control.revision;
-      const active = () => isActive() && control.revision === cycleRevision;
-      const cycleSettings = { ...settings, controlRevision: cycleRevision,
-        monitoringStartedAt: control.changedAt, canDispatch: () => !cycling };
-      const onProjected = (transition) =>
-        sendAlerts([], cycleSettings, active, transition.type === "RECOVERED");
-      const hadLease = active();
-      const now = new Date();
-      try {
-        const lease = await MonitoringCollector.findOneAndUpdate(
-          {
-            _id: "primary",
-            $or: [
-              { owner },
-              { leaseUntil: { $lte: now } },
-              { leaseUntil: { $exists: false } },
-            ],
-          },
-          {
-            $set: {
-              owner,
-              leaseUntil: new Date(now.getTime() + LEASE_MS),
-              heartbeatAt: now,
-            },
-          },
-          { upsert: true, new: true },
-        ).lean();
-        leaseUntil = new Date(lease.leaseUntil).getTime();
-        if (!active()) return;
-        if (!lease.cycleStartedAt || lease.cycleControlRevision !== cycleRevision) {
-          const cycleStartedAt = new Date();
-          const saved = await MonitoringCollector.updateOne({ _id: "primary", owner,
-            leaseUntil: { $gt: new Date() } }, { $set: { cycleStartedAt, cycleControlRevision: cycleRevision } });
-          if (!saved.matchedCount) { leaseUntil = 0; return; }
-          cycleSettings.cycleStartedAt = cycleStartedAt;
-        } else cycleSettings.cycleStartedAt = lease.cycleStartedAt;
-      } catch (error) {
-        if (error.code === 11000) {
-          leaseUntil = 0;
-          return;
+      let state = await store.read();
+      const scanKey = value => control.revision + ":" + value.anchor + ":" + Math.floor(Math.max(0, Date.now() - value.anchor) / settings.intervalMs);
+      if (state.anchor && state.scan?.id === scanKey(state)) return;
+      lease = await acquireFileLease(settings.stateDir, "collector", 60000);
+      if (!lease || stopped) return;
+      state = await store.update(value => { value.control ||= control; value.anchor ||= Date.now(); });
+      if (!state.control.enabled || state.control.revision !== control.revision) return;
+      scanId = scanKey(state);
+      if (state.scan?.id === scanId) return;
+      controller = new AbortController();
+      controller.revision = control.revision;
+      const active = async () => {
+        if (stopped || controller.signal.aborted || !await lease?.owns()) return false;
+        const current = (await store.read()).control;
+        return current.enabled && current.revision === control.revision;
+      };
+      const slot = Math.floor(Math.max(0, Date.now() - state.anchor) / settings.intervalMs);
+      const nextAt = state.anchor + (slot + 1) * settings.intervalMs;
+      const budget = Math.min(settings.intervalMs - 10000, nextAt - Date.now() - 1000);
+      if (budget < 1000) return;
+      deadline = setTimeout(() => controller.abort(), budget); deadline.unref();
+      const reportSlot = Math.floor(Math.max(0, Date.now() - state.anchor) / settings.reportIntervalMs);
+      const reportId = control.revision + ":" + state.anchor + ":report:" + reportSlot;
+      const reportDue = reportSlot > 0 && state.report?.id !== reportId;
+      await store.update(value => { value.scan = { id: scanId, nextAt: new Date(nextAt).toISOString(), startedAt: new Date().toISOString() }; });
+      let snapshot = await readInventory(settings, null, controller.signal);
+      state = await store.read();
+      const cameras = snapshot.cameras.filter(camera => !cameraMuted(state, snapshot, camera.cameraId));
+      let rows = await readStatuses(cameras, settings, controller.signal);
+      if (!await active()) return;
+      if (reportDue) {
+        // Refresh old Down observations before a report, using the same status API.
+        const oldDown = new Set(rows.filter(row => row.status === "DOWN"
+          && Date.now() - Date.parse(row.checkedAt) > settings.sourceMaxAgeMs / 2).map(row => row.cameraId));
+        if (oldDown.size) {
+          const fresh = new Map((await readStatuses(cameras.filter(camera => oldDown.has(camera.cameraId)),
+            settings, controller.signal)).map(row => [row.cameraId, row]));
+          rows = rows.map(row => fresh.get(row.cameraId) || row);
         }
-        throw error;
+        snapshot = await readInventory(settings, null, controller.signal);
       }
-      if (!active()) return;
-      sendAlerts.configure(cycleSettings, active);
-      if (!hadLease) sendAlerts([], cycleSettings, active);
-      // No automatic index creation. Deployment must provision indexes separately.
-      const stateFilter = settings.adminIds.size
-        ? { adminId: { $in: [...settings.adminIds] } }
-        : {};
-      let rows = await MonitoringState.find(stateFilter).lean();
-      if (
-        !inventory ||
-        Date.now() - inventoryAt >= settings.inventoryIntervalMs
-      ) {
-        inventory = await readInventory(settings, null, true);
-        inventoryAt = Date.now();
-        const cameras = new Map(
-          inventory.cameras.map((camera) => [String(camera.cameraId), camera]),
-        );
-        for (const row of rows) {
-          if (!active()) return;
-          const camera = cameras.get(row._id);
-          const reason = !camera
-            ? "CAMERA_REMOVED"
-            : !camera.enabled
-              ? "CAMERA_DISABLED"
-              : row.alertsMuted
-                ? "CAMERA_MUTED"
-                : null;
-          if (reason) await closeForLifecycle(row, reason);
-        }
-        rows = await MonitoringState.find(stateFilter).lean();
-      }
-      const states = new Map(rows.map((row) => [row._id, row]));
-      const due = inventory.cameras.filter((camera) => {
-        const state = states.get(String(camera.cameraId));
-        // Apply changed code defaults to existing records without a migration or resetting history.
-        const nextCheckAt = scheduledCheckAt(state, cycleSettings);
-        return (
-          camera.enabled &&
-          !state?.alertsMuted &&
-          (!observedSinceResume(state, control) || !nextCheckAt || nextCheckAt.getTime() <= Date.now())
-        );
+      if (!await active()) return;
+      const current = new Map(snapshot.cameras.map(camera => [camera.cameraId, camera]));
+      rows = rows.filter(row => current.get(row.cameraId)?.sourceKey === row.sourceKey);
+      state = await store.update(async value => {
+        if (value.scan?.id === scanId && await active()) saveResults(value, rows, snapshot);
       });
-      await flushTransitions(active, onProjected);
-      statusController = new AbortController();
-      await readStatuses(
-        due,
-        cycleSettings,
-        async (camera, reading) => {
-          if (!active()) return;
-          try {
-            const current = await MonitoringState.findById(
-              String(camera.cameraId),
-            ).lean();
-            if (current?.alertsMuted || !active()) return;
-            const saved = await recordObservation(
-              current,
-              camera,
-              reading,
-              cycleSettings,
-            );
-            statistics[saved?.latestResult?.verdict || reading.verdict]++;
-            if (saved) {
-              statistics.committed++;
-              states.set(String(camera.cameraId), saved);
-              // Publish recovery before waiting for the remainder of the inventory cycle.
-              if (saved.transitionTypes.includes("RECOVERED"))
-                await flushTransitions(active, onProjected, camera.cameraId);
-              await recordMonitoringError(camera, saved, cycleSettings);
-            }
-          } catch {
-            logger.error(
-              "[STREAM_MONITORING] camera observation could not be committed",
-            );
-          }
-        },
-        active,
-        states,
-        statusController.signal,
-      );
-      statusController = null;
-      if (active()) {
-        await flushTransitions(active, onProjected);
-        if (statistics.committed) sendAlerts(due, cycleSettings, active);
-        await MonitoringCollector.updateOne(
-          { _id: "primary", owner },
-          {
-            $set: {
-              lastCycleStats: {
-                ...statistics,
-                checkedAt: new Date(),
-                durationMs: Date.now() - startedAt,
-                due: due.length,
-              },
-            },
-          },
-        );
+      let deliveries = { planned: 0, sent: 0, failed: 0 };
+      if (reportDue && await active()) {
+        let claimed = false;
+        await store.update(async value => {
+          if (value.report?.id === reportId || !await active()) return;
+          value.report = { id: reportId, startedAt: new Date().toISOString() }; claimed = true;
+        });
+        // Claim before sending. A restart/ambiguous response cannot replay this report.
+        if (claimed) deliveries = await sendDownReports(rows.map(row => state.cameras[row.cameraId] || row),
+          snapshot, settings, { reportId, store, active, signal: controller.signal });
       }
-      // Separate batch checks, individual verification, final report validation
-      // and the fifteen-minute healthy-camera cooldown.
-      let nextDue = Date.now() + 5000;
-      for (const camera of inventory.cameras) {
-        const state = states.get(String(camera.cameraId));
-        if (!camera.enabled || state?.alertsMuted) continue;
-        const scheduled = scheduledCheckAt(state, cycleSettings);
-        if (scheduled) nextDue = Math.min(nextDue, scheduled.getTime());
-      }
-      delay = Math.min(5000, Math.max(1000, nextDue - Date.now()));
-    } catch {
-      leaseUntil = 0;
-      logger.error("[STREAM_MONITORING] cycle failed; will retry");
-    } finally {
-      cycling = false;
-      statusController?.abort();
-      statusController = null;
-      if (!stopped) {
-        timer = setTimeout(cycle, delay);
-        timer.unref();
-      }
+      await store.update(value => {
+        if (value.scan?.id === scanId) Object.assign(value.scan,
+          { finishedAt: new Date().toISOString(), counts: summarize(rows), deliveries });
+      });
+      logger.info("[STREAM_MONITORING] checked=" + rows.length + " down=" + summarize(rows).DOWN + " sent=" + deliveries.sent);
+    } catch { logger.error("[STREAM_MONITORING] Check interrupted; next scheduled scan will retry"); }
+    finally {
+      clearTimeout(deadline); controller?.abort(); controller = null;
+      await lease?.release().catch(() => {}); lease = null;
+      running = false;
+      if (!stopped) { timer = setTimeout(run, 5000); timer.unref(); }
     }
   }
-  timer = setTimeout(cycle, 0);
-  timer.unref();
+  wake();
   return () => {
-    stopped = true;
-    leaseUntil = 0;
-    clearTimeout(timer);
-    clearInterval(renewal);
-    clearInterval(controlTimer);
-    unsubscribeControl();
-    sendAlerts.stop();
-    statusController?.abort();
+    stopped = true; controller?.abort(); clearTimeout(timer); clearInterval(watch); clearInterval(renew);
+    unsubscribe(); unregisterWake();
   };
 }

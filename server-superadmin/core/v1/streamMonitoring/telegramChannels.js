@@ -60,3 +60,16 @@ export function selectedTelegramChannels(recipient = {}) {
   return channels.filter(channel => channel.chatId === selected);
 }
 
+// Monitoring overrides are local; the shared bot/linking records stay unchanged.
+export function monitoringChannels(recipient, state) {
+  const hidden = state.hiddenChannels[String(recipient._id)] || [];
+  return telegramChannels(recipient).filter(channel => !hidden.includes(channel.chatId));
+}
+
+export function selectedMonitoringChannel(recipient, state) {
+  const channels = monitoringChannels(recipient, state), owner = String(recipient._id);
+  const selected = Object.hasOwn(state.selections, owner) ? state.selections[owner]
+    : recipient.selectedChatId || channels[0]?.chatId;
+  return channels.find(channel => channel.chatId === selected) || null;
+}
+

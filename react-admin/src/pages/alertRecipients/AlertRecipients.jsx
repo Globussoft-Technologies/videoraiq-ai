@@ -125,6 +125,7 @@ export default function AlertRecipients() {
   }
 
   const channels = data?.channels || []
+  const availableChannels = data?.availableChannels || channels
   const filtered = channels.filter(channel => `${channel.channelName} ${channel.chatId}`.toLowerCase().includes(search.toLowerCase()))
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / pageSize) - 1))
   const botName = String(data?.botUsername || '').replace(/^@/, '')
@@ -140,7 +141,7 @@ export default function AlertRecipients() {
           <div className="p-5">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/8 dark:bg-white/3">
               {channels.length > 0 && <p className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">{channels.length} Telegram {channels.length === 1 ? 'channel' : 'channels'} connected.</p>}
-              <ol className="list-decimal space-y-2 pl-5 text-xs leading-6 text-gray-600 dark:text-gray-400">
+              {data.code ? <><ol className="list-decimal space-y-2 pl-5 text-xs leading-6 text-gray-600 dark:text-gray-400">
                 <li>Create a Telegram channel.</li>
                 <li>Add our bot as an admin: <a href={`https://t.me/${encodeURIComponent(botName)}`} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 dark:text-blue-400">@{botName}</a> (grant permission to post messages).</li>
                 <li>Copy the code below, paste it in your channel, and press Enter.</li>
@@ -149,12 +150,12 @@ export default function AlertRecipients() {
                 <code className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm tracking-wider dark:border-white/8 dark:bg-[#0b0d13]">{data.code || 'Refresh to get a code'}</code>
                 <button type="button" disabled={!data.code || busy || loading || !!error || !data.botConfigured} onClick={copyCode} className={`${button} border border-gray-200 text-gray-600 dark:border-white/8 dark:text-gray-300`}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy'}</button>
               </div>
-              <button type="button" disabled={loading || busy} onClick={refreshChannels} className={`${primary} mt-3`}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />I’ve posted the code - Refresh</button>
-              {channels.length > 0 && <div className="mt-5 max-w-xl">
+              <button type="button" disabled={loading || busy} onClick={refreshChannels} className={`${primary} mt-3`}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />I’ve posted the code - Refresh</button></> : <p className="text-xs leading-6 text-gray-600 dark:text-gray-400">Choose an existing linked Telegram channel for Superadmin stream alerts. Disconnected alert channels can be selected again below.</p>}
+              {availableChannels.length > 0 && <div className="mt-5 max-w-xl">
                 <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">Send stream alerts to</p>
-                <CustomSelect value={data.selectedChatId} options={channels.map(channel => ({ value: channel.chatId, label: channel.channelName }))} onChange={selectChannel} disabled={busy || loading || !!error} />
+                <CustomSelect value={data.selectedChatId} options={availableChannels.map(channel => ({ value: channel.chatId, label: channel.channelName }))} onChange={selectChannel} disabled={busy || loading || !!error} />
               </div>}
-              <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Connecting a channel selects it for alerts when monitoring is On. Due cameras are checked in batches, with a second check after {Math.round((data.checkIntervalMs || 300000) / 60000)} minutes. Suspects are then checked individually every {Math.round((data.individualIntervalMs || 30000) / 1000)} seconds for {Math.round((data.verificationWindowMs || 300000) / 60000)} minutes. Down alerts require a final individual check before delivery. Healthy cameras are not checked again for {Math.round((data.aliveIntervalMs || 900000) / 60000)} minutes. Down and recovery reports are released at {Math.round((data.cycleMs || 900000) / 60000)}-minute cycle boundaries, grouped by admin and NVR. Reminders remain at least {Math.round((data.reminderMs || 900000) / 60000)} minutes apart after successful delivery. Idle and queued feeds do not trigger Down alerts.</p>
+              <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">When monitoring is On, cameras are checked every {Math.round((data.checkIntervalMs || 120000) / 60000)} minutes. Fresh RTSP offline + stalled reports are Down; RTSP online + running reports are Alive. Other, missing or stale results are Unknown and do not trigger alerts. Only Down reports are sent every {Math.round((data.reportIntervalMs || 600000) / 60000)} minutes, grouped by admin and NVR. The first report is due 10 minutes after monitoring starts.</p>
               {(monitoringEnabled ?? data.collectorEnabled) === false && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Monitoring and Telegram alerts are paused.</p>}
               {!data.botConfigured && <p className="mt-3 text-xs text-red-600 dark:text-red-300">The Telegram bot is not configured in the superadmin backend.</p>}
             </div>
