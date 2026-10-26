@@ -151,9 +151,9 @@ export default function AlertRecipients() {
                 <button type="button" disabled={!data.code || busy || loading || !!error || !data.botConfigured} onClick={copyCode} className={`${button} border border-gray-200 text-gray-600 dark:border-white/8 dark:text-gray-300`}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy'}</button>
               </div>
               <button type="button" disabled={loading || busy} onClick={refreshChannels} className={`${primary} mt-3`}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />I’ve posted the code - Refresh</button></> : <p className="text-xs leading-6 text-gray-600 dark:text-gray-400">Choose an existing linked Telegram channel for Superadmin stream alerts. Disconnected alert channels can be selected again below.</p>}
-              {availableChannels.length > 0 && <div className="mt-5 max-w-xl">
+              {availableChannels.length > 0 && <div className="mt-5 w-fit min-w-[min(100%,12rem)] max-w-[min(100%,24rem)]">
                 <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">Send stream alerts to</p>
-                <CustomSelect value={data.selectedChatId} options={availableChannels.map(channel => ({ value: channel.chatId, label: channel.channelName }))} onChange={selectChannel} disabled={busy || loading || !!error} />
+                <CustomSelect className="gap-6 text-left" value={data.selectedChatId} options={availableChannels.map(channel => ({ value: channel.chatId, label: channel.channelName }))} onChange={selectChannel} disabled={busy || loading || !!error} />
               </div>}
               <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">When monitoring is On, cameras are checked every {Math.round((data.checkIntervalMs || 120000) / 60000)} minutes. Fresh RTSP offline + stalled reports are Down; RTSP online + running reports are Alive. Other, missing or stale results are Unknown and do not trigger alerts. Only Down reports are sent every {Math.round((data.reportIntervalMs || 600000) / 60000)} minutes, grouped by admin and NVR. The first report is due 10 minutes after monitoring starts.</p>
               {(monitoringEnabled ?? data.collectorEnabled) === false && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Monitoring and Telegram alerts are paused.</p>}
