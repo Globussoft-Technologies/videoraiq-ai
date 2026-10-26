@@ -9,7 +9,7 @@ import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
 import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/context/PermissionContext';
-import { fetchShifts, deleteShift } from './Api';
+import { fetchShifts, deleteShift, updateShift } from './Api';
 import ShiftForm from './ShiftForm';
 import AssignShiftModal from './AssignShiftModal';
 import ShiftEmployeesModal from './ShiftEmployeesModal';
@@ -69,6 +69,7 @@ const Shifts = () => {
   const [total, setTotal] = useState(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [defaultSaving, setDefaultSaving] = useState(false);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const canView = permissions?.shifts?.view;
@@ -93,6 +94,20 @@ const Shifts = () => {
       setOnLoading(false);
     }
   }, [currentPage, limit, searchInput]);
+
+  const markDefault = useCallback(async (shift) => {
+    setDefaultSaving(true);
+    try {
+      const response = await updateShift(shift._id, { isDefault: true });
+      if (response?.data?.body?.status !== 'success') throw new Error(response?.data?.body?.message || 'Failed to set default shift');
+      toast.success(`${shift.name} is now the default shift`);
+      await loadShifts();
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || error.message || 'Failed to set default shift');
+    } finally {
+      setDefaultSaving(false);
+    }
+  }, [loadShifts]);
 
   useEffect(() => {
     loadShifts();
@@ -267,6 +282,14 @@ const Shifts = () => {
         header: 'Action',
         cell: ({ row }) => (
           <div className="flex items-center gap-2 md:gap-3">
+            {canEdit && !row.original.isDefault && row.original.isActive !== false && (
+              <button type="button" disabled={defaultSaving}
+                onClick={() => markDefault(row.original)}
+                className="text-xs font-semibold text-[var(--blue)] whitespace-nowrap cursor-pointer disabled:opacity-50"
+                title="Use this shift for new users unless another shift is selected">
+                Make default
+              </button>
+            )}
             {canEdit && (
               <AssignShiftModal
                 shift={row.original}
@@ -311,7 +334,7 @@ const Shifts = () => {
         ),
       },
     ],
-    [canEdit, canDelete, loadShifts],
+    [canEdit, canDelete, loadShifts, markDefault, defaultSaving],
   );
 
   if (permissionsLoading) return <PageLoader />;

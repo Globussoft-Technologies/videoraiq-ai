@@ -396,6 +396,12 @@ const AttendanceLogs = () => {
         // export and Attendance Analytics can't disagree.
         status: item.status,
         minutesSpent: item.minutesSpent,
+        isLate: item.isLate,
+        lateMinutes: item.lateMinutes,
+        shiftName: item.shiftName,
+        earlyLeaveMinutes: item.earlyLeaveMinutes,
+        overtimeMinutes: item.overtimeMinutes,
+        isWeekOff: item.isWeekOff,
         // Same checkout→checkin pairing behind the Break Logs dialog,
         // totalled here so the table doesn't need a click-through to show it.
         breakMinutes: item.breakMinutes || 0,
@@ -619,6 +625,16 @@ const AttendanceLogs = () => {
       <ReusableTablePage
         stats={stats}
         secondaryToolbar={absentTabs}
+        dateFilterActions={
+          <button
+            type="button"
+            aria-pressed={statusFilter === 'late_arrival'}
+            onClick={() => dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === 'late_arrival' ? '' : 'late_arrival' })}
+            className={`h-10 rounded-[10px] border px-3 text-xs font-bold transition-colors cursor-pointer ${statusFilter === 'late_arrival' ? 'border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-300' : 'border-amber-500/60 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300'}`}
+          >
+            Late Arrival
+          </button>
+        }
         loading={state.loading}
         attendanceLogsCount={attendanceLogsCount}
         currentPage={currentPage}

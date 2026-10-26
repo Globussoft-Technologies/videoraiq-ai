@@ -218,6 +218,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             designation: editUser.designation || '',
             location: editUser.location || '',
             departmentId: editUser?.departmentId?._id || '',
+            shiftId: editUser.shiftId?._id || editUser.shiftId || '',
           }
         : {
             empId: '',
@@ -228,6 +229,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             designation: '',
             location: '',
             departmentId: '',
+            shiftId: '',
           },
     [editUser]
   );
@@ -263,6 +265,8 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     Object.keys(values).forEach((key) => {
       const value = typeof values[key] === 'string' ? values[key].trim() : values[key];
       const fieldName = key === 'empId' ? 'emp_id' : key;
+      // Omit an unselected shift: existing optional registration stays unchanged.
+      if (key === 'shiftId' && !value) return;
       formData.append(fieldName, value);
     });
     uploadedImagePaths.forEach((item) => {
@@ -391,6 +395,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                 {step === 1 ? (
                   <RegisterFormStep1
                     departments={departments}
+                    currentShift={editUser?.shiftId}
                     locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))}
                   />
                 ) : (

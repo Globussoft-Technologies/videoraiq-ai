@@ -249,7 +249,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
           <>
             <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15' }}>
               {imgSrc ? (
-                <img src={imgSrc} alt={det} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={imgSrc} alt={det} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: incident?.incidentType === 'lateArrival' ? 'center top' : 'center' }} />
               ) : (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)', fontSize: 11.5 }}>
                   {incident?.channelData?.name || 'No snapshot'}

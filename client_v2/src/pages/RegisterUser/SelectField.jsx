@@ -29,6 +29,11 @@ export default function  SelectField({
   placeholder = 'Select',
   disabled = false,
   preferUp = false,
+  onOpen,
+  onLoadMore,
+  loading = false,
+  error = '',
+  onRetry,
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -113,7 +118,7 @@ export default function  SelectField({
         ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!open) onOpen?.(); setOpen((v) => !v); }}
         className={`${triggerClass} ${open ? 'border-[var(--blue)]' : 'border-[var(--bd)]'} ${
           disabled ? 'opacity-60 cursor-not-allowed' : ''
         }`}
@@ -128,6 +133,10 @@ export default function  SelectField({
         createPortal(
           <div
             ref={panelRef}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              if (el.scrollHeight - el.scrollTop - el.clientHeight < 32) onLoadMore?.();
+            }}
             /* Radix puts `pointer-events: none` on <body> while a dialog is open
                and re-enables it only on the dialog content — this panel is a
                body child, so it has to opt back in or it ignores every event. */
@@ -155,6 +164,8 @@ export default function  SelectField({
                 {opt.label}
               </div>
             ))}
+            {loading && <div role="status" className="px-2.5 py-2 text-xs text-[var(--tx3)]">Loading shifts…</div>}
+            {error && <button type="button" onClick={onRetry} className="px-2.5 py-2 text-xs text-[var(--crit)]">{error} Retry</button>}
           </div>,
           document.body
         )}

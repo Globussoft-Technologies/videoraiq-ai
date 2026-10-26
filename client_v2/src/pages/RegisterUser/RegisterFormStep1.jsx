@@ -1,6 +1,7 @@
 import { Field, ErrorMessage, useFormikContext } from 'formik';
 import { Input } from '@/components/ui/input';
 import SelectField from './SelectField';
+import ShiftSelect from './ShiftSelect';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 const errorClass = 'text-[var(--crit)] text-[11px] mt-1';
@@ -11,7 +12,7 @@ function FieldLabel({ children }) {
 
 const locationLabel = (loc) => (loc.toLowerCase() === 'banglore' ? 'Bangalore' : loc);
 
-const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
+const RegisterFormStep1 = ({ departments = [], locations = [], currentShift }) => {
   const { values, setFieldValue, handleChange, setFieldError, setFieldTouched } = useFormikContext();
 
   // Combine fetched locations with the current value so it prepopulates on edit.
@@ -115,6 +116,10 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
           className="bg-[var(--bg3)] border-[var(--bd)] text-[var(--tx)] shadow-none rounded-[10px]"
         />
         <ErrorMessage name="vehicleNumber" component="div" className={errorClass} />
+      </div>
+      <div>
+        <FieldLabel>Shift (optional)</FieldLabel>
+        <ShiftSelect value={values.shiftId} onChange={(id) => setFieldValue('shiftId', id)} currentShift={currentShift} />
       </div>
     </div>
   );

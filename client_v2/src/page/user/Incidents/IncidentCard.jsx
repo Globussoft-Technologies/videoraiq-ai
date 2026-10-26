@@ -439,7 +439,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
         {/* Image area */}
         <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
           {imgSrc ? (
-            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: item.incidentType === 'lateArrival' ? 'center top' : 'center' }} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)' }}>
               <ImageOff size={28} strokeWidth={1.4} />

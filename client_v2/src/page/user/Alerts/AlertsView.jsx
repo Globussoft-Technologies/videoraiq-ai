@@ -901,7 +901,7 @@ export default function AlertsView() {
             <>
               <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--bd)' }}>
                 {active.Image ? (
-                  <img src={mediaUrl(active.Image)} alt="" onClick={() => setImageOpen(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+                  <img src={mediaUrl(active.Image)} alt="" onClick={() => setImageOpen(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: active.incidentType === 'lateArrival' ? 'center top' : 'center', cursor: 'pointer' }} />
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)', fontSize: 11.5 }}>No snapshot</div>
                 )}

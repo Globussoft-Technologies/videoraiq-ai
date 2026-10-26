@@ -355,6 +355,7 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
                 </div>
               )}
             </div>
+            <div>
             <CheckPill
               checked={formik.values.isDefault}
               onChange={(next) => formik.setFieldValue('isDefault', next)}
@@ -362,6 +363,8 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
               label="Default Shift"
               tint="var(--warn)"
             />
+            <p className="mt-1.5 text-xs text-[var(--tx3)]">Preselected for new users. Another shift can be chosen during registration.</p>
+            </div>
           </div>
 
           <div className="bg-[var(--bg2)] border border-[var(--bd)] rounded-[12px] p-3 sm:p-4">

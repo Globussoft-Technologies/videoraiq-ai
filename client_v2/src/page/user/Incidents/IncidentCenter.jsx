@@ -1415,7 +1415,7 @@ function IncidentListRow({
         </div>
 
         <div role="cell" style={{ width: 94, height: 58, borderRadius: 8, overflow: 'hidden', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {image ? <img src={image} alt={incident} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageOff size={22} color="#6b7280" />}
+          {image ? <img src={image} alt={incident} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: item.incidentType === 'lateArrival' ? 'center top' : 'center' }} /> : <ImageOff size={22} color="#6b7280" />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>

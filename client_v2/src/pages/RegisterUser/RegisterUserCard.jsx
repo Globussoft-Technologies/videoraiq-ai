@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
 import SelectField from './SelectField';
+import ShiftSelect from './ShiftSelect';
 import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import { COMPACT_TOAST } from './toastOptions';
@@ -97,6 +98,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [designation, setDesignation] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [shiftId, setShiftId] = useState('');
   const [location, setLocation] = useState('');
   const [errors, setErrors] = useState({});
 
@@ -180,6 +182,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     setVehicleNumber('');
     setDesignation('');
     setDepartmentId('');
+    setShiftId('');
     setLocation('');
     setErrors({});
     setImagePaths(['', '', '']);
@@ -249,6 +252,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     formData.append('vehicleNumber', vehicleNumber.trim());
     formData.append('designation', designation.trim());
     if (departmentId) formData.append('departmentId', departmentId);
+    if (shiftId) formData.append('shiftId', shiftId);
     if (location) formData.append('location', location);
     imagePaths.forEach((item) => {
       if (item instanceof File) formData.append('file', item);
@@ -400,6 +404,10 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                 value={vehicleNumber}
                 onChange={(e) => setVehicleNumber(e.target.value)}
               />
+            </div>
+            <div>
+              <label className={fieldLabel}>Shift (optional)</label>
+              <ShiftSelect value={shiftId} onChange={setShiftId} />
             </div>
           </div>
 
