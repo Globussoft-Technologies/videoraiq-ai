@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-// Incident preview is switched off: the card's Preview button, the modal it
-// opened and the Settings > Incident Preview panel are all commented out.
-// Restore this import together with the blocks below.
-// import IncidentPreviewModal from './IncidentPreviewModal';
+import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
 import { PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
@@ -327,7 +324,7 @@ function Spinner({ size = 14, color = '#fff' }) {
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser, hideResolveControls, resolveSelected, resolveSelectionActive, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete }) {
   const [reportOpen,   setReportOpen]   = useState(false);
-  // const [previewOpen,  setPreviewOpen]  = useState(false);   // preview disabled
+  const [previewOpen,  setPreviewOpen]  = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
   const [hover,        setHover]        = useState(false);
@@ -347,11 +344,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   // Preview the recorded moment in place. channelData is the whole channel
   // document (the incidents aggregation $lookup does not project it down), so
   // the ids the playback API needs are all on it.
-  // Disabled along with the Preview button below.
-  // const previewChannel = item.channelData || null;
-  // const previewChannelId = previewChannel?._id || item.channelId || null;
-  // const previewAt = item.timeOfIncident || null;
-  // const canPreview = Boolean(previewChannelId && previewAt);
+  const previewChannel = item.channelData || null;
+  const previewChannelId = previewChannel?._id || item.channelId || null;
+  const previewAt = item.timeOfIncident || null;
+  const canPreview = Boolean(previewChannelId && previewAt);
   const site     = item.nvrData?.nvrName  || item.location  || '';
   const conf     = item.confidence ?? item.accuracy ?? item.score;
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;
@@ -409,7 +405,6 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   return (
     <>
       {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
-      {/* Preview disabled — restore together with the button further down.
       {previewOpen && (
         <IncidentPreviewModal
           item={item}
@@ -419,7 +414,6 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
           onClose={() => setPreviewOpen(false)}
         />
       )}
-      */}
 
       <div
         onClick={handleCardClick}
@@ -727,9 +721,6 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             {/* Opens Playback on this camera at the second the incident was
                 recorded. Hidden rather than disabled when the incident carries
                 no camera or timestamp — a dead control is worse than none. */}
-            {/* Preview disabled. Uncomment this block, the modal render above,
-                the preview state/consts and the IncidentPreviewModal import to
-                bring it back.
             {canPreview && (
               <button
                 type="button"
@@ -755,7 +746,6 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                 Preview
               </button>
             )}
-            */}
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '0 0 auto', fontSize: 10.5, color: st.color, fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color }} />
               {st.label}
