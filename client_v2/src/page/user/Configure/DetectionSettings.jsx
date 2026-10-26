@@ -1169,11 +1169,11 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   };
 
   const handleBulkDetectionControl = async () => {
-    if (!canResetAll || !bulkAction || bulkInFlight.current) return;
+    if (!canResetAll || !bulkAction || !resetToken || bulkInFlight.current) return;
     bulkInFlight.current = true;
     setBulkLoading(true);
     try {
-      const result = await bulkDetectionControl(bulkAction);
+      const result = await bulkDetectionControl(bulkAction, resetToken);
       observedBulkJob.current = { id: result.job.id, notify: true, finished: false };
       seenBulkErrors.current.clear();
       bulkStateApi.setData(previous => ({ ...previous, job: result.job }));
@@ -1181,6 +1181,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
     } catch (error) {
       toast.error(error?.response?.data?.body?.message || 'Bulk action failed. Please retry.');
     } finally {
+      setResetToken('');
       try { await Promise.all([channelsApi.refetch({ silent: true }), bulkStateApi.refetch({ silent: true })]); }
       finally { bulkInFlight.current = false; setBulkLoading(false); }
     }
@@ -1417,7 +1418,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           <button type="button" aria-haspopup="dialog"
             aria-label={retryBulk ? `Retry failed ${nextBulkAction}` : nextBulkAction === 'resume' ? 'Resume all detections' : 'Pause all detections'}
             disabled={bulkBusy || bulkStateApi.loading || Boolean(bulkStateApi.error) || !bulkStateApi.data?.cameraCount || resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
-            onClick={() => setBulkAction(nextBulkAction)}
+            onClick={() => { setResetToken(''); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); setBulkAction(nextBulkAction); }}
             className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))' }}>
             {bulkBusy || bulkStateApi.loading ? <Loader2 size={15} className="animate-spin" /> : nextBulkAction === 'resume' ? <Play size={15} /> : <Pause size={15} />}
@@ -1542,21 +1543,21 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
       )}
 
       <ConfirmationModal
-        open={Boolean(bulkAction)}
+        open={Boolean(bulkAction) && Boolean(resetToken)}
         title={retryBulk ? 'Retry failed cameras?' : bulkAction === 'pause' ? 'Pause all detections?' : 'Resume all detections?'}
         message={retryBulk ? `Retry ${bulkAction} for the unfinished cameras only? Each failed camera gets up to 3 attempts. Zones and settings will be preserved.` : bulkAction === 'pause'
           ? 'Pause object detection on every camera in your account, including cameras outside the current filters? Zones and settings will be preserved. Detection stays paused until you resume it. Face authentication is unaffected.'
-          : 'Resume previously running object detections on all paused cameras using their saved zones and settings? Scheduled detections will follow their schedules. Face authentication is unaffected.'}
+          : 'Resume object detections on all cameras with saved zones, including detections that were previously stopped? Scheduled detections will follow their schedules. Face authentication is unaffected.'}
         confirmLabel={retryBulk ? 'Retry failed' : bulkAction === 'pause' ? 'Pause all' : 'Resume all'}
         loading={bulkLoading}
-        onClose={() => !bulkLoading && setBulkAction(null)}
+        onClose={() => { if (!bulkLoading) { setBulkAction(null); setResetToken(''); } }}
         onConfirm={handleBulkDetectionControl}
       />
       <ConfirmationModal
-        open={Boolean(resetAllTarget) && !resetToken}
-        title="Verify password to reset"
+        open={Boolean(resetAllTarget || bulkAction) && !resetToken}
+        title={bulkAction ? `Verify password to ${bulkAction}` : 'Verify password to reset'}
         message={<div className="space-y-3 text-left">
-          <p>Enter your account password to continue. You will confirm the reset next.</p>
+          <p>Enter your account password to continue. You will confirm the {bulkAction || 'reset'} next.</p>
           <div className="relative">
             <input type={showResetPassword ? 'text' : 'password'} autoComplete="off"
               name="detection-reset-verification" aria-label="Account password"
@@ -1573,7 +1574,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           </div>
         </div>}
         confirmLabel="Verify password" loading={verifyingReset}
-        onClose={() => { if (!verifyingReset) { setResetAllTarget(null); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); } }}
+        onClose={() => { if (!verifyingReset) { setResetAllTarget(null); setBulkAction(null); setResetToken(''); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); } }}
         onConfirm={handleVerifyResetPassword}
       />
       <ConfirmationModal
@@ -1589,7 +1590,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         confirmLabel={resetAllTarget === 'camera-types' ? 'Reset all camera types' : 'Reset all detections'}
         cancelLabel="Cancel"
         loading={resettingAll}
-        onClose={() => !resettingAll && setResetAllTarget(null)}
+        onClose={() => { if (!resettingAll) { setResetAllTarget(null); setResetToken(''); } }}
         onConfirm={handleResetAllDetections}
       />
       <ConfirmationModal

@@ -170,8 +170,8 @@ export const getBulkDetectionState = async () => {
   });
   return unwrap(res);
 };
-export const bulkDetectionControl = async (action) => {
-  const res = await axios.post(`${Api_url}/detection-settings/bulk-control`, { action, confirm: true }, {
+export const bulkDetectionControl = async (action, resetToken) => {
+  const res = await axios.post(`${Api_url}/detection-settings/bulk-control`, { action, confirm: true, resetToken }, {
     headers: { 'x-access-token': getAccessToken() }, timeout: 30000,
   });
   window.dispatchEvent(new Event('vq-detection-toggle-change'));
