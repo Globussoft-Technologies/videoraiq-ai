@@ -16,7 +16,7 @@ import {
   parseTime,
   formatTime,
 } from '../../../pages/AttendanceLogs/components/timeUtils';
-import IncidentCard, { apiMarkResolved, ReportModal, VehicleTagStrip } from './IncidentCard';
+import IncidentCard, { apiMarkResolved, formatDoorStatus, ReportModal, VehicleTagStrip } from './IncidentCard';
 import IncidentZoneDetails from './IncidentZoneDetails';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
@@ -1139,16 +1139,16 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                     maxWidth: 360,
                   }}>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      Door
+                      Door Name
                     </span>
                     <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
                       {item.zoneName || item.zone || '--'}
                     </span>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      Status
+                      Door Status
                     </span>
                     <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right', textTransform: 'capitalize' }}>
-                      {item.doorStatus || '--'}
+                      {formatDoorStatus(item)}
                     </span>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
                       Door Open Duration
@@ -1438,7 +1438,7 @@ function IncidentListRow({
                 {{
                   zone: item.zoneName || item.zone || '—',
                   presenceSec: formatDoorDuration(item.durationSec),
-                  done: item.doorStatus || '—',
+                  done: formatDoorStatus(item),
                 }[field]}
               </span>
             ) : zoneRows.length ? zoneRows.map((zone, index) => (
@@ -2707,7 +2707,7 @@ export default function IncidentCenter() {
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
-                <span role="columnheader">{doorOnly ? 'Door' : hasDoor ? 'Door / Zone' : packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
+                <span role="columnheader">{doorOnly ? 'Door Name' : hasDoor ? 'Door Name / Zone' : packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
                 <span role="columnheader">{doorOnly ? 'Door Open Duration' : hasDoor ? 'Door Open Duration / Presence (s)' : packingOnly ? 'Start time' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
                 {packingOnly && <><span role="columnheader">End time</span><span role="columnheader">Time to complete</span></>}
                 {!packingOnly && <span role="columnheader">{doorOnly ? 'Door Status' : hasDoor ? 'Door Status / Done' : hasPacking ? 'Done / Time to complete' : 'Done'}</span>}

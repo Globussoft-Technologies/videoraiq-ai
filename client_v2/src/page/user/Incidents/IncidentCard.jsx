@@ -56,6 +56,13 @@ const formatDoorDuration = (seconds) => {
   return `${value} sec${value === 1 ? '' : 's'}`;
 };
 
+// Door status is the state reported by the detector. Incident workflow
+// resolution is shown separately through the card's existing status indicator.
+export const formatDoorStatus = (item) => {
+  const state = String(item?.doorStatus || '').trim().toLowerCase();
+  return state || '--';
+};
+
 /**
  * Plate + who it belongs to, for detections that carry a vehicle number
  * (Vehicle Detection and the other plate-bearing types). An untagged plate
@@ -683,23 +690,22 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
            {isDoorDetection && (
              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door</span>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Name</span>
                  <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{item.zoneName || item.zone || '--'}</span>
                </div>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Status</span>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Status</span>
                  <span style={{
-                   color: 'var(--tx2)',
-                   background: 'transparent',
-                   padding: 0,
+                   color: String(item.doorStatus || '').toLowerCase() === 'open' ? 'var(--crit)' : 'var(--ok)',
                    fontSize: 11.5,
-                   fontWeight: 500,
+                   fontWeight: 600,
+                   textTransform: 'capitalize',
                  }}>
-                   {item.doorStatus || '--'}
+                   {formatDoorStatus(item)}
                  </span>
                </div>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Open Duration</span>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Open Duration</span>
                  <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{formatDoorDuration(item.durationSec)}</span>
                </div>
              </div>
@@ -711,6 +717,8 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>Camera</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{cam || '--'}</span>
               </span>
+            ) : isDoorDetection ? (
+              <span style={{ flex: '1 1 auto', minWidth: 0 }} />
             ) : (
               <span style={{ fontSize: 11, color: item.incidentType === 'boxPackingDetection' ? 'var(--tx2)' : 'var(--tx3)', fontWeight: item.incidentType === 'boxPackingDetection' ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
                 {cam}

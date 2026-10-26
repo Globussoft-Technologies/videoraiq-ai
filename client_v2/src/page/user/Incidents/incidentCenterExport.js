@@ -95,7 +95,7 @@ const mapRow = (item, index) => {
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
     ...(isDoorDetection ? {
-      Door: text(item?.zoneName || item?.zone),
+      'Door Name': text(item?.zoneName || item?.zone),
       'Door Status': text(item?.doorStatus),
       'Door Open Duration': formatDoorDuration(item?.durationSec),
     } : {}),
@@ -185,7 +185,7 @@ const exportListPdf = (rows, showVehicleNumber) => {
 
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
-    ...(rows.some((row) => Object.hasOwn(row, 'Door')) ? ['Door', 'Door Status', 'Door Open Duration'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Open Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
     'Severity', 'Status', 'Time of Incident',
     ...(showVehicleNumber ? ['Vehicle Number'] : []),
@@ -197,7 +197,7 @@ const exportListPdf = (rows, showVehicleNumber) => {
     Incident: showVehicleNumber ? 48 : 60,
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
-    Door: 24,
+    'Door Name': 24,
     'Door Status': 24,
     'Door Open Duration': 30,
     Severity: 18,
@@ -332,9 +332,9 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
     ['Incident', 'Incident'],
     ['NVR', 'NVR'],
     ['Camera', 'Camera'],
-    ...(Object.hasOwn(row, 'Door') ? [
-      ['Door', 'Door'],
-      ['Status', 'Door Status'],
+    ...(Object.hasOwn(row, 'Door Name') ? [
+      ['Door Name', 'Door Name'],
+      ['Door Status', 'Door Status'],
       ['Door Open Duration', 'Door Open Duration'],
     ] : []),
     ...(Object.hasOwn(row, 'Box ID') ? PACKING_INCIDENT_EXPORT_COLUMNS.map((key) => [key, key]) : []),

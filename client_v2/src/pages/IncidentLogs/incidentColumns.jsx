@@ -297,7 +297,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     cols.push(
       {
         accessorKey: 'zoneName',
-        header: sortableHeader('Door', 'zone', onSort, sortable),
+        header: sortableHeader('Door Name', 'zone', onSort, sortable),
         cell: ({ row }) => <span className={styles.text}>{row.original.zoneName || row.original.zone || '--'}</span>,
       },
       {
@@ -491,10 +491,10 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         )}
         {config.showDoorFields && (
           <>
-            <IncidentCardRow icon={DoorOpen} label="Door" value={row.zoneName || row.zone || '--'} />
+            <IncidentCardRow icon={DoorOpen} label="Door Name" value={row.zoneName || row.zone || '--'} />
             <IncidentCardRow
               icon={DoorOpen}
-              label="Status"
+              label="Door Status"
               value={row.doorStatus || '--'}
               valueClassName="capitalize"
               valueStyle={doorStatusStyle(row.doorStatus)}
