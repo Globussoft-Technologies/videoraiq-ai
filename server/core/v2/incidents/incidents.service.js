@@ -3458,6 +3458,7 @@ console.log(result,'result');
     // (all/tagged/untagged) filter and lets free-text `search` match the
     // tagged user's name, not just the plate.
     attachVehicleOwners = false,
+    includeBoxStatusCounts = false,
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -3724,6 +3725,15 @@ console.log(result,'result');
     const sortsOnJoinedField = sortPath === "nvrData.nvrName" || sortPath === "channelData.name";
     const canPageBeforeLookups = !postLookupSearch && !attachVehicleOwners && !sortsOnJoinedField;
 
+    const summaryStage = {
+      $group: {
+        _id: null,
+        totalCount: { $sum: 1 },
+        high: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "high"] }, 1, 0] } },
+        moderate: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "moderate"] }, 1, 0] } },
+        low: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "low"] }, 1, 0] } },
+      },
+    };
     let countResult;
     let logs;
     if (canPageBeforeLookups) {
@@ -3731,7 +3741,7 @@ console.log(result,'result');
       // Count from the indexed match alone, and only join NVR/camera details for
       // the requested page instead of every matching incident.
       [countResult, logs] = await Promise.all([
-        Incident.aggregate([{ $match: matchStage }, { $count: "totalCount" }]),
+        Incident.aggregate([{ $match: matchStage }, summaryStage]),
         Incident.aggregate([
           { $match: matchStage },
           { $sort: sortStage },
@@ -3744,7 +3754,7 @@ console.log(result,'result');
       // Joined-field search/sort and vehicle-owner filtering must retain the
       // original stage order. The count still does not need the final sort.
       [countResult, logs] = await Promise.all([
-        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([...basePipeline, summaryStage]),
         Incident.aggregate([
           ...basePipeline,
           { $sort: sortStage },
@@ -3758,11 +3768,37 @@ console.log(result,'result');
       await attachTaggedUsers(logs, data?.adminId);
     }
 
+    let boxStatusCounts;
+    if (includeBoxStatusCounts) {
+      const statusMatch = { ...matchStage };
+      delete statusMatch.resolved;
+      const statusPipeline = [{ $match: statusMatch }, ...basePipeline.slice(1), {
+        $group: {
+          _id: null,
+          all: { $sum: 1 },
+          completed: { $sum: { $cond: [{ $eq: ["$resolved", true] }, 1, 0] } },
+          review: { $sum: { $cond: [{ $ne: ["$resolved", true] }, 1, 0] } },
+        },
+      }];
+      const [counts] = await Incident.aggregate(statusPipeline);
+      boxStatusCounts = {
+        all: counts?.all || 0,
+        completed: counts?.completed || 0,
+        review: counts?.review || 0,
+      };
+    }
+
     await this._attachVehicleLogCounts(logs, data?.user_id, incidentType);
 
     return res.status(200).json(
       Response.userSuccessResp(`${incidentType} logs fetched successfully`, {
         totalCount: countResult[0]?.totalCount || 0,
+        severityCounts: {
+          high: countResult[0]?.high || 0,
+          moderate: countResult[0]?.moderate || 0,
+          low: countResult[0]?.low || 0,
+        },
+        ...(boxStatusCounts && { boxStatusCounts }),
         data: logs,
       }),
     );
@@ -4981,7 +5017,7 @@ console.log(result,'result');
         ? { ...req, verified: { ...req.verified, authorizedChannel: undefined } }
         : req;
       return await this._fetchIncidentLogs({
-        req: request, res, incidentType: 'boxPackingDetection', extraMatch, postLookupSearch: true,
+        req: request, res, incidentType: 'boxPackingDetection', extraMatch, postLookupSearch: true, includeBoxStatusCounts: true,
         searchFields: ['boxId', 'completedBy', 'zones.zone', 'endTimeSource', 'detectedVia', 'confirmationReason'],
       });
     } catch (error) {
