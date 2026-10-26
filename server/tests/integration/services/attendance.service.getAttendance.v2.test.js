@@ -115,6 +115,35 @@ async function seedAttendance(
 }
 
 describe("AttendanceService (v2) getAttendance", () => {
+  it("filters late arrivals through the API and excludes stale assessments without a shift", async () => {
+    const seeded = await seed();
+    const row = await seedAttendance(seeded);
+    const shiftId = new mongoose.Types.ObjectId();
+    await mongoose.connection.collection("shifts").insertOne({
+      _id: shiftId, adminId: seeded.admin._id, name: "Day",
+      startTime: "09:00", endTime: "18:00", graceLateMinutes: 15,
+    });
+    await AuthorizedUsers.updateOne({ _id: seeded.employee._id }, { $set: { shiftId } });
+    await Attendance.updateOne({ _id: row._id }, { $set: {
+      arrivalAssessment: { shiftId, isLate: true, lateMinutes: 58 },
+    } });
+    const get = async (query) => {
+      const { req, res } = serviceCtx({ adminId: seeded.admin._id, query, body: {} });
+      await AttendanceService.getAttendance(req, res);
+      expect(res.statusCode).toBe(200);
+      return payload(res).data;
+    };
+    const late = await get({ status: "late_arrival", limit: "1", page: "1" });
+    expect(late.total).toBe(1);
+    expect(late.attendanceLogs).toHaveLength(1);
+    expect(late.attendanceLogs[0]).toMatchObject({ isLate: true, lateMinutes: 58 });
+    await AuthorizedUsers.updateOne({ _id: seeded.employee._id }, { $unset: { shiftId: "" } });
+    expect((await get({ status: "late_arrival" })).total).toBe(0);
+    const unfiltered = await get({});
+    expect(unfiltered.total).toBe(1);
+    expect(unfiltered.attendanceLogs[0].isLate).toBe(false);
+  });
+
   it("returns an empty summary when no attendance rows exist", async () => {
     const seeded = await seed();
     const { req, res } = serviceCtx({

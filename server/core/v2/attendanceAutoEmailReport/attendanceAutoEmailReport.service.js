@@ -410,6 +410,11 @@ export function rowFromAttendance(item, timezone, rules) {
       };
     }),
     status: "",
+    // Unknown for legacy raw records: never claim on-time without an assessment.
+    isLate: typeof item.arrivalAssessment?.isLate === "boolean"
+      ? item.arrivalAssessment.isLate : null,
+    lateMinutes: typeof item.arrivalAssessment?.isLate === "boolean"
+      ? Math.max(0, Number(item.arrivalAssessment.lateMinutes) || 0) : null,
     // Raw values the monthly-status sheet needs. The display columns above are
     // already formatted for the PDF/CSV grid; the sheet needs the underlying
     // date, clock times and shift to place each day in its own column.
@@ -643,6 +648,8 @@ const REPORT_COLUMNS = [
     day: (ctx) => imageCell(ctx.row.checkOutImage, "Checkout Image"),
     session: (ctx) => imageCell(ctx.session.checkOutImage, "Checkout Image"),
   },
+  { header: "Late Check-in", day: ({ row }) => row.isLate == null ? "-" : row.isLate ? "Yes" : "No" },
+  { header: "Late By (minutes)", day: ({ row }) => row.lateMinutes ?? "-" },
 ];
 
 // Exported so tests can locate a column by name rather than by a hard-coded
@@ -736,7 +743,7 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     const logoImage = logo ? document.openImage(logo) : null;
 
     const pageWidth = document.page.width - 64;
-    // Widths sum to ~1096pt, within the A3-landscape usable width (~1127pt).
+    // Preferred widths are fitted to the A3-landscape usable width below.
     // Headings and order line up with REPORT_COLUMNS / reportTableRows.
     // `wrap: true` columns hold free text (name, department, camera, location)
     // and are rendered on multiple lines instead of being truncated — the
@@ -744,7 +751,7 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     // name rather than an ellipsis. The rest are fixed-format:
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
-    const columns = columnSpec || [
+    const preferredColumns = columnSpec || [
       { head: "S\u00A0No", width: 26, noWrap: true },
       { head: "Employee ID", width: 48 },
       { head: "Employee Name", width: 72, wrap: true },
@@ -765,7 +772,14 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
       { head: "Checkout Camera", width: 64, wrap: true },
       { head: "Checkin Image", width: 48 },
       { head: "Checkout Image", width: 48 },
+      { head: "Late Check-in", width: 48 },
+      { head: "Late By (minutes)", width: 48 },
     ];
+    // Keep every column inside the header and row backgrounds, including
+    // additional report fields. Preserve smaller custom tables at their size.
+    const preferredWidth = preferredColumns.reduce((sum, column) => sum + column.width, 0);
+    const widthScale = Math.min(1, pageWidth / preferredWidth);
+    const columns = preferredColumns.map(column => ({ ...column, width: column.width * widthScale }));
     const tableLines = lineSpec || reportTableRows(rows);
     const heading = title || "Attendance Report";
     const drawHeader = () => {

@@ -6427,7 +6427,7 @@
         "tags": [
           "Incidents"
         ],
-        "description": "Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in in range, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. When startDate/endDate are given, only vehicles with a crossing inside that range are returned. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.",
+        "description": "Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row shows the first check-in, custody, crossing counts and latest event time. With startDate/endDate, custody and counts use all crossings through endDate; vehicles still in custody carry forward from earlier days, alongside vehicles with activity in the selected range. Visits completed before startDate are excluded. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.",
         "parameters": [
           {
             "name": "skip",
@@ -6497,6 +6497,16 @@
             "EncryptedAuthToken": []
           }
         ]
+      }
+    },
+    "/api/v2/incidents/logs/vehicle-check-in-out/manual-checkout": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
       }
     },
     "/api/v2/incidents/logs/vehicle-check-in-out/history": {
@@ -7692,6 +7702,78 @@
         ]
       }
     },
+    "/api/v2/detection-settings/verify-reset-password": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "password": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "502": {
+            "description": "Bad Gateway"
+          }
+        }
+      }
+    },
+    "/api/v2/detection-settings/bulk-control": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/v2/detection-settings/": {
       "get": {
         "tags": [
@@ -7919,6 +8001,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "502": {
             "description": "DS stop failed; settings retained"
           }
@@ -7958,6 +8043,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "502": {
             "description": "DS stop failed; camera types retained"
@@ -10998,6 +11086,28 @@
                 }
               }
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "responses": {

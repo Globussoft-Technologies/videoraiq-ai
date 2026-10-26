@@ -1,3 +1,4 @@
+import { processLateArrival } from "../../../services/lateArrivalAlert.service.js";
 import Attendance from "./attendance.model.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
@@ -144,6 +145,8 @@ class AttendanceService {
         },
         { new: true, upsert: true }
       );
+
+      await processLateArrival({ attendance, employee: isEmployeeExist, admin: user, channel, event });
 
       const populatedAttendance = await Attendance.findById(
         attendance._id

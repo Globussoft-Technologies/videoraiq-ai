@@ -1,3 +1,4 @@
+import { processLateArrival } from "../../../services/lateArrivalAlert.service.js";
 import Attendance from "./attendance.model.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
@@ -490,6 +491,8 @@ class AttendanceService {
         { new: true, upsert: true }
       );
 
+      await processLateArrival({ attendance, employee: isEmployeeExist, admin: user, channel, event });
+
       const populatedAttendance = await Attendance.findById(
         attendance._id
       ).populate({
@@ -743,7 +746,7 @@ class AttendanceService {
           lateMinutes: att.lateMinutes ?? null,
           earlyLeaveMinutes: att.earlyLeaveMinutes ?? null,
           overtimeMinutes: att.overtimeMinutes ?? null,
-          isLate: att.shift ? Boolean(att.isLate) : false,
+          isLate: Boolean(att.isLate),
           isEarlyLeave: att.shift ? Boolean(att.isEarlyLeave) : false,
           isWeekOff: att.shift ? Boolean(att.isWeekOff) : false,
           logInTime: firstCheckIn?.timestamp || null,
@@ -1172,6 +1175,7 @@ class AttendanceService {
             },
             employee: { $first: "$employee" },
             shift: { $first: "$shift" },
+            arrivalAssessment: { $first: "$arrivalAssessment" },
             events: { $push: "$events" },
           },
         },
@@ -1218,6 +1222,23 @@ class AttendanceService {
         ...shiftContextStage(shiftTimezone),
         attendanceStatusStage(attendanceRules),
         shiftOvertimeStage(),
+        {
+          $addFields: {
+            // Saved assessments must not flag employees who no longer have a shift.
+            isLate: { $cond: [
+              { $ne: [{ $ifNull: ["$shift._id", null] }, null] },
+              { $ifNull: ["$arrivalAssessment.isLate", "$isLate"] },
+              false,
+            ] },
+            lateMinutes: { $cond: [
+              { $ne: [{ $ifNull: ["$shift._id", null] }, null] },
+              { $ifNull: ["$arrivalAssessment.lateMinutes", "$lateMinutes"] },
+              null,
+            ] },
+            shiftName: { $ifNull: ["$arrivalAssessment.shiftName", "$shiftName"] },
+            shiftStartTime: { $ifNull: ["$arrivalAssessment.startTime", "$shiftStartTime"] },
+          },
+        },
 
         // --- Status filter (Present / Half Day / Absent / Checked In) ---
         // Validated against the known set rather than passed through raw, so
@@ -1226,7 +1247,9 @@ class AttendanceService {
         // of ATTENDANCE_STATUS) backing the Check In / Checkout tiles: "has
         // this employee checked in/out at all today", regardless of what
         // status that graded to.
-        ...(status === "checkin"
+        ...(status === "late_arrival"
+          ? [{ $match: { isLate: true, lateMinutes: { $gt: 0 }, firstCheckIn: { $ne: null } } }]
+          : status === "checkin"
           ? [{ $match: { firstCheckIn: { $ne: null } } }]
           : status === "checkout"
           ? [{ $match: { lastCheckOut: { $ne: null } } }]
@@ -1409,6 +1432,9 @@ class AttendanceService {
       // `date` column is derived from createdAt; the group key holds the day.
       createdAt: doc._id?.date ? new Date(`${doc._id.date}T00:00:00Z`) : new Date(),
       employee: doc.employee || null,
+      arrivalAssessment: doc.arrivalAssessment || (doc.shift ? {
+        isLate: doc.isLate, lateMinutes: doc.lateMinutes,
+      } : null),
       events,
     };
   }

@@ -8,6 +8,7 @@
  * aggregates and that buildCsv/buildPdf still produce valid output.
  */
 import { describe, it, expect, vi } from "vitest";
+import PDFDocument from "pdfkit";
 
 vi.mock("../../../utils/mediaStorage.js", () => ({ putMedia: vi.fn() }));
 
@@ -26,6 +27,35 @@ function attendance(events) {
 }
 
 const ev = (cameraType, time) => ({ cameraType, timestamp: `2026-08-07T${time}:00.000Z`, images: { frame: `/f/${time}.jpg` } });
+
+it("keeps late-minutes headers and values inside the table on every PDF page", async () => {
+  const originalText = PDFDocument.prototype.text;
+  const placements = [];
+  const spy = vi.spyOn(PDFDocument.prototype, "text").mockImplementation(function (text, x, y, options) {
+    if (text === "Late By (minutes)" || text === "9876") {
+      placements.push({ text, right: x + options.width, tableRight: this.page.width - 32 });
+    }
+    return originalText.apply(this, arguments);
+  });
+  try {
+    const row = rowFromAttendance({
+      ...attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]),
+      arrivalAssessment: { isLate: true, lateMinutes: 9876 },
+    }, "Asia/Kolkata", rules);
+    const rows = Array.from({ length: 60 }, () => ({
+      ...row,
+      employee: "Employee with a long name that wraps across multiple lines",
+      department: "Software development and operations department",
+    }));
+    await buildPdf({ report: {}, rows, label: "Test", timezone: "Asia/Kolkata" });
+    expect(placements.map(item => item.text)).toEqual(expect.arrayContaining(["Late By (minutes)", "9876"]));
+    expect(placements.filter(item => item.text === "Late By (minutes)").length).toBeGreaterThan(1);
+    expect(placements.filter(item => item.text === "9876")).toHaveLength(rows.length);
+    for (const placement of placements) expect(placement.right).toBeLessThanOrEqual(placement.tableRight + 0.01);
+  } finally {
+    spy.mockRestore();
+  }
+});
 
 describe("attendanceAutoEmailReport session sub-rows", () => {
   it("uses separate check-in and checkout image columns", () => {
@@ -181,4 +211,19 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(pdf.slice(0, 5).toString("latin1")).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(500);
   });
+});
+
+it("exports late assessment only on the day line and leaves legacy data unknown", () => {
+  const input = attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]);
+  for (const assessment of [{isLate:true, lateMinutes:16}, {isLate:false, lateMinutes:0}, null]) {
+    const result = rowFromAttendance({...input, arrivalAssessment:assessment}, "Asia/Kolkata", rules);
+    const lines = reportTableRows([result]);
+    const flag = REPORT_HEADERS.indexOf("Late Check-in");
+    const minutes = REPORT_HEADERS.indexOf("Late By (minutes)");
+    expect(lines[0].cells[flag]).toBe(assessment == null ? "-" : assessment.isLate ? "Yes" : "No");
+    expect(lines[0].cells[minutes]).toBe(assessment?.lateMinutes ?? "-");
+    expect(lines[1].cells[flag]).toBe("");
+    expect(result.workingHoursDay).toBe("08:00");
+    expect(buildCsv({rows:[result], label:"Test", timezone:"Asia/Kolkata"}).toString()).toContain("Late By (minutes)");
+  }
 });

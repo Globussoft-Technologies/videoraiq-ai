@@ -52,6 +52,16 @@ const attendanceSchema = new Schema(
     //   type: mongoose.Schema.Types.ObjectId,
     //   ref: "Shift",
     // },
+    arrivalAssessment: {
+      date: String,
+      shiftId: mongoose.Schema.Types.ObjectId,
+      shiftName: String,
+      startTime: String,
+      expectedArrival: Date,
+      graceDeadline: Date,
+      isLate: Boolean,
+      lateMinutes: Number,
+    },
     events: [eventSchema], // all events for the day (can come from different cameras)
   },
   { timestamps: true },

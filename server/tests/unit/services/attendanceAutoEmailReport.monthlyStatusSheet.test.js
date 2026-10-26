@@ -85,9 +85,9 @@ const BREAK_ROW = 14;
 const TOTAL_ROW = 15;
 
 // Summary boxes: a yellow caption row with its value on the row beneath.
-const WORKING_DAYS_VALUE_ROW = 19;
-const STANDARD_TIME_VALUE_ROW = 22;
-const MONTHLY_HOURS_VALUE_ROW = 25;
+const WORKING_DAYS_VALUE_ROW = 21;
+const STANDARD_TIME_VALUE_ROW = 24;
+const MONTHLY_HOURS_VALUE_ROW = 27;
 
 describe("monthlyStatusSheet — day grid", () => {
   it("gives each employee their own worksheet, named for them", async () => {
@@ -268,4 +268,14 @@ describe("monthlyStatusSheet — edge cases", () => {
     expect(workbook.worksheets).toHaveLength(1);
     expect(workbook.worksheets[0].name).not.toMatch(/[:\\/?*[\]]/);
   });
+});
+
+it("includes daily late details without changing status or worked time", async () => {
+  const workbook = await build([{ ...row("2026-06-01", "Present", "09:30", "18:00", 480), isLate: true, lateMinutes: 15 }]);
+  const sheet = workbook.worksheets[0];
+  const column = columnFor("2026-06-01");
+  expect(sheet.getCell(11, column).value).toBe("P");
+  expect(sheet.getCell(15, column).value).toBe("8:00");
+  expect(sheet.getCell(16, column).value).toBe("Yes");
+  expect(sheet.getCell(17, column).value).toBe(15);
 });

@@ -211,6 +211,8 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     // measured separately (see pairBreaks/pairWorkSessions in the service).
     { title: "Total Break", value: (day, row) => minutesToHm(row ? row.breakMinutesDay : 0) },
     { title: "Total", value: (day, row) => minutesToHm(row ? row.workingMinutesDay : 0) },
+    { title: "Late Check-in", value: (day, row) => !row ? "" : row.isLate == null ? "-" : row.isLate ? "Yes" : "No" },
+    { title: "Late By (minutes)", value: (day, row) => !row ? "" : row.lateMinutes ?? "-" },
   ];
 
   lines.forEach((line, lineIndex) => {
