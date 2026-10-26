@@ -5827,10 +5827,15 @@ console.log(result,'result');
 
   async getDoorDetectionLogs(req, res, next) {
     try {
+      const doorStatus = String(req.query?.doorStatus || '').trim().toLowerCase();
+      if (doorStatus && !['open', 'closed'].includes(doorStatus)) {
+        return res.status(400).json({ error: 'doorStatus must be open or closed.' });
+      }
       return await this._fetchIncidentLogs({
         req,
         res,
         incidentType: "doorDetection",
+        extraMatch: doorStatus ? { doorStatus } : {},
         searchFields: ["incidentName", "description", "zone", "zoneName", "doorStatus", "eventId"],
         postLookupSearch: true,
         searchNumberFields: ["thresholdSec", "durationSec", "alertCount"],
