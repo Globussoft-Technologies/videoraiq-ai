@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'moment-timezone';
 import {
@@ -123,7 +124,7 @@ const CUSTODY_TABS = [
   { id: 'false', label: 'Returned' },
 ];
 
-const th = 'px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] whitespace-nowrap';
+const th = 'px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-[var(--tx2)] whitespace-nowrap';
 const td = 'px-4 py-3 text-sm text-[var(--tx)] align-middle';
 
 /** Header cell that sorts server-side on `field` (see VEHICLE_SORT_FIELDS). */
@@ -224,8 +225,8 @@ const VehicleCheckInOutLogs = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
     try {
       const res = await fetchVehicleCheckInOutLogs({
         skip: (page - 1) * pageSize,
@@ -247,7 +248,12 @@ const VehicleCheckInOutLogs = () => {
       const data = res?.data?.body?.data;
       const nextRows = data?.data || [];
       setRows(nextRows);
-      setSelected([]);
+      if (background) {
+        const available = new Set(nextRows.filter((row) => row.custody).map((row) => row.vehicleKey));
+        setSelected((previous) => previous.filter((key) => available.has(key)));
+      } else {
+        setSelected([]);
+      }
       setTotalCount(data?.totalCount || 0);
       setInCustodyCount(data?.inCustodyCount || 0);
       // Keep visible vehicles open across refreshes, using their latest crossings.
@@ -262,7 +268,7 @@ const VehicleCheckInOutLogs = () => {
         err?.response?.data?.body?.message || 'Failed to fetch vehicle check-in/out logs',
       );
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [page, pageSize, startDate, endDate, effectiveCustody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode]);
 
@@ -312,11 +318,7 @@ const VehicleCheckInOutLogs = () => {
   useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [autoRefresh]);
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
 
-  useEffect(() => {
-    if (!autoRefresh || refreshInterval <= 0 || checkoutRows.length || checkingOut) return undefined;
-    const id = setInterval(load, refreshInterval * 1000);
-    return () => clearInterval(id);
-  }, [autoRefresh, refreshInterval, load, checkoutRows.length, checkingOut]);
+  useLogPolling(load, autoRefresh && !checkoutRows.length && !checkingOut, refreshInterval, loading);
 
   // Crossings arrive with the row (includeHistory), so expanding is just a
   // visual toggle — no request.

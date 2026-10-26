@@ -66,6 +66,7 @@ export const fetchIncidentLogs = async ({
   channelIds,
   severity,
   status,
+  doorStatus,
   search,
   vehicleNumber,
   boxType,
@@ -91,6 +92,7 @@ export const fetchIncidentLogs = async ({
       ...(Array.isArray(hygieneCategory) && hygieneCategory.length ? { hygieneCategory: hygieneCategory.join(',') } : typeof hygieneCategory === 'string' && hygieneCategory ? { hygieneCategory } : {}),
       ...(Array.isArray(severity) ? severity.length ? { severity: severity.join(',') } : {} : severity ? { severity } : {}),
       ...(status && { status }),
+      ...(doorStatus && { doorStatus }),
       ...(search && { search }),
       ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
       ...(boxType?.trim() && { boxType: boxType.trim() }),
@@ -98,6 +100,26 @@ export const fetchIncidentLogs = async ({
     },
     headers: getHeaders(),
   });
+};
+
+// Keep Door Logs correct when an older API deployment ignores doorStatus.
+// Pass the filter to the server, then validate all returned pages locally so
+// pagination and totals are based on the selected status in either case.
+export const fetchDoorStatusLogs = async ({ doorStatus, ...params }) => {
+  const batchSize = 500;
+  const allRows = [];
+  let totalCount = Infinity;
+
+  while (allRows.length < totalCount) {
+    const response = await fetchIncidentLogs({ ...params, doorStatus, skip: allRows.length, limit: batchSize });
+    const page = response?.data?.body?.data;
+    const rows = Array.isArray(page?.data) ? page.data : [];
+    totalCount = Number(page?.totalCount) || 0;
+    allRows.push(...rows);
+    if (!rows.length) break;
+  }
+
+  return allRows.filter((row) => String(row.doorStatus || '').trim().toLowerCase() === doorStatus);
 };
 
 export const fetchIncidentBoxTypes = async ({

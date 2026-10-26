@@ -37,6 +37,7 @@ const IncidentFilterPopover = ({
   severity,
   setSeverity,
   showSeverity = true,
+  mediumSeverityLabel = false,
   multiSeverity = false,
   showStatus = false,
   status,
@@ -154,12 +155,12 @@ const IncidentFilterPopover = ({
             )}
             {showLightingCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={LIGHTING_CATEGORY_OPTIONS} placeholder="All lighting categories" searchable={false} className="w-full" />}
             {showHygieneCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={HYGIENE_CATEGORY_OPTIONS.map(c => ({ id: c.id, label: c.label }))} placeholder="All hygiene categories" searchable={false} className="w-full" />}
-            {showSeverity && multiSeverity && <MultiSelect options={SEVERITY_OPTIONS.map(o => ({ id: o.value, label: o.label }))} value={Array.isArray(severity) ? severity : severity ? [severity] : []} onChange={setSeverity} placeholder="All severities" searchable={false} className="w-full" />}
+            {showSeverity && multiSeverity && <MultiSelect options={SEVERITY_OPTIONS.map(o => ({ id: o.value, label: mediumSeverityLabel && o.value === 'moderate' ? 'Medium' : o.label }))} value={Array.isArray(severity) ? severity : severity ? [severity] : []} onChange={setSeverity} placeholder="All severities" searchable={false} className="w-full" />}
             {showSeverity && !multiSeverity && (
               <InlineSelect
                 value={severity}
                 onChange={setSeverity}
-                options={SEVERITY_OPTIONS}
+                options={SEVERITY_OPTIONS.map(o => ({ ...o, label: mediumSeverityLabel && o.value === 'moderate' ? 'Medium' : o.label }))}
                 placeholder="Severity"
                 allLabel="All Severities"
               />

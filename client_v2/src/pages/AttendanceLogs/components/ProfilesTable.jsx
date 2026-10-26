@@ -37,13 +37,13 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassN
   if (loading) {
     return (
       <table className="min-w-full bg-[var(--bg1solid)]">
-        <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap ${headerClassName}`}>
+        <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap [&_button]:!text-[11px] [&_button]:!font-bold [&_button]:text-[var(--tx)] ${headerClassName}`}>
           <tr className="border-b border-[var(--bd)]">
             {expandable && <th className="w-10 px-3 py-3" aria-label="Expand row" />}
             {table.getAllColumns().map((column) => (
               <th
                 key={column.id}
-                className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.06em] text-[var(--tx3)] font-medium"
+                className="px-5 py-3 text-left text-[11px] uppercase tracking-[0.06em] text-[var(--tx)] font-bold"
               style={{ fontFamily: 'var(--mono)' }}
               >
                 <Skeleton width={80} height={18} baseColor="var(--bg3)" highlightColor="var(--bg2)" />
@@ -70,13 +70,13 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassN
 
   return (
     <table className="min-w-full bg-[var(--bg1solid)]">
-      <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap ${headerClassName}`}>
+      <thead className={`bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap [&_button]:!text-[11px] [&_button]:!font-bold [&_button]:text-[var(--tx)] ${headerClassName}`}>
         <tr className="border-b border-[var(--bd)]">
           {expandable && <th className="w-10 px-3 py-3" aria-label="Expand row" />}
           {table.getAllColumns().map((column) => (
             <th
               key={column.id}
-              className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.06em] text-[var(--tx3)] font-medium"
+              className="px-5 py-3 text-left text-[11px] uppercase tracking-[0.06em] text-[var(--tx)] font-bold"
               style={{ fontFamily: 'var(--mono)' }}
             >
               {typeof column.columnDef.header === 'function'

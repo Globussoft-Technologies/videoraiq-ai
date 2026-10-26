@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import { getAccessTimes } from './accessTimes';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -184,11 +185,9 @@ const AccessLogs = () => {
   }, [selectedDepartments, nvrIds, channelIds, removeUnknown, employeeLocations, limit]);
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchLogs = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', value: true });
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
-    // Reset local tag overrides so freshly fetched server state wins.
-    resetOverrides();
 
     try {
       const utcFromTime = convertToUTC(startDate, fromTime, region);
@@ -226,6 +225,9 @@ const AccessLogs = () => {
       ]);
       const data = res?.data?.body?.data;
       const authorizedData = authorizedRes?.data?.body?.data;
+
+      // Only discard local tag changes once fresh server data is available.
+      resetOverrides();
 
       dispatch({ type: 'SET_MINDATE', value: data?.accessLogsStartDate?.createdAt || null });
 
@@ -283,7 +285,7 @@ const AccessLogs = () => {
       console.log('Error fetching logs:', err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      dispatch({ type: 'SET_LOADING', value: false });
+      if (!background) dispatch({ type: 'SET_LOADING', value: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -311,13 +313,7 @@ const AccessLogs = () => {
   }, [fetchLogs, manualTrigger]);
 
   // Effect 2: Auto Refresh timer
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   /* ─────────────── Derived data ─────────────── */
   const columns = useMemo(

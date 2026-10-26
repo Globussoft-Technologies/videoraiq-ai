@@ -1,11 +1,12 @@
 import { lightingCategoryLabel } from '@/helpers/lightingDetection';
+import { hygieneCategoryLabel } from '@/helpers/hygieneDetection';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-import { fetchIncidentLogs } from './Api';
+import { fetchDoorStatusLogs, fetchIncidentLogs } from './Api';
 import { formatDoorDuration, formatStatus } from './incidentColumns';
 import { boxSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
@@ -23,9 +24,9 @@ const resolveIncidentImageUrl = (value) => {
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
 const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, searchInput, vehicleNumber } = params;
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber } = params;
 
-  const res = await fetchIncidentLogs({
+  const query = {
     endpoint: config.endpoint,
     method: config.method,
     skip: 0,
@@ -38,13 +39,16 @@ const fetchAllForExport = async (config, params) => {
     channelIds,
     severity,
     status,
+    doorStatus: config.showDoorFields ? doorStatus : undefined,
     search: searchInput,
     vehicleNumber,
     hygieneCategory: params.hygieneCategory,
     lightingCategory: params.lightingCategory,
-  });
+  };
 
-  const list = res?.data?.body?.data?.data || [];
+  const list = config.showDoorFields && doorStatus
+    ? await fetchDoorStatusLogs({ ...query, doorStatus })
+    : (await fetchIncidentLogs(query))?.data?.body?.data?.data || [];
   return list.map((item) => {
     let evidenceScoreStr = '--';
     if (item.evidenceScore != null) {
@@ -53,15 +57,14 @@ const fetchAllForExport = async (config, params) => {
     }
     return {
       ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
-      ...(config.showLightingFields ? {
+      ...((config.showLightingFields || config.showHygieneFields) ? {
         zone: item.zone || '--',
-        selectedCategories: (item.selectedCategories || []).map(lightingCategoryLabel).join(', '),
+        selectedCategories: (item.selectedCategories || []).map(config.showLightingFields ? lightingCategoryLabel : hygieneCategoryLabel).join(', '),
         violationCount: item.violationCount ?? item.violations?.length ?? 0,
         violations: (item.violations || []).map(violation => [
-          violation.categoryName || lightingCategoryLabel(violation.category),
+          violation.categoryName || (config.showLightingFields ? lightingCategoryLabel : hygieneCategoryLabel)(violation.category),
           violation.description,
-          Number.isFinite(violation.confidence) ? `${Math.round(violation.confidence * 100)}% confidence` : '',
-          violation.severity,
+          String(violation.severity || '').toLowerCase() === 'moderate' ? 'Medium' : violation.severity,
         ].filter(Boolean).join(' - ')).join('\n'),
       } : {}),
       incidentName: item.incidentName || '--',
@@ -74,14 +77,14 @@ const fetchAllForExport = async (config, params) => {
       createdAt: item.timeOfIncident || item.createdAt
         ? moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
         : '--',
-      severity: item.severity || '--',
+      severity: (config.showLightingFields || config.showHygieneFields || config.showDoorFields) && String(item.severity || '').toLowerCase() === 'moderate' ? 'Medium' : item.severity || '--',
       incidentImageUrl: resolveIncidentImageUrl(item.Image),
       fireCount: item.fireCount ?? '--',
       smokeCount: item.smokeCount ?? '--',
       count: item.count ?? '--',
       alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
-      tamperType: tamperTypeOf(item),
+      description: item.description || '--',
       evidenceScore: evidenceScoreStr,
       stockMovement: item.stockMovement || '--',
       stockCountBefore: item.stockCountBefore ?? '--',
@@ -136,10 +139,12 @@ const buildExportColumns = (config) => {
   }
 
   if (config.showBlurredCameraFields) {
-    cols.push({ key: 'tamperType', label: 'Tamper Type' });
+    cols.push(
+      { key: 'description', label: 'Description' },
+    );
   }
 
-  if (config.showLightingFields) {
+  if (config.showLightingFields || config.showHygieneFields) {
     cols.push({ key: 'zone', label: 'Zone' }, { key: 'selectedCategories', label: 'Selected Categories' },
       { key: 'violationCount', label: 'Issues Detected' }, { key: 'violations', label: 'Violations' });
   }
@@ -335,7 +340,7 @@ const exportToGridPDF = async (config, params) => {
     const details = [];
     if (config.showIncidentName !== false) details.push(['Incident', 'incidentName']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);
-    if (config.showSeverity !== false) details.push(['Severity', 'severity']);
+    if (config.showSeverity !== false && !config.showDoorFields) details.push(['Severity', 'severity']);
     if (config.showFireSmokeFields) {
       details.push(['Fire Objects', 'fireCount'], ['Smoke Objects', 'smokeCount']);
     }
@@ -347,7 +352,9 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     if (config.showBlurredCameraFields) {
-      details.push(['Tamper Type', 'tamperType']);
+      details.push(
+        ['Description', 'description'],
+      );
     }
     if (config.showDoorFields) {
       details.push(
@@ -356,7 +363,7 @@ const exportToGridPDF = async (config, params) => {
         ['Door Open Duration', 'doorOpenDuration'],
       );
     }
-    if (config.showLightingFields) {
+    if (config.showLightingFields || config.showHygieneFields) {
       details.push(['Zone', 'zone'], ['Selected Categories', 'selectedCategories'], ['Issues Detected', 'violationCount'], ['Violations', 'violations']);
     }
     if (config.showIndustrialFields) {
@@ -374,7 +381,7 @@ const exportToGridPDF = async (config, params) => {
         ['Events', 'eventCount']
       );
     }
-    details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
+    details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], [config.showDoorFields ? 'Time of Incident' : 'Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;
     const firstPageStartY = 42;
     const nextPageStartY = 12;
@@ -527,7 +534,3 @@ export const handleIncidentExport = async (format, config, params) => {
   if (format === 'pdf') await exportToPDF(config, params);
   if (format === 'pdf-grid') await exportToGridPDF(config, params);
 };
-
-/** Camera tampering kind, e.g. "covered"; an older blur-only incident reads as "blurred". */
-export const tamperTypeOf = (item) =>
-  item?.tamperType || (item?.isBlurred === true ? 'blurred' : item?.isBlurred === false ? 'cleared' : '--');

@@ -35,19 +35,15 @@ const statusOf = (item) => {
 const formatDoorDuration = (seconds) => {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value < 0) return '--';
-  if (value >= 86400) {
-    const days = value / 86400;
-    return `${days.toFixed(value % 86400 ? 1 : 0)} day${days === 1 ? '' : 's'}`;
-  }
-  if (value >= 3600) {
-    const hours = value / 3600;
-    return `${hours.toFixed(value % 3600 ? 1 : 0)} hr${hours === 1 ? '' : 's'}`;
-  }
-  if (value >= 60) {
-    const minutes = value / 60;
-    return `${minutes.toFixed(value % 60 ? 1 : 0)} min${minutes === 1 ? '' : 's'}`;
-  }
-  return `${value} sec${value === 1 ? '' : 's'}`;
+  const totalMinutes = Math.floor(value / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hr${hours === 1 ? '' : 's'}`);
+  if (minutes) parts.push(`${minutes} min${minutes === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
 };
 
 // The API stores the Medium severity under the `moderate` key. Keep exports

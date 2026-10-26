@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import useLogPolling from '@/hooks/useLogPolling';
 import { toast } from 'sonner';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
@@ -88,7 +89,8 @@ const DetectedUsers = () => {
 
   /* ─────────────── Data fetch ─────────────── */
   const fetchFolders = useCallback(
-    async ({ silent = false } = {}) => {
+    async ({ silent = false, background = false } = {}) => {
+      silent = silent || background;
       if (!silent) setLoading(true);
       setError(null);
       try {
@@ -120,19 +122,12 @@ const DetectedUsers = () => {
   // Auto-refresh on the configured interval. Skips the full-page spinner and
   // pauses while any selection is active so it can't disrupt an in-progress
   // delete. A silent /grouped re-pull refreshes an open folder too.
-  useEffect(() => {
-    if (!canView || !autoRefresh || refreshInterval <= 0) return undefined;
-    if (selectedImageIds.length > 0 || selectedFolderIds.length > 0) return undefined;
-    const id = setInterval(() => fetchFolders({ silent: true }), refreshInterval * 1000);
-    return () => clearInterval(id);
-  }, [
-    canView,
-    autoRefresh,
-    refreshInterval,
-    selectedImageIds.length,
-    selectedFolderIds.length,
+  useLogPolling(
     fetchFolders,
-  ]);
+    canView && autoRefresh && !selectedImageIds.length && !selectedFolderIds.length,
+    refreshInterval,
+    loading,
+  );
 
   const activeFolder = folders.find((f) => f.dsId === activeDsId) || null;
 

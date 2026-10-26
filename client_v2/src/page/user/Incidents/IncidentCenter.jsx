@@ -35,26 +35,67 @@ import getAccessToken from '../../../utils/getAccessToken';
 import { exportIncidentCenter } from './incidentCenterExport';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
-const LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 140px 110px 70px 90px 100px 135px 160px';
-const PACKING_LIST_ROW_COLUMNS = '34px 94px minmax(190px,1.5fr) minmax(150px,1fr) 120px 105px 105px 120px 90px 100px 110px 160px';
+const INCIDENT_LIST_DETAILS = {
+  doorDetection: [
+    { field: 'zone', label: 'Door Name', width: 140 },
+    { field: 'presenceSec', label: 'Door Open Duration', width: 130 },
+    { field: 'done', label: 'Door Status', width: 120 },
+  ],
+  deskSolarShoulderDetection: [
+    { field: 'zone', label: 'Zone', width: 140 },
+    { field: 'presenceSec', label: 'Presence (s)', width: 110 },
+    { field: 'done', label: 'Done', width: 70 },
+  ],
+  boxPackingDetection: [
+    { field: 'completedBy', label: 'Completed by', width: 120 },
+    { field: 'startTime', label: 'Start time', width: 105 },
+    { field: 'endTime', label: 'End time', width: 105 },
+    { field: 'packingTime', label: 'Time to complete', width: 120 },
+  ],
+  hygieneSanitationFoodSafetyDetection: [{ field: 'zone', label: 'Zone', width: 140 }],
+  lightingVisibilitySiteConditionsDetection: [{ field: 'zone', label: 'Zone', width: 140 }],
+};
+const incidentListDetailsFor = (types) => {
+  const columns = new Map();
+  types.forEach((type) => {
+    const details = INCIDENT_LIST_DETAILS[type]
+      || (PLATE_BEARING_TYPES.includes(type) ? [{ field: 'vehicleNumber', label: 'Vehicle Number', width: 140 }] : []);
+    details.forEach(({ field, label, width }) => {
+      const current = columns.get(field);
+      if (current) {
+        if (!current.labels.includes(label)) current.labels.push(label);
+        current.width = Math.max(current.width, width);
+      } else {
+        columns.set(field, { field, labels: [label], width });
+      }
+    });
+  });
+  return [...columns.values()].map(({ field, labels, width }) => ({
+    field,
+    label: labels.join(' / '),
+    width: labels.length > 1 ? Math.max(width, 190) : width,
+  }));
+};
+const incidentListColumns = (details) => [
+  '34px', '94px', 'minmax(190px,1.5fr)', 'minmax(150px,1fr)',
+  ...details.map(({ width }) => `${width}px`),
+  '90px', '100px', '135px', '160px',
+].join(' ');
+const incidentListMinWidth = (details) => 1080 + details.reduce((total, { width }) => total + width + 12, 0);
 const DELETE_BATCH_SIZE = 250;
 
 const formatDoorDuration = (seconds) => {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value < 0) return '--';
-  if (value >= 86400) {
-    const days = value / 86400;
-    return `${days.toFixed(value % 86400 ? 1 : 0)} day${days === 1 ? '' : 's'}`;
-  }
-  if (value >= 3600) {
-    const hours = value / 3600;
-    return `${hours.toFixed(value % 3600 ? 1 : 0)} hr${hours === 1 ? '' : 's'}`;
-  }
-  if (value >= 60) {
-    const minutes = value / 60;
-    return `${minutes.toFixed(value % 60 ? 1 : 0)} min${minutes === 1 ? '' : 's'}`;
-  }
-  return `${value} sec${value === 1 ? '' : 's'}`;
+  const totalMinutes = Math.floor(value / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hr${hours === 1 ? '' : 's'}`);
+  if (minutes) parts.push(`${minutes} min${minutes === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
 };
 
 const SEVERITIES = [
@@ -1339,7 +1380,8 @@ const LIST_SEVERITY_COLORS = {
 
 function IncidentListRow({
   item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
-  hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, listColumns = LIST_ROW_COLUMNS,
+  hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, detailColumns,
+  listColumns, listMinWidth,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1354,7 +1396,7 @@ function IncidentListRow({
   const isDoorDetection = item.incidentType === 'doorDetection';
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
-  const packingList = listColumns === PACKING_LIST_ROW_COLUMNS;
+  const applicableDetailFields = new Set(incidentListDetailsFor([item.incidentType]).map(({ field }) => field));
   const toggleSelection = deleteMode ? onToggleDelete : onToggleResolve;
   const zoneRows = item.incidentType === 'deskSolarShoulderDetection' && Array.isArray(item.zones)
     ? item.zones.filter((zone) => zone && typeof zone === 'object')
@@ -1390,7 +1432,7 @@ function IncidentListRow({
         className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
         style={{
           display: 'grid', gridTemplateColumns: listColumns,
-          gap: 12, alignItems: 'center', minWidth: 1420, padding: packing ? '10px 12px' : '14px 12px',
+          gap: 12, alignItems: 'center', minWidth: listMinWidth, padding: packing ? '10px 12px' : '14px 12px',
           background: selectionActive ? (deleteMode ? 'rgba(239,68,68,.07)' : 'rgba(34,197,94,.07)') : 'var(--bg1solid)',
           borderBottom: '1px solid var(--bd)', cursor: deleteMode || image ? 'pointer' : 'default',
         }}
@@ -1423,7 +1465,7 @@ function IncidentListRow({
           <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
-          {['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && <IncidentZoneDetails item={item} compact />}
+          {['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && <IncidentZoneDetails item={item} compact showZone={false} />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1431,9 +1473,9 @@ function IncidentListRow({
           <span title={nvr} style={{ fontSize: 11.5, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nvr}</span>
         </div>
 
-        {(packing ? (packingList ? ['completedBy', 'startTime', 'endTime', 'packingTime'] : ['completedBy', 'startTime', 'packingTime']) : ['zone', 'presenceSec', 'done']).map((field) => (
+        {detailColumns.map(({ field }) => (
           <div key={field} role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', fontSize: 11.5, color: packing ? 'var(--tx)' : 'var(--tx2)', fontWeight: packing ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>
-            {packing ? <span>{({ completedBy: packing.completedBy, startTime: packing.startTime, endTime: packing.endTime, packingTime: packing.packingTime })[field]}</span> : isDoorDetection ? (
+            {!applicableDetailFields.has(field) ? <span>—</span> : packing ? <span>{({ completedBy: packing.completedBy, startTime: packing.startTime, endTime: packing.endTime, packingTime: packing.packingTime })[field]}</span> : isDoorDetection ? (
               <span style={{ fontWeight: 500, textTransform: field === 'done' ? 'capitalize' : undefined }}>
                 {{
                   zone: item.zoneName || item.zone || '—',
@@ -1441,6 +1483,10 @@ function IncidentListRow({
                   done: formatDoorStatus(item),
                 }[field]}
               </span>
+            ) : field === 'vehicleNumber' ? (
+              <span>{item.vehicleNumber || '—'}</span>
+            ) : ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && field === 'zone' ? (
+              <span>{item.zoneName || item.zone || '—'}</span>
             ) : zoneRows.length ? zoneRows.map((zone, index) => (
               <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {zone[field] ?? '—'}
@@ -1687,10 +1733,10 @@ export default function IncidentCenter() {
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
-  const packingOnly = items.length > 0 && items.every((item) => item.incidentType === 'boxPackingDetection');
-  const hasPacking = items.some((item) => item.incidentType === 'boxPackingDetection');
-  const doorOnly = items.length > 0 && items.every((item) => item.incidentType === 'doorDetection');
-  const hasDoor = items.some((item) => item.incidentType === 'doorDetection');
+  const visibleTypes = detTypes.size ? [...detTypes] : [...new Set(items.map((item) => item.incidentType))];
+  const detailColumns = incidentListDetailsFor(visibleTypes);
+  const listColumns = incidentListColumns(detailColumns);
+  const listMinWidth = incidentListMinWidth(detailColumns);
   // Preserve the selected incident's identity when resolving removes it from
   // the active feed. The grid still refreshes normally behind the viewer.
   const lightboxItemIndex = lightboxIncident
@@ -2701,16 +2747,13 @@ export default function IncidentCenter() {
             <div data-tour="incidents-list" role="table" aria-label="Incidents" style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 12, background: 'var(--bg1solid)', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
               <div
                 role="row"
-                style={{ display: 'grid', gridTemplateColumns: packingOnly ? PACKING_LIST_ROW_COLUMNS : LIST_ROW_COLUMNS, gap: 12, alignItems: 'center', minWidth: packingOnly ? 1540 : 1420, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
+                style={{ display: 'grid', gridTemplateColumns: listColumns, gap: 12, alignItems: 'center', minWidth: listMinWidth, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
               >
                 <span role="columnheader">Select</span>
                 <span role="columnheader">Evidence</span>
                 <span role="columnheader">Incident</span>
                 <span role="columnheader">Camera / NVR</span>
-                <span role="columnheader">{doorOnly ? 'Door Name' : hasDoor ? 'Door Name / Zone' : packingOnly ? 'Completed by' : hasPacking ? 'Zone / Completed by' : 'Zone'}</span>
-                <span role="columnheader">{doorOnly ? 'Door Open Duration' : hasDoor ? 'Door Open Duration / Presence (s)' : packingOnly ? 'Start time' : hasPacking ? 'Presence (s) / Time to complete' : 'Presence (s)'}</span>
-                {packingOnly && <><span role="columnheader">End time</span><span role="columnheader">Time to complete</span></>}
-                {!packingOnly && <span role="columnheader">{doorOnly ? 'Door Status' : hasDoor ? 'Door Status / Done' : hasPacking ? 'Done / Time to complete' : 'Done'}</span>}
+                {detailColumns.map(({ field, label }) => <span key={field} role="columnheader">{label}</span>)}
                 <span role="columnheader">Severity</span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader">Time of Incident</span>
@@ -2732,7 +2775,9 @@ export default function IncidentCenter() {
                   deleteMode={isDeleteMode}
                   selectedForDelete={selectedForDelete.includes(item._id || item.id)}
                   onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
-                  listColumns={packingOnly ? PACKING_LIST_ROW_COLUMNS : LIST_ROW_COLUMNS}
+                  detailColumns={detailColumns}
+                  listColumns={listColumns}
+                  listMinWidth={listMinWidth}
                 />
               ))}
             </div>

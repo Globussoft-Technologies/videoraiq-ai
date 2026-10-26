@@ -1,4 +1,5 @@
-import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
+import useLogPolling from '@/hooks/useLogPolling';
+import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { LayoutGrid, List, Loader2, Truck } from 'lucide-react';
@@ -24,6 +25,7 @@ import {
   getHygieneLogFilters,
   getchannels,
   fetchIncidentLogs,
+  fetchDoorStatusLogs,
   fetchIncidentVehicleNumbers,
   fetchIncidentBoxTypes,
 } from './Api';
@@ -110,6 +112,7 @@ const IncidentLogsPage = ({ config }) => {
     channelIds,
     severity,
     status,
+    doorStatus,
     vehicleNumber,
     boxType,
     limit,
@@ -125,6 +128,7 @@ const IncidentLogsPage = ({ config }) => {
   });
   const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
+  const fetchRequestId = useRef(0);
   const [viewMode, setViewMode] = useState(() => (config.tableOnly ? 'table' : 'grid')); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
   const [previewIndex, setPreviewIndex] = useState(-1);
@@ -238,16 +242,17 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [hygieneCategory, nvrIds, channelIds, severity, status, vehicleNumber, boxType, limit]);
+  }, [hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
 
   const skip = (currentPage - 1) * limit;
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchLogs = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', value: true });
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    const requestId = ++fetchRequestId.current;
+    if (!background) dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
-      const res = await fetchIncidentLogs({
+      const query = {
         endpoint: config.endpoint,
         method: config.method,
         skip,
@@ -262,15 +267,20 @@ const IncidentLogsPage = ({ config }) => {
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
         status: config.showStatus ? status : undefined,
+        doorStatus: config.showDoorFields ? doorStatus : undefined,
         search: searchInput,
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
         boxType: config.showBoxTypeFilter ? boxType : undefined,
         direction: config.showStockCountingFields ? stockDirection : undefined,
-      });
-
+      };
+      const filteredDoorRows = config.showDoorFields && doorStatus
+        ? await fetchDoorStatusLogs({ ...query, doorStatus })
+        : null;
+      const res = filteredDoorRows ? null : await fetchIncidentLogs(query);
       const data = res?.data?.body?.data;
-      let list = data?.data || [];
-      let total = data?.totalCount || 0;
+      let list = filteredDoorRows ? filteredDoorRows.slice(skip, skip + limit) : data?.data || [];
+      let total = filteredDoorRows ? filteredDoorRows.length : data?.totalCount || 0;
+      if (requestId !== fetchRequestId.current) return;
 
       // Box Packing is currently being validated with local sample records.
       // Keep the shared production table and controls, but populate it when
@@ -327,81 +337,34 @@ const IncidentLogsPage = ({ config }) => {
       }
 
       if (config.showStats !== false && !config.showStockCountingFields) {
-        try {
-          const totals = await Promise.all(
-            SEVERITY_LEVELS.map(async (level) => {
-              if (Array.isArray(severity) ? severity.length > 0 && !severity.includes(level) : severity && severity !== level) return [level, 0];
-              const countRes = await fetchIncidentLogs({
-                endpoint: config.endpoint,
-                method: config.method,
-                skip: 0,
-                limit: 1,
-                startDate,
-                endDate,
-                nvrIds,
-                channelIds,
-                hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
-                lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
-                severity: level,
-                status: config.showStatus ? status : undefined,
-                search: searchInput,
-                vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
-                boxType: config.showBoxTypeFilter ? boxType : undefined,
-              });
-              return [level, countRes?.data?.body?.data?.totalCount || 0];
-            })
-          );
-          setSeverityTotals(Object.fromEntries(totals));
-        } catch (statsErr) {
-          console.log(`Error fetching ${config.title} severity totals:`, statsErr);
-        }
+        const counts = filteredDoorRows
+          ? Object.fromEntries(SEVERITY_LEVELS.map((level) => [
+            level,
+            filteredDoorRows.filter((row) => String(row.severity || '').toLowerCase() === level).length,
+          ]))
+          : data?.severityCounts;
+        if (counts) setSeverityTotals(counts);
       }
       if (config.showBoxPackingStatusFilter) {
-        try {
-          const statusCounts = await Promise.all([
-            ['', 'all'],
-            ['completed', 'completed'],
-            ['review', 'review'],
-          ].map(async ([statusValue, key]) => {
-            const countRes = await fetchIncidentLogs({
-              endpoint: config.endpoint,
-              method: config.method,
-              skip: 0,
-              limit: 1,
-              startDate,
-              endDate,
-              nvrIds,
-              channelIds,
-              status: statusValue,
-              search: searchInput,
-            });
-            return [key, countRes?.data?.body?.data?.totalCount || 0];
-          }));
-          setPackingStatusTotals(Object.fromEntries(statusCounts));
-        } catch (statusErr) {
-          console.log(`Error fetching ${config.title} status totals:`, statusErr);
-        }
+        if (data?.boxStatusCounts) setPackingStatusTotals(data.boxStatusCounts);
       }
     } catch (err) {
+      if (requestId !== fetchRequestId.current) return;
       console.log(`Error fetching ${config.title}:`, err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      dispatch({ type: 'SET_LOADING', value: false });
+      if (requestId === fetchRequestId.current && !background) {
+        dispatch({ type: 'SET_LOADING', value: false });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs, manualTrigger]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(
@@ -604,9 +567,10 @@ const IncidentLogsPage = ({ config }) => {
   const onSort = useCallback(
     (field) => {
       dispatch({ type: 'SET_SORT_FIELD', value: field });
-      dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
+      dispatch({ type: 'SET_SORT_ORDER', value: sortField === field && sortOrder === 'asc' ? 'desc' : 'asc' });
+      dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
     },
-    [sortOrder]
+    [sortField, sortOrder]
   );
 
   const columns = useMemo(
@@ -647,10 +611,10 @@ const IncidentLogsPage = ({ config }) => {
     return [
       { label: config.statsLabel || 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
       { label: 'High', value: severityTotals.high || 0, color: 'var(--crit)' },
-      { label: 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
+      { label: config.showLightingFields || config.showHygieneFields || config.showDoorFields ? 'Medium' : 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, config.showStockCountingFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
+  }, [config.showStats, config.showStockCountingFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({
@@ -664,12 +628,13 @@ const IncidentLogsPage = ({ config }) => {
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
       status: config.showStatus ? status : undefined,
+      doorStatus: config.showDoorFields ? doorStatus : undefined,
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, status, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -741,7 +706,21 @@ const IncidentLogsPage = ({ config }) => {
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
-        dateFilterActions={config.showBoxPackingStatusFilter ? (
+        dateFilterActions={config.showDoorFields ? (
+          <div role="group" aria-label="Door status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+            {[['', 'Both'], ['open', 'Open'], ['closed', 'Closed']].map(([value, label]) => (
+              <button
+                key={value || 'both'}
+                type="button"
+                aria-pressed={doorStatus === value}
+                onClick={() => dispatch({ type: 'SET_DOOR_STATUS', value })}
+                className={`h-full cursor-pointer rounded-[7px] px-3 text-xs font-semibold transition-colors ${doorStatus === value ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : config.showBoxPackingStatusFilter ? (
           <div role="group" aria-label="Box packing status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
             {[['', 'ALL'], ['completed', 'COMPLETED'], ['review', 'NEEDS REVIEW']].map(([value, title]) => {
               const count = packingStatusTotals[value || 'all'] ?? 0;
@@ -828,6 +807,7 @@ const IncidentLogsPage = ({ config }) => {
           severity={severity}
           setSeverity={(v) => dispatch({ type: 'SET_SEVERITY', value: v })}
           showSeverity={config.showSeverityFilter !== false}
+          mediumSeverityLabel={config.showLightingFields || config.showHygieneFields || config.showDoorFields}
           multiSeverity={config.showHygieneFields}
           showStatus={config.showStatus}
           status={status}

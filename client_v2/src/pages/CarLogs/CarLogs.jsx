@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
@@ -365,8 +366,8 @@ const CarLogs = () => {
 
   const skip = (currentPage - 1) * limit;
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await fetchCarLogs({
@@ -405,7 +406,7 @@ const CarLogs = () => {
       setError(err);
       toast.error(getApiMessage(err, 'Failed to load car logs'));
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, vehicleNumber, searchInput]);
 
@@ -421,15 +422,7 @@ const CarLogs = () => {
     localStorage.setItem(INTERVAL_KEY, refreshInterval);
   }, [refreshInterval]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   useEffect(() => {
     const fetchNvrs = async () => {

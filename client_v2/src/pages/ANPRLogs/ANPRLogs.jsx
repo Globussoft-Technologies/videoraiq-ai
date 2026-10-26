@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -211,8 +212,8 @@ const ANPRLogs = () => {
   const skip = (currentPage - 1) * limit;
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchLogs = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', value: true });
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
       const res = await fetchVehicleObstructionLogs({
@@ -265,7 +266,7 @@ const ANPRLogs = () => {
       console.log('Error fetching vehicle obstruction logs:', err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      dispatch({ type: 'SET_LOADING', value: false });
+      if (!background) dispatch({ type: 'SET_LOADING', value: false });
     }
   }, [
     skip,
@@ -288,13 +289,7 @@ const ANPRLogs = () => {
     fetchLogs();
   }, [fetchLogs, manualTrigger]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(

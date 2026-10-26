@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -154,9 +155,9 @@ const SleepActivityLogs = () => {
   const skip = (currentPage - 1) * limit;
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
     if (!canView) return;
-    setLoading(true);
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await getSleepActivityLogs({
@@ -197,7 +198,7 @@ const SleepActivityLogs = () => {
       console.log('Error fetching sleep activity logs:', err);
       setError(err);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [canView, skip, limit, startDate, endDate, nvrIds, channelIds, sleepingFilter]);
 
@@ -205,13 +206,7 @@ const SleepActivityLogs = () => {
     fetchLogs();
   }, [fetchLogs, manualTrigger]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(

@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -117,6 +118,7 @@ const AttendanceLogs = () => {
   useEffect(() => localStorage.setItem(ATTENDANCE_VIEW_MODE_KEY, viewMode), [viewMode]);
 
   const {
+    loading,
     selectedLog,
     showPreview,
     selectedProfile,
@@ -235,9 +237,9 @@ const AttendanceLogs = () => {
   }, [selectedDepartments, nvrIds, cameraId, fromTime, toTime, timeType, employeeLocations, limit]);
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchAttendanceLogs = useCallback(async () => {
+  const fetchAttendanceLogs = useCallback(async ({ background = false } = {}) => {
     const requestId = ++attendanceRequestRef.current;
-    dispatch({ type: 'SET_LOADING', value: true });
+    if (!background) dispatch({ type: 'SET_LOADING', value: true });
     const departmentIds = selectedDepartments.join(',');
     const utcFromTime = convertToUTC(startDate, fromTime, region);
     const utcToTime = convertToUTC(startDate, toTime, region);
@@ -326,11 +328,10 @@ const AttendanceLogs = () => {
     } catch (error) {
       if (requestId !== attendanceRequestRef.current) return;
       console.error('Error fetching attendance logs:', error);
-      dispatch({ type: 'SET_ATTENDANCE_LOGS', value: [] });
-      dispatch({ type: 'SET_ATTENDANCE_COUNT', value: 0 });
-      dispatch({ type: 'SET_STATUS_COUNTS', value: EMPTY_STATUS_COUNTS });
     } finally {
-      if (requestId === attendanceRequestRef.current) dispatch({ type: 'SET_LOADING', value: false });
+      if (requestId === attendanceRequestRef.current && !background) {
+        dispatch({ type: 'SET_LOADING', value: false });
+      }
     }
   }, [
     searchInput,
@@ -355,13 +356,7 @@ const AttendanceLogs = () => {
     fetchAttendanceLogs();
   }, [fetchAttendanceLogs, manualTrigger]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchAttendanceLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchAttendanceLogs]);
+  useLogPolling(fetchAttendanceLogs, autoRefresh, refreshInterval, loading);
 
   /* ─────────────── Derived data ─────────────── */
   const mappedLogs = useMemo(

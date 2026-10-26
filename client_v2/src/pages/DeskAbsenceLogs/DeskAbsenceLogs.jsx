@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
@@ -111,8 +112,8 @@ const DeskAbsenceLogs = () => {
   const skip = (currentPage - 1) * LIMIT;
   const totalPages = Math.max(1, Math.ceil(totalCount / LIMIT));
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await getDeskAbsenceLogs({
@@ -132,7 +133,7 @@ const DeskAbsenceLogs = () => {
       console.log('Error fetching desk absence logs:', err);
       setError(err);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [skip, activeView.startDate, activeView.endDate, activeView.granularity, nvrIds, channelIds, zoneNames]);
 
@@ -181,15 +182,7 @@ const DeskAbsenceLogs = () => {
     })();
   }, []);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   // Reset to page 1 when filters change
   useEffect(() => {

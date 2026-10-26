@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactApexChart from 'react-apexcharts';
@@ -71,8 +72,8 @@ const VehicleCountLogs = () => {
   const skip = (currentPage - 1) * LIMIT;
   const totalPages = Math.max(1, Math.ceil(totalCount / LIMIT));
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await fetchVehicleCountLogs({ skip, limit: LIMIT, startDate, endDate });
@@ -83,7 +84,7 @@ const VehicleCountLogs = () => {
       console.log('Error fetching vehicle count logs:', err);
       setError(err);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [skip, startDate, endDate]);
 
@@ -91,15 +92,7 @@ const VehicleCountLogs = () => {
     fetchLogs();
   }, [fetchLogs, manualTrigger]);
 
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   // Reset to page 1 when filters change.
   useEffect(() => {

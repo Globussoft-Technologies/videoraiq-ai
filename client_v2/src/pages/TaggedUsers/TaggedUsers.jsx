@@ -1,3 +1,4 @@
+import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -191,8 +192,8 @@ const TaggedUsers = () => {
   }, [selectedDepartments, nvrIds, channelIds, removeUnknown, employeeLocations, limit]);
 
   /* ─────────────── Data fetch ─────────────── */
-  const fetchLogs = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', value: true });
+  const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    if (!background) dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
 
     try {
@@ -232,7 +233,7 @@ const TaggedUsers = () => {
       console.log('Error fetching logs:', err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      dispatch({ type: 'SET_LOADING', value: false });
+      if (!background) dispatch({ type: 'SET_LOADING', value: false });
     }
   }, [
     startDate,
@@ -259,13 +260,7 @@ const TaggedUsers = () => {
   }, [fetchLogs, manualTrigger]);
 
   // Effect 2: Auto Refresh timer
-  useEffect(() => {
-    let intervalId;
-    if (autoRefresh && refreshInterval > 0) {
-      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
-    }
-    return () => intervalId && clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, fetchLogs]);
+  useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
   // This page lists only tagged entries, so every toggle starts ON. The user
   // can only turn it OFF (untag); doing so removes the row from this list.

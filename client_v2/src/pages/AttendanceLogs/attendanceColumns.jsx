@@ -13,7 +13,7 @@ const SortHeader = ({ label, field, sortField, sortOrder, dispatch }) => (
       dispatch({ type: 'SET_SORT_FIELD', value: field });
       dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
     }}
-    className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)]"
+    className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx)] hover:opacity-75"
     style={{ fontFamily: 'var(--mono)' }}
   >
     {label}

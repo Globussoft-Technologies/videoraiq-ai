@@ -2,7 +2,7 @@ import { LIGHTING_INCIDENT_TYPE, lightingCategoryLabel } from '../../../helpers/
 import { hygieneCategoryLabel } from '../../../helpers/hygieneDetection';
 import { severity } from '../../../lib/format';
 
-export default function IncidentHygieneDetails({ item, variant = 'card', compact = false }) {
+export default function IncidentHygieneDetails({ item, variant = 'card', compact = false, showIssueCount = true, showViolationSeverity = true, showConfidence = true, showZone = true }) {
   const dark = variant === 'lightbox';
   const isLighting = item.incidentType === LIGHTING_INCIDENT_TYPE;
   const categoryLabel = isLighting ? lightingCategoryLabel : hygieneCategoryLabel;
@@ -12,12 +12,12 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
     ? item.violationCount : violations.length;
   return (
     <section aria-label={isLighting ? "Lighting and site condition violations" : "Hygiene and food safety violations"} style={{ color: dark ? '#e2e8f0' : 'var(--tx2)', fontSize: dark ? 12 : 11, minWidth: 0, maxWidth: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 6, background: dark ? 'rgba(245,158,11,.14)' : 'var(--bg2)', fontWeight: 600 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: showIssueCount ? 'space-between' : 'flex-start', flexWrap: 'wrap', gap: 6 }}>
+        {showIssueCount && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 6, background: dark ? 'rgba(245,158,11,.14)' : 'var(--bg2)', fontWeight: 600 }}>
           Issues detected
           <strong style={{ minWidth: 18, textAlign: 'center', fontVariantNumeric: 'tabular-nums', color: dark ? '#fbbf24' : 'var(--tx)' }}>{count}</strong>
-        </span>
-        {item.zone && <span style={{ overflowWrap: 'anywhere' }}>Zone: <strong>{item.zone}</strong></span>}
+        </span>}
+        {showZone && item.zone && <span style={{ overflowWrap: 'anywhere' }}>Zone: <strong>{item.zone}</strong></span>}
       </div>
       {compact && violations.length > 0 && (
         <div style={{ marginTop: 6, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
@@ -47,10 +47,10 @@ export default function IncidentHygieneDetails({ item, variant = 'card', compact
                 <li key={`${violation.category}-${index}`} style={{ borderTop: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'var(--bd)'}`, paddingTop: 6, overflowWrap: 'anywhere' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ flex: '1 1 160px', lineHeight: 1.4 }}>{index + 1}. {violation.categoryName || categoryLabel(violation.category) || 'Issue'}</strong>
-                    {violation.severity && <span style={{ color: level.color, fontSize: 10, fontWeight: 700, border: '1px solid currentColor', borderRadius: 4, padding: '2px 5px', alignSelf: 'flex-start' }}>{level.short}</span>}
+                    {showViolationSeverity && violation.severity && <span style={{ color: level.color, fontSize: 10, fontWeight: 700, border: '1px solid currentColor', borderRadius: 4, padding: '2px 5px', alignSelf: 'flex-start' }}>{level.short}</span>}
                   </div>
                   {violation.description && <div style={{ marginTop: 3, lineHeight: 1.45 }}>{violation.description}</div>}
-                  {confidence && <div style={{ marginTop: 3, color: dark ? '#94a3b8' : 'var(--tx3)' }}>{confidence}</div>}
+                  {showConfidence && confidence && <div style={{ marginTop: 3, color: dark ? '#94a3b8' : 'var(--tx3)' }}>{confidence}</div>}
                 </li>
               );
             })}

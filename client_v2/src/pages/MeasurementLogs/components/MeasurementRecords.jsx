@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment';
 import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { DOWNLOADS, STATUS_META, devColor } from '../data';
@@ -290,6 +290,8 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const requestId = useRef(0);
+  const requestPending = useRef(false);
   // SKU / station option lists — captured from the first successful response
   // and kept stable so narrowing a filter never empties its own dropdown.
   const [skuList, setSkuList] = useState([]);
@@ -305,7 +307,9 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const currentRequest = ++requestId.current;
+    requestPending.current = true;
+    if (records.length === 0) setLoading(true);
     const params = {
       limit: 1000,
       ...toIsoWindow({ from: fromDate, to: toDate }),
@@ -326,13 +330,18 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
       })
       .catch((e) => {
         if (!cancelled) {
-          setRecords([]);
           setError(e?.message || 'Failed to load records');
         }
       })
-      .finally(() => !cancelled && setLoading(false));
+      .finally(() => {
+        if (!cancelled && currentRequest === requestId.current) {
+          requestPending.current = false;
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
+      if (currentRequest === requestId.current) requestPending.current = false;
     };
   }, [fromDate, toDate, statusF, dbStatusF, skuF, qDebounced, refreshKey]);
 
@@ -523,7 +532,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           <RefreshControl
             storageKey="measurement_logs"
             defaultActive
-            onManualRefresh={() => setRefreshKey((key) => key + 1)}
+            onManualRefresh={() => { if (!requestPending.current) setRefreshKey((key) => key + 1); }}
           />
         </span>
       </div>
@@ -532,7 +541,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
         <div className="max-h-[520px] overflow-auto">
           <div style={{ minWidth: GRID_MIN_W }}>
           <div
-            className="relative grid w-full min-w-full h-[42px] box-border items-center gap-x-[10px] p-[8px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[9px] tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[5] isolate [&>span]:min-w-0 [&>span]:whitespace-nowrap [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span:nth-child(3)]:pl-[12px]"
+            className="relative grid w-full min-w-full h-[42px] box-border items-center gap-x-[10px] p-[8px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[11px] font-bold tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[5] isolate [&>span]:min-w-0 [&>span]:whitespace-nowrap [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span:nth-child(3)]:pl-[12px]"
             style={{ gridTemplateColumns: GRID_COLS }}
           >
             <span>SNAP</span><span>MEAS</span><span>ORDER · REF</span><span>SKU · MODEL</span>

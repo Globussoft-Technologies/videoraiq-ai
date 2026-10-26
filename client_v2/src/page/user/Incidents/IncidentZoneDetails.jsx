@@ -4,8 +4,8 @@ import { LIGHTING_INCIDENT_TYPE } from '../../../helpers/lightingDetection';
 import { HYGIENE_INCIDENT_TYPE } from '../../../helpers/hygieneDetection';
 import IncidentHygieneDetails from './IncidentHygieneDetails';
 
-export default function IncidentZoneDetails({ item, variant = 'card', compact = false }) {
-  if ([HYGIENE_INCIDENT_TYPE, LIGHTING_INCIDENT_TYPE].includes(item.incidentType)) return <IncidentHygieneDetails item={item} variant={variant} compact={compact} />;
+export default function IncidentZoneDetails({ item, variant = 'card', compact = false, showZone = true }) {
+  if ([HYGIENE_INCIDENT_TYPE, LIGHTING_INCIDENT_TYPE].includes(item.incidentType)) return <IncidentHygieneDetails item={item} variant={variant} compact={compact} showZone={showZone} />;
   if (item.incidentType === 'boxPackingDetection') {
     const packing = packingIncidentDetails(item), dark = variant === 'lightbox';
     if (!dark) return <dl aria-label="Box packing details" style={{ margin: '1px 0', fontSize: 11, minWidth: 0 }}>

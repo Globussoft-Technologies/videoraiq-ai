@@ -2,8 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
-import { tamperTypeOf } from './incidentExport';
+import { Activity, AlertTriangle, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -33,21 +32,23 @@ const severityBg = (severity) => {
         : 'rgba(6,8,13,.7)';
 };
 
+const severityLabel = (severity) => String(severity || '--').toLowerCase() === 'moderate' ? 'Medium' : severity || '--';
+
 const formatTime = (t) =>
   t ? moment.utc(t).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A') : '--';
 
 export const formatDoorDuration = (seconds) => {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value < 0) return '--';
-
-  const formatValue = (amount) => Number.isInteger(amount)
-    ? String(amount)
-    : amount.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-
-  if (value >= 86400) return `${formatValue(value / 86400)} day${value / 86400 === 1 ? '' : 's'}`;
-  if (value >= 3600) return `${formatValue(value / 3600)} hr${value / 3600 === 1 ? '' : 's'}`;
-  if (value >= 60) return `${formatValue(value / 60)} min${value / 60 === 1 ? '' : 's'}`;
-  return `${formatValue(value)} sec${value === 1 ? '' : 's'}`;
+  const totalMinutes = Math.floor(value / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hr${hours === 1 ? '' : 's'}`);
+  if (minutes) parts.push(`${minutes} min${minutes === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
 };
 
 const doorStatusStyle = (status) => {
@@ -137,9 +138,10 @@ const sortableHeader = (label, field, onSort, sortable) =>
     ? () => (
         <button
           onClick={() => onSort(field)}
-          className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] font-semibold text-[var(--tx)] hover:opacity-75 [font-family:var(--mono)]"
         >
           {label}
+          <ArrowUpDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
         </button>
       )
     : label;
@@ -208,7 +210,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     },
     {
       accessorKey: 'channelName',
-      header: 'Camera Name',
+      header: config.showBlurredCameraFields ? sortableHeader('Camera Name', 'channelData.name', onSort, sortable) : 'Camera Name',
       cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
     },
   );
@@ -216,14 +218,14 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   if (config.showSeverity !== false) {
     cols.push({
       accessorKey: 'severity',
-      header: 'Severity',
+      header: config.showBlurredCameraFields ? sortableHeader('Severity', 'severity', onSort, sortable) : 'Severity',
       cell: ({ row }) => (
         <span
           className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${severityClass(
             row.original.severity
           )}`}
         >
-          {row.original.severity || '--'}
+          {config.showLightingFields || config.showHygieneFields || config.showDoorFields ? severityLabel(row.original.severity) : row.original.severity || '--'}
         </span>
       ),
     });
@@ -276,11 +278,13 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   }
 
   if (config.showBlurredCameraFields) {
-    cols.push({
-      accessorKey: 'tamperType',
-      header: 'Tamper Type',
-      cell: ({ row }) => <span className={styles.text}>{tamperTypeOf(row.original)}</span>,
-    });
+    cols.push(
+      {
+        accessorKey: 'description',
+        header: sortableHeader('Description', 'description', onSort, sortable),
+        cell: ({ row }) => <span className={`${styles.text} block min-w-[180px] max-w-[320px] whitespace-normal break-words`}>{row.original.description || '--'}</span>,
+      },
+    );
   }
 
   if (config.showIndustrialFields) {
@@ -321,14 +325,21 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showLightingFields || config.showHygieneFields) {
+    cols.push({ id: 'issuesDetected', header: 'Issues Detected', enableSorting: false,
+      cell: ({ row }) => <span className={styles.text}>{Number.isInteger(row.original.violationCount) && row.original.violationCount >= 0 ? row.original.violationCount : Array.isArray(row.original.violations) ? row.original.violations.length : 0}</span> });
+    cols.push({ accessorKey: 'zone', header: 'Zone', enableSorting: false,
+      cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> });
+  }
+
   if (config.showLightingFields) {
     cols.push({ id: 'lightingDetails', header: 'Lighting / Site condition violations', enableSorting: false,
-      cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
+      cell: ({ row }) => <IncidentHygieneDetails item={row.original} showIssueCount={false} showConfidence={false} showZone={false} /> });
   }
 
   if (config.showHygieneFields) {
     cols.push({ id: 'hygieneDetails', header: 'Hygiene violations', enableSorting: false,
-      cell: ({ row }) => <IncidentHygieneDetails item={row.original} /> });
+      cell: ({ row }) => <IncidentHygieneDetails item={row.original} showIssueCount={false} showConfidence={false} showZone={false} /> });
   }
 
   if (config.showBoxPackingFields) {
@@ -382,7 +393,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   cols.push(
     {
       accessorKey: 'createdAt',
-      header: sortableHeader('Time of Incident', 'createdAt', onSort, sortable),
+      header: sortableHeader('Time of Incident', 'timeOfIncident', onSort, sortable),
       cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
     }
   );
@@ -426,12 +437,35 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         <Image className="w-10 h-10 text-[var(--tx3)]" />
       )}
 
-      {config.showSeverity !== false && (
+      {(config.showHygieneFields || config.showLightingFields) ? (
+        <>
+          <span className="absolute bottom-2 right-2 z-20 rounded-[5px] bg-[rgba(6,8,13,.82)] px-[7px] py-[3px] text-[10px] font-semibold text-white shadow-sm">
+            Issues detected: {Number.isInteger(row.violationCount) && row.violationCount >= 0 ? row.violationCount : Array.isArray(row.violations) ? row.violations.length : 0}
+          </span>
+          {config.showSeverity !== false && <span
+            className="absolute top-2 right-2 z-20 rounded-[5px] px-[7px] py-[3px] text-[10px] font-semibold capitalize text-white shadow-sm"
+            style={{ background: severityBg(row.severity) }}
+          >
+            {severityLabel(row.severity)}
+          </span>}
+        </>
+      ) : config.showBlurredCameraFields ? (
+        <>
+          {config.showSeverity !== false && (
+            <span
+              className="absolute top-2 right-2 z-20 rounded-[5px] px-[7px] py-[3px] text-[10px] font-semibold capitalize text-white shadow-sm"
+              style={{ background: severityBg(row.severity) }}
+            >
+              {row.severity || '--'}
+            </span>
+          )}
+        </>
+      ) : config.showSeverity !== false && (
         <div
           className="absolute top-2 right-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
           style={{ background: severityBg(row.severity) }}
         >
-          {row.severity || '--'}
+          {config.showDoorFields ? severityLabel(row.severity) : row.severity || '--'}
         </div>
       )}
 
@@ -447,11 +481,11 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showIncidentName !== false && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
         )}
-        {config.showSeverity !== false && (
+        {config.showSeverity !== false && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
           <IncidentCardRow
             icon={AlertTriangle}
             label="Severity"
-            value={row.severity || '--'}
+            value={config.showDoorFields ? severityLabel(row.severity) : row.severity || '--'}
             valueClassName="capitalize"
             valueStyle={{ color: severityBg(row.severity) }}
           />
@@ -478,11 +512,15 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
           </>
         )}
         {config.showBlurredCameraFields && (
-          <IncidentCardRow
-            icon={Activity}
-            label="Tamper Type"
-            value={tamperTypeOf(row)}
-          />
+          <>
+            {row.description && (
+              <div className="flex items-start gap-2 text-xs min-w-0">
+                <Activity className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+                <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">Description</span>
+                <span className="text-[var(--tx2)] font-medium text-[11.5px] break-words min-w-0 text-right flex-1">{row.description}</span>
+              </div>
+            )}
+          </>
         )}
         {config.showIndustrialFields && (
           <>
@@ -502,7 +540,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <IncidentCardRow icon={Clock} label="Door Open Duration" value={formatDoorDuration(row.durationSec)} />
           </>
         )}
-        {(config.showHygieneFields || config.showLightingFields) && <IncidentHygieneDetails item={row} />}
+        {(config.showHygieneFields || config.showLightingFields) && <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showConfidence={false} />}
         {config.showStockCountingFields && (
           <>
             <IncidentCardRow icon={Activity} label="Vehicle" value={row.vehicleNumber || 'Unknown'} />
@@ -535,7 +573,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
-        <IncidentCardRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
+        <IncidentCardRow icon={Clock} label={config.showDoorFields ? 'Time of Incident' : 'Time'} value={formatTime(row.createdAt)} />
       </div>
     ) : (
       <div className="p-[11px]">
