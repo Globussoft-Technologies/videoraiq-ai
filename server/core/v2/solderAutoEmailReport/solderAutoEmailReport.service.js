@@ -15,9 +15,10 @@ import Response from '../../../utils/response.js';
 import logger from '../../../utils/logger.js';
 import { validTimezone, DEFAULT_ADMIN_TIMEZONE } from '../../../utils/timezone.js';
 import { trackOutboundEmail, trackFailedEmail } from '../emailMonitoring/emailTracker.js';
-import { scheduledWindow } from './scheduleWindow.js';
+import { scheduledWindow, reportWindowLabel } from './scheduleWindow.js';
 import { buildReportRows, buildAttachments, REPORT_TITLES } from './reportData.js';
 import { buildEmailHtml } from './reportLayout.js';
+import { putMediaV2 as putMedia } from '../adminStorage/mediaStorage.v2.js';
 
 // Older deployments use SendGrid directly and do not include the optional
 // SMTP transport. Resolve it at send time so its absence cannot stop startup.
@@ -81,9 +82,33 @@ const scopedChannel = (req, channelId) => {
 const httpError = (message, status = 400) => Object.assign(new Error(message), { status });
 const fail = (res, error) => res.status(error.status || 500).json(Response.errorResp(error.message, 'Solder report schedule failed.'));
 
+// Solder records can remain after the source Channel document is removed. The
+// reports page still exposes that account-scoped data as a historical station,
+// so email reports must be able to use the same station identity. Never infer
+// this from an arbitrary channel id: require a matching record owned by the
+// requesting account before creating the fallback metadata.
+async function findReportChannel({ channelId, userId }) {
+  const channel = await Channel.findOne({ _id: channelId, userId })
+    .populate('detections.deskSolarShoulderDetectionSettings.id').lean();
+  if (channel) return channel;
+
+  const [panel, incident] = await Promise.all([
+    SolderPanel.exists({ userId, channelId }),
+    Incident.exists({ userId, channelId, incidentType: 'deskSolarShoulderDetection' }),
+  ]);
+  if (!panel && !incident) return null;
+  return {
+    _id: channelId,
+    userId,
+    name: 'Historical solder camera',
+    customName: 'Historical solder camera',
+    detections: {},
+  };
+}
+
 async function validateTargets(data, account) {
   const [channel, verified] = await Promise.all([
-    Channel.findOne({ _id: data.channelId, userId: account.userId }).lean(),
+    findReportChannel({ channelId: data.channelId, userId: account.userId }),
     Recipient.find({ adminId: account.adminId, type: 'email', verified: true }).select('value').lean(),
   ]);
   if (!channel) throw httpError('Select a station belonging to your organisation.');
@@ -93,8 +118,7 @@ async function validateTargets(data, account) {
 }
 
 export async function fetchReportRows(report, window, timezone) {
-  const channel = await Channel.findOne({ _id: report.channelId, userId: report.userId })
-    .populate('detections.deskSolarShoulderDetectionSettings.id').lean();
+  const channel = await findReportChannel({ channelId: report.channelId, userId: report.userId });
   if (!channel) throw new Error('Report station is no longer available.');
   const scope = { userId: report.userId, channelId: report.channelId };
   const [panels, absences] = await Promise.all([
@@ -121,12 +145,32 @@ async function prepareEmail(report, window, timezone) {
   await validateTargets(report, report);
   const { rows, channel } = await fetchReportRows(report, window, timezone);
   const title = `Solder Line — ${REPORT_TITLES[report.reportType]}`;
-  const subtitle = `${channel.customName || channel.name || 'Camera'} · ${window.start.format('DD MMM YYYY HH:mm')} – ${window.end.format('DD MMM YYYY HH:mm')} (${timezone})`;
-  const attachments = await buildAttachments(rows, title, subtitle, report.formats);
+  const subtitle = `${channel.customName || channel.name || 'Camera'} · ${reportWindowLabel(window, timezone, report.schedule.frequency)}`;
+  const generated = await buildAttachments(rows, title, subtitle, report.formats);
+  let downloads = [], attachments = [];
+  try {
+    for (const file of generated) {
+      const mediaPath = await putMedia({ adminId: report.adminId, buffer: Buffer.from(file.content, 'base64'),
+        mediaType: 'report', folderName: String(report.adminId), originalName: file.filename, fallbackToEnv: true });
+      const base = /^\/?v2\//i.test(mediaPath)
+        ? `${String(config.get('backendDomain')).replace(/\/+$/, '')}/api/v2/uploads`
+        : String(config.get('ImageView')).replace(/\/+$/, '');
+      const url = new URL(`${base}/${String(mediaPath).replace(/^\/+/, '')}`);
+      url.searchParams.set('download', file.filename);
+      downloads.push({ format: file.filename.endsWith('.pdf') ? 'pdf' : 'xlsx', url: url.toString() });
+    }
+  } catch (error) {
+    logger.warn(`[SOLDER_REPORT] Storage unavailable; sending generated files as attachments: ${error.message}`);
+    downloads = [];
+    attachments = generated;
+  }
+  const subjectPeriod = report.schedule.frequency === 'custom'
+    ? `${window.start.format('DD MMM YYYY')} – ${window.end.clone().subtract(1, 'day').format('DD MMM YYYY')}`
+    : window.start.format('DD MMM YYYY');
   return {
-    from: (await getMailTransport()).getMailSender(), to: report.recipients, subject: `${title} — ${window.start.format('DD MMM YYYY')}`,
-    text: `${title}\n${subtitle}\n${rows.length} report rows.\nThe scheduled report is attached.`, attachments,
-    html: buildEmailHtml(rows, title, subtitle, report.formats),
+    from: (await getMailTransport()).getMailSender(), to: report.recipients, subject: `${title} — ${subjectPeriod}`,
+    text: `${title}\n${subtitle}\n${rows.length} report rows.\n${downloads.length ? 'Use the download links in this email to get the report.' : 'The report files are attached.'}`, attachments,
+    html: buildEmailHtml(rows, title, subtitle, report.formats, false, downloads),
   };
 }
 
@@ -174,7 +218,7 @@ class SolderAutoEmailReportService {
       const { rows } = await fetchReportRows(report, window, timezone);
       return res.json(Response.userSuccessResp('Report preview ready.', {
         rows: rows.slice(0, 100), total: rows.length,
-        period: `${window.start.format('DD MMM YYYY HH:mm')} – ${window.end.format('DD MMM YYYY HH:mm')} (${timezone})`,
+        period: reportWindowLabel(window, timezone, data.schedule.frequency),
       }));
     } catch (error) {
       if (email) await trackFailedEmail(email, error, { adminId: auth(req).adminId, category: 'Solder report test' }).catch(() => {});
@@ -245,6 +289,17 @@ class SolderAutoEmailReportService {
       report.enabled = req.body.enabled;
       await report.save();
       return res.json(Response.userSuccessResp(report.enabled ? 'Email schedule enabled.' : 'Email schedule disabled.', report));
+    } catch (error) { return fail(res, error); }
+  }
+
+  async remove(req, res) {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) throw httpError('Invalid schedule id.');
+      const report = await Report.findOne({ _id: req.params.id, ...auth(req) });
+      if (!report) throw httpError('Schedule not found.', 404);
+      if (!scopedChannel(req, report.channelId)) throw httpError('You do not have access to this schedule.', 403);
+      await Report.deleteOne({ _id: report._id, ...auth(req) });
+      return res.json(Response.userSuccessResp('Email schedule deleted.'));
     } catch (error) { return fail(res, error); }
   }
 

@@ -1,5 +1,12 @@
 import moment from 'moment-timezone';
 
+// The data query uses an exclusive end. Custom date ranges display the last
+// selected day instead of the following midnight used by that query.
+export function reportWindowLabel(window, timezone, frequency) {
+  const end = frequency === 'custom' ? window.end.clone().subtract(1, 'minute') : window.end;
+  return `${window.start.format('DD MMM YYYY HH:mm')} – ${end.format('DD MMM YYYY HH:mm')} (${timezone})`;
+}
+
 /** Latest scheduled send time and its report period, in the organisation timezone. */
 export function scheduledWindow(schedule, timezone, now = moment()) {
   if (!schedule?.frequency) return null;

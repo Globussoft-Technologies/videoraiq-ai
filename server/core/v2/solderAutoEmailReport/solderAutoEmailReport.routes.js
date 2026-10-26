@@ -21,4 +21,5 @@ router.post('/send-test', access(['create', 'edit']), (req, res) => service.draf
 router.post('/', access('create'), (req, res) => service.save(req, res));
 router.put('/:id', access('edit'), (req, res) => service.save(req, res));
 router.patch('/:id', access('edit'), (req, res) => service.setEnabled(req, res));
+router.delete('/:id', access('edit'), (req, res) => service.remove(req, res));
 export default router;
