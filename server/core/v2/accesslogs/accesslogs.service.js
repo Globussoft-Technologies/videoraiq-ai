@@ -865,8 +865,10 @@ async getLogs(req, res, next) {
         // Add sorting and pagination
         const sortMap = {
           "lastCreatedAt": "lastCreatedAt",
+          "date": "date",
           "userInfo.userName": "userInfo.userName",
-          "department.departmentName": "departmentInfo.departmentName"
+          "department.departmentName": "departmentInfo.departmentName",
+          "userInfo.location": "_sortLocation"
         };
 
         const sortField_ = sortMap[sortField] || "lastCreatedAt";
@@ -893,6 +895,29 @@ async getLogs(req, res, next) {
             }
           },
           { $unwind: { path: "$departmentInfo", preserveNullAndEmptyArrays: true } },
+
+          ...(sortField_ === "_sortLocation" ? [
+            {
+              $lookup: {
+                from: "nvrs",
+                localField: "sessions.nvr",
+                foreignField: "_id",
+                as: "sortNvrInfo"
+              }
+            },
+            {
+              $set: {
+                _sortLocation: {
+                  $cond: [
+                    { $ne: [{ $ifNull: ["$userInfo.location", ""] }, ""] },
+                    "$userInfo.location",
+                    { $arrayElemAt: ["$sortNvrInfo.location", 0] }
+                  ]
+                }
+              }
+            },
+            { $unset: "sortNvrInfo" }
+          ] : []),
 
           // Filter by department
           ...(deptObjectIds.length ? [
@@ -931,7 +956,7 @@ async getLogs(req, res, next) {
         const countResult = await hintFiltered(OptimizedAccessLogs.aggregate(countPipeline));
         const total = countResult[0]?.total || 0;
 
-        pipeline.push({ $sort: { [sortField_]: sortDir } });
+        pipeline.push({ $sort: { [sortField_]: sortDir, _id: -1 } });
 
         if(!isExport) {
           pipeline.push({ $skip: skip });

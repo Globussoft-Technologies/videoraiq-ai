@@ -335,12 +335,13 @@ const firstFilled = (...values) => {
 // onto the fields those columns actually render.
 const LOG_SORT_FIELDS = {
   timeOfIncident: "timeOfIncident",
-  severity: "severity",
+  severity: "_severitySortRank",
   incidentName: "incidentName",
   description: "description",
   zone: "zone",
   resolved: "resolved",
   vehicleNumber: "vehicleNumber",
+  vehicleLogCount: "_vehicleLogCountSort",
   modelName: "model_name",
   model_name: "model_name",
   company: "company",
@@ -349,8 +350,16 @@ const LOG_SORT_FIELDS = {
   year: "year",
   currentStatus: "currentStatus",
   count: "count",
+  fireCount: "fireCount",
+  smokeCount: "smokeCount",
+  isFallDetected: "isFallDetected",
+  evidenceScore: "evidenceScore",
+  doorStatus: "doorStatus",
+  violationCount: "violationCount",
+  violationDetails: "violations.0.categoryName",
   cylinderCount: "cylinderCount",
   stackHeight: "stackHeight",
+  durationSec: "durationSec",
   nvrName: "nvrData.nvrName",
   "nvrData.nvrName": "nvrData.nvrName",
   channelName: "channelData.name",
@@ -363,6 +372,9 @@ const LOG_SORT_FIELDS = {
   endTimeSource: "endTimeSource",
   detectedVia: "detectedVia",
   confirmationReason: "confirmationReason",
+  date: "timeOfIncident",
+  startTime: "startTime",
+  endTime: "timeOfIncident",
 };
 
 const cacheDir = path.join("/tmp", "media-cache"); // You can change this to './cache' or any path
@@ -3707,10 +3719,61 @@ console.log(result,'result');
     // $sort must remain the last stage of basePipeline. Every log page sends
     // sortField/sortOrder when a column header is clicked; without a
     // recognised field this keeps the previous behaviour (newest first).
-    const sortPath = LOG_SORT_FIELDS[String(sortField ?? "").trim()];
+    const sortRequest = String(sortField ?? "").trim();
+    if (sortRequest === "severity") {
+      basePipeline.push({
+        $set: {
+          _severitySortRank: {
+            $switch: {
+              branches: [
+                { case: { $eq: ["$severity", "low"] }, then: 1 },
+                { case: { $in: ["$severity", ["medium", "moderate"]] }, then: 2 },
+                { case: { $in: ["$severity", ["high", "critical"]] }, then: 3 },
+              ],
+              default: 0,
+            },
+          },
+        },
+      });
+    }
+    if (sortRequest === "vehicleLogCount" && incidentType === "carModelDetection") {
+      basePipeline.push(
+        {
+          $lookup: {
+            from: Incident.collection.name,
+            let: { plate: "$vehicleNumber" },
+            pipeline: [
+              { $match: {
+                userId: data.user_id.toString(),
+                incidentType,
+                $expr: { $eq: ["$vehicleNumber", "$$plate"] },
+              } },
+              { $count: "count" },
+            ],
+            as: "_vehicleSortCounts",
+          },
+        },
+        {
+          $set: {
+            _vehicleLogCountSort: {
+              $cond: [
+                { $in: ["$vehicleNumber", [null, ""]] },
+                0,
+                { $ifNull: [{ $arrayElemAt: ["$_vehicleSortCounts.count", 0] }, 0] },
+              ],
+            },
+          },
+        },
+        { $unset: "_vehicleSortCounts" },
+      );
+    }
+    const sortPath = LOG_SORT_FIELDS[sortRequest];
     let sortStage;
     if (sortPath) {
       sortStage = { [sortPath]: sortOrder === "asc" ? 1 : -1 };
+      if (sortRequest === "violationDetails") {
+        sortStage["violations.0.description"] = sortOrder === "asc" ? 1 : -1;
+      }
       // Tiebreaker: a low-cardinality column (colour, year, company) leaves
       // most rows tied, and an unstable order between the $count and the
       // $skip/$limit aggregation lets a row repeat or vanish across pages.
@@ -3723,7 +3786,7 @@ console.log(result,'result');
     const parsedSkip = parseInt(skip);
     const parsedLimit = parseInt(limit);
     const sortsOnJoinedField = sortPath === "nvrData.nvrName" || sortPath === "channelData.name";
-    const canPageBeforeLookups = !postLookupSearch && !attachVehicleOwners && !sortsOnJoinedField;
+    const canPageBeforeLookups = !postLookupSearch && !attachVehicleOwners && !sortsOnJoinedField && sortRequest !== "severity" && sortRequest !== "vehicleLogCount";
 
     const summaryStage = {
       $group: {
@@ -5339,6 +5402,8 @@ console.log(result,'result');
         timeOfIncident: "timeOfIncident",
         vehicleNumber: "vehicleNumber",
         direction: "direction",
+        loadedBoxCount: "loadedBoxCount",
+        unloadedBoxCount: "unloadedBoxCount",
         boxCount: "boxCount",
         count: "boxCount",
         eventCount: "eventCount",
