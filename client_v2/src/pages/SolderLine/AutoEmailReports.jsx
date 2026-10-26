@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Mail, Loader2, Pencil, Eye, Send } from 'lucide-react';
+import { Mail, Loader2, Pencil, Eye, Send, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getApiErrorMessage } from '@/helpers/client';
 import { usePermissions } from '@/context/PermissionContext';
@@ -8,6 +8,7 @@ import MultiSelect from '@/components/MultiSelect';
 import SingleDatePicker from '@/components/SingleDatePicker';
 import ReportTable from './ReportTable';
 import TotalReport from './TotalReport';
+import ConfirmationModal from '@/components/DeleteConfirmation';
 
 const endpoint = '/solder-auto-email-reports';
 const button = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 12px', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd2)', fontSize: 12, cursor: 'pointer' };
@@ -168,6 +169,7 @@ export default function AutoEmailReports({ station, reportType, title }) {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [reload, setReload] = useState(0);
   const stationId = station?._id;
   useEffect(() => {
@@ -207,6 +209,27 @@ export default function AutoEmailReports({ station, reportType, title }) {
     } catch (e) { toast.error(getApiErrorMessage(e, 'Could not update the email schedule.')); }
     finally { setBusyId(null); }
   };
+  const sendTest = async (report) => {
+    if (busyId) return;
+    setBusyId(report._id);
+    try {
+      const { title: scheduleTitle, schedule, recipients, formats, enabled } = report;
+      await api.post(`${endpoint}/send-test`, { channelId: stationId, reportType, title: scheduleTitle, schedule, recipients, formats, enabled }, { timeout: 120000 });
+      toast.success('Test email sent to the configured recipients.');
+    } catch (e) { toast.error(getApiErrorMessage(e, 'Could not send the test email.')); }
+    finally { setBusyId(null); }
+  };
+  const remove = async () => {
+    if (!deleteTarget || busyId) return;
+    setBusyId(deleteTarget._id);
+    try {
+      await api.delete(`${endpoint}/${deleteTarget._id}`);
+      toast.success('Email schedule deleted.');
+      setDeleteTarget(null);
+      setReload((r) => r + 1);
+    } catch (e) { toast.error(getApiErrorMessage(e, 'Could not delete the email schedule.')); }
+    finally { setBusyId(null); }
+  };
   if (!access.view) return null;
   return (
     <div className="flex w-full max-w-full flex-col gap-2" style={{ marginTop: 14, alignSelf: 'stretch', minWidth: 0 }}>
@@ -214,18 +237,21 @@ export default function AutoEmailReports({ station, reportType, title }) {
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}Auto email reports
       </button>
       {error && <div role="alert" className="text-xs text-red-500">{error} <button type="button" onClick={() => setReload((r) => r + 1)} className="underline cursor-pointer">Retry</button></div>}
-      <div style={{ fontSize: 11, color: 'var(--tx3)' }}>{title} · {reports.length} saved schedule{reports.length === 1 ? '' : 's'}</div>
+      <div style={{ fontSize: 11, color: 'var(--tx3)', overflowWrap: 'anywhere' }}>{title} · {reports.length} saved schedule{reports.length === 1 ? '' : 's'}</div>
       {!loading && !reports.length && !error && <p style={{ margin: 0, fontSize: 11, color: 'var(--tx3)' }}>No email schedules for {title.toLowerCase()} yet.</p>}
-      {reports.map((report) => <div key={report._id} style={{ fontSize: 11, padding: 9, border: '1px solid var(--bd)', borderRadius: 8, color: 'var(--tx2)' }}>
-        <div>{report.enabled ? 'Enabled' : 'Disabled'} · {report.title || 'Configure this schedule'} · {report.schedule ? `${report.schedule.frequency} at ${report.schedule.time}` : 'Choose frequency and time'} · {report.recipients.length} recipient{report.recipients.length === 1 ? '' : 's'}</div>
-        {report.lastSentAt && <div className="mt-1 text-[var(--tx3)]">Last sent: {new Intl.DateTimeFormat('en-GB', { timeZone: options.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.lastSentAt))}</div>}
+      {reports.map((report) => <div key={report._id} style={{ width: '100%', boxSizing: 'border-box', padding: 10, border: `1px solid ${report.enabled ? 'rgba(99,102,241,.28)' : 'var(--bd)'}`, borderRadius: 10, color: 'var(--tx2)', background: report.enabled ? 'linear-gradient(135deg, rgba(59,130,246,.1), rgba(168,85,247,.08))' : 'var(--bg2)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, minWidth: 0, color: 'var(--tx)', fontSize: 11 }}><span style={{ width: 7, height: 7, flex: '0 0 auto', marginTop: 5, borderRadius: '50%', background: report.enabled ? 'var(--ok)' : 'var(--tx3)' }} /><strong>{report.enabled ? 'Enabled' : 'Disabled'}</strong><span style={{ color: 'var(--tx3)' }}>·</span><strong style={{ minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{report.title || 'Configure this schedule'}</strong></div>
+        <div style={{ marginTop: 5, color: 'var(--tx3)', fontSize: 10.5, overflowWrap: 'anywhere' }}>{title} · {report.schedule?.frequency || 'Choose frequency'} at {report.schedule?.time || '—'} · {report.recipients?.length || 0} recipient{report.recipients?.length === 1 ? '' : 's'}</div>
         {report.lastError && <div role="alert" className="mt-1 text-red-500">Last delivery failed. Check the email configuration and recipients.</div>}
-        {access.edit && <div className="flex gap-2 mt-2">
-          <button type="button" style={{ ...button, padding: '4px 8px', fontSize: 11 }} disabled={Boolean(busyId)} onClick={() => setModal(report)}><Pencil size={11} />Edit</button>
-          <button type="button" style={{ ...button, padding: '4px 8px', fontSize: 11 }} disabled={Boolean(busyId)} onClick={() => toggleEnabled(report)}>{busyId === report._id && <Loader2 size={11} className="animate-spin" />}{report.enabled ? 'Disable' : 'Enable'}</button>
+        {(access.create || access.edit) && <div className="mt-3 flex flex-nowrap items-center gap-2">
+          {(access.create || access.edit) && <button type="button" title="Send test mail" aria-label="Send test mail" style={{ ...button, width: 32, height: 32, padding: 0, flex: '0 0 auto', color: 'var(--violet)', background: 'rgba(168,85,247,.08)' }} disabled={Boolean(busyId)} onClick={() => sendTest(report)}>{busyId === report._id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}</button>}
+          {access.edit && <button type="button" title="Edit report" aria-label="Edit report" style={{ ...button, width: 32, height: 32, padding: 0, flex: '0 0 auto', color: 'var(--blue)', background: 'rgba(59,130,246,.08)' }} disabled={Boolean(busyId)} onClick={() => setModal(report)}><Pencil size={14} /></button>}
+          {access.edit && <button type="button" title={report.enabled ? 'Disable report' : 'Enable report'} aria-label={report.enabled ? 'Disable report' : 'Enable report'} style={{ ...button, width: 32, height: 32, padding: 0, flex: '0 0 auto', color: 'var(--warn)', background: 'rgba(245,158,11,.08)' }} disabled={Boolean(busyId)} onClick={() => toggleEnabled(report)}>{report.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}</button>}
+          {access.edit && <button type="button" title="Delete report" aria-label="Delete report" style={{ ...button, width: 32, height: 32, padding: 0, flex: '0 0 auto', color: 'var(--crit)', background: 'rgba(239,68,68,.08)' }} disabled={Boolean(busyId)} onClick={() => setDeleteTarget(report)}><Trash2 size={14} /></button>}
         </div>}
       </div>)}
       {modal && options && station && <Setup key={modal._id || 'new'} initial={modal} options={options} station={station} title={title} reportType={reportType} onSave={save} onClose={() => setModal(null)} />}
+      <ConfirmationModal open={Boolean(deleteTarget)} title="Delete auto email report?" icon={<Trash2 className="h-6 w-6 text-[var(--crit)]" />} message={<>This will permanently remove <strong>{deleteTarget?.title}</strong> and its schedule.</>} confirmLabel="Delete report" loading={busyId === deleteTarget?._id} onClose={() => setDeleteTarget(null)} onConfirm={remove} />
     </div>
   );
 }
