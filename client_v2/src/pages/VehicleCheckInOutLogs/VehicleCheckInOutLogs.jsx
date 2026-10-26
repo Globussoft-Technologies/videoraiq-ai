@@ -180,7 +180,7 @@ const VehicleCheckInOutLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
 
-  // vehicleKey -> { loading, data } for the expanded sub-rows.
+  // vehicleKey -> true for the expanded sub-rows.
   const [expanded, setExpanded] = useState({});
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [exporting, setExporting] = useState(null);
@@ -245,12 +245,17 @@ const VehicleCheckInOutLogs = () => {
         viewMode,
       });
       const data = res?.data?.body?.data;
-      setRows(data?.data || []);
+      const nextRows = data?.data || [];
+      setRows(nextRows);
       setSelected([]);
       setTotalCount(data?.totalCount || 0);
       setInCustodyCount(data?.inCustodyCount || 0);
-      // Any open sub-rows belong to the previous result set.
-      setExpanded({});
+      // Keep visible vehicles open across refreshes, using their latest crossings.
+      setExpanded((previous) => Object.fromEntries(
+        nextRows
+          .filter((row) => previous[row.vehicleKey])
+          .map((row) => [row.vehicleKey, true]),
+      ));
     } catch (err) {
       console.error(err);
       toast.error(
