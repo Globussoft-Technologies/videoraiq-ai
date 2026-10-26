@@ -112,7 +112,7 @@ const buildExportColumns = (config) => {
 
   if (config.showDoorFields) {
     cols.push(
-      { key: 'door', label: 'Door' },
+      { key: 'door', label: 'Door Name' },
       { key: 'doorStatus', label: 'Door Status' },
       { key: 'doorOpenDuration', label: 'Door Open Duration' },
     );
@@ -351,7 +351,7 @@ const exportToGridPDF = async (config, params) => {
     }
     if (config.showDoorFields) {
       details.push(
-        ['Door', 'door'],
+        ['Door Name', 'door'],
         ['Door Status', 'doorStatus'],
         ['Door Open Duration', 'doorOpenDuration'],
       );
