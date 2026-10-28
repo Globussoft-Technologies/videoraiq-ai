@@ -187,3 +187,63 @@ describe("createAuthUser — default shift", () => {
     expect(created.shiftId).toBeNull();
   });
 });
+
+
+describe("updateAuthUser ? optional DS profile images", () => {
+  const update = async ({ retained = ['/v2/test/old.jpg'], files = [], missingInDs = false } = {}) => {
+    const employee = await AuthorizedUsers.create({
+      adminId: admin._id, firstName: 'Before', lastName: 'User',
+      email: 'update@test.com', profilePics: ['/v2/test/old.jpg', '/v2/test/second.jpg'],
+    });
+    const c = serviceCtx({ adminId: admin._id, query: { userId: String(employee._id) }, body: {
+      firstName: 'After', lastName: 'User', email: employee.email, profilePics: retained,
+    } });
+    c.req.files = files;
+    if (missingInDs) {
+      axios.put.mockRejectedValueOnce({ response: { data: { message: 'User not found in this collection' } } });
+      axios.post.mockResolvedValueOnce({ data: { status: 'ok' } });
+    } else axios.put.mockResolvedValueOnce({ data: { status: 'ok' } });
+    await AuthUsersService.updateAuthUser(c.req, c.res, c.next);
+    expect(c.res.statusCode).toBe(200);
+    expect(payload(c.res).status).toBe('success');
+    return employee;
+  };
+
+  it('omits profileImages for details-only edits and retains database paths', async () => {
+    const retained = ['/v2/test/old.jpg', '/v2/test/second.jpg'];
+    const employee = await update({ retained });
+    expect(axios.put.mock.calls[0][0]).toContain('/update_user_info');
+    expect(axios.put.mock.calls[0][1]).not.toHaveProperty('profileImages');
+    expect(axios.put.mock.calls[0][1].firstName).toBe('After');
+    const saved = await AuthorizedUsers.findById(employee._id);
+    expect(saved.profilePics).toEqual(retained);
+  });
+
+  it('sends the full remaining image list after a removal', async () => {
+    await update();
+    expect(axios.put.mock.calls[0][1].profileImages).toEqual([expect.stringContaining('/v2/test/old.jpg')]);
+  });
+
+  it('sends retained and uploaded images after adding an image', async () => {
+    await update({ retained: ['/v2/test/old.jpg', '/v2/test/second.jpg'], files: threeFiles().slice(0, 1) });
+    expect(axios.put.mock.calls[0][1].profileImages).toEqual([
+      expect.stringContaining('/v2/test/old.jpg'), expect.stringContaining('/v2/test/second.jpg'), expect.stringContaining('/v2/test/a.jpg'),
+    ]);
+  });
+
+  it('sends replacement images when the final image count is unchanged', async () => {
+    await update({ files: threeFiles().slice(0, 1) });
+    expect(axios.put.mock.calls[0][1].profileImages).toEqual([
+      expect.stringContaining('/v2/test/old.jpg'), expect.stringContaining('/v2/test/a.jpg'),
+    ]);
+  });
+
+  it('includes saved images in registration when DS is missing the user', async () => {
+    await update({ retained: ['/v2/test/old.jpg', '/v2/test/second.jpg'], missingInDs: true });
+    expect(axios.put.mock.calls[0][1]).not.toHaveProperty('profileImages');
+    expect(axios.post.mock.calls[0][0]).toContain('/register');
+    expect(axios.post.mock.calls[0][1].profileImages).toEqual([
+      expect.stringContaining('/v2/test/old.jpg'), expect.stringContaining('/v2/test/second.jpg'),
+    ]);
+  });
+});

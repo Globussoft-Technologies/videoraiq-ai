@@ -353,6 +353,7 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
                 }}
                 className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-[var(--bg2)] transition-colors"
                 aria-label={`Play ${row.original.name}`}
+                title="Play preview"
               >
                 <Play className="w-5 h-5 text-[var(--brand)]" />
               </button>

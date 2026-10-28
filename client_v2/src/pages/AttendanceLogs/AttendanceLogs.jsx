@@ -3,6 +3,7 @@ import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
+import { Check } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import { useTimezone } from '@/context/TimezoneContext';
@@ -634,8 +635,10 @@ const AttendanceLogs = () => {
             type="button"
             aria-pressed={statusFilter === 'late_arrival'}
             onClick={() => dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === 'late_arrival' ? '' : 'late_arrival' })}
-            className={`h-10 rounded-[10px] border px-3 text-xs font-bold transition-colors cursor-pointer ${statusFilter === 'late_arrival' ? 'border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-300' : 'border-amber-500/60 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300'}`}
+            title={statusFilter === 'late_arrival' ? 'Late Arrival filter active. Click to clear.' : 'Show late arrivals only'}
+            className={`inline-flex h-10 items-center gap-1.5 rounded-[10px] border px-3 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg1solid)] ${statusFilter === 'late_arrival' ? 'border-amber-500 bg-amber-500 text-slate-950 hover:bg-amber-400' : 'border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:border-amber-500 hover:bg-amber-500/10'}`}
           >
+            <Check aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${statusFilter === 'late_arrival' ? 'opacity-100' : 'opacity-0'}`} />
             Late Arrival
           </button>
         }
