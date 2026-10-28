@@ -1,5 +1,5 @@
 import axios from "axios";
-import { packingReportData, formatPackingReportDuration } from "./packingReportData.js";
+import { packingReportData, formatPackingReportTotalTime } from "./packingReportData.js";
 import config from "config";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
@@ -76,6 +76,7 @@ const rowFromIncident = (item, timezone) => ({
   image: imageUrl(item.Image),
   boxId: item.boxId || '',
   completedBy: item.completedBy || '',
+  timeTakenSec: item.timeTakenSec,
   zones: Array.isArray(item.zones) ? item.zones : Object.entries(item.zones || {}).map(([zone, data]) => ({ ...data, zone })),
   detectedVia: item.detectedVia || '',
   confirmationReason: item.confirmationReason || '',
@@ -176,7 +177,7 @@ const packingRows = (details) => details.rows.map((row) => {
     date: record.Date,
     start: record['Start time'],
     end: record['End time'],
-    cycle: Number((Array.isArray(row.zones) ? row.zones : Object.entries(row.zones || {}).map(([zone, value]) => ({ ...value, zone }))).find(zone => String(zone.zone).trim() === String(row.completedBy).trim())?.timeTakenSec) || 0,
+    cycle: Number(row.timeTakenSec ?? (Array.isArray(row.zones) ? row.zones : Object.entries(row.zones || {}).map(([zone, value]) => ({ ...value, zone }))).find(zone => String(zone.zone).trim() === String(row.completedBy).trim())?.timeTakenSec) || 0,
     camera: asText(row.camera || "Packing camera"),
     time: asText(row.time),
     image: row.image,
@@ -186,7 +187,7 @@ const packingRows = (details) => details.rows.map((row) => {
 const packingSummary = (rows) => ({
   workers: new Set(rows.filter(row => row.operator && row.operator !== '—').map(row => JSON.stringify([row.station, row.operator]))).size,
   boxes: rows.reduce((sum, row) => sum + row.boxes, 0),
-  cycle: rows.length ? Math.round(rows.reduce((sum, row) => sum + row.cycle, 0) / rows.length) : 0,
+  totalSeconds: rows.reduce((sum, row) => sum + (Number.isFinite(row.cycle) && row.cycle > 0 ? row.cycle : 0), 0),
 });
 
 const drawPackingHeader = (document, details, suffix, summary) => {
@@ -204,7 +205,7 @@ const drawPackingHeader = (document, details, suffix, summary) => {
   const cardTop = 96;
   const gap = 10;
   const cardWidth = (width - 56 - gap * 2) / 3;
-  [["TOTAL WORKERS", summary.workers ?? 0, "#4f46e5"], ["BOXES PACKED", summary.boxes, "#059669"], ["AVERAGE TIME TO COMPLETE", formatPackingReportDuration(summary.cycle), "#7e22ce"]].forEach(([label, value, color], index) => {
+  [["TOTAL WORKERS", summary.workers ?? 0, "#4f46e5"], ["BOXES PACKED", summary.boxes, "#059669"], ["TOTAL TIME", formatPackingReportTotalTime(summary.totalSeconds), "#7e22ce"]].forEach(([label, value, color], index) => {
     const x = 28 + index * (cardWidth + gap);
     document.roundedRect(x, cardTop, cardWidth, 34, 5).fillAndStroke("#f8fafc", RULE);
     document.fillColor(color).circle(x + 10, cardTop + 12, 2.2).fill();

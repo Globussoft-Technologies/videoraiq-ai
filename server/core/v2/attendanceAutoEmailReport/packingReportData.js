@@ -2,8 +2,8 @@ import moment from 'moment-timezone';
 
 export const PACKING_REPORT_COLUMNS = {
   total: ['Box ID', 'Completed By', 'NVR', 'Camera Name', 'Date', 'Start time', 'End time', 'Time to complete', 'Snapshot'],
-  hourly: ['Time range', 'Boxes packed', 'Average time to complete', 'Active workers'],
-  comparison: ['NVR', 'Camera Name', 'Worker', 'Boxes packed', 'Average time to complete'],
+  hourly: ['Time range', 'Boxes packed', 'Total time', 'Active workers'],
+  comparison: ['NVR', 'Camera Name', 'Worker', 'Boxes packed', 'Total time'],
 };
 
 export const formatPackingReportDuration = (seconds) => {
@@ -17,6 +17,21 @@ export const formatPackingReportDuration = (seconds) => {
 };
 
 const duration = formatPackingReportDuration;
+const totalSeconds = (rows) => rows.reduce((total, row) => total + (Number.isFinite(row.seconds) && row.seconds > 0 ? row.seconds : 0), 0);
+export const formatPackingReportTotalTime = (seconds) => {
+  let remaining = Math.round(Number(seconds) || 0);
+  if (remaining <= 0) return '0s';
+  const units = [[365 * 86400, 'yr'], [30 * 86400, 'mo'], [86400, 'd'], [3600, 'h'], [60, 'm'], [1, 's']];
+  const parts = [];
+  for (const [size, unit] of units) {
+    const count = Math.floor(remaining / size);
+    if (!count) continue;
+    parts.push(`${count}${unit}`);
+    remaining %= size;
+    if (parts.length === 2) break;
+  }
+  return parts.join(' ');
+};
 const idOf = (value) => String(value?._id || value?.id || value || '');
 const zonesOf = (row) => {
   const snapshot = row.workerZones ?? row.zones ?? [];
@@ -34,10 +49,6 @@ const startOf = (row) => {
   return row.startTime || row.start_time || null;
 };
 const fmt = (value, timezone, pattern) => value && moment(value).tz(timezone).isValid() ? moment(value).tz(timezone).format(pattern) : '—';
-const averageSeconds = (rows) => {
-  const values = rows.map(secondsOf).filter((value) => Number.isFinite(value) && value > 0);
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-};
 
 export function packingReportData(rows, reportType = 'total', timezone = 'Asia/Kolkata', channels = []) {
   const type = PACKING_REPORT_COLUMNS[reportType] ? reportType : 'total';
@@ -53,6 +64,7 @@ export function packingReportData(rows, reportType = 'total', timezone = 'Asia/K
     station: JSON.stringify([idOf(row.nvrId || row.nvrData?._id || row.channelData?.nvrId), idOf(row.cameraId || row.channelData?._id || row.channelId || row.camera)]),
   }));
   const records = [];
+  // Zone configuration is used for camera scope only; it never creates worker records.
   const configuredWorkers = new Map();
   for (const channel of channels) {
     const settings = channel.detections?.boxPackingDetectionSettings?.id?.settings;
@@ -61,7 +73,10 @@ export function packingReportData(rows, reportType = 'total', timezone = 'Asia/K
     if (!Array.isArray(raw) || !raw.length) continue;
     const polygons = Array.isArray(raw[0]?.[0]) ? raw : [raw];
     polygons.forEach((polygon, index) => {
-      if (!Array.isArray(polygon) || polygon.length < 3) return;
+      if (!Array.isArray(polygon) || polygon.filter((point) => {
+        const [x, y] = Array.isArray(point) ? point : [point?.x, point?.y];
+        return Number.isFinite(Number(x)) && Number.isFinite(Number(y));
+      }).length < 3) return;
       const worker = String(settings?.zone_configs?.[index]?.name || `Zone ${index + 1}`).trim();
       const station = JSON.stringify([idOf(channel.nvrId), cameraId]);
       configuredWorkers.set(JSON.stringify([station, worker]), {
@@ -77,9 +92,6 @@ export function packingReportData(rows, reportType = 'total', timezone = 'Asia/K
   }));
   else {
     const groups = new Map();
-    if (type === 'comparison') {
-      for (const [key, worker] of configuredWorkers) groups.set(key, { rows: [], worker });
-    }
     normalized.forEach((row) => {
       if ((type === 'hourly' && !row.date.isValid()) || (type === 'comparison' && !row.worker)) return;
       const key = type === 'hourly' ? row.date.format('YYYY-MM-DD HH') : JSON.stringify([row.station, row.worker]);
@@ -89,17 +101,17 @@ export function packingReportData(rows, reportType = 'total', timezone = 'Asia/K
     const multiDay = new Set([...groups.values()].filter((group) => group.rows.length).map((group) => group.rows[0].date.format('YYYY-MM-DD'))).size > 1;
     const entries = type === 'hourly' ? [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)) : [...groups.entries()];
     entries.forEach(([, group]) => {
-      const row = group.rows[0] || group.worker, average = duration(averageSeconds(group.rows));
-      if (type === 'comparison') records.push({ NVR: row.nvr || '—', 'Camera Name': row.camera || '—', Worker: row.worker, 'Boxes packed': group.rows.length, 'Average time to complete': average });
+      const row = group.rows[0] || group.worker, totalTime = formatPackingReportTotalTime(totalSeconds(group.rows));
+      if (type === 'comparison') records.push({ NVR: row.nvr || '—', 'Camera Name': row.camera || '—', Worker: row.worker, 'Boxes packed': group.rows.length, 'Total time': totalTime });
       else {
         const workers = new Map();
-        group.rows.filter((item) => item.worker).forEach((item) => workers.set(JSON.stringify([item.station, item.worker]), item.worker));
+        group.rows.filter((item) => item.worker).forEach((item) => workers.set(item.worker, item.worker));
         const names = [...workers.values()];
         const start = row.date.clone().startOf('hour');
-        records.push({ 'Time range': start.format(multiDay ? 'DD MMM YYYY HH:mm' : 'HH:mm') + '–' + start.clone().add(1, 'hour').format('HH:mm'), 'Boxes packed': group.rows.length, 'Average time to complete': average, 'Active workers': `${workers.size}${names.length ? ' · ' + names.join(', ') : ''}` });
+        records.push({ 'Time range': start.format(multiDay ? 'DD MMM YYYY HH:mm' : 'HH:mm') + '–' + start.clone().add(1, 'hour').format('HH:mm'), 'Boxes packed': group.rows.length, 'Total time': totalTime, 'Active workers': `${workers.size}${names.length ? ' · ' + names.join(', ') : ''}` });
       }
     });
   }
-  const workerKeys = new Set([...configuredWorkers.keys(), ...normalized.filter((row) => row.worker).map((row) => JSON.stringify([row.station, row.worker]))]);
-  return { records, columns: PACKING_REPORT_COLUMNS[type], summary: { workers: workerKeys.size, boxes: rows.length, cycle: Math.round(averageSeconds(normalized)) } };
+  const workerKeys = new Set(normalized.filter((row) => row.worker).map((row) => row.worker));
+  return { records, columns: PACKING_REPORT_COLUMNS[type], summary: { workers: workerKeys.size, boxes: rows.length, totalSeconds: totalSeconds(normalized) } };
 }
