@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { Clock, Moon, Sun } from 'lucide-react';
+import { Clock, Moon, Sun, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -342,13 +342,22 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
 
           <div className="flex flex-wrap gap-3">
             <div>
-              <CheckPill
-                checked={formik.values.isNightShift}
-                onChange={(next) => formik.setFieldValue('isNightShift', next)}
-                icon={<Moon className="w-4 h-4" />}
-                label="Night Shift"
-                tint="var(--violet)"
-              />
+              <div role="group" aria-label="Shift type" className="flex flex-wrap gap-2">
+                <CheckPill
+                  checked={!formik.values.isNightShift}
+                  onChange={() => formik.setFieldValue('isNightShift', false)}
+                  icon={<Sun className="w-4 h-4" />}
+                  label="Day Shift"
+                  tint="var(--warn)"
+                />
+                <CheckPill
+                  checked={formik.values.isNightShift}
+                  onChange={() => formik.setFieldValue('isNightShift', true)}
+                  icon={<Moon className="w-4 h-4" />}
+                  label="Night Shift"
+                  tint="var(--violet)"
+                />
+              </div>
               {formik.errors.isNightShift && (
                 <div className="text-xs text-red-500 mt-1 font-medium">
                   {formik.errors.isNightShift}
@@ -359,7 +368,7 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
             <CheckPill
               checked={formik.values.isDefault}
               onChange={(next) => formik.setFieldValue('isDefault', next)}
-              icon={<Sun className="w-4 h-4" />}
+              icon={<Star className="w-4 h-4" />}
               label="Default Shift"
               tint="var(--warn)"
             />

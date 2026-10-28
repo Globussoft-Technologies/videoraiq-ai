@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
-import { Search, CirclePlus, Trash, Users, Moon, Sun, Info } from 'lucide-react';
+import { Search, CirclePlus, Trash, Users, Moon, Star, Info } from 'lucide-react';
 import { FiEdit3 } from 'react-icons/fi';
 import { toast } from 'sonner';
 import DeleteConfirmation from '@/components/DeleteConfirmation';
@@ -410,7 +410,7 @@ const Shifts = () => {
               <Moon className="w-3 h-3 text-[var(--violet)]" /> Night shift
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Sun className="w-3 h-3 text-[var(--ok)]" /> Default for new staff
+              <Star className="w-3 h-3 text-[var(--ok)]" /> Default for new staff
             </span>
           </div>
 
