@@ -9,7 +9,6 @@ import {
   Loader2,
   PackageCheck,
   PackageOpen,
-  RefreshCw,
   Sparkles,
   TrendingUp,
   Truck,
@@ -19,6 +18,7 @@ import AccessDenied from '@/components/AccessDenied';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import IncidentFilterPopover from '@/pages/IncidentLogs/components/IncidentFilterPopover';
+import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import {
   fetchIncidentBoxTypes,
@@ -30,6 +30,8 @@ import {
 
 const VEHICLE_ENDPOINT = '/incidents/logs/loading-unloading-stock-counting-detection/numbers';
 const BOX_TYPE_ENDPOINT = '/incidents/logs/loading-unloading-stock-counting-detection/box-types';
+const AUTO_REFRESH_KEY = 'stock_analytics_auto_refresh_enabled';
+const REFRESH_INTERVAL_KEY = 'stock_analytics_auto_refresh_interval';
 const number = (value) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(value || 0);
 const titleCase = (value) => String(value || 'Unknown').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const incidentImageUrl = (value) => {
@@ -71,6 +73,14 @@ const StockCountingAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem(AUTO_REFRESH_KEY);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const saved = Number.parseInt(localStorage.getItem(REFRESH_INTERVAL_KEY), 10);
+    return Number.isFinite(saved) && saved >= 0 ? saved : 30;
+  });
   const [expandedBoxTypes, setExpandedBoxTypes] = useState(() => new Set());
   const [boxTypeEventRows, setBoxTypeEventRows] = useState({});
   const [boxTypeEventLoading, setBoxTypeEventLoading] = useState({});
@@ -89,6 +99,20 @@ const StockCountingAnalytics = () => {
     : typeof logs?.global?.view === 'boolean'
       ? logs.global.view
       : Boolean(logs?.view);
+
+  useEffect(() => {
+    localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh);
+  }, [autoRefresh]);
+
+  useEffect(() => {
+    localStorage.setItem(REFRESH_INTERVAL_KEY, refreshInterval);
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    if (!canView || !autoRefresh || refreshInterval <= 0 || loading) return;
+    const timer = setInterval(() => setRefreshKey((value) => value + 1), refreshInterval * 1000);
+    return () => clearInterval(timer);
+  }, [canView, autoRefresh, refreshInterval, loading]);
 
   useEffect(() => {
     if (!canView) return;
@@ -464,14 +488,15 @@ const StockCountingAnalytics = () => {
               triggerClassName="!border-white/25 !bg-white/10 !text-white hover:!bg-white/20"
             />
             <button type="button" onClick={() => { setStartDate(moment.tz(getConfiguredTimezone()).subtract(29, 'days').format('YYYY-MM-DD')); setEndDate(moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD')); setNvrIds([]); setChannelIds([]); setVehicleNumber(''); setBoxType(''); setVehicleNumberSearch(''); }} className="h-10 rounded-lg border border-white/25 px-3 text-sm">Reset</button>
-            <button
-              type="button"
-              onClick={() => setRefreshKey((value) => value + 1)}
-              disabled={loading}
-              className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-            </button>
+            <AutoRefreshComponent
+              isActive={autoRefresh && refreshInterval > 0}
+              onActiveChange={setAutoRefresh}
+              refreshInterval={refreshInterval}
+              onIntervalChange={setRefreshInterval}
+              onManualRefresh={() => {
+                if (!loading) setRefreshKey((value) => value + 1);
+              }}
+            />
           </div>
         </div>
       <div className="px-4 py-2 text-sm text-[var(--tx2)]" aria-live="polite">

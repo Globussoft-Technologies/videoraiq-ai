@@ -54,6 +54,13 @@ const validMoment = (value) => {
   return parsed.isValid() ? parsed : null;
 };
 
+const attendanceDate = (item, region) => {
+  const capture = validMoment(item.login) || validMoment(item.logout);
+  if (capture) return capture.tz(region).format('DD/MM/YYYY');
+  const date = item.date && item.date !== '--' ? moment(item.date) : null;
+  return date?.isValid() ? date.format('DD/MM/YYYY') : '-';
+};
+
 /** Compact badge for a shift-derived flag (late / early / overtime). */
 const ShiftFlag = ({ children, tint }) => (
   <span
@@ -218,13 +225,7 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       header: () => <SortHeader label="Date" field="date" {...sortProps} />,
       cell: ({ row }) => (
         <span className="text-[var(--tx2)] text-xs" style={mono}>
-          {moment.utc(row.original.login).isValid()
-            ? moment.utc(row.original.login).tz(region).format('DD/MM/YYYY')
-            : moment.utc(row.original.logout).isValid()
-              ? moment.utc(row.original.logout).tz(region).format('DD/MM/YYYY')
-              : row.original.date
-                ? moment(row.original.date).format('DD/MM/YYYY')
-                : '-'}
+          {attendanceDate(row.original, region)}
         </span>
       ),
     },
@@ -508,6 +509,11 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
               {item.department || '—'}
             </span>
           </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 text-[11px]" style={mono}>
+          <span className="text-[var(--tx3)]">Date</span>
+          <span className="font-semibold text-[var(--tx)]">{attendanceDate(item, region)}</span>
         </div>
 
         {/* Time + Status fields */}

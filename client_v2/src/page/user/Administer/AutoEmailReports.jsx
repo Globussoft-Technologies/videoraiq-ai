@@ -58,6 +58,8 @@ const emptyForm = () => ({
   title: '',
   contentTypes: ['attendance'],
   incidentTypes: [],
+  selectedColumns: [],
+  selectedBreakColumns: [],
   pdfLayout: 'list',
   recipients: [],
   frequency: 'weekly',
@@ -164,6 +166,8 @@ function formFromReport(report = {}) {
     title: report.title || '',
     contentTypes: reportContentTypes(report),
     incidentTypes: Array.isArray(report.incidentTypes) ? report.incidentTypes : [],
+    selectedColumns: Array.isArray(report.selectedColumns) ? report.selectedColumns : [],
+    selectedBreakColumns: Array.isArray(report.selectedBreakColumns) ? report.selectedBreakColumns : [],
     pdfLayout: report.pdfLayout === 'grid' ? 'grid' : 'list',
     recipients: Array.isArray(report.recipients) ? report.recipients : [],
     frequency: schedule.frequency || 'weekly',
@@ -210,6 +214,8 @@ function buildPayload(form) {
     recipients: form.recipients,
     schedule,
     target,
+    selectedColumns: hasAttendance ? form.selectedColumns : [],
+    selectedBreakColumns: hasAttendance ? form.selectedBreakColumns : [],
     formats: [form.pdf && 'pdf', form.xlsx && 'xlsx', hasAttendance && form.breakPdf && 'breakPdf', hasAttendance && form.breakXlsx && 'breakXlsx'].filter(Boolean),
     enabled: form.enabled,
     sendTestMail: Boolean(form.sendTestMail),
@@ -301,6 +307,8 @@ function ReportFormModal({
   recipients,
   employees,
   departments,
+  attendanceColumns = [],
+  breakColumns = [],
   incidentTypes,
   adminTimezone,
   timezoneValue,
@@ -478,6 +486,27 @@ function ReportFormModal({
               </div>
             )}
           </Section>
+
+          {hasAttendance && (
+            <Section title="Report columns (optional)" icon={FileText}>
+              <p style={{ margin: '0 0 10px', color: 'var(--tx3)', fontSize: 12 }}>
+                Leave a selection empty to include all columns. Selected columns apply to both Excel and PDF.
+              </p>
+              {(form.pdf || form.xlsx) && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ marginBottom: 6, color: 'var(--tx2)', fontSize: 12 }}>Attendance columns</div>
+                  <MultiSelect options={attendanceColumns.map((column) => ({ id: column, label: column }))} value={form.selectedColumns} onChange={(value) => setForm((current) => ({ ...current, selectedColumns: value }))} placeholder="All attendance columns" searchPlaceholder="Search columns..." msg="No columns found" maxHeight="max-h-64" />
+                  <p style={{ margin: '6px 0 0', color: 'var(--tx3)', fontSize: 11 }}>Choosing columns uses the attendance table layout for multi-day Excel reports.</p>
+                </div>
+              )}
+              {(form.breakPdf || form.breakXlsx) && (
+                <div>
+                  <div style={{ marginBottom: 6, color: 'var(--tx2)', fontSize: 12 }}>Break-log columns</div>
+                  <MultiSelect options={breakColumns.map((column) => ({ id: column, label: column }))} value={form.selectedBreakColumns} onChange={(value) => setForm((current) => ({ ...current, selectedBreakColumns: value }))} placeholder="All break-log columns" searchPlaceholder="Search columns..." msg="No columns found" maxHeight="max-h-64" />
+                </div>
+              )}
+            </Section>
+          )}
 
           {hasAttendance && (
             <Section title="Filter" icon={Search}>
@@ -948,6 +977,8 @@ export default function AutoEmailReports() {
           recipients={recipients}
           employees={employees}
           departments={departments}
+          attendanceColumns={audienceApi.data?.attendanceColumns || []}
+          breakColumns={audienceApi.data?.breakColumns || []}
           incidentTypes={incidentTypes}
           adminTimezone={adminTimezone}
           timezoneValue={timezoneValue}

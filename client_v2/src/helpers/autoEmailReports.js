@@ -42,6 +42,8 @@ export async function getAttendanceAudienceOptions({ search = '' } = {}) {
   return {
     employees: data?.employees ?? [],
     departments: data?.departments ?? [],
+    attendanceColumns: data?.attendanceColumns ?? [],
+    breakColumns: data?.breakColumns ?? [],
   };
 }
 

@@ -289,7 +289,8 @@ function PresenceCard({ o }) {
   );
 }
 
-function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
+function AbsenceSection({ s, model, preview, range }) {
+  const [latestPreview, setLatestPreview] = useState(null);
   const cameraColumn = useRef(null);
   const logsColumn = useRef(null);
   const [columnHeight, setColumnHeight] = useState(undefined);
@@ -347,7 +348,7 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
             {!latest ? <div style={{ padding: 16 }}><NoPeriodData minH={120} /></div> : (
               <div style={{ display: 'flex', gap: 12, padding: '12px 14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                 <div style={{ flex: '0 1 260px', width: 260, minWidth: 0, maxWidth: '100%' }}>
-                  <Snap image={latest.image} onOpen={() => preview(latest._id)}>
+                  <Snap image={latest.image} onOpen={() => setLatestPreview(latest)}>
                     <span style={{ position: 'absolute', left: 8, bottom: 8, ...mono, fontSize: 9.5, color: '#fff', background: 'rgba(6,8,13,.75)', borderRadius: 5, padding: '3px 7px' }}>{clock(latest.start)}</span>
                   </Snap>
                 </div>
@@ -360,7 +361,6 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {latest.image && <DownloadButton action={() => downloadSnapshot({ ...latest, station: s })} description="image" style={btnPrimary}>Image</DownloadButton>}
-                    {onOpenLogs && <button type="button" onClick={onOpenLogs} style={btnGhost}>All alert logs →</button>}
                   </div>
                 </div>
               </div>
@@ -405,6 +405,11 @@ function AbsenceSection({ s, model, onOpenLogs, preview, range }) {
           {s.ops.map(o => <AbsenceLogTable key={o.i} operator={o} absences={s.absences} singleDay={model.singleDay} onPreview={preview} />)}
         </div>
       </Panel>
+      <SnapshotPreview
+        items={latestPreview ? [latestPreview] : []}
+        openId={latestPreview?._id}
+        onClose={() => setLatestPreview(null)}
+      />
     </>
   );
 }
@@ -637,7 +642,7 @@ const btnGhost = { display: 'flex', alignItems: 'center', gap: 6, height: 32, pa
 
 // ---------------------------------------------------------------- page
 
-export default function Overview({ model, onOpenLogs, selected, onSelect, range }) {
+export default function Overview({ model, selected, onSelect, range }) {
   const [openId, setOpenId] = useState(null);
   if (!model.stations.length) {
     return (
@@ -659,7 +664,7 @@ export default function Overview({ model, onOpenLogs, selected, onSelect, range 
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14.5 }}>{absentOp.zone} desk empty on {s.name}</span>
         </div>
       )}
-      <AbsenceSection s={s} model={model} onOpenLogs={onOpenLogs} preview={setOpenId} range={range} />
+      <AbsenceSection key={s._id} s={s} model={model} preview={setOpenId} range={range} />
       <SolderSection s={s} />
       <HourSection s={s} model={model} range={range} />
       <SnapshotPreview items={[...s.absences, ...s.missed]} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
