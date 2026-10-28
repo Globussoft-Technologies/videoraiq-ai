@@ -1219,26 +1219,42 @@ class AttendanceService {
         // this org's configured thresholds. Placed immediately after
         // firstCheckIn/lastCheckOut so every stage below — and every caller
         // that reuses this pipeline — can read `status`.
+        // The attendance view uses the currently configured roster for this day.
+        // Saved arrival assessments remain untouched for incident/audit history.
+        { $lookup: {
+          from: 'shiftschedules',
+          let: { employeeId: '$_id.employee', rosterDate: '$_id.date' },
+          pipeline: [{ $match: { adminId: new mongoose.Types.ObjectId(adminId), $expr: { $and: [
+            { $eq: ['$employee', '$$employeeId'] }, { $eq: ['$date', '$$rosterDate'] },
+          ] } } }, { $limit: 1 }],
+          as: '__rosterOverride',
+        } },
+        { $addFields: { __rosterOverride: { $arrayElemAt: ['$__rosterOverride', 0] } } },
+        ...shiftJoinStages({ $cond: [
+          { $ne: [{ $ifNull: ['$__rosterOverride', null] }, null] },
+          { $cond: ['$__rosterOverride.isOff', null, '$__rosterOverride.shiftId'] },
+          '$employee.shiftId',
+        ] }),
+        { $addFields: { shift: { $cond: [
+          { $and: [
+            { $ne: [{ $ifNull: ['$shift', null] }, null] },
+            { $ne: [{ $ifNull: ['$__rosterOverride', null] }, null] },
+          ] },
+          { $mergeObjects: ['$shift', { workingDays: {
+            sunday: { type: '$__rosterOverride.dayType' },
+            monday: { type: '$__rosterOverride.dayType' },
+            tuesday: { type: '$__rosterOverride.dayType' },
+            wednesday: { type: '$__rosterOverride.dayType' },
+            thursday: { type: '$__rosterOverride.dayType' },
+            friday: { type: '$__rosterOverride.dayType' },
+            saturday: { type: '$__rosterOverride.dayType' }
+          } }] },
+          '$shift',
+        ] } } },
         ...shiftContextStage(shiftTimezone),
         attendanceStatusStage(attendanceRules),
         shiftOvertimeStage(),
-        {
-          $addFields: {
-            // Saved assessments must not flag employees who no longer have a shift.
-            isLate: { $cond: [
-              { $ne: [{ $ifNull: ["$shift._id", null] }, null] },
-              { $ifNull: ["$arrivalAssessment.isLate", "$isLate"] },
-              false,
-            ] },
-            lateMinutes: { $cond: [
-              { $ne: [{ $ifNull: ["$shift._id", null] }, null] },
-              { $ifNull: ["$arrivalAssessment.lateMinutes", "$lateMinutes"] },
-              null,
-            ] },
-            shiftName: { $ifNull: ["$arrivalAssessment.shiftName", "$shiftName"] },
-            shiftStartTime: { $ifNull: ["$arrivalAssessment.startTime", "$shiftStartTime"] },
-          },
-        },
+
 
         // --- Status filter (Present / Half Day / Absent / Checked In) ---
         // Validated against the known set rather than passed through raw, so
@@ -1247,7 +1263,9 @@ class AttendanceService {
         // of ATTENDANCE_STATUS) backing the Check In / Checkout tiles: "has
         // this employee checked in/out at all today", regardless of what
         // status that graded to.
-        ...(status === "late_arrival"
+        ...(status === "early_departure"
+          ? [{ $match: { earlyLeaveMinutes: { $gt: 0 }, firstCheckIn: { $ne: null }, lastCheckOut: { $ne: null } } }]
+          : status === "late_arrival"
           ? [{ $match: { isLate: true, lateMinutes: { $gt: 0 }, firstCheckIn: { $ne: null } } }]
           : status === "checkin"
           ? [{ $match: { firstCheckIn: { $ne: null } } }]
