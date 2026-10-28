@@ -75,7 +75,9 @@ const LateArrivalLabel = ({ item, overlay = false }) => {
     <span className={overlay
       ? 'mt-1 border-t border-white/20 pt-1 text-[10px] font-bold text-amber-300'
       : 'mt-1 inline-block rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-1 text-xs font-bold text-amber-800 dark:text-amber-300'}>
-      Late by {total} {overlay ? (total === 1 ? 'min' : 'mins') : (total === 1 ? 'minute' : 'minutes')}
+      Late by {total >= 60
+        ? formatMinutes(total)
+        : `${total} ${overlay ? (total === 1 ? 'min' : 'mins') : (total === 1 ? 'minute' : 'minutes')}`}
     </span>
   );
 };

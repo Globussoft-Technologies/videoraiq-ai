@@ -1,3 +1,4 @@
+import { latestAttendanceCapture } from './components/latestCapture';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -361,47 +362,55 @@ const AttendanceLogs = () => {
   /* ─────────────── Derived data ─────────────── */
   const mappedLogs = useMemo(
     () =>
-      (attendanceLogs || []).map((item) => ({
-        id: item.employee?._id || item.id,
-        image: item.employee?.profilePics?.[0]
-          ? BASE_URL + item.employee?.profilePics?.[0]
-          : USER_AVTAR_INITIALS +
-            (item.employee ? item.employee.firstName.charAt(0) : 'U') +
-            (item.employee ? item.employee.lastName.charAt(0) : 'P'),
-        name: item.employee ? `${item.employee.firstName} ${item.employee.lastName}` : '',
-        department: item.employee?.departmentId?.departmentName || 'Unknown',
-        date: item.date,
-        location: item.employee?.location || '--',
-        login: item.logInTime,
-        logout: item.logOutTime || '--',
-        cameraNames: cameraNamesForAttendance(item),
-        imageUrls: Array.isArray(item?.imageUrls)
-          ? item.imageUrls.map((img) => ({
-              url: img?.images?.frame || img?.images?.person || img?.images?.face,
-              timestamp: img?.timestamp,
-              cameraType: img?.cameraType,
-              cameraName: img?.cameraName,
-            }))
-          : [],
-        email: item.employee?.email || '',
-        checkinCam: cameraNamesForAttendance(item) || item.checkinCam || '-',
-        checkoutCam: item.checkoutCam || '-',
-        // Graded on the server against this org's configured full-day /
-        // half-day thresholds — never re-derived here, so the table, the
-        // export and Attendance Analytics can't disagree.
-        status: item.status,
-        minutesSpent: item.minutesSpent,
-        isLate: item.isLate,
-        lateMinutes: item.lateMinutes,
-        shiftName: item.shiftName,
-        earlyLeaveMinutes: item.earlyLeaveMinutes,
-        overtimeMinutes: item.overtimeMinutes,
-        isWeekOff: item.isWeekOff,
-        // Same checkout→checkin pairing behind the Break Logs dialog,
-        // totalled here so the table doesn't need a click-through to show it.
-        breakMinutes: item.breakMinutes || 0,
-        breakCount: item.breakCount || 0,
-      })),
+      (attendanceLogs || []).map((item) => {
+        const capture = import.meta.env.VITE_ATTENDANCE_USE_LATEST_CAPTURE === 'true'
+          ? latestAttendanceCapture(item.imageUrls) : null;
+        return {
+          id: item.employee?._id || item.id,
+          image: capture
+            ? (/^https?:\/\//i.test(capture)
+              ? capture
+              : `${BASE_URL.replace(/\/+$/, '')}/${capture.replace(/^\/+/, '')}`)
+            : item.employee?.profilePics?.[0]
+            ? BASE_URL + item.employee?.profilePics?.[0]
+            : USER_AVTAR_INITIALS +
+              (item.employee ? item.employee.firstName.charAt(0) : 'U') +
+              (item.employee ? item.employee.lastName.charAt(0) : 'P'),
+          name: item.employee ? `${item.employee.firstName} ${item.employee.lastName}` : '',
+          department: item.employee?.departmentId?.departmentName || 'Unknown',
+          date: item.date,
+          location: item.employee?.location || '--',
+          login: item.logInTime,
+          logout: item.logOutTime || '--',
+          cameraNames: cameraNamesForAttendance(item),
+          imageUrls: Array.isArray(item?.imageUrls)
+            ? item.imageUrls.map((img) => ({
+                url: img?.images?.frame || img?.images?.person || img?.images?.face,
+                timestamp: img?.timestamp,
+                cameraType: img?.cameraType,
+                cameraName: img?.cameraName,
+              }))
+            : [],
+          email: item.employee?.email || '',
+          checkinCam: cameraNamesForAttendance(item) || item.checkinCam || '-',
+          checkoutCam: item.checkoutCam || '-',
+          // Graded on the server against this org's configured full-day /
+          // half-day thresholds — never re-derived here, so the table, the
+          // export and Attendance Analytics can't disagree.
+          status: item.status,
+          minutesSpent: item.minutesSpent,
+          isLate: item.isLate,
+          lateMinutes: item.lateMinutes,
+          shiftName: item.shiftName,
+          earlyLeaveMinutes: item.earlyLeaveMinutes,
+          overtimeMinutes: item.overtimeMinutes,
+          isWeekOff: item.isWeekOff,
+          // Same checkout→checkin pairing behind the Break Logs dialog,
+          // totalled here so the table doesn't need a click-through to show it.
+          breakMinutes: item.breakMinutes || 0,
+          breakCount: item.breakCount || 0,
+        };
+      }),
     [attendanceLogs, BASE_URL, USER_AVTAR_INITIALS]
   );
 

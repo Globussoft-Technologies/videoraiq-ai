@@ -117,11 +117,14 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   // An empty filter set means "everyone", so the server refuses it unless
   // `allEmployees` is set explicitly. Mirror that here rather than letting the
   // admin hit a 400.
+  const removedEmployeeIds = individual && !dated
+    ? [...autoSelectedEmployeeIdsRef.current].filter(id => !employeeIds.includes(id))
+    : [];
   const canSubmit =
     Boolean(selectedShiftId) &&
     !startDateInvalid &&
     !dateRangeInvalid &&
-    (hasFilter || (!individual && allEmployees));
+    (hasFilter || removedEmployeeIds.length > 0 || (!individual && allEmployees));
 
   const filters = useMemo(
     () =>
@@ -424,7 +427,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
         reset();
         return;
       }
-      const res = await assignShift(selectedShiftId, filters);
+      const res = await assignShift(selectedShiftId, { ...filters, ...(individual ? { removedEmployeeIds } : {}) });
       const data = res?.data?.body?.data;
       toast.success(res?.data?.body?.message || `${data?.modified ?? 0} employees assigned`);
       onAssigned?.(data);
@@ -501,7 +504,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
-        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
+        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] customscrollbar"
         closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] transition-colors top-5 right-5"
         onInteractOutside={(event) => {
           if (conflictingEmployees.length > 0) {
@@ -597,6 +600,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                 onLoadMore={loadMoreEmployees}
                 hasMore={employeeLoadedCount < employeeTotalCount}
                 loadingMore={loadingMoreEmployees}
+                inlinePanel
                 placeholder="Select employees…"
                 searchPlaceholder="Search by name or email…"
                 msg="No employees found"
