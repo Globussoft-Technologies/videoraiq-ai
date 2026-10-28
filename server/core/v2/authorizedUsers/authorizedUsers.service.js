@@ -934,7 +934,11 @@ async updateAuthUser(req, res, _next) {
       department: updatedUser.departmentId?.departmentName || "",
       branch: updatedUser.branch || "",
       designation: updatedUser.designation || "",
-      profileImages: newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
+      // DS preserves enrolled faces when this optional field is omitted.
+      ...(existingProfilePics.length !== newProfilePics.length ||
+        existingProfilePics.some((pic, index) => pic !== newProfilePics[index])
+        ? { profileImages: newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)) }
+        : {}),
       collection_name: this.getDbName(updatedUser.adminId),
       admin_id: updatedUser.adminId?.toString(),
     };

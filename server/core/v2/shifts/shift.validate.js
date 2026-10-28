@@ -120,10 +120,14 @@ const assignmentFilters = {
   includeSuspended: Joi.boolean().default(false),
 };
 
-export const assignmentFilterValidator = Joi.object(assignmentFilters).custom(
+export const assignmentFilterValidator = Joi.object({
+  ...assignmentFilters,
+  removedEmployeeIds: Joi.array().items(objectId("Employee id")).default([]),
+}).custom(
   (value, helpers) => {
     const hasFilter =
       value.employeeIds?.length ||
+      value.removedEmployeeIds?.length ||
       value.locations?.length ||
       value.departmentIds?.length;
     if (!hasFilter && !value.allEmployees) {

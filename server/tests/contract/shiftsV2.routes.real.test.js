@@ -339,6 +339,40 @@ describe("GET/PUT/DELETE /api/v2/shifts/:id", () => {
 });
 
 describe("POST /api/v2/shifts/:id/assign", () => {
+  it("saves explicit deselections without removing unseen or reassigned employees", async () => {
+    const shift = await Shift.create({ adminId: admin._id, ...validShift() });
+    const otherShift = await Shift.create({ adminId: admin._id, ...validShift({ name: "Other shift" }) });
+    const kept = await makeEmployee({ email: "kept@test.com", shiftId: shift._id });
+    const removed = await makeEmployee({ email: "removed@test.com", shiftId: shift._id });
+    const unseen = await makeEmployee({ email: "unseen@test.com", shiftId: shift._id });
+    const moved = await makeEmployee({ email: "moved@test.com", shiftId: otherShift._id });
+    const foreign = await makeEmployee({ email: "foreign@test.com", adminId: new mongoose.Types.ObjectId(), shiftId: shift._id });
+    const res = await request(app).post(`/api/v2/shifts/${shift._id}/assign`).send({
+      employeeIds: [String(kept._id)],
+      removedEmployeeIds: [removed, moved, foreign].map(employee => String(employee._id)),
+    });
+    expect(res.status).toBe(200);
+    expect(inner(res).data.unassigned).toBe(1);
+    expect((await AuthorizedUser.findById(removed._id)).shiftId).toBeNull();
+    expect(String((await AuthorizedUser.findById(kept._id)).shiftId)).toBe(String(shift._id));
+    expect(String((await AuthorizedUser.findById(unseen._id)).shiftId)).toBe(String(shift._id));
+    expect(String((await AuthorizedUser.findById(moved._id)).shiftId)).toBe(String(otherShift._id));
+    expect(String((await AuthorizedUser.findById(foreign._id)).shiftId)).toBe(String(shift._id));
+  });
+  it("supports deselecting the last employee without assigning the whole organization", async () => {
+    const shift = await Shift.create({ adminId: admin._id, ...validShift() });
+    const removed = await makeEmployee({ email: "last@test.com", shiftId: shift._id });
+    const untouched = await makeEmployee({ email: "untouched@test.com" });
+    const res = await request(app).post(`/api/v2/shifts/${shift._id}/assign`).send({
+      employeeIds: [], removedEmployeeIds: [String(removed._id)],
+    });
+    expect(res.status).toBe(200);
+    expect(inner(res).data.modified).toBe(0);
+    expect(inner(res).data.unassigned).toBe(1);
+    expect((await AuthorizedUser.findById(removed._id)).shiftId).toBeNull();
+    expect((await AuthorizedUser.findById(untouched._id)).shiftId == null).toBe(true);
+  });
+
   let shift;
   let engineering;
   let sales;

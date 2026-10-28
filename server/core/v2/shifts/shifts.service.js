@@ -710,7 +710,8 @@ class ShiftService {
           );
       }
 
-      const targets = await this.#resolveTargets(adminId, value, memberId, {
+      const removalOnly = value.removedEmployeeIds.length > 0 && !value.employeeIds?.length && !value.locations?.length && !value.departmentIds?.length && !value.allEmployees;
+      const targets = removalOnly ? [] : await this.#resolveTargets(adminId, value, memberId, {
         excludeShiftId: shift._id,
       });
       const employeeIds = targets.map((employee) => employee._id);
@@ -729,9 +730,18 @@ class ShiftService {
           })
         : { deletedCount: 0 };
 
+      const selectedIds = new Set((value.employeeIds || []).map(String));
+      const removedIds = value.removedEmployeeIds.filter(id => !selectedIds.has(String(id)));
+      const removed = removedIds.length ? await authorizedUsersModel.updateMany({
+        adminId: asObjectId(adminId),
+        shiftId: shift._id,
+        _id: { $in: removedIds.map(asObjectId) },
+      }, { $set: { shiftId: null } }).setOptions({ memberId }) : { modifiedCount: 0 };
+      const unassigned = removed.modifiedCount ?? 0;
+
       return res.status(200).json(
         Response.userSuccessResp(
-          modified
+          unassigned ? `${modified} employees assigned, ${unassigned} removed from ${shift.name}` : modified
             ? `${modified} employee${modified === 1 ? "" : "s"} assigned to ${shift.name}`
             : "No employees needed updating — they are already on this shift",
           {
@@ -739,6 +749,7 @@ class ShiftService {
             shiftName: shift.name,
             matched: employeeIds.length,
             modified,
+            unassigned,
             clearedTemporaryOverrides: clearedTemporaryOverrides?.deletedCount ?? 0,
           },
         ),
