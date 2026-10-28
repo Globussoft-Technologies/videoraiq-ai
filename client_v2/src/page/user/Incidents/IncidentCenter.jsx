@@ -1537,6 +1537,7 @@ export default function IncidentCenter() {
   // filter via navigate(..., { state }).
   const initialStatusFilter = location.state?.statusFilter;
   const initialDate = location.state?.date;
+  const initialAllTime = location.state?.allTime === true;
   const initialSeverityFilter = location.state?.severityFilter;
   // Same convention as client's Incidents page — visiting with this query
   // param on the URL turns on bulk-selection/delete mode.
@@ -1607,8 +1608,8 @@ export default function IncidentCenter() {
   const [detTypes,   setDetTypes]   = useState(() => new Set());
   const [sevSet,     setSevSet]     = useState(() => new Set(initialSeverityFilter ? [initialSeverityFilter] : []));
   const [statusSet,  setStatusSet]  = useState(() => new Set(initialStatusFilter ? [initialStatusFilter] : []));
-  const [dateFrom,   setDateFrom]   = useState(() => initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
-  const [dateTo,     setDateTo]     = useState(() => initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
+  const [dateFrom,   setDateFrom]   = useState(() => initialAllTime ? '' : initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
+  const [dateTo,     setDateTo]     = useState(() => initialAllTime ? '' : initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
   const [nvrIds,     setNvrIds]     = useState([]);
   const [channelIds, setChannelIds] = useState([]);
   const [deptIds,    setDeptIds]    = useState([]);

@@ -82,6 +82,20 @@ const LateArrivalLabel = ({ item, overlay = false }) => {
   );
 };
 
+const EarlyLeaveLabel = ({ item, overlay = false }) => {
+  const minutes = Number(item.earlyLeaveMinutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  const total = Math.ceil(minutes);
+  const duration = total >= 60 ? formatMinutes(total) : `${total} ${total === 1 ? 'min' : 'mins'}`;
+  return (
+    <span className={overlay
+      ? 'mt-1 border-t border-white/20 pt-1 text-[10px] font-bold text-amber-300'
+      : 'mt-1 inline-block rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-1 text-xs font-bold text-amber-800 dark:text-amber-300'}>
+      Left {duration} early
+    </span>
+  );
+};
+
 /** 150 -> "2h 30m", so an overtime badge stays readable past an hour. */
 const formatMinutes = (minutes) => {
   const total = Math.max(0, Math.round(minutes || 0));
@@ -269,7 +283,7 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       header: 'Status',
       cell: ({ row }) => {
         const { statusLabel, statusColor } = attendanceMeta(row.original, region, convertToRegionTime);
-        const { earlyLeaveMinutes, overtimeMinutes, isWeekOff, shiftName } =
+        const { overtimeMinutes, isWeekOff, shiftName } =
           row.original || {};
         return (
           <div className="flex flex-col gap-1">
@@ -280,14 +294,12 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
               </span>
             </span>
             <LateArrivalLabel item={row.original} />
+            <EarlyLeaveLabel item={row.original} />
             {/* Only rendered for an employee who actually holds a shift — with
                 no shift there is nothing to be late against, so an absent
                 badge here would be a claim the data cannot support. */}
             {shiftName && (
               <div className="flex flex-wrap items-center gap-1">
-                {earlyLeaveMinutes > 0 && (
-                  <ShiftFlag tint="var(--warn)">{`${earlyLeaveMinutes}m early`}</ShiftFlag>
-                )}
                 {overtimeMinutes > 0 && (
                   <ShiftFlag tint="var(--ok)">{`+${formatMinutes(overtimeMinutes)} OT`}</ShiftFlag>
                 )}
@@ -475,6 +487,7 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
           <span style={{ color: 'var(--ok)' }}>IN {checkInStr}</span>
           <span style={{ color: 'rgba(255,255,255,.75)' }}>OUT {checkOutStr}</span>
           <LateArrivalLabel item={item} overlay />
+          <EarlyLeaveLabel item={item} overlay />
         </div>
       </div>
 

@@ -631,16 +631,21 @@ const AttendanceLogs = () => {
         stats={stats}
         secondaryToolbar={absentTabs}
         dateFilterActions={
-          <button
-            type="button"
-            aria-pressed={statusFilter === 'late_arrival'}
-            onClick={() => dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === 'late_arrival' ? '' : 'late_arrival' })}
-            title={statusFilter === 'late_arrival' ? 'Late Arrival filter active. Click to clear.' : 'Show late arrivals only'}
-            className={`inline-flex h-10 items-center gap-1.5 rounded-[10px] border px-3 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg1solid)] ${statusFilter === 'late_arrival' ? 'border-amber-500 bg-amber-500 text-slate-950 hover:bg-amber-400' : 'border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:border-amber-500 hover:bg-amber-500/10'}`}
-          >
-            <Check aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${statusFilter === 'late_arrival' ? 'opacity-100' : 'opacity-0'}`} />
-            Late Arrival
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {[{ value: 'late_arrival', label: 'Late Arrival' }, { value: 'early_departure', label: 'Early Leave' }].map(filter => (
+              <button
+                key={filter.value}
+                type="button"
+                aria-pressed={statusFilter === filter.value}
+                onClick={() => dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === filter.value ? '' : filter.value })}
+                title={statusFilter === filter.value ? `${filter.label} filter active. Click to clear.` : `Show ${filter.label.toLowerCase()} only`}
+                className={`inline-flex h-10 items-center gap-1.5 rounded-[10px] border px-3 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg1solid)] ${statusFilter === filter.value ? 'border-amber-500 bg-amber-500 text-slate-950 hover:bg-amber-400' : 'border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:border-amber-500 hover:bg-amber-500/10'}`}
+              >
+                <Check aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${statusFilter === filter.value ? 'opacity-100' : 'opacity-0'}`} />
+                {filter.label}
+              </button>
+            ))}
+          </div>
         }
         loading={state.loading}
         attendanceLogsCount={attendanceLogsCount}
