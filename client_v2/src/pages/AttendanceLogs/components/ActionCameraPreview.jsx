@@ -123,9 +123,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
     setImageLoaded(false);
   }, [currentIndex, isOpen]);
 
-  const cameraType = module === 'accesslogs'
-    ? selectedLog?.channelInfo?.name || 'checkin'
-    : fullCameraTypes[currentIndex] || '—';
+  const cameraType = fullCameraTypes[currentIndex] || '—';
 
   const cameraName = fullCameraNames[currentIndex]
     || (fullCameraTypes[currentIndex] === 'checkout' ? selectedLog?.checkoutCam : selectedLog?.checkinCam)
@@ -141,7 +139,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
 
   const timeValue = isAttendance
     ? convertToRegionTime(fullTimestamps[currentIndex])
-    : convertToRegionTime(fullTimestamp[currentIndex]);
+    : convertToRegionTime(fullTimestamps[currentIndex] || fullTimestamp[currentIndex]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -261,9 +259,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 flex-1">
               <DetailItem icon={Zap} label="Camera Type" value={cameraType} />
-              {isAttendance && (
-                <DetailItem icon={Camera} label="Camera" value={cameraName} />
-              )}
+              <DetailItem icon={Camera} label="Camera" value={cameraName} />
               {isAttendance && (
                 <DetailItem icon={Camera} label="Checkout Cam" value={selectedLog?.checkoutCam} />
               )}

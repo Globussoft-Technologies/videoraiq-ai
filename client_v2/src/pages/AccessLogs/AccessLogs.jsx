@@ -247,7 +247,12 @@ const AccessLogs = () => {
               : unknownimg;
         const imageUrls = sessions.map((session) => {
           const images = session.images;
-          return images?.frameImage || images?.personImage || images?.faceImage;
+          return {
+            url: images?.frameImage || images?.personImage || images?.faceImage,
+            timestamp: session.timestamp,
+            cameraType: session.channel?.checkType ?? session.checkType ?? session.cameraType,
+            cameraName: session.channel?.name,
+          };
         });
         const personImages = sessions
           .map((session) => {
