@@ -1,3 +1,4 @@
+import { cacheReads } from "../../../services/apiCache.service.js";
 import express from "express";
 import ChannelControllerontroller from "./channels.controller.js";
 import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck } from '../../../middlewares/permissionMiddleware.js';
@@ -19,7 +20,7 @@ router.post("/playback-url",viewAccessCheck, ChannelControllerontroller.getPlayb
 router.post("/playback-timeline",viewAccessCheck, ChannelControllerontroller.getPlaybackTimeline);
 router.post("/playback-thumbnail",viewAccessCheck, ChannelControllerontroller.getPlaybackPreview);
 router.post("/playBackFilters",viewAccessCheck, ChannelControllerontroller.getPlaybackWithFilters);
-router.get("/all-channels",viewAccessCheck, ChannelControllerontroller.getFilterAllChannels);
+router.get("/all-channels",viewAccessCheck, cacheReads.channels, ChannelControllerontroller.getFilterAllChannels);
 // Honeywell DASH playback proxy — a <video>/dash.js player fetches these
 // directly (manifest, then repeated init.mp4/seg.m4s), so it's under
 // viewAccessCheck like the other playback reads, not editAccessCheck.

@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 import { encrypt, decrypt } from "../../../utils/cryptoUtils.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
@@ -140,5 +141,7 @@ NVRSchema.pre("distinct", async function () {
 });
 
 NVRSchema.index({ userId: 1 });
+
+NVRSchema.plugin(invalidateApiCache, { domains: ["nvrs"] });
 
 export default mongoose.model("NVR", NVRSchema);

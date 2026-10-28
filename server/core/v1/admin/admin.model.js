@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 // models/User.js
 
 import mongoose from 'mongoose';
@@ -189,6 +190,8 @@ const adminSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 });
+
+adminSchema.plugin(invalidateApiCache, { domains: ["admin"] });
 
 export default mongoose.model('Admin', adminSchema);
 

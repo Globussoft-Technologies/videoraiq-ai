@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import config from "config";
@@ -362,5 +363,7 @@ ChannelSchema.statics.findByIdActive = function (id) {
 // Tenant-scoped active camera pages, including their existing sort order.
 ChannelSchema.index({ userId: 1, isAdded: 1, createdAt: -1, _id: -1 });
 ChannelSchema.index({ isAdded: 1, snapshotNextAttemptAt: 1, snapshotLeaseUntil: 1 });
+
+ChannelSchema.plugin(invalidateApiCache, { domains: ["channels"] });
 
 export default mongoose.model("Channel", ChannelSchema);

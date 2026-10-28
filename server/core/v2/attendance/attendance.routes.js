@@ -1,10 +1,11 @@
+import { cacheReads } from "../../../services/apiCache.service.js";
 import express from "express";
 import attendanceController from "./attendance.controller.js";
 const router = express.Router();
 import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck } from '../../../middlewares/permissionMiddleware.js';
 
 // GET attendance
-router.post("/get",viewAccessCheck,attendanceController.getAttendance);
+router.post("/get",viewAccessCheck,cacheReads.attendance, attendanceController.getAttendance);
 // POST (not GET) so the client can send employeeLocations in the body, exactly
 // like /get. Filters still travel in the query string.
 router.post("/export",viewAccessCheck,attendanceController.exportAttendance);

@@ -1,3 +1,4 @@
+import { cacheReads } from "../../../services/apiCache.service.js";
 import express from "express";
 import ChannelControllerontroller from "./channels.controller.js";
 import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck } from '../../../middlewares/permissionMiddleware.js';
@@ -18,7 +19,7 @@ router.put("/updateConfiguration",editAccessCheck,ChannelControllerontroller.upd
 router.post("/playback-url",viewAccessCheck, ChannelControllerontroller.getPlaybackUrl);
 router.post("/playback-timeline",viewAccessCheck, ChannelControllerontroller.getPlaybackTimeline);
 router.post("/playBackFilters",viewAccessCheck, ChannelControllerontroller.getPlaybackWithFilters);
-router.get("/all-channels",viewAccessCheck, ChannelControllerontroller.getFilterAllChannels);
+router.get("/all-channels",viewAccessCheck, cacheReads.channels, ChannelControllerontroller.getFilterAllChannels);
 router.get("/:id",viewAccessCheck, ChannelControllerontroller.getChannelById);
 
 export default router;

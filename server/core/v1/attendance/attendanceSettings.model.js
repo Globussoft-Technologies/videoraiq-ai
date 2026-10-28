@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 
 const { Schema } = mongoose;
@@ -75,5 +76,7 @@ const attendanceSettingsSchema = new Schema(
   },
   { timestamps: true },
 );
+
+attendanceSettingsSchema.plugin(invalidateApiCache, { domains: ["attendanceSettings"] });
 
 export default mongoose.model("AttendanceSettings", attendanceSettingsSchema);

@@ -1,3 +1,4 @@
+import { cacheReads } from "../../../services/apiCache.service.js";
 import Router from "express";
 import shiftController from "./shifts.controller.js";
 import shiftScheduleController from "./shiftSchedule.controller.js";
@@ -12,12 +13,12 @@ const router = Router();
 
 router
   .route("/")
-  .get(viewAccessCheck, shiftController.getAllShifts)
+  .get(viewAccessCheck, cacheReads.shifts, shiftController.getAllShifts)
   .post(createAccessCheck, shiftController.createShift);
 
 // Literal segments have to be declared before `/:id`, or Express hands
 // "list" and "assignments" to the id route.
-router.get("/list", viewAccessCheck, shiftController.getShiftList);
+router.get("/list", viewAccessCheck, cacheReads.shifts, shiftController.getShiftList);
 
 // Monthly schedule grid. Declared before `/:id` like the other literal
 // segments, and POST rather than GET so the filter arrays don't have to be
@@ -54,7 +55,7 @@ router.post("/:id/assign", editAccessCheck, shiftController.assignShift);
 
 router
   .route("/:id")
-  .get(viewAccessCheck, shiftController.getShiftById)
+  .get(viewAccessCheck, cacheReads.shifts, shiftController.getShiftById)
   .put(editAccessCheck, shiftController.updateShift)
   .delete(deleteAccessCheck, shiftController.deleteShift);
 

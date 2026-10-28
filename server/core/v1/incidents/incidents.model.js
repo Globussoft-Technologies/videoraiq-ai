@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 // models/incident.js
 
 import mongoose from 'mongoose';
@@ -50,6 +51,8 @@ incidentSchema.index({ userId: 1, channelId: 1, timeOfIncident: -1 });
 incidentSchema.index({ userId: 1, nvrId: 1, timeOfIncident: -1 });
 incidentSchema.index({ userId: 1, resolved: 1, timeOfIncident: -1 });
 incidentSchema.index({ userId: 1, incidentType: 1, vehicleNumber: 1, timeOfIncident: -1 });
+
+incidentSchema.plugin(invalidateApiCache, { domains: ["incidents"] });
 
 const Incident = model('Incident', incidentSchema);
 

@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 
 /**
@@ -70,5 +71,7 @@ const shiftScheduleSchema = new mongoose.Schema(
 shiftScheduleSchema.index({ adminId: 1, employee: 1, date: 1 }, { unique: true });
 // The grid reads a whole month for a page of employees at a time.
 shiftScheduleSchema.index({ adminId: 1, date: 1 });
+
+shiftScheduleSchema.plugin(invalidateApiCache, { domains: ["schedule"] });
 
 export default mongoose.model("ShiftSchedule", shiftScheduleSchema);

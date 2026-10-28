@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
@@ -75,5 +76,7 @@ const attendanceSchema = new Schema(
 // `employee: { $in: [...] }` to the same match.
 attendanceSchema.index({ user: 1, createdAt: -1 });
 attendanceSchema.index({ user: 1, employee: 1, createdAt: -1 });
+
+attendanceSchema.plugin(invalidateApiCache, { domains: ["attendance"] });
 
 export default mongoose.model("Attendance", attendanceSchema);

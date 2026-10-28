@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from 'mongoose';
 import { encrypt, decrypt } from "../../../utils/cryptoUtils.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
@@ -183,5 +184,7 @@ authorizedUsersSchema.pre(/^find|countDocuments/, async function () {
     $and: [existingQuery, { location: buildCaseInsensitiveLocationIn(allowedLocations) }],
   });
 });
+
+authorizedUsersSchema.plugin(invalidateApiCache, { domains: ["employees"] });
 
 export default mongoose.model('authorizedUsers', authorizedUsersSchema);

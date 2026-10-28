@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
@@ -81,5 +82,7 @@ departmentSchema.pre(/^find|countDocuments/, async function () {
   });
 });
 
+
+departmentSchema.plugin(invalidateApiCache, { domains: ["departments"] });
 
 export default mongoose.model("Department", departmentSchema);

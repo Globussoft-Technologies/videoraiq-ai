@@ -1,3 +1,4 @@
+import { invalidateApiCache } from "../../../services/apiCache.service.js";
 import mongoose from "mongoose";
 
 /**
@@ -271,5 +272,7 @@ ShiftSchema.pre("validate", function syncDerivedFields() {
   this.set("settings.lateLogin", this.graceLateMinutes || 0);
   this.set("settings.earlyLogout", this.graceEarlyMinutes || 0);
 });
+
+ShiftSchema.plugin(invalidateApiCache, { domains: ["shifts"] });
 
 export default mongoose.model("Shift", ShiftSchema);

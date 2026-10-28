@@ -1,3 +1,4 @@
+import { cacheReads } from "../../../services/apiCache.service.js";
 import express from "express";
 import NVRController from "./nvr.controller.js";
 import {
@@ -9,8 +10,8 @@ import {
 
 const router = express.Router();
 
-router.get("/locations", viewAccessCheck, NVRController.getNVRLocations);
-router.get("/", viewAccessCheck, NVRController.getAllNvrs);
+router.get("/locations", viewAccessCheck, cacheReads.nvrs, NVRController.getNVRLocations);
+router.get("/", viewAccessCheck, cacheReads.nvrs, NVRController.getAllNvrs);
 router.get("/all-nvrs", viewAccessCheck, NVRController.allNvrs);
 router.post("/register", createAccessCheck, NVRController.registerNvr);
 router.post("/register-and-fetch", createAccessCheck, NVRController.registerAndFetchCameras);
