@@ -1449,7 +1449,10 @@ class AttendanceService {
     return {
       // `date` column is derived from createdAt; the group key holds the day.
       createdAt: doc._id?.date ? new Date(`${doc._id.date}T00:00:00Z`) : new Date(),
-      employee: doc.employee || null,
+      // The aggregation joins the assigned shift beside the employee; its
+      // shiftId is still an ObjectId. The shared report expects populated
+      // employee.shiftId to read the shift name and timings.
+      employee: doc.employee ? { ...doc.employee, shiftId: doc.shift || null } : null,
       arrivalAssessment: doc.arrivalAssessment || (doc.shift ? {
         isLate: doc.isLate, lateMinutes: doc.lateMinutes,
       } : null),

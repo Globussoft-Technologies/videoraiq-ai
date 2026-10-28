@@ -28,11 +28,11 @@ function attendance(events) {
 
 const ev = (cameraType, time) => ({ cameraType, timestamp: `2026-08-07T${time}:00.000Z`, images: { frame: `/f/${time}.jpg` } });
 
-it("keeps late-minutes headers and values inside the table on every PDF page", async () => {
+it("keeps late-duration headers and values inside the table on every PDF page", async () => {
   const originalText = PDFDocument.prototype.text;
   const placements = [];
   const spy = vi.spyOn(PDFDocument.prototype, "text").mockImplementation(function (text, x, y, options) {
-    if (text === "Late By (minutes)" || text === "9876") {
+    if (text === "Late By (HH:mm:ss)" || text === "164:36:00") {
       placements.push({ text, right: x + options.width, tableRight: this.page.width - 32 });
     }
     return originalText.apply(this, arguments);
@@ -48,9 +48,9 @@ it("keeps late-minutes headers and values inside the table on every PDF page", a
       department: "Software development and operations department",
     }));
     await buildPdf({ report: {}, rows, label: "Test", timezone: "Asia/Kolkata" });
-    expect(placements.map(item => item.text)).toEqual(expect.arrayContaining(["Late By (minutes)", "9876"]));
-    expect(placements.filter(item => item.text === "Late By (minutes)").length).toBeGreaterThan(1);
-    expect(placements.filter(item => item.text === "9876")).toHaveLength(rows.length);
+    expect(placements.map(item => item.text)).toEqual(expect.arrayContaining(["Late By (HH:mm:ss)", "164:36:00"]));
+    expect(placements.filter(item => item.text === "Late By (HH:mm:ss)").length).toBeGreaterThan(1);
+    expect(placements.filter(item => item.text === "164:36:00")).toHaveLength(rows.length);
     for (const placement of placements) expect(placement.right).toBeLessThanOrEqual(placement.tableRight + 0.01);
   } finally {
     spy.mockRestore();

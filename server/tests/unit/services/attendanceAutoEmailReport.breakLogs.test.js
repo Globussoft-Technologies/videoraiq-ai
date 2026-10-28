@@ -80,7 +80,7 @@ const toMinutes = (text) => {
 describe("breakLogReport — columns", () => {
   it("carries every requested column, in order", () => {
     expect(BREAK_HEADERS).toEqual([
-      "S No", "Employee ID", "Employee Name", "Department", "Shift ID", "Shift Timings", "Date", "Location",
+      "S No", "Employee ID", "Employee Name", "Department", "Shift Name", "Shift Timings", "Date", "Location",
       "Break #", "Break Out", "Break In", "Break Time", "Total Break Time",
       "Break Out Camera", "Break In Camera", "View Image",
     ]);
@@ -91,7 +91,7 @@ describe("breakLogReport — columns", () => {
     expect(at(line, "Employee ID")).toBe("103198");
     expect(at(line, "Employee Name")).toBe("Chethan S");
     expect(at(line, "Department")).toBe("software development");
-    expect(at(line, "Shift ID")).toBe("morning shift");
+    expect(at(line, "Shift Name")).toBe("morning shift");
     expect(at(line, "Shift Timings")).toBe("10:00 - 19:00");
     expect(at(line, "Date")).toBe("07 Aug 2026");
     expect(at(line, "Location")).toBe("bangalore");

@@ -12,7 +12,7 @@ const COLUMN_WIDTHS = {
   "Employee ID": 15,
   "Employee Name": 24,
   Department: 20,
-  "Shift ID": 17,
+  "Shift Name": 17,
   "Shift Timings": 24,
   Date: 16,
   "Location/Unit Number": 22,
@@ -69,8 +69,9 @@ export async function buildAttendanceWorkbook({ headers, lines, label, timezone,
   });
 
   const lastColumn = Math.max(1, headers.length);
+  const titleColumn = Math.max(2, lastColumn - 4);
   sheet.mergeCells(1, 1, 2, Math.max(1, lastColumn - 5));
-  sheet.mergeCells(1, Math.max(2, lastColumn - 4), 2, lastColumn);
+  if (lastColumn > 1) sheet.mergeCells(1, titleColumn, 2, lastColumn);
 
   const brand = sheet.getCell(1, 1);
   brand.value = "VideoraIQ";
@@ -78,8 +79,8 @@ export async function buildAttendanceWorkbook({ headers, lines, label, timezone,
   brand.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BLUE } };
   brand.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 
-  const title = sheet.getCell(1, Math.max(2, lastColumn - 4));
-  title.value = "Attendance Report";
+  const title = lastColumn > 1 ? sheet.getCell(1, titleColumn) : sheet.getCell(1, 1);
+  title.value = lastColumn > 1 ? "Attendance Report" : "VideoraIQ Attendance Report";
   title.font = { bold: true, size: 20, color: { argb: "FFFFFFFF" } };
   title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
   title.alignment = { vertical: "middle", horizontal: "center" };

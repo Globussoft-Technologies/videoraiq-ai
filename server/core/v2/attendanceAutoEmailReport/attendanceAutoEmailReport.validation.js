@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { ATTENDANCE_COLUMNS, BREAK_COLUMNS } from "./reportColumns.js";
 
 const objectId = Joi.string().hex().length(24);
 const reportTitle = Joi.string()
@@ -90,6 +91,8 @@ const report = Joi.object({
   target: target.default(),
   formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx", "breakPdf", "breakXlsx")).min(1).unique().required(),
   enabled: Joi.boolean().default(true),
+  selectedColumns: Joi.array().items(Joi.string().valid(...ATTENDANCE_COLUMNS)).unique().default([]),
+  selectedBreakColumns: Joi.array().items(Joi.string().valid(...BREAK_COLUMNS)).unique().default([]),
   sendTestMail: Joi.boolean().default(false),
 }).custom(validateContentSelection, "report content validation").messages({ "any.custom": "{{#message}}" });
 
@@ -106,5 +109,7 @@ export const updateReportSchema = Joi.object({
   target,
   formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx", "breakPdf", "breakXlsx")).min(1).unique(),
   enabled: Joi.boolean(),
+  selectedColumns: Joi.array().items(Joi.string().valid(...ATTENDANCE_COLUMNS)).unique(),
+  selectedBreakColumns: Joi.array().items(Joi.string().valid(...BREAK_COLUMNS)).unique(),
   sendTestMail: Joi.boolean(),
 }).min(1);

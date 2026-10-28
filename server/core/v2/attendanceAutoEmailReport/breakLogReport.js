@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { selectTableColumns } from "./reportColumns.js";
 import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor } from "./attendanceAutoEmailReport.service.js";
 
 /**
@@ -26,7 +27,7 @@ const BREAK_COLUMNS = [
   { header: "Employee ID", width: 58, break: (ctx) => ctx.row.employeeId },
   { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
-  { header: "Shift ID", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift Name", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", width: 76, break: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", width: 64, break: (ctx) => ctx.row.date },
   { header: "Location", width: 68, wrap: true, break: (ctx) => ctx.row.location },
@@ -129,6 +130,7 @@ export async function buildBreakPdf({ report, rows, label, timezone }) {
     lines: breakTableRows(rows),
     title: TITLE,
     emptyText: EMPTY_TEXT,
+    selectedColumns: report?.selectedBreakColumns || [],
   });
 }
 
@@ -137,26 +139,28 @@ const SUBTOTAL_FILL = "FFE6EDFA";
 const BORDER = { style: "thin", color: { argb: "FFD8DFEC" } };
 
 /** The break log as a real .xlsx workbook — one sheet, one row per break. */
-export async function buildBreakWorkbook({ rows, label, timezone }) {
+export async function buildBreakWorkbook({ rows, label, timezone, selectedColumns = [] }) {
+  const table = selectTableColumns(BREAK_HEADERS, breakTableRows(rows), selectedColumns);
+  const columns = table.headers.map((header) => BREAK_COLUMNS.find((column) => column.header === header));
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "VideoraIQ";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Break Logs");
 
-  sheet.mergeCells(1, 1, 1, BREAK_HEADERS.length);
+  sheet.mergeCells(1, 1, 1, table.headers.length);
   const title = sheet.getCell(1, 1);
   title.value = `Break Logs — ${label}`;
   title.font = { bold: true, size: 13 };
   title.alignment = { horizontal: "center" };
 
-  sheet.mergeCells(2, 1, 2, BREAK_HEADERS.length);
+  sheet.mergeCells(2, 1, 2, table.headers.length);
   const sub = sheet.getCell(2, 1);
   sub.value = `Timezone: ${timezone}`;
   sub.font = { size: 9, color: { argb: "FF61708F" } };
   sub.alignment = { horizontal: "center" };
 
   const headerRow = 4;
-  BREAK_HEADERS.forEach((header, index) => {
+  table.headers.forEach((header, index) => {
     const cell = sheet.getCell(headerRow, index + 1);
     cell.value = header;
     cell.font = { bold: true, size: 9, color: { argb: "FFFFFFFF" } };
@@ -164,10 +168,10 @@ export async function buildBreakWorkbook({ rows, label, timezone }) {
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     // PDF points are roughly half a spreadsheet character column.
-    sheet.getColumn(index + 1).width = Math.max(9, Math.round(BREAK_COLUMNS[index].width / 5.5));
+    sheet.getColumn(index + 1).width = Math.max(9, Math.round(columns[index].width / 5.5));
   });
 
-  breakTableRows(rows).forEach((line, lineIndex) => {
+  table.lines.forEach((line, lineIndex) => {
     const rowNumber = headerRow + 1 + lineIndex;
     line.cells.forEach((value, columnIndex) => {
       const cell = sheet.getCell(rowNumber, columnIndex + 1);
@@ -183,7 +187,7 @@ export async function buildBreakWorkbook({ rows, label, timezone }) {
       if (line.kind === "total") {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SUBTOTAL_FILL } };
       }
-      cell.alignment = { vertical: "middle", wrapText: Boolean(BREAK_COLUMNS[columnIndex].wrap) };
+      cell.alignment = { vertical: "middle", wrapText: Boolean(columns[columnIndex].wrap) };
       cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     });
   });

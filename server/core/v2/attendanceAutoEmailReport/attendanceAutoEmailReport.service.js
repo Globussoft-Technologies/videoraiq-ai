@@ -19,6 +19,7 @@ import { createReportSchema, updateReportSchema } from "./attendanceAutoEmailRep
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
 import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
 import { buildAttendanceWorkbook } from "./attendanceWorkbook.js";
+import { ATTENDANCE_COLUMNS, BREAK_COLUMNS, selectTableColumns } from "./reportColumns.js";
 import { buildBreakPdf, buildBreakWorkbook } from "./breakLogReport.js";
 import {
   buildIncidentGridPdf,
@@ -112,6 +113,12 @@ function formatPeriodDuration(minutes) {
   const hours = Math.floor(total / 60);
   const mins = total % 60;
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+}
+
+function formatLateDuration(minutes) {
+  const seconds = Math.max(0, Math.round(minutes * 60));
+  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+    .map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 function formatUnitDurationFromMs(ms) {
@@ -251,6 +258,9 @@ function rangeForReport(report, reference = moment()) {
 // the multi-day status-matrix workbook solely because its frequency is named
 // "custom".
 export function usesDailyAttendanceWorkbook(report, summary) {
+  // A selected-column report needs the table, rather than a calendar matrix,
+  // so its Excel and PDF attachments expose the same selected fields.
+  if (report?.selectedColumns?.length) return true;
   if (report?.schedule?.frequency === "daily") return true;
   if (!summary?.start || !summary?.end) return false;
   const timezone = validTimezone(summary.timezone) || reportTimezone(report);
@@ -535,10 +545,11 @@ async function reportRows(report, reference) {
   // CSV render, so the preview modal shows the exact layout recipients receive
   // (multi-row check-in/check-out sessions + a per-day total row) instead of a
   // flattened one-row-per-day view. `headers` pairs with each line's `cells`.
+  const table = selectTableColumns(REPORT_HEADERS, reportTableRows(rows), report.selectedColumns);
   return {
     rows: cleanRows,
-    headers: REPORT_HEADERS,
-    tableRows: reportTableRows(rows),
+    headers: table.headers,
+    tableRows: table.lines,
     timezone,
     label,
   };
@@ -585,7 +596,7 @@ const REPORT_COLUMNS = [
   // against, so the report shows it beside the times rather than leaving the
   // reader to look it up. Unassigned employees render "-", never a default
   // shift they were never actually on.
-  { header: "Shift ID", day: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift Name", day: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", day: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", day: (ctx) => ctx.row.date },
   { header: "Location/Unit Number", day: (ctx) => ctx.row.location },
@@ -710,19 +721,20 @@ export function csvField(value) {
 }
 
 export function buildCsv({ report, rows, label, timezone }) {
+  const table = selectTableColumns(REPORT_HEADERS, reportTableRows(rows), report?.selectedColumns);
   const meta = [
     ["VideoraIQ Attendance Report"],
     ["Report", REPORT_DISPLAY_TITLE],
     ["Period", label],
     ["Timezone", timezone],
     [],
-    REPORT_HEADERS,
+    table.headers,
   ].map((line) => line.map(csvCell).join(","));
-  const body = reportTableRows(rows).map(({ cells }) => cells.map(csvField).join(","));
+  const body = table.lines.map(({ cells }) => cells.map(csvField).join(","));
   return Buffer.from(`\uFEFF${[...meta, ...body].join("\r\n")}`, "utf8");
 }
 
-export async function buildPdf({ report, rows, label, timezone, columns: columnSpec, lines: lineSpec, title, emptyText }) {
+export async function buildPdf({ report, rows, label, timezone, columns: columnSpec, lines: lineSpec, title, emptyText, selectedColumns = report?.selectedColumns }) {
   const logo = await logoBuffer();
   return new Promise((resolve, reject) => {
     const document = new PDFDocument({ size: "A3", layout: "landscape", margin: 32 });
@@ -751,12 +763,12 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     // name rather than an ellipsis. The rest are fixed-format:
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
-    const preferredColumns = columnSpec || [
+    let preferredColumns = columnSpec || [
       { head: "S\u00A0No", width: 26, noWrap: true },
       { head: "Employee ID", width: 48 },
       { head: "Employee Name", width: 72, wrap: true },
       { head: "Department", width: 62, wrap: true },
-      { head: "Shift ID", width: 52, wrap: true },
+      { head: "Shift Name", width: 52, wrap: true },
       { head: "Shift Timings", width: 64 },
       { head: "Date", width: 54 },
       { head: "Location/Unit Number", width: 52, wrap: true },
@@ -773,14 +785,26 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
       { head: "Checkin Image", width: 48 },
       { head: "Checkout Image", width: 48 },
       { head: "Late Check-in", width: 48 },
-      { head: "Late By (minutes)", width: 48 },
+      { head: "Late By (HH:mm:ss)", width: 60 },
     ];
+    const sourceHeaders = preferredColumns.map((column, index) => columnSpec ? column.head : REPORT_HEADERS[index]);
+    const table = selectTableColumns(sourceHeaders, lineSpec || reportTableRows(rows), selectedColumns);
+    if (selectedColumns?.length) {
+      preferredColumns = preferredColumns.filter((column, index) => table.headers.includes(sourceHeaders[index]));
+    }
     // Keep every column inside the header and row backgrounds, including
     // additional report fields. Preserve smaller custom tables at their size.
     const preferredWidth = preferredColumns.reduce((sum, column) => sum + column.width, 0);
     const widthScale = Math.min(1, pageWidth / preferredWidth);
     const columns = preferredColumns.map(column => ({ ...column, width: column.width * widthScale }));
-    const tableLines = lineSpec || reportTableRows(rows);
+    // Stored values and selection keys remain in minutes. Format the PDF's
+    // duration after projection so it also works when only Late By is selected.
+    const lateColumn = columnSpec ? -1 : table.headers.indexOf("Late By (minutes)");
+    const tableLines = lateColumn < 0 ? table.lines : table.lines.map((line) => ({
+      ...line,
+      cells: line.cells.map((value, index) => index === lateColumn && Number.isFinite(value)
+        ? formatLateDuration(value) : value),
+    }));
     const heading = title || "Attendance Report";
     const drawHeader = () => {
       const titleBlockWidth = 300;
@@ -1361,8 +1385,7 @@ async function prepareAttendanceReport(report, options = {}) {
   const xlsxBuffer = wantsXlsx
     ? usesDailyAttendanceWorkbook(attendanceReport, summary)
       ? await buildAttendanceWorkbook({
-          headers: REPORT_HEADERS,
-          lines: reportTableRows(rows),
+          ...selectTableColumns(REPORT_HEADERS, reportTableRows(rows), attendanceReport.selectedColumns),
           label: summary.label,
           timezone: summary.timezone,
           rowCount: summary.rowCount,
@@ -1385,7 +1408,7 @@ async function prepareAttendanceReport(report, options = {}) {
     ? await buildBreakPdf({ report: attendanceReport, rows, label: summary.label, timezone: summary.timezone })
     : null;
   const breakXlsxBuffer = wantsBreakXlsx
-    ? await buildBreakWorkbook({ rows, label: summary.label, timezone: summary.timezone })
+    ? await buildBreakWorkbook({ rows, label: summary.label, timezone: summary.timezone, selectedColumns: attendanceReport.selectedBreakColumns })
     : null;
   const breakMs = Date.now() - breakT0;
 
@@ -1532,7 +1555,9 @@ class AttendanceAutoEmailReportService {
           .lean(),
         Department.find({ adminId }).select("departmentName").sort({ departmentName: 1 }).lean(),
       ]);
-      return res.json(Response.userSuccessResp("Attendance report audience options fetched", { employees, departments }));
+      return res.json(Response.userSuccessResp("Attendance report audience options fetched", {
+        employees, departments, attendanceColumns: ATTENDANCE_COLUMNS, breakColumns: BREAK_COLUMNS,
+      }));
     } catch (error) {
       return res.status(500).json(Response.errorResp("Failed to fetch attendance report audience options", error.message));
     }

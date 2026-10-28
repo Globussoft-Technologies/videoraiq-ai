@@ -170,7 +170,7 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     ["Department:", employee.department || "-"],
     ["Employee ID:", employee.employeeId || "-"],
     ["Employee Name:", employee.name || "-"],
-    ["Shift ID:", shift ? shift.name || "-" : "Not assigned"],
+    ["Shift Name:", shift ? shift.name || "-" : "Not assigned"],
   ];
   identity.forEach(([labelText, value], index) => {
     const row = 5 + index;

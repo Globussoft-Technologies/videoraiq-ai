@@ -1,6 +1,6 @@
 /**
  * Unit tests for the employee-identity columns on the PDF/CSV report:
- * Employee ID, Shift ID and Shift Timings.
+ * Employee ID, Shift Name and Shift Timings.
  *
  * These sit beside the attendance times because a check-in only means
  * something against the shift it is judged by — a 09:15 arrival is late on a
@@ -54,14 +54,14 @@ function dayLine(item) {
 describe("attendanceAutoEmailReport identity columns", () => {
   it("exposes the three columns in the report header", () => {
     expect(REPORT_HEADERS).toContain("Employee ID");
-    expect(REPORT_HEADERS).toContain("Shift ID");
+    expect(REPORT_HEADERS).toContain("Shift Name");
     expect(REPORT_HEADERS).toContain("Shift Timings");
   });
 
   it("shows the employee code, shift name and shift window on the day line", () => {
     const cells = dayLine(attendance(DAY_SHIFT));
     expect(at(cells, "Employee ID")).toBe("1460206");
-    expect(at(cells, "Shift ID")).toBe("General Shift");
+    expect(at(cells, "Shift Name")).toBe("General Shift");
     expect(at(cells, "Shift Timings")).toBe("09:00 - 18:00");
   });
 
@@ -72,7 +72,7 @@ describe("attendanceAutoEmailReport identity columns", () => {
 
   it("shows '-' for an employee with no shift rather than a default window", () => {
     const cells = dayLine(attendance(null));
-    expect(at(cells, "Shift ID")).toBe("-");
+    expect(at(cells, "Shift Name")).toBe("-");
     expect(at(cells, "Shift Timings")).toBe("-");
   });
 
@@ -81,7 +81,7 @@ describe("attendanceAutoEmailReport identity columns", () => {
     const cells = dayLine(attendance(partial));
     // The name is known, so it still shows; the window is not, so it must not
     // be half-rendered as "09:00 - undefined".
-    expect(at(cells, "Shift ID")).toBe("Half-configured");
+    expect(at(cells, "Shift Name")).toBe("Half-configured");
     expect(at(cells, "Shift Timings")).toBe("-");
   });
 
@@ -101,7 +101,7 @@ describe("attendanceAutoEmailReport identity columns", () => {
     const out = reportTableRows([rowFromAttendance(item, TZ, rules)]);
     expect(out.map((line) => line.kind)).toEqual(["day", "session", "total"]);
     // Identity belongs to the employee-day, not to each session within it.
-    for (const header of ["Employee ID", "Shift ID", "Shift Timings"]) {
+    for (const header of ["Employee ID", "Shift Name", "Shift Timings"]) {
       expect(at(out[1].cells, header)).toBe("");
     }
   });
@@ -110,9 +110,9 @@ describe("attendanceAutoEmailReport identity columns", () => {
     const row = rowFromAttendance(attendance(DAY_SHIFT), TZ, rules);
     const csv = buildCsv({ report: {}, rows: [row], label: "Aug 2026", timezone: TZ }).toString("utf8");
     const lines = csv.split("\r\n");
-    const header = lines.find((line) => line.includes("Employee ID") && line.includes("Shift ID"));
+    const header = lines.find((line) => line.includes("Employee ID") && line.includes("Shift Name"));
     expect(header).toContain("Employee ID");
-    expect(header).toContain("Shift ID,Shift Timings");
+    expect(header).toContain("Shift Name,Shift Timings");
     const dayRow = lines[lines.indexOf(header) + 1];
     expect(dayRow).toContain("1460206");
     expect(dayRow).toContain("General Shift");

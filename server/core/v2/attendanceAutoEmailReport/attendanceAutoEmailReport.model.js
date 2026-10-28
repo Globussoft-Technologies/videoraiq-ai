@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ATTENDANCE_COLUMNS, BREAK_COLUMNS } from "./reportColumns.js";
 
 const scheduleSchema = new mongoose.Schema(
   {
@@ -72,6 +73,8 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     schedule: { type: scheduleSchema, required: true },
     target: { type: targetSchema, default: () => ({}) },
     formats: [{ type: String, enum: ["pdf", "csv", "xlsx", "breakPdf", "breakXlsx"] }],
+    selectedColumns: [{ type: String, enum: ATTENDANCE_COLUMNS }],
+    selectedBreakColumns: [{ type: String, enum: BREAK_COLUMNS }],
     enabled: { type: Boolean, default: true },
     lastRunKey: { type: String, default: null },
     lastSentAt: { type: Date, default: null },
