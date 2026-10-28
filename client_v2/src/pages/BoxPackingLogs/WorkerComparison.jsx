@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import moment from 'moment-timezone';
-import { ArrowDown, ArrowUp, ArrowUpDown, Boxes, Clock3, Gauge, PackageCheck, Trophy, Users } from 'lucide-react';
-import { formatPackingDuration, packingStartTimestamp, packingWorkerId } from './boxPackingData';
+import { ArrowDown, ArrowUp, ArrowUpDown, Boxes, CheckCircle2, Clock3, Gauge, PackageCheck, Trophy } from 'lucide-react';
+import { formatPackingTotalTime, packingDurationSeconds, packingTotalSeconds, packingStartTimestamp, packingWorkerActivity, packingWorkerId } from './boxPackingData';
 import { useTheme } from '@/theme/ThemeContext';
 
 const TZ = 'Asia/Kolkata';
 const COLORS = ['#348cff', '#b128f2', '#00d797', '#ff9a45', '#35c5e9', '#ef5b8f'];
-const mean = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 const dayOf = (value) => value && moment(value).isValid() ? moment(value).tz(TZ).format('YYYY-MM-DD') : null;
 const workerOrder = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 
@@ -25,7 +24,7 @@ function WorkerTooltip({ worker, total, x, y }) {
   return createPortal(<div role="tooltip" style={{ position: 'fixed', left: x, top: y, zIndex: 9999, width: 220, padding: '9px 11px', borderRadius: 10, border: `1px solid ${isDark ? '#374365' : '#d7dfec'}`, borderLeft: `3px solid ${worker.color}`, background: isDark ? '#141d38' : '#ffffff', color: isDark ? '#f5f7ff' : '#16213b', boxShadow: isDark ? '0 12px 30px rgba(0,0,0,.42)' : '0 12px 30px rgba(36,52,87,.18)', pointerEvents: 'none', fontSize: 11, lineHeight: 1.5 }}>
     <strong style={{ display: 'flex', alignItems: 'center', gap: 7, color: isDark ? worker.color : `color-mix(in srgb, ${worker.color} 55%, #16213b)` }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: worker.color }} />{worker.id}</strong>
     <div>{worker.boxes} box{worker.boxes === 1 ? '' : 'es'} · {Math.round(worker.boxes / total * 100)}% of total</div>
-    <div style={{ color: isDark ? '#aab7d6' : '#52617c' }}>{worker.average ? `${formatPackingDuration(worker.average)} average · ${worker.timedCount} timed` : 'No packing time recorded'}</div>
+    <div style={{ color: isDark ? '#aab7d6' : '#52617c' }}>{worker.totalSeconds > 0 ? `${formatPackingTotalTime(worker.rows)} total · ${worker.timedCount} timed` : 'No packing time recorded'}</div>
   </div>, document.body);
 }
 
@@ -69,6 +68,7 @@ export default function WorkerComparison({ rows = [], cameraName, dateRange }) {
   }), [rows, dateRange?.startDate, dateRange?.endDate]);
   const workers = useMemo(() => {
     const groups = new Map();
+    const activity = new Map(packingWorkerActivity(scopedRows).map((worker) => [worker.id, worker]));
     scopedRows.forEach((row) => {
       const id = packingWorkerId(row);
       if (!id) return;
@@ -76,15 +76,14 @@ export default function WorkerComparison({ rows = [], cameraName, dateRange }) {
       groups.get(id).push(row);
     });
     return [...groups.entries()].sort(([a], [b]) => workerOrder(a, b)).map(([id, entries], index) => {
-      const durations = entries.map((row) => Number(row.timeTakenSec)).filter((seconds) => Number.isFinite(seconds) && seconds > 0);
-      const average = mean(durations);
-      return { id, boxes: entries.length, timedCount: durations.length, average, color: COLORS[index % COLORS.length] };
+      const timedCount = entries.filter((row) => packingDurationSeconds(row) > 0).length;
+      return { id, rows: entries, boxes: entries.length, completed: activity.get(id)?.completed === true, timedCount, totalSeconds: packingTotalSeconds(entries), color: COLORS[index % COLORS.length] };
     });
   }, [scopedRows]);
   const total = workers.reduce((sum, worker) => sum + worker.boxes, 0);
-  const timedSeconds = scopedRows.filter((row) => packingWorkerId(row)).map((row) => Number(row.timeTakenSec)).filter((seconds) => Number.isFinite(seconds) && seconds > 0);
+  const timedRows = scopedRows.filter((row) => packingWorkerId(row) && packingDurationSeconds(row) > 0);
   const mostBoxes = [...workers].sort((a, b) => b.boxes - a.boxes || workerOrder(a.id, b.id))[0];
-  const fastest = [...workers].filter((worker) => worker.boxes >= 3 && worker.average != null).sort((a, b) => a.average - b.average || workerOrder(a.id, b.id))[0];
+  const mostTime = [...workers].filter((worker) => worker.totalSeconds > 0).sort((a, b) => b.totalSeconds - a.totalSeconds || workerOrder(a.id, b.id))[0];
   const maxBoxes = Math.max(1, ...workers.map((worker) => worker.boxes));
   const chartCeiling = Math.max(5, Math.ceil(maxBoxes / 5) * 5);
   const chartWorkers = [...workers].sort((a, b) => b.boxes - a.boxes || workerOrder(a.id, b.id));
@@ -106,17 +105,17 @@ export default function WorkerComparison({ rows = [], cameraName, dateRange }) {
     ? dateRange.startDate === dateRange.endDate ? moment(dateRange.startDate).format('DD MMM YYYY') : `${moment(dateRange.startDate).format('DD MMM')} – ${moment(dateRange.endDate).format('DD MMM YYYY')}`
     : 'Selected period';
   const toggleSort = (key) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
-  const columns = [['id', 'Worker'], ['boxes', 'Boxes packed'], ['average', 'Avg. time to complete']];
+  const columns = [['id', 'Worker'], ['boxes', 'Boxes packed'], ['totalSeconds', 'Total time']];
 
   return <section className="min-w-0 rounded-2xl border border-[var(--bd2)] bg-[var(--bg2)] p-4 text-[var(--tx)]">
     <div className="mb-4 flex flex-wrap items-baseline gap-3"><div className="flex min-w-0 flex-wrap items-baseline gap-3"><h2 className="m-0 font-[var(--disp)] text-[19px] leading-tight font-bold">Worker comparison</h2><p className="m-0 text-xs leading-[1.4] text-[var(--tx3)]">{cameraName || 'Selected camera'} · {rangeLabel}</p></div><span className="ml-auto shrink-0 rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold text-[var(--violet)]">{workers.length} workers</span></div>
     {!workers.length ? <p className="rounded-xl border border-dashed border-[var(--bd2)] p-5 text-xs text-[var(--tx3)]">No worker packing activity for this camera and date range.</p> : <>
       <div className="grid grid-cols-1 gap-2.5 min-[501px]:grid-cols-2 min-[851px]:grid-cols-3 min-[1101px]:grid-cols-5">
-        <Stat icon={Boxes} title="Total workers" value={workers.length} detail="Active in this period" color="#9b35dc" lightBackground="linear-gradient(125deg,#f0e2ff,#fcfaff)" />
-        <Stat icon={Users} title="Boxes packed" value={total} detail="Completed in this period" color="#3975e5" lightBackground="linear-gradient(125deg,#e2edff,#f9fbff)" />
-        <Stat icon={Clock3} title="Team average" value={timedSeconds.length ? formatPackingDuration(mean(timedSeconds)) : '—'} detail={`${timedSeconds.length} timed boxes`} color="#079c99" lightBackground="linear-gradient(125deg,#d7f5f2,#f8fdfd)" />
+        <Stat icon={CheckCircle2} title="Total workers" value={workers.length} detail={`${workers.filter((worker) => worker.completed).length} completed · ${total} boxes`} color="#10b981" lightBackground="linear-gradient(125deg,#d9fbe9,#f7fffb)" />
+        <Stat icon={Boxes} title="Boxes packed" value={total} detail="Boxes packed in selected period" color="#3975e5" lightBackground="linear-gradient(125deg,#e2edff,#f9fbff)" />
+        <Stat icon={Clock3} title="Team total time" value={formatPackingTotalTime(timedRows)} detail={`${timedRows.length} timed boxes`} color="#079c99" lightBackground="linear-gradient(125deg,#d7f5f2,#f8fdfd)" />
         <Stat icon={PackageCheck} title="Most boxes" value={mostBoxes.id} detail={`${mostBoxes.boxes} completed`} color="#c8661e" lightBackground="linear-gradient(125deg,#ffebd8,#fffaf5)" />
-        <Stat icon={Trophy} title="Fastest average" value={fastest?.id || '—'} detail={fastest ? `${formatPackingDuration(fastest.average)} per box` : 'Needs 3+ boxes with timing'} color="#9634d4" lightBackground="linear-gradient(125deg,#f2e3ff,#fdfaff)" />
+        <Stat icon={Trophy} title="Most time recorded" value={mostTime?.id || '—'} detail={mostTime ? formatPackingTotalTime(mostTime.rows) : 'No timing recorded'} color="#9634d4" lightBackground="linear-gradient(125deg,#f2e3ff,#fdfaff)" />
       </div>
 
   
@@ -141,13 +140,13 @@ export default function WorkerComparison({ rows = [], cameraName, dateRange }) {
         </div>
       </div>
       <div className="mt-3.5 overflow-hidden rounded-[13px] border border-[var(--bd)] bg-[var(--bg1solid)]">
-        <div className="flex min-h-[68px] items-center gap-3 border-b border-[var(--bd)] bg-[var(--bg2)] px-[18px] py-3.5"><span className="grid size-[34px] shrink-0 place-items-center rounded-[10px] bg-violet-500/10 text-[var(--violet)]"><Gauge size={16} /></span><div className="flex min-w-0 flex-col gap-1"><h3 className="m-0 font-[var(--disp)] text-sm leading-tight font-bold text-[var(--tx)]">Worker performance</h3><span className="text-[11px] leading-[1.35] text-[var(--tx2)]">Compare boxes packed and average time to complete</span></div></div>
+        <div className="flex min-h-[68px] items-center gap-3 border-b border-[var(--bd)] bg-[var(--bg2)] px-[18px] py-3.5"><span className="grid size-[34px] shrink-0 place-items-center rounded-[10px] bg-violet-500/10 text-[var(--violet)]"><Gauge size={16} /></span><div className="flex min-w-0 flex-col gap-1"><h3 className="m-0 font-[var(--disp)] text-sm leading-tight font-bold text-[var(--tx)]">Worker performance</h3><span className="text-[11px] leading-[1.35] text-[var(--tx2)]">Compare boxes packed and total packing time</span></div></div>
         <div className="max-h-[360px] overflow-auto"><table className="w-full min-w-[650px] border-separate border-spacing-y-1.5 px-2 text-[11px]">
-          <thead><tr>{columns.map(([key, title]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'} className="sticky top-0 z-[2] bg-[var(--bg2)] px-2.5 py-2 text-left"><button type="button" onClick={() => toggleSort(key)} className={`flex w-full cursor-pointer items-center justify-between gap-1.5 border-0 bg-transparent p-0 text-left text-[9px] font-extrabold uppercase tracking-[.04em] hover:text-[var(--violet)] ${sort.key === key ? 'text-[var(--violet)]' : 'text-[var(--tx3)]'}`} title={`Sort by ${title}`} aria-label={`Sort by ${title}, ${sort.key === key ? sort.direction : 'not sorted'}`}><span>{title}</span>{sort.key === key ? sort.direction === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} aria-hidden="true" /> : <ArrowDown size={13} strokeWidth={2.5} aria-hidden="true" /> : <ArrowUpDown size={13} aria-hidden="true" />}</button></th>)}</tr></thead>
+          <thead><tr>{columns.map(([key, title]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'} className="sticky top-0 z-[2] bg-[var(--bg2)] px-2.5 py-2 text-left"><button type="button" onClick={() => toggleSort(key)} className={`inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[9px] font-extrabold uppercase tracking-[.04em] hover:text-[var(--violet)] ${sort.key === key ? 'text-[var(--violet)]' : 'text-[var(--tx3)]'}`} title={`Sort by ${title}`} aria-label={`Sort by ${title}, ${sort.key === key ? sort.direction : 'not sorted'}`}><span>{title}</span>{sort.key === key ? sort.direction === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} aria-hidden="true" /> : <ArrowDown size={13} strokeWidth={2.5} aria-hidden="true" /> : <ArrowUpDown size={13} aria-hidden="true" />}</button></th>)}</tr></thead>
           <tbody>{sorted.map((worker) => <tr key={worker.id} className="group">
             <td className="h-14 rounded-l-[10px] border-y border-l-[3px] border-y-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-2 transition-colors group-hover:bg-[var(--bg2)]" style={{ borderLeftColor: worker.color }}><div className="flex items-center gap-2.5 whitespace-nowrap font-extrabold"><span className="grid size-[27px] shrink-0 place-items-center rounded-lg text-[10px] text-white" style={{ background: worker.color }}>{worker.id.slice(0, 2)}</span><span>{worker.id}</span></div></td>
             <td className="h-14 border-y border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-2 transition-colors group-hover:bg-[var(--bg2)]"><span className="text-sm font-extrabold">{worker.boxes}</span></td>
-            <td className="h-14 rounded-r-[10px] border-y border-r border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-2 transition-colors group-hover:bg-[var(--bg2)]"><div className="inline-flex min-w-[132px] items-center gap-2.5 rounded-lg border px-2.5 py-1.5" style={{ borderColor: `color-mix(in srgb, ${worker.color} 30%, var(--bd))`, background: `color-mix(in srgb, ${worker.color} 8%, var(--bg1solid))` }}><span className="grid place-items-center" style={{ color: worker.color }}><Clock3 size={18} aria-hidden="true" /></span><span><strong className="block text-[15px] leading-tight">{worker.average ? formatPackingDuration(worker.average) : '—'}</strong><small className="mt-0.5 block text-[9px] text-[var(--tx3)]">{worker.timedCount ? `${worker.timedCount} timed box${worker.timedCount === 1 ? '' : 'es'}` : 'No timing recorded'}</small></span></div></td>
+            <td className="h-14 rounded-r-[10px] border-y border-r border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 py-2 transition-colors group-hover:bg-[var(--bg2)]"><div className="inline-flex min-w-[132px] items-center gap-2.5 rounded-lg border px-2.5 py-1.5" style={{ borderColor: `color-mix(in srgb, ${worker.color} 30%, var(--bd))`, background: `color-mix(in srgb, ${worker.color} 8%, var(--bg1solid))` }}><span className="grid place-items-center" style={{ color: worker.color }}><Clock3 size={18} aria-hidden="true" /></span><span><strong className="block text-[15px] leading-tight">{formatPackingTotalTime(worker.rows)}</strong><small className="mt-0.5 block text-[9px] text-[var(--tx3)]">{worker.timedCount ? `${worker.timedCount} timed box${worker.timedCount === 1 ? '' : 'es'}` : 'No timing recorded'}</small></span></div></td>
           </tr>)}</tbody>
         </table></div>
        

@@ -144,7 +144,7 @@ const buildExportColumns = (config) => {
   }
 
   if (config.showLightingFields || config.showHygieneFields) {
-    cols.push({ key: 'zone', label: 'Zone' }, { key: 'selectedCategories', label: 'Selected Categories' },
+    cols.push({ key: 'zone', label: 'Zone Name' }, { key: 'selectedCategories', label: 'Selected Categories' },
       { key: 'violationCount', label: 'Issues Detected' }, { key: 'violations', label: 'Violations' });
   }
 
@@ -363,7 +363,7 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     if (config.showLightingFields || config.showHygieneFields) {
-      details.push(['Zone', 'zone'], ['Selected Categories', 'selectedCategories'], ['Issues Detected', 'violationCount'], ['Violations', 'violations']);
+      details.push(['Zone Name', 'zone'], ['Selected Categories', 'selectedCategories'], ['Issues Detected', 'violationCount'], ['Violations', 'violations']);
     }
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);
@@ -381,7 +381,7 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], [config.showDoorFields ? 'Time of Incident' : 'Time', 'createdAt']);
-    const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;
+    const cardHeight = imageHeight + bodyTopGap + rowGap * (details.length + (config.showLightingFields || config.showHygieneFields ? 1 : 0)) + 4;
     const firstPageStartY = 42;
     const nextPageStartY = 12;
     let x = margin;
@@ -447,6 +447,12 @@ const exportToGridPDF = async (config, params) => {
         doc.setFont('helvetica', isDoorStatus ? 'bold' : 'normal');
         doc.setTextColor(isDoorStatus ? (isOpen ? 220 : 22) : 26, isDoorStatus ? (isOpen ? 38 : 163) : 42, isDoorStatus ? (isOpen ? 38 : 74) : 103);
         doc.setFontSize(6.3);
+        if (key === 'selectedCategories') {
+          const lines = doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 7).slice(0, 2);
+          doc.text(lines, labelX, textY + 3.2);
+          textY += rowGap + lines.length * 2.5;
+          return;
+        }
         const valueText =
           doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 22).slice(0, 1)[0] || '--';
         if (isDoorStatus) {

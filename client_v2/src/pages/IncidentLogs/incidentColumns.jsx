@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, MapPin, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -118,7 +118,7 @@ const IncidentCardRow = ({ icon: Icon, label, value, valueClassName = '', valueS
 const LightingCardMetaRow = ({ icon: Icon, label, value }) => (
   <div className="flex min-w-0 items-start gap-2 text-[11px] leading-snug">
     <Icon className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--tx3)]" aria-hidden="true" />
-    <span className="w-12 shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">{label}</span>
+    <span className="w-20 shrink-0 whitespace-nowrap font-semibold uppercase tracking-wide text-[var(--tx2)]">{label}</span>
     <span className="min-w-0 flex-1 break-words text-right font-medium text-[var(--tx)]" title={String(value || '--')}>{value || '--'}</span>
   </div>
 );
@@ -344,18 +344,18 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
   if (config.showLightingFields || config.showHygieneFields) {
     cols.push({ id: 'issuesDetected', header: sortHeader('Issues Detected', 'violationCount'),
       cell: ({ row }) => <span className={styles.text}>{Number.isInteger(row.original.violationCount) && row.original.violationCount >= 0 ? row.original.violationCount : Array.isArray(row.original.violations) ? row.original.violations.length : 0}</span> });
-    cols.push({ accessorKey: 'zone', header: sortHeader('Zone', 'zone'),
+    cols.push({ accessorKey: 'zone', header: sortHeader('Zone Name', 'zone'),
       cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> });
   }
 
   if (config.showLightingFields) {
     cols.push({ id: 'lightingDetails', header: sortHeader('Lighting / Site condition violations', 'violationDetails'),
-      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} /></div> });
+      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showViolationNumber={false} showConfidence={false} showZone={false} /></div> });
   }
 
   if (config.showHygieneFields) {
     cols.push({ id: 'hygieneDetails', header: sortHeader('Hygiene violations', 'violationDetails'),
-      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} /></div> });
+      cell: ({ row }) => <div className="w-[340px] max-w-[340px] whitespace-normal break-words"><IncidentHygieneDetails item={row.original} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showViolationNumber={false} showConfidence={false} showZone={false} /></div> });
   }
 
   if (config.showBoxPackingFields) {
@@ -494,7 +494,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
 
     {config.showLightingFields ? (
       <div className="flex flex-1 flex-col gap-3 p-3.5">
-        <div className="flex items-start gap-2.5 min-w-0">
+        {config.showIncidentName !== false && <div className="flex items-start gap-2.5 min-w-0">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--blue)]/10 text-[var(--blue)]">
             <ShieldAlert className="h-4 w-4" aria-hidden="true" />
           </span>
@@ -502,27 +502,24 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
             <div className="mt-0.5 text-[12px] font-semibold leading-snug text-[var(--tx)] break-words">{row.incidentName || '--'}</div>
           </div>
-        </div>
-        <div className="min-w-0 rounded-[10px] bg-[var(--bg2)] px-3 py-2.5">
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+        </div>}
+        <div className="min-w-0 rounded-[10px] border border-teal-200/80 bg-teal-50/80 px-3 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/30">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">
             <Activity className="h-3.5 w-3.5" aria-hidden="true" />
             Site condition violation
           </div>
-          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showConfidence={false} showZone={false} />
-        </div>
-        <div className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">Zone</span>
-          <span className="min-w-0 rounded-md bg-[var(--bg2)] px-2 py-0.5 font-medium text-[var(--tx)] break-words">{row.zone || '--'}</span>
+          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showViolationNumber={false} showViolationMarker showConfidence={false} showZone={false} />
         </div>
         <div className="mt-auto space-y-2 border-t border-[var(--bd)] pt-2.5">
           <LightingCardMetaRow icon={Server} label="NVR" value={row.nvrName} />
           <LightingCardMetaRow icon={Video} label="Camera" value={row.channelName} />
+          <LightingCardMetaRow icon={MapPin} label="Zone Name" value={row.zone} />
           <LightingCardMetaRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
         </div>
       </div>
     ) : config.showHygieneFields ? (
       <div className="flex flex-1 flex-col gap-3 p-3.5">
-        <div className="flex min-w-0 items-start gap-2.5">
+        {config.showIncidentName !== false && <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--blue)]/10 text-[var(--blue)]">
             <ShieldAlert className="h-4 w-4" aria-hidden="true" />
           </span>
@@ -530,21 +527,18 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
             <div className="mt-0.5 break-words text-[12px] font-semibold leading-snug text-[var(--tx)]">{row.incidentName || '--'}</div>
           </div>
-        </div>
-        <div className="min-w-0 rounded-[10px] bg-[var(--bg2)] px-3 py-2.5">
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+        </div>}
+        <div className="min-w-0 rounded-[10px] border border-teal-200/80 bg-teal-50/80 px-3 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/30">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">
             <Activity className="h-3.5 w-3.5" aria-hidden="true" />
             Hygiene violations
           </div>
-          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showConfidence={false} showZone={false} />
-        </div>
-        <div className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="shrink-0 font-semibold uppercase tracking-wide text-[var(--tx2)]">Zone</span>
-          <span className="min-w-0 break-words rounded-md bg-[var(--bg2)] px-2 py-0.5 font-medium text-[var(--tx)]">{row.zone || '--'}</span>
+          <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showViolationSeparator={false} showViolationNumber={false} showViolationMarker showConfidence={false} showZone={false} />
         </div>
         <div className="mt-auto space-y-2 border-t border-[var(--bd)] pt-2.5">
           <LightingCardMetaRow icon={Server} label="NVR" value={row.nvrName} />
           <LightingCardMetaRow icon={Video} label="Camera" value={row.channelName} />
+          <LightingCardMetaRow icon={MapPin} label="Zone Name" value={row.zone} />
           <LightingCardMetaRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
         </div>
       </div>

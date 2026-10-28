@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Panel } from '../../../components/primitives';
 import { Empty } from '../../../components/States';
 import { useNavigate } from 'react-router-dom';
@@ -235,9 +236,22 @@ export default function MultiSiteNetwork({
   const groups = new Set(nodes.map((node) => node.group));
   const hasLocations = [...groups].some((group) => group !== FALLBACK_GROUP);
   const baseHeight = tall ? 520 : 580;
+  const panelRef = useRef(null);
+  const [panelHeight, setPanelHeight] = useState(baseHeight);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return undefined;
+    const updateHeight = () => setPanelHeight(panel.clientHeight);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <Panel
+      ref={panelRef}
       gradient
       className="vq-msn"
       style={{
@@ -396,6 +410,10 @@ export default function MultiSiteNetwork({
             // Only scroll once there's enough to actually need it — under that,
             // the tooltip sizes to its content like before.
             const scrollTooltip = node.detectionDetails.length > 5;
+            const spaceBelow = panelHeight * (1 - node.y / 100) - 46;
+            const spaceAbove = panelHeight * node.y / 100 - 46;
+            const openAbove = spaceBelow < 320 && spaceAbove > spaceBelow;
+            const availableHeight = openAbove ? spaceAbove : spaceBelow;
             return (
             <div
               key={node.id}
@@ -422,10 +440,10 @@ export default function MultiSiteNetwork({
               <div
                 style={{
                   position: 'absolute',
-                  top: -36,
+                  top: openAbove ? -70 : -36,
                   left: -36,
                   right: -36,
-                  bottom: -36,
+                  bottom: openAbove ? -36 : -70,
                   zIndex: -1,
                 }}
               />
@@ -510,15 +528,17 @@ export default function MultiSiteNetwork({
                   // cause of both the hover flakiness and the label losing
                   // its clickable cursor whenever a workaround tried to
                   // punch a pointer-events hole through it.
-                  top: 46,
+                  top: openAbove ? 'auto' : 46,
+                  bottom: openAbove ? 46 : 'auto',
                   width: 300,
                   maxWidth: 'min(300px, calc(100vw - 48px))',
                   // Fixed px, not a %-based calc: the nearest positioned
                   // ancestor here is the 14px node dot, not the panel, so a
                   // percentage height would resolve against that instead.
-                  ...(scrollTooltip
-                    ? { maxHeight: 280, overflowY: 'auto', overflowX: 'hidden' }
-                    : null),
+                  maxHeight: Math.max(80, Math.min(320, availableHeight)),
+                  boxSizing: 'border-box',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
                   borderRadius: 10,
                   background: 'var(--bg1solid)',
                   border: '1px solid var(--bd)',
@@ -526,9 +546,8 @@ export default function MultiSiteNetwork({
                   boxShadow: '0 20px 48px rgba(0,0,0,.28)',
                   padding: '18px 20px',
                   zIndex: 6,
-                  cursor: 'pointer',
+                  cursor: 'default',
                 }}
-                onClick={() => navigate('/incidents')}
               >
                 <div
                   style={{

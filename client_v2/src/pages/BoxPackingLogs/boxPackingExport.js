@@ -5,7 +5,7 @@ import { autoTable } from 'jspdf-autotable';
 import { readPackingPdfImage, loadPackingPdfImages } from './packingPdfImages';
 import { drawPackingPdfGrid } from './packingPdfGrid';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
-import { formatPackingDuration, packingWorkerCount, packingAverageSeconds, packingDateValue, packingEndTimeValue, packingStartTimeValue } from './boxPackingData';
+import { formatPackingDuration, formatPackingTotalTime, packingWorkerCount, packingDateValue, packingEndTimeValue, packingStartTimeValue } from './boxPackingData';
 import { packingMediaUrls } from './packingMedia';
 import { buildPackingReportRecords, REPORT_COLUMNS } from './packingReportData';
 
@@ -46,10 +46,10 @@ const normalizePackingRecords = (records, rows, timezone, reportType) => records
   return next;
 });
 
-const summaryFrom = (rows, stats) => ({
+const summaryFrom = (rows) => ({
   'Total workers': packingWorkerCount(rows),
-  'Boxes packed': stats?.boxes ?? rows.length,
-  'Average time to complete': formatPackingDuration(stats?.avgTime ?? packingAverageSeconds(rows)),
+  'Boxes packed': rows.length,
+  'Total time': formatPackingTotalTime(rows),
 });
 
 const removeReviewFields = (value) => {
@@ -81,9 +81,9 @@ export const downloadBoxPackingXlsx = (rows = [], options = {}) => {
   const records = removeReviewFields(normalizePackingRecords(options.records ?? reportRecords(rows, timezone, reportType), rows, timezone, reportType));
   const summary = reportType === 'activity' || reportType === 'hourly'
     ? {
-      'Total workers': packingWorkerCount(rows),
+      'Active workers': packingWorkerCount(rows),
       'Boxes packed': rows.length,
-      'Average time to complete': formatPackingDuration(packingAverageSeconds(rows)),
+      'Total time': formatPackingTotalTime(rows),
     }
     : removeReviewFields(summaryFrom(rows));
   const workbook = XLSX.utils.book_new();
@@ -149,7 +149,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
   const filenamePrefix = options.filenamePrefix || 'box-packing-alert-report';
   const reportType = options.reportType || 'total';
   const records = removeReviewFields(normalizePackingRecords(options.records ?? reportRecords(rows, timezone, reportType), rows, timezone, reportType));
-  const summary = removeReviewFields(summaryFrom(rows, stats));
+  const summary = removeReviewFields(summaryFrom(rows));
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   doc.setProperties({ title: reportTitle, subject: `Packing activity report · ${periodLabel}`, author: 'VideoiraQ' });
@@ -170,7 +170,8 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(periodLabel, pageWidth - 14, gridLayout ? 17 : 27, { align: 'right' });
   doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(reportType === 'alerts' ? (options.layout === 'grid' ? 'Packing snapshots and details' : 'Packing activity log') : 'Packing activity and worker comparison', 14, gridLayout ? 30 : 39);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUTED); doc.text(`Generated ${formatDate(new Date(), timezone)} · ${timezone}`, 14, gridLayout ? 35 : 46);
-  const cards = [['TOTAL WORKERS', summary['Total workers'], BLUE], ['BOXES PACKED', summary['Boxes packed'], [5, 150, 105]], ['AVERAGE TIME TO COMPLETE', summary['Average time to complete'], [126, 34, 206]]];
+  const isActivity = reportType === 'activity' || reportType === 'hourly';
+  const cards = [[isActivity ? 'ACTIVE WORKERS' : 'TOTAL WORKERS', summary[isActivity ? 'Active workers' : 'Total workers'], BLUE], ['BOXES PACKED', summary['Boxes packed'], [5, 150, 105]], ['TOTAL TIME', summary['Total time'], [126, 34, 206]]];
   const cardWidth = (pageWidth - 28 - 12) / 3;
   cards.forEach(([cardLabel, value, color], index) => {
     const x = 14 + index * (cardWidth + 6);

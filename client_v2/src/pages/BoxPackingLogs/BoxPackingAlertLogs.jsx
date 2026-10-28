@@ -12,7 +12,7 @@ import BoxPackingDownloadButton from './BoxPackingDownloadButton';
 import { mono } from '@/pages/SolderLine/ui';
 import { downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
 import { downloadBoxPackingSnapshot, downloadBoxPackingSnapshotsZip } from './boxPackingSnapshots';
-import { formatPackingDuration, packingWorkerCount, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue } from './boxPackingData';
+import { formatPackingDuration, formatPackingTotalTime, packingWorkerCount, packingDateValue, packingEndTimestamp, packingEndTimeValue, packingStartTimestamp, packingStartTimeValue } from './boxPackingData';
 import { formatTime, generateHourOptions, generateMinuteOptions, generatePeriodOptions, parseTime } from '@/pages/AttendanceLogs/components/timeUtils';
 
 const cameraLabel = (row) => row.cameraName || row.camera || row.channelData?.customName || row.channelData?.name || row.channelName || 'Packing Camera';
@@ -193,7 +193,7 @@ export default function BoxPackingAlertLogs({ rows = [], periodLabel = 'Selected
   // Downloads include every row matching the active filters and sort, independent of the table page.
   const exportRows = sorting.rows;
 
-  const filteredStats = useMemo(() => ({ total: filteredRows.length, boxes: filteredRows.length, avgTime: filteredRows.length ? Math.round(filteredRows.reduce((sum, row) => sum + (Number(row.timeTakenSec) || 0), 0) / filteredRows.length) : 0, zones: new Set(filteredRows.map((row) => row.zone).filter(Boolean)).size }), [filteredRows]);
+  const filteredStats = useMemo(() => ({ total: filteredRows.length, boxes: filteredRows.length, zones: new Set(filteredRows.map((row) => row.zone).filter(Boolean)).size }), [filteredRows]);
   const exportStats = filteredStats;
   const previewRows = useMemo(() => filteredRows.filter(hasImage), [filteredRows]);
   const previewIndex = openSnapshot ? previewRows.findIndex((row) => row.id === openSnapshot.id) : -1;
@@ -202,9 +202,9 @@ export default function BoxPackingAlertLogs({ rows = [], periodLabel = 'Selected
   const movePreview = (offset) => { const next = previewRows[previewIndex + offset]; if (next) openPreview(next, openSnapshot?.fullscreen); };
 
   const stats = [
-    { label: 'Active workers', value: packingWorkerCount(filteredRows), color: '#0891b2', title: "Distinct completedBy worker IDs, counted per camera/NVR across the date range." },
+    { label: 'Active workers', value: packingWorkerCount(filteredRows), color: '#0891b2', title: "Distinct completedBy worker IDs across the selected date range." },
     { label: 'Boxes Packed', value: filteredStats.boxes, color: '#059669', title: 'Number of packed-box records matching the current filters and date range.' },
-    { label: 'Average time to complete', value: formatPackingDuration(filteredStats.avgTime), color: '#7c3aed', title: 'Average time taken to complete a box, using records matching the current filters and date range.' },
+    { label: 'Total time', value: formatPackingTotalTime(filteredRows), color: '#7c3aed', title: 'Sum of recorded packing time for boxes matching the current filters and date range.' },
   ];
   const timeLabel = !timeError && fromTime && toTime ? `${fromTime} – ${toTime}` : '';
   const reportPeriodLabel = timeLabel ? `${periodLabel} · ${timeLabel}` : periodLabel;

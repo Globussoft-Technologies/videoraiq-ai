@@ -174,9 +174,7 @@ export const NAV_GROUPS = [
   {
     label: 'BOX PACKING QC',
     items: [
-      { key: 'box-packing', label: 'Box Packing', path: 'box-packing', end: true, icon: Package, moduleKey: 'boxPackingQc', modulePageKey: 'boxPacking', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
-      { key: 'box-packing-alerts', label: 'Packing Alert Logs', path: 'box-packing/alerts', icon: TriangleAlert, moduleKey: 'boxPackingQc', modulePageKey: 'packingAlertLogs', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
-      { key: 'box-packing-reports', label: 'Box Packing Reports', path: 'box-packing/reports', icon: FileChartColumn, moduleKey: 'boxPackingQc', modulePageKey: 'boxPackingReports', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
+      { key: 'box-packing', label: 'Box Packing', path: 'box-packing', icon: Package, moduleKey: 'boxPackingQc', modulePageKey: 'boxPacking', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
     ],
   },
   {

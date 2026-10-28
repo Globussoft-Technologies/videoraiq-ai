@@ -285,6 +285,7 @@ export const LIGHTING_CONFIG = {
   }),
   showIndustrialFields: false,
   showLightingFields: true,
+  showIncidentName: false,
 };
 
 export const HYGIENE_CONFIG = {
@@ -299,6 +300,7 @@ export const HYGIENE_CONFIG = {
   }),
   showIndustrialFields: false,
   showHygieneFields: true,
+  showIncidentName: false,
 };
 
 export const STOCK_COUNTING_CONFIG = {

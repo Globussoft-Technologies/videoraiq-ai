@@ -78,6 +78,7 @@ const SleepActivityLogs = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({ all: null, sleeping: null, awake: null });
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [searchInput, setSearchInput] = useState('');
@@ -194,6 +195,28 @@ const SleepActivityLogs = () => {
 
       setRows(mapped);
       setTotalCount(total);
+      try {
+        const countRes = await getSleepActivityLogs({
+          skip: 0,
+          limit: 1,
+          startDate,
+          endDate,
+          nvrIds,
+          channelIds,
+          isSleeping: sleepingFilter === 'true' ? false : true,
+        });
+        const otherCount = countRes?.data?.body?.data?.totalCount ?? 0;
+        const sleeping = sleepingFilter === 'true' ? total : otherCount;
+        const awake = sleepingFilter === 'false' ? total : sleepingFilter === 'true' ? otherCount : Math.max(0, total - sleeping);
+        setStatusCounts({ all: sleeping + awake, sleeping, awake });
+      } catch (countError) {
+        console.log('Error fetching sleep activity counts:', countError);
+        setStatusCounts({
+          all: sleepingFilter === '' ? total : null,
+          sleeping: sleepingFilter === 'true' ? total : null,
+          awake: sleepingFilter === 'false' ? total : null,
+        });
+      }
     } catch (err) {
       console.log('Error fetching sleep activity logs:', err);
       setError(err);
@@ -291,8 +314,12 @@ const SleepActivityLogs = () => {
   );
 
   const stats = useMemo(
-    () => [{ label: 'Detections', value: totalCount ?? 0, color: 'var(--blue)' }],
-    [totalCount]
+    () => [
+      { label: 'Total Sleep Logs', value: statusCounts.all ?? '--', color: 'var(--blue)' },
+      { label: 'Sleeping', value: statusCounts.sleeping ?? '--', color: 'var(--crit)' },
+      { label: 'Awake', value: statusCounts.awake ?? '--', color: 'var(--ok)' },
+    ],
+    [statusCounts]
   );
 
   /* ─────────────── Guards ─────────────── */

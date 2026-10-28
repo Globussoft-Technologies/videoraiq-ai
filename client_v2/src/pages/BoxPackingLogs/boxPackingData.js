@@ -10,6 +10,25 @@ export const packingWorkerId = (row) => {
     ? (String(value).trim() === 'Completed by not provided' ? '' : String(value).trim()) : '';
 };
 export const packingWorkerIds = (rows = []) => [...new Set(rows.map(packingWorkerId).filter(Boolean))];
+const packingRowHasBox = (row) => {
+  const boxNumber = Number(row?.boxNumber);
+  return Boolean(row?.boxId) || row?.status === 'completed' || (Number.isFinite(boxNumber) && boxNumber > 0);
+};
+export const packingWorkerStationStats = (rows = []) => {
+  const activity = new Map();
+  for (const row of rows) {
+    const worker = packingWorkerId(row);
+    if (!worker) continue;
+    const key = JSON.stringify([packingStationKey(row), worker]);
+    if (!activity.has(key)) activity.set(key, { completed: false });
+    activity.get(key).completed ||= packingRowHasBox(row);
+  }
+  return { total: activity.size, completed: [...activity.values()].filter((entry) => entry.completed).length };
+};
+// The overview parent card follows the production rule: a worker ID is
+// counted once per camera/NVR station, so the same worker on two cameras is
+// represented in both station totals.
+export const packingWorkerCountByStation = (rows = []) => packingWorkerStationStats(rows).total;
 export const packingZonesForChannel = (channel) => {
   const detections = channel?.detections;
   const setting = Array.isArray(detections)
@@ -28,8 +47,24 @@ export const packingZonesForChannel = (channel) => {
   })).filter((zone) => zone.points.length >= 3);
   return zones.length ? { width: Number(settings?.videoResolution?.[0]), height: Number(settings?.videoResolution?.[1]), zones } : null;
 };
-export const packingWorkerCount = (rows = []) => new Set(rows.filter(packingWorkerId)
-  .map((row) => JSON.stringify([packingStationKey(row), packingWorkerId(row)]))).size;
+export const packingWorkerCount = (rows = []) => packingWorkerIds(rows).length;
+export const packingWorkerActivity = (rows = []) => {
+  const activity = new Map();
+  for (const row of rows) {
+    const worker = packingWorkerId(row);
+    if (!worker) continue;
+    if (!activity.has(worker)) activity.set(worker, { id: worker, boxes: 0, completed: false, rows: [] });
+    const entry = activity.get(worker);
+    entry.rows.push(row);
+    // A packing row represents a completed box even when the backend's
+    // sequence number is zero or omitted. Prefer the explicit box id/status
+    // and only use a positive sequence number as a fallback.
+    const hasBox = packingRowHasBox(row);
+    if (hasBox) entry.boxes += 1;
+    entry.completed = entry.completed || hasBox;
+  }
+  return [...activity.values()].sort((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true }));
+};
 
 export const packingWorkerDetails = (row) => {
   const matched = packingCompletedZone(row);
@@ -37,12 +72,11 @@ export const packingWorkerDetails = (row) => {
   const metric = matched || (!hasSnapshot ? row : {});
   return { worker: packingWorkerId(row), boxNumber: metric.boxNumber, timeTakenSec: metric.timeTakenSec };
 };
-export const packingAverageSeconds = (rows) => {
-  const seconds = rows.map((row) => Number(row.timeTakenSec)).filter((value) => Number.isFinite(value) && value > 0);
-  return seconds.length ? seconds.reduce((sum, value) => sum + value, 0) / seconds.length : 0;
-};
-
 export const packingDurationSeconds = (row) => Number(row?.timeTakenSec ?? packingCompletedZone(row)?.timeTakenSec) || 0;
+export const packingTotalSeconds = (rows = []) => rows.reduce((total, row) => {
+  const seconds = packingDurationSeconds(row);
+  return total + (Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
+}, 0);
 export const packingEndTimestamp = (row) => row?.timeOfIncident || row?.time || row?.recordedAt || row?.endTime || row?.end_time || row?.createdAt;
 export const packingStartTimestamp = (row) => {
   const end = packingEndTimestamp(row);
@@ -102,11 +136,36 @@ export const formatPackingDuration = (seconds) => {
   return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 };
 
+export const formatPackingTotalSeconds = (seconds) => {
+  let remaining = Math.round(Number(seconds) || 0);
+  if (remaining <= 0) return '0s';
+
+  // These are elapsed-time units, so months and years use fixed lengths.
+  const units = [
+    [365 * 24 * 60 * 60, 'yr'],
+    [30 * 24 * 60 * 60, 'mo'],
+    [24 * 60 * 60, 'd'],
+    [60 * 60, 'h'],
+    [60, 'm'],
+    [1, 's'],
+  ];
+  const parts = [];
+  for (const [size, unit] of units) {
+    const count = Math.floor(remaining / size);
+    if (!count) continue;
+    parts.push(`${count}${unit}`);
+    remaining %= size;
+    if (parts.length === 2) break;
+  }
+  return parts.join(' ');
+};
+export const formatPackingTotalTime = (rows = []) => formatPackingTotalSeconds(packingTotalSeconds(rows));
+
 export const packingStats = (rows) => ({
   total: rows.length,
   review: rows.filter((row) => row.status === 'review').length,
   // Each row represents one packed box. `boxNumber` is the sequence/label
   // shown for that box, not a quantity to add to the total.
   boxes: rows.length,
-  avgTime: Math.round(packingAverageSeconds(rows)),
+  totalSeconds: packingTotalSeconds(rows),
 });

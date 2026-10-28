@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment-timezone';
-import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { Boxes, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react';
 import PackingStationSummary from './PackingStationSummary';
-import { mono, label, Panel, Chip, Kpi, KpiGrid, NoPeriodData } from '@/pages/SolderLine/ui';
+import PackingMetricCard from './PackingMetricCard';
+import { mono, label, Panel, Chip, KpiGrid, NoPeriodData } from '@/pages/SolderLine/ui';
 import SnapshotCell from '@/pages/SolderLine/SnapshotCell';
 import SolderPagination, { useSolderPagination } from '@/pages/SolderLine/SolderPagination';
 import { mediaUrl } from '@/lib/format';
 import { downloadBoxPackingPdf, downloadBoxPackingXlsx } from './boxPackingExport';
-import { formatPackingDuration, packingEndTimestamp, packingStats, packingWorkerIds } from './boxPackingData';
-import PackingZoneKpi from './PackingZoneKpi';
+import { formatPackingTotalTime, packingEndTimestamp, packingStats, packingWorkerActivity, packingWorkerCountByStation, packingWorkerStationStats } from './boxPackingData';
 import { buildPackingReportRecords, buildPackingReportStations, REPORT_COLUMNS } from './packingReportData';
 import { usePackingSort } from './PackingSort';
 import BoxPackingAutoEmailReports from './BoxPackingAutoEmailReports';
 import { formatTime, generateHourOptions, generateMinuteOptions, generatePeriodOptions, parseTime } from '@/pages/AttendanceLogs/components/timeUtils';
 
 const TYPES = [
-  ['comparison', 'Worker Comparison', 'Packed boxes and average packing time by camera and worker'],
-  ['hourly', 'Hourly activity', 'Packed boxes, average cycle and active workers per hour'],
+  ['comparison', 'Worker Comparison', 'Packed boxes and total packing time by camera and worker'],
+  ['hourly', 'Hourly activity', 'Packed boxes, total packing time and active workers per hour'],
   ['total', 'Total report', 'Box details and packing times for the selected cameras'],
 ];
 const rangeLabel = (range, timezone) => {
@@ -148,10 +148,17 @@ function ReportFilters({ fromTime, toTime, setFromTime, setToTime }) {
 
 function ReportKpis({ rows, scope }) {
   const stats = packingStats(rows);
+  const workers = packingWorkerActivity(rows);
+  const workerStats = packingWorkerStationStats(rows);
+  const completedWorkers = workerStats.completed;
+  const inactiveWorkers = packingWorkerCountByStation(rows) - completedWorkers;
+  const activity = workers.length
+    ? `${completedWorkers} completed · ${workers.reduce((total, worker) => total + worker.boxes, 0)} boxes${inactiveWorkers ? ` · ${inactiveWorkers} no activity` : ''}`
+    : 'No workers recorded';
   return <KpiGrid>
-    <PackingZoneKpi stations={buildPackingReportStations(rows)} />
-    <Kpi label="Boxes packed" value={stats.boxes} sub={scope} title="Number of packed-box records for the report's camera scope and date range." color="#22c55e" />
-    <Kpi label="Average time to complete" value={rows.length ? formatPackingDuration(stats.avgTime) : '—'} sub={scope} title="Average recorded time to complete a box for the report's camera scope and date range." color="#a855f7" />
+    <PackingMetricCard label="Total workers" value={workerStats.total} detail={activity} icon={Users} color="#3b82f6" />
+    <PackingMetricCard label="Boxes packed" value={stats.boxes} detail={scope} icon={Boxes} color="#22c55e" />
+    <PackingMetricCard label="Total packing time" value={formatPackingTotalTime(rows)} detail={scope} icon={Clock} color="#a855f7" />
   </KpiGrid>;
 }
 
@@ -197,7 +204,7 @@ export default function BoxPackingReports({ rows = [], channels = [], range, onR
     });
   }, [rows, fromTime, toTime, timeError, timezone]);
   const stations = useMemo(() => buildPackingReportStations(filteredRows, channels), [filteredRows, channels]);
-  const viewingStations = useMemo(() => [{ id: 'all', name: 'All cameras', nvrName: `${stations.length} camera stations`, workers: packingWorkerIds(filteredRows) }, ...stations], [stations, filteredRows]);
+  const viewingStations = useMemo(() => [{ id: 'all', name: 'All cameras', nvrName: `${stations.length} camera stations`, workers: packingWorkerActivity(filteredRows).map((worker) => worker.id) }, ...stations], [stations, filteredRows]);
   const selectedIndex = Math.max(0, viewingStations.findIndex((station) => station.id === selectedId));
   const selectedStation = viewingStations[selectedIndex];
   const selected = selectedStation?.id === 'all' ? null : selectedStation;

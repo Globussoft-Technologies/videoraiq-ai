@@ -1,5 +1,5 @@
 import moment from 'moment-timezone';
-import { formatPackingDuration, packingWorkerIds, packingWorkerDetails, packingAverageSeconds, packingDateValue, packingEndTimeValue, packingStartTimeValue } from './boxPackingData.js';
+import { formatPackingDuration, formatPackingTotalTime, packingWorkerDetails, packingDateValue, packingEndTimeValue, packingStartTimeValue, packingWorkerIds } from './boxPackingData.js';
 import { packingStationKey, samePackingCamera } from './packingIdentity.js';
 
 export const reportCameraName = (row) => row.cameraName || row.camera || row.channelData?.customName || row.channelData?.name || row.channelName || '—';
@@ -27,8 +27,8 @@ export function buildPackingReportStations(rows = [], channels = []) {
 
 export const REPORT_COLUMNS = {
   total: ['Box ID', 'Completed By', 'NVR', 'Camera Name', 'Date', 'Start time', 'End time', 'Time to complete', 'Snapshot'],
-  hourly: ['Time range', 'Boxes packed', 'Average time to complete', 'Active workers'],
-  comparison: ['NVR', 'Camera Name', 'Worker', 'Boxes packed', 'Average time to complete'],
+  hourly: ['Time range', 'Boxes packed', 'Total time', 'Active workers'],
+  comparison: ['NVR', 'Camera Name', 'Worker', 'Boxes packed', 'Total time'],
 };
 
 export function buildPackingReportRecords(rows = [], type = 'total', timezone = 'Asia/Kolkata') {
@@ -57,13 +57,13 @@ export function buildPackingReportRecords(rows = [], type = 'total', timezone = 
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, group]) => {
       const workers = new Map();
       group.rows.filter((row) => row.worker).forEach((row) => {
-        workers.set(JSON.stringify([packingStationKey(row), row.worker]), { name: row.worker, camera: reportCameraName(row), nvr: reportNvrName(row) });
+        workers.set(row.worker, { name: row.worker, camera: reportCameraName(row), nvr: reportNvrName(row) });
       });
       const names = [...workers.values()].map((worker) => worker.name);
       return {
         'Time range': group.date.format(multiDay ? 'DD MMM YYYY HH:mm' : 'HH:mm') + '–' + group.date.clone().add(1, 'hour').format('HH:mm'),
         'Boxes packed': group.rows.length,
-        'Average time to complete': formatPackingDuration(packingAverageSeconds(group.rows)),
+        'Total time': formatPackingTotalTime(group.rows),
         'Active workers': `${workers.size}${names.length ? ' · ' + names.join(', ') : ''}`,
       };
     });
@@ -80,6 +80,6 @@ export function buildPackingReportRecords(rows = [], type = 'total', timezone = 
   return [...groups.values()].map((group) => ({
     NVR: reportNvrName(group.row), 'Camera Name': reportCameraName(group.row), Worker: group.worker,
     'Boxes packed': group.boxes,
-    'Average time to complete': formatPackingDuration(packingAverageSeconds(group.rows)),
+    'Total time': formatPackingTotalTime(group.rows),
   }));
 }

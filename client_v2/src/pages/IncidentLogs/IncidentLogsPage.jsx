@@ -19,6 +19,7 @@ import { handleIncidentExport } from './incidentExport';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
 import { packingExportValues, packingZones } from './boxPacking';
+import { formatPackingTotalTime } from '@/pages/BoxPackingLogs/boxPackingData';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import {
   getNVRs,
@@ -591,13 +592,12 @@ const IncidentLogsPage = ({ config }) => {
     if (config.showStats === false) return [];
     if (config.showBoxPackingFields) {
       const boxes = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.boxNumber) || 0), 0), 0);
-      const seconds = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.timeTakenSec) || 0), 0), 0);
       const review = rows.filter((row) => /variance|review|pending/i.test(`${row.status || ''} ${row.confirmationReason || ''}`)).length;
       return [
         { label: 'Packing Events', value: totalCount ?? rows.length, color: 'var(--blue)' },
         { label: 'Boxes Packed', value: boxes, color: 'var(--ok)' },
         { label: 'Needs Review', value: review, color: 'var(--warn)' },
-        { label: 'Average Time', value: rows.length ? `${Math.round(seconds / rows.length)}s` : '0s', color: 'var(--violet)' },
+        { label: 'Total Time', value: formatPackingTotalTime(rows), color: 'var(--violet)' },
       ];
     }
     if (config.showStockCountingFields) {
