@@ -86,6 +86,12 @@ const SEVERITY_OPTIONS = [
 const severityPayload = (incidentIds, severityByType) => Object.fromEntries(
   incidentIds.map((id) => [id, severityByType[id] || []]).filter(([, list]) => list.length),
 );
+const sameIds = (left, right) => JSON.stringify([...new Set(left)].sort()) === JSON.stringify([...new Set(right)].sort());
+const normalizeSeveritySettings = (incidentIds, severityByType) => JSON.stringify(
+  Object.entries(severityPayload(incidentIds, severityByType))
+    .map(([type, severities]) => [type, [...severities].sort()])
+    .sort(([left], [right]) => left.localeCompare(right)),
+);
 
 // Per selected detection type: which incident severities this recipient is
 // emailed about. No chip on = every severity for that type.
@@ -164,6 +170,7 @@ function DepartmentField({ value, onChange, label = 'Departments', exclude = [] 
         placeholder="No department"
         searchPlaceholder="Search departments..."
         msg={loading ? 'Loading departments...' : 'No departments found'}
+        inlinePanel
       />
       <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
         Used to find this recipient on the Detections page. They don&apos;t change which alerts they get.
@@ -272,6 +279,7 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
             justifyContent: 'space-between',
             padding: '16px 20px',
             borderBottom: '1px solid var(--bd)',
+            flexShrink: 0,
           }}
         >
           <div>
@@ -388,6 +396,8 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
               placeholder="Select detection types..."
               searchPlaceholder="Search detection types..."
               msg="No detection types found"
+              inlinePanel
+              closeOnSelectAll
             />
             <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
               Alerts of these types from every camera. With none picked, they only get alerts from detections they're selected on (Detections page).
@@ -405,6 +415,7 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
             gap: 8,
             padding: '15px 20px',
             borderTop: '1px solid var(--bd)',
+            flexShrink: 0,
           }}
         >
           <button
@@ -472,6 +483,20 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
     Object.entries(recipient.severityByType || {}).map(([type, list]) => [fromLegacyKey(type), list]),
   ));
   const [saving, setSaving] = useState(false);
+  const originalIncidentIds = (Array.isArray(recipient.incidentTypes) ? recipient.incidentTypes : []).map(fromLegacyKey);
+  const originalDepartmentIds = (recipient.departmentIds || [])
+    .filter(Boolean)
+    .map((department) => String(department?._id ?? department))
+    .filter((id) => !lockedDepartmentIds.includes(id));
+  const originalSeverityByType = Object.fromEntries(
+    Object.entries(recipient.severityByType || {}).map(([type, list]) => [fromLegacyKey(type), list]),
+  );
+  const hasChanges =
+    (!isUser && fullName.trim() !== (recipient.fullName || '').trim()) ||
+    !sameIds(incidentIds, originalIncidentIds) ||
+    !sameIds(departmentIds, originalDepartmentIds) ||
+    normalizeSeveritySettings(incidentIds, severityByType) !==
+      normalizeSeveritySettings(originalIncidentIds, originalSeverityByType);
 
   const typeOptions = useMemo(
     () =>
@@ -483,6 +508,7 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
   );
 
   async function submit() {
+    if (saving || !hasChanges) return;
     if (!isUser) {
       if (!fullName.trim()) {
         toast.error('Full name is required');
@@ -576,6 +602,7 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
             justifyContent: 'space-between',
             padding: '16px 20px',
             borderBottom: '1px solid var(--bd)',
+            flexShrink: 0,
           }}
         >
           <div>
@@ -652,6 +679,8 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
               placeholder="Select detection types..."
               searchPlaceholder="Search detection types..."
               msg="No detection types found"
+              inlinePanel
+              closeOnSelectAll
             />
             <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 5 }}>
               Alerts of these types from every camera. With none picked, they only get alerts from detections they're selected on (Detections page).
@@ -669,6 +698,7 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
             gap: 8,
             padding: '15px 20px',
             borderTop: '1px solid var(--bd)',
+            flexShrink: 0,
           }}
         >
           <button
@@ -689,7 +719,8 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
           </button>
           <button
             onClick={submit}
-            disabled={saving}
+            disabled={saving || !hasChanges}
+            title={!hasChanges ? 'No changes to save' : undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -700,9 +731,9 @@ function EditRecipientModal({ recipient, detectionTypes, onClose, onUpdated }) {
               background: 'linear-gradient(135deg,var(--blue),var(--violet))',
               borderRadius: 9,
               padding: '9px 18px',
-              cursor: saving ? 'wait' : 'pointer',
+              cursor: saving ? 'wait' : hasChanges ? 'pointer' : 'not-allowed',
               border: 'none',
-              opacity: saving ? 0.7 : 1,
+              opacity: saving || !hasChanges ? 0.55 : 1,
             }}
           >
             {saving && <Loader2 size={13} className="animate-spin" />}

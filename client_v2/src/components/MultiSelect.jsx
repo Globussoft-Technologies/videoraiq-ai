@@ -56,6 +56,7 @@ const MultiSelect = ({
   hasMore = false,
   loadingMore = false,
   inlinePanel = false,
+  closeOnSelectAll = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -243,7 +244,10 @@ const MultiSelect = ({
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--bd)]">
             <button
               type="button"
-              onClick={selectAll}
+              onClick={() => {
+                selectAll();
+                if (closeOnSelectAll) setOpen(false);
+              }}
               className="text-xs font-semibold text-[var(--brand)] hover:opacity-80 cursor-pointer"
             >
               Select All
