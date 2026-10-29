@@ -51,6 +51,7 @@ const RECIPIENT_VIEWS = [
 ];
 
 const TELEGRAM_CHANNELS_PER_PAGE = 4;
+const EMAIL_RECIPIENTS_PER_PAGE = 10;
 
 function Avatar({ name }) {
   const initials = (name || '?').trim().slice(0, 2).toUpperCase();
@@ -1291,6 +1292,7 @@ export default function AlertRecipients() {
   const [activeView, setActiveView] = useState('email');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [emailPage, setEmailPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -1366,6 +1368,20 @@ export default function AlertRecipients() {
   const recipients = Array.isArray(recipientsApi.data) ? recipientsApi.data : [];
   const detectionTypes = typesApi.data || {};
   const verifiedCount = recipients.filter((recipient) => recipient.verified).length;
+  const emailTotalPages = Math.max(1, Math.ceil(recipients.length / EMAIL_RECIPIENTS_PER_PAGE));
+  const currentEmailPage = Math.min(emailPage, emailTotalPages);
+  const paginatedRecipients = recipients.slice(
+    (currentEmailPage - 1) * EMAIL_RECIPIENTS_PER_PAGE,
+    currentEmailPage * EMAIL_RECIPIENTS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setEmailPage(1);
+  }, [debouncedSearch, statusFilter]);
+
+  useEffect(() => {
+    if (emailPage > emailTotalPages) setEmailPage(emailTotalPages);
+  }, [emailPage, emailTotalPages]);
 
   const linkedTelegramChannels = telegramStatus?.linkedChannels?.length
     ? telegramStatus.linkedChannels.filter((channel) => channel?.active !== false)
@@ -1790,7 +1806,7 @@ export default function AlertRecipients() {
                     }
                   >
                     {() =>
-                      recipients.map((recipient) => (
+                      paginatedRecipients.map((recipient) => (
                         <RecipientRow
                           key={recipient._id}
                           recipient={recipient}
@@ -1828,7 +1844,7 @@ export default function AlertRecipients() {
                 }
               >
                 {() =>
-                  recipients.map((recipient) => (
+                  paginatedRecipients.map((recipient) => (
                     <RecipientMobileCard
                       key={recipient._id}
                       recipient={recipient}
@@ -1843,6 +1859,13 @@ export default function AlertRecipients() {
               </AsyncBoundary>
             </div>
           </div>
+          {!recipientsApi.loading && !recipientsApi.error && recipients.length > EMAIL_RECIPIENTS_PER_PAGE && (
+            <Pagination
+              currentPage={currentEmailPage}
+              totalPages={emailTotalPages}
+              onPageChange={setEmailPage}
+            />
+          )}
         </>
       ) : (
         <>
