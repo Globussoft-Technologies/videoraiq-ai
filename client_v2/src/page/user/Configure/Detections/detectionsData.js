@@ -8,7 +8,7 @@ export const DETECTION_CATEGORIES = [
   { key: 'safety', label: 'Safety & PPE', color: 'var(--warn)', tint: 'rgba(245,166,35,.15)', icon: HardHat },
   { key: 'workplace', label: 'Workplace & Retail', color: 'var(--cyan)', tint: 'rgba(34,211,238,.15)', icon: Store },
   { key: 'industrial', label: 'Industrial & Environment', color: 'var(--ok)', tint: 'rgba(34,197,94,.15)', icon: Factory },
-  // { key: 'other', label: 'Other Models', color: 'var(--tx3)', tint: 'rgba(148,163,184,.15)', icon: Settings2 },
+  { key: 'other', label: 'Other Models', color: 'var(--tx3)', tint: 'rgba(148,163,184,.15)', icon: Settings2 },
 ];
 
 export const CATEGORY_BY_KEY = Object.fromEntries(DETECTION_CATEGORIES.map((c) => [c.key, c]));
@@ -154,6 +154,10 @@ const CATEGORY_MATCHERS = [
   ['workplace', ['desk', 'guard', 'table', 'occupancy', 'door', 'phone', 'mobile', 'retail', 'food']],
 ];
 
+const DETECTION_CATEGORY_OVERRIDES = {
+  uniformDetectionSettings: 'safety',
+};
+
 function isAttendanceDetection(value) {
   const normalized = String(value || '')
     .replace(/settings$/i, '')
@@ -203,7 +207,13 @@ function boolFrom(value, fallback) {
   return fallback;
 }
 
-function categoryFor(key, label) {
+function categoryFor(key, label, category) {
+  // Keep a known detector in its product category even when cached catalogue
+  // metadata still calls it "other" or uses an unrecognised category key.
+  if (DETECTION_CATEGORY_OVERRIDES[key]) return DETECTION_CATEGORY_OVERRIDES[key];
+  const requested = typeof category === 'string' ? category.trim().toLowerCase() : '';
+  const configured = DETECTION_CATEGORIES.find(item => item.key === requested || item.label.toLowerCase() === requested);
+  if (configured) return configured.key;
   const text = `${key} ${label}`.toLowerCase();
   const match = CATEGORY_MATCHERS.find(([, words]) => words.some((word) => text.includes(word)));
   return match?.[0] || 'other';
@@ -271,7 +281,7 @@ export function buildDetectionModels(detectionTypes) {
       settingType: key,
       name: label,
       subtitle: data.subtitle || subtitleFor(key, label),
-      category: data.category || categoryFor(key, label),
+      category: categoryFor(key, label, data.category),
       active: boolFrom(data.active, boolFrom(data.enabled, true)),
       incidents24h: numberFrom(data.incidents24h, data.incidentCount24h, data.last24Hours, data.count24h) ?? 0,
       sensitivity,
