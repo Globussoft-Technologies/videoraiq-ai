@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -592,6 +592,7 @@ export default function Detections() {
   const [resettingSetting, setResettingSetting] = useState(false);
   const [resettingThresholds, setResettingThresholds] = useState(false);
   const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
+  const catalogueRef = useRef(null);
   const incidentRequestIdRef = useRef(0);
   const autoSelectFirstCameraRef = useRef(false);
   const suppressCameraParamExitRef = useRef(false);
@@ -604,6 +605,9 @@ export default function Detections() {
   // refreshes it on every detection toggle.
   const { license, refresh: refreshLicense } = useLicense();
   const typesApi = useDetectionCatalog(license);
+  useLayoutEffect(() => {
+    if (enteredDetections) catalogueRef.current?.scrollIntoView({ block: 'start' });
+  }, [enteredDetections, zoneCamera?._id]);
   const incidentFilterTypesApi = useApi(
     () => fetchIncidentFilterTypes({ skip: 0, limit: 100 }),
     [],
@@ -722,10 +726,10 @@ export default function Detections() {
         return;
       }
     }
-    if (!models.some((m) => m.id === selectedId)) setSelectedId(models[0].id);
+    if (selectedId && !models.some((m) => m.id === selectedId)) setSelectedId('');
   }, [models, selectedId]);
 
-  const selected = models.find((m) => m.id === selectedId) || models[0];
+  const selected = models.find((m) => m.id === selectedId);
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
   const selectedIncidentType = incidentTypeForDetection(selected, incidentFilterTypesApi.data);
@@ -1161,9 +1165,8 @@ export default function Detections() {
       }
 
       if (enable && !hasExistingSetting) {
+        setZoneSettingsOpen(false);
         toast.info('Please configure zones and rules before enabling this detection.');
-        setSelectedId(model.id);
-        setZoneSettingsOpen(true);
         return;
       }
 
@@ -1327,8 +1330,12 @@ export default function Detections() {
   // immediately closes the detail view, forcing users to click twice.
   }, [detailCameraId]);
 
-  const enterDetections = (camera, targetSettingType = detailDetection || '') => {
+  const enterDetections = (camera, targetSettingType = '') => {
     const nextCameraId = String(camera?._id || '');
+    setCategory('all');
+    setStateTab('all');
+    setCollapsedGroups({});
+    setZoneSettingsOpen(false);
     // Opened from an Engines-column chip: remember the detection it stands for so
     // the detail view lands on it. If the catalogue is already loaded, apply it
     // now; otherwise the models effect picks it up once it arrives.
@@ -1337,15 +1344,16 @@ export default function Detections() {
       if (match) {
         setSelectedId(match.id);
         setSearch(match.name || '');
-        setStateTab('all');
-        setCategory('all');
         pendingDetectionRef.current = '';
       } else {
+        setSelectedId('');
+        setSearch('');
         pendingDetectionRef.current = String(targetSettingType);
       }
     } else {
       // No detection was requested by the URL or a camera chip.
       pendingDetectionRef.current = '';
+      setSelectedId('');
       setSearch('');
     }
     const nextNvrId = nvrIdOf(camera?.nvrId);
@@ -1353,6 +1361,7 @@ export default function Detections() {
       const next = new URLSearchParams(previous);
       next.set('camera', nextCameraId);
       if (targetSettingType) next.set('detection', targetSettingType);
+      else next.delete('detection');
       return next;
     });
     setSelectedFilterCameraId(nextCameraId);
@@ -1370,6 +1379,7 @@ export default function Detections() {
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       next.delete('camera');
+      next.delete('detection');
       return next;
     }, { replace: true });
     setEnteredDetections(false);
@@ -1377,6 +1387,11 @@ export default function Detections() {
     setSelectedNvrIds([]);
     setSelectedFilterCameraId('');
     setZoneSettingsOpen(false);
+    pendingDetectionRef.current = '';
+    setSelectedId('');
+    setSearch('');
+    setCategory('all');
+    setStateTab('all');
   };
 
   const fetchCameraWithZones = async (camera, nvr, settingType) => {
@@ -1597,7 +1612,7 @@ export default function Detections() {
   }
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div ref={catalogueRef} style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button
           type="button"
@@ -1656,8 +1671,8 @@ export default function Detections() {
         />
         <StatCard
           label="Selected"
-          value={selected?.name || (typesApi.loading ? '...' : '-')}
-          sub={`${incidents.length} ${incidents.length === 1 ? 'incident' : 'incidents'} shown`}
+          value={selected?.name || (typesApi.loading ? '...' : 'All detections')}
+          sub={selected ? `${incidents.length} ${incidents.length === 1 ? 'incident' : 'incidents'} shown` : 'Select a model to configure'}
           color="#ec4899"
           small
         />
@@ -1967,7 +1982,7 @@ export default function Detections() {
           </div>
 
           <div className="vq-det-aside">
-            {selected && (
+            {selected ? (
               <>
                 <div
                   style={{
@@ -2054,6 +2069,11 @@ export default function Detections() {
                   }}
                 />
               </>
+            ) : (
+              <div className="vq-det-zone-card text-center" style={{ padding: '38px 20px', color: 'var(--tx2)' }}>
+                <div className="vq-det-section-title">Select a detection model</div>
+                <p style={{ marginTop: 8, fontSize: 12.5 }}>Search or choose a model to configure its zones and settings for this camera.</p>
+              </div>
             )}
           </div>
         </div>
