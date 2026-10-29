@@ -112,7 +112,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     ? employeeIds.length > 0
     : locations.length > 0 || departmentIds.length > 0;
   const dated = individual && Boolean(effectiveFrom);
-  const startDateInvalid = dated && effectiveFrom !== todayDate;
+  const startDateInvalid = dated && effectiveFrom < todayDate;
   const dateRangeInvalid = dated && effectiveTo && effectiveTo < effectiveFrom;
   // An empty filter set means "everyone", so the server refuses it unless
   // `allEmployees` is set explicitly. Mirror that here rather than letting the
@@ -617,11 +617,10 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                   <SingleDatePicker
                     value={effectiveFrom}
                     minDate={todayDate}
-                    maxDate={todayDate}
                     placeholder="Select start date"
                     clearable
                     onChange={(date) => {
-                      const allowedDate = !date || date === todayDate ? date : '';
+                      const allowedDate = !date || date >= todayDate ? date : '';
                       setEffectiveFrom(allowedDate);
                       // From gates the dated mode — clearing it (or moving it
                       // past the end) drops a now-invalid end date too.
@@ -645,7 +644,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
               </div>
               <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
                 {startDateInvalid
-                  ? 'The start date must be today.'
+                  ? 'The start date must be today or later.'
                   : dateRangeInvalid
                   ? 'The end date is before the start date.'
                   : dated
