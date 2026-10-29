@@ -7,7 +7,7 @@ import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
 import MultiSelect from '../../../../components/MultiSelect';
-import { createDetectionSetting, deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getDetectionTypes, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
+import { createDetectionSetting, deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { useSocket } from '../../../../context/SocketContext';
 import { useAuth } from '../../../../context/AuthContext';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
@@ -29,6 +29,7 @@ import {
   toPercent,
 } from './detectionsData';
 import DetectionCard from './DetectionCard';
+import { useDetectionCatalog } from './useDetectionCatalog';
 import DetectionDetailPanel from './DetectionDetailPanel';
 import DetectionIncidents from './DetectionIncidents';
 import { buildFullFrameDefaultPayload } from './FullFrameDetectionSettings';
@@ -597,12 +598,12 @@ export default function Detections() {
   // Set when the camera list is opened via an Engines-column chip or deep-link param
   const pendingDetectionRef = useRef(detailDetection || '');
 
-  const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   // Licensing headroom, so the limits are visible before one is hit rather than
   // only surfacing as a refusal. Shared with the sidebar via LicenseContext, so
   // the page does not fetch the same snapshot a second time; the provider
   // refreshes it on every detection toggle.
   const { license, refresh: refreshLicense } = useLicense();
+  const typesApi = useDetectionCatalog(license);
   const incidentFilterTypesApi = useApi(
     () => fetchIncidentFilterTypes({ skip: 0, limit: 100 }),
     [],
