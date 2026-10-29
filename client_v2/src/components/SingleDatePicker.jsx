@@ -19,12 +19,13 @@ const SingleDatePicker = ({
   maxDate,
   placeholder = 'Select Date',
   clearable = false,
+  defaultViewDate,
   onChange,
   portalContainer,
 }) => {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() =>
-    moment(value || undefined).startOf('month')
+    moment(value || defaultViewDate || undefined).startOf('month')
   );
   const ref = useRef(null);
   const panelRef = useRef(null);
@@ -40,8 +41,8 @@ const SingleDatePicker = ({
   }, []);
 
   useEffect(() => {
-    setViewMonth(moment(value || undefined).startOf('month'));
-  }, [value, open]);
+    setViewMonth(moment(value || defaultViewDate || undefined).startOf('month'));
+  }, [value, defaultViewDate, open]);
 
   useEffect(() => {
     const onClick = (e) => {
@@ -61,13 +62,24 @@ const SingleDatePicker = ({
       if (!el) return;
       const r = el.getBoundingClientRect();
       const vw = window.innerWidth;
+      const vh = window.innerHeight;
       const w = Math.min(panelRef.current?.offsetWidth || 320, vw - GUTTER * 2);
+      const maxHeight = Math.max(0, vh - GUTTER * 2);
+      const height = Math.min(panelRef.current?.scrollHeight || 400, maxHeight);
+      const below = vh - r.bottom - GUTTER;
+      const above = r.top - GUTTER;
+      const openAbove = below < height + GUTTER && above > below;
+      const preferredTop = openAbove ? r.top - height - GUTTER : r.bottom + GUTTER;
+      const top = Math.max(GUTTER, Math.min(preferredTop, vh - height - GUTTER));
       let left = Math.round(r.left);
       left = Math.max(GUTTER, Math.min(left, vw - w - GUTTER));
       setPos({
         position: 'fixed',
-        top: Math.round(r.bottom + 8),
+        top: Math.round(top),
         left,
+        maxHeight,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
         maxWidth: `calc(100vw - ${GUTTER * 2}px)`,
       });
     };

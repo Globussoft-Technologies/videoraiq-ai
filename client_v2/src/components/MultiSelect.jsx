@@ -149,9 +149,9 @@ const MultiSelect = ({
   const isPickable = (o) => !o.isHeader && !o.disabled;
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim().toLowerCase().replace(/\s+/g, ' ');
     const matched = q
-      ? options.filter((o) => o.isHeader || o.label?.toLowerCase().includes(q))
+      ? options.filter((o) => o.isHeader || [o.label, o.searchText].some(text => text?.toLowerCase().replace(/\s+/g, ' ').includes(q)))
       : options;
     return matched.filter((o, i) => (o.isHeader ? isPickable(matched[i + 1] ?? {}) : true));
   }, [options, query]);

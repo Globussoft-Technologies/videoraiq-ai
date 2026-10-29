@@ -84,7 +84,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
 
   // Optional effective range for "Specific employees". When `from` is set the
   // assignment is written as dated ShiftSchedule overrides rather than changing
-  // the standing shift; `to` blank means a single day (to === from).
+  // the standing shift; a blank end applies from the start date onward.
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [effectiveTo, setEffectiveTo] = useState('');
 
@@ -251,6 +251,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
           found.forEach((employee) => {
             merged.set(employee._id, {
               id: employee._id,
+              searchText: employee.email || '',
               label: [
                 employeeName(employee),
                 employee.departmentId?.departmentName || employee.location,
@@ -300,6 +301,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
         found.forEach((employee) => {
           merged.set(employee._id, {
             id: employee._id,
+            searchText: employee.email || '',
             label: [
               employeeName(employee),
               employee.departmentId?.departmentName || employee.location,
@@ -413,12 +415,12 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     setSubmitting(true);
     try {
       if (dated) {
-        // "To" is optional — a blank end means a single day.
+        // A blank end creates an ongoing effective-dated assignment.
         const res = await bulkAssignSchedule({
           employeeIds,
           shiftId: selectedShiftId,
           from: effectiveFrom,
-          to: effectiveTo || effectiveFrom,
+          ...(effectiveTo ? { to: effectiveTo } : {}),
         });
         const data = res?.data?.body?.data;
         toast.success(res?.data?.body?.message || 'Shift scheduled');
@@ -504,7 +506,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
-        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] customscrollbar"
+        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-1 gap-0 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%]"
         closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] transition-colors top-5 right-5"
         onInteractOutside={(event) => {
           if (conflictingEmployees.length > 0) {
@@ -518,6 +520,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
           }
         }}
       >
+        <div className="min-h-0 max-h-[calc(92vh-8px)] overflow-y-auto overflow-x-hidden overscroll-contain customscrollbar rounded-[14px] p-3 sm:p-4">
         <DialogHeader className="flex-row items-center gap-3 text-left space-y-0">
           <span
             className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0"
@@ -635,6 +638,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                   <label className={labelClass}>To (optional)</label>
                   <SingleDatePicker
                     value={effectiveTo}
+                    defaultViewDate={effectiveFrom || undefined}
                     minDate={effectiveFrom || undefined}
                     placeholder={effectiveFrom ? 'Select end date' : 'Pick a start date first'}
                     clearable
@@ -648,7 +652,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                   : dateRangeInvalid
                   ? 'The end date is before the start date.'
                   : dated
-                  ? 'Scheduled for the selected day(s) only — the standing shift is unchanged.'
+                  ? (effectiveTo ? 'Scheduled for the selected date range only.' : 'Applies from the start date onward, until a later assignment changes it.')
                   : 'Leave the dates blank to set this as the standing shift.'}
               </p>
             </div>
@@ -834,6 +838,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
               : `Assign${activeShiftName ? ` to ${activeShiftName}` : ''}`}
           </Button>
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
     <ConfirmationModal
