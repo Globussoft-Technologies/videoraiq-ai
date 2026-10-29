@@ -26,6 +26,7 @@ export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, 
 // older label returned by the API, so the UI does not depend on every backend
 // instance/cache being updated at exactly the same time.
 const DETECTION_LABEL_OVERRIDES = {
+  uniformDetectionSettings: 'Uniform Detection',
   cylinderDetectionSettings: 'Cylinder Detection',
   fireSmokeDetectionSettings: 'Fire & Smoke Detection',
   personFallSickDetectionSettings: 'Person Fall/Sick Detection',
@@ -59,6 +60,7 @@ export const INCIDENT_STATUS = {
  * two labels → two rows, and so on.
  */
 export const DETECTION_THRESHOLDS = {
+  uniformDetectionSettings: ['person_threshold', 'uniform_confidence'],
   faceAuth: ['person_threshold'],
   faceRecognitionSettings: ['person_threshold'],
   faceDetectionSettings: ['person_threshold'],
@@ -112,6 +114,7 @@ export const DETECTION_THRESHOLDS = {
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */
 export const THRESHOLD_LABELS = {
+  uniform_confidence: 'Uniform Confidence',
   person_threshold: 'Person Confidence',
   vest_threshold: 'Vest',
   helmet_threshold: 'Helmet',
@@ -143,7 +146,7 @@ export function thresholdLabel(key) {
 }
 
 const CATEGORY_MATCHERS = [
-  ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon', 'fall', 'sick']],
+  ['safety', ['uniform', 'ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon', 'fall', 'sick']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
   ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light', 'height', 'oil', 'gunny', 'material', 'sand', 'dust', 'waste', 'scrap', 'animal', 'messy', 'stock', 'loading', 'unloading', 'blurred', 'blur', 'packing']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],

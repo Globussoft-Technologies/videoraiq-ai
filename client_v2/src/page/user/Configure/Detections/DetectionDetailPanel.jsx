@@ -68,6 +68,7 @@ const DETECTION_ICONS = {
   guardAbsenceSettings: ShieldOff,
   tableOccupancySettings: Table2,
   tableOccupancyDetectionSettings: Table2,
+  uniformDetectionSettings: ShieldAlert,
   mobilePhoneDetectionSettings: Smartphone,
   conveyorDetectionSettings: Factory,
   crusherDetectionSettings: Hammer,

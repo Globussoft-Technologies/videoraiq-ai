@@ -94,6 +94,7 @@ const stevinrockLogItems = [
   { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs', logsConfigKey: 'waterSpillLogs' },
   { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs', logsConfigKey: 'unauthorizedAccessLogs' },
   { key: 'fire-smoke', label: 'Fire & Smoke Logs', path: 'logs/fire-smoke', icon: Flame, permissionKey: 'logs', permissionSubKey: 'fireSmokeLogs', logsConfigKey: 'fireSmokeLogs' },
+  { key: 'uniform', label: 'Uniform Detection Logs', path: 'logs/uniform', icon: ShieldAlert, permissionKey: 'logs', permissionSubKey: 'uniformLogs', logsConfigKey: 'uniformLogs' },
   { key: 'person-fall-sick', label: 'Person Fall/Sick Logs', path: 'logs/person-fall-sick', icon: HeartPulse, permissionKey: 'logs', permissionSubKey: 'personFallSickLogs', logsConfigKey: 'personFallSickLogs' },
   { key: 'working-at-height', label: 'Working at Height Logs', path: 'logs/working-at-height', icon: HardHat, permissionKey: 'logs', permissionSubKey: 'workingAtHeightLogs', logsConfigKey: 'workingAtHeightLogs' },
   { key: 'oil-leakage', label: 'Oil Leakage Logs', path: 'logs/oil-leakage', icon: Droplet, permissionKey: 'logs', permissionSubKey: 'oilLeakageLogs', logsConfigKey: 'oilLeakageLogs' },

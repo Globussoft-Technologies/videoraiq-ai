@@ -639,7 +639,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
-        <IncidentCardRow icon={Clock} label={config.showDoorFields ? 'Time of Incident' : 'Time'} value={formatTime(row.createdAt)} />
+        <IncidentCardRow icon={Clock} label={config.timeLabel || (config.showDoorFields ? 'Time of Incident' : 'Time')} value={formatTime(row.createdAt)} />
       </div>
     ) : (
       <div className="p-[11px]">

@@ -360,3 +360,12 @@ export const BOX_PACKING_CONFIG = {
   enableViewExports: false,
   datePickerVariant: 'preset',
 };
+
+export const UNIFORM_CONFIG = {
+  endpoint: '/incidents/logs/uniform-detection', title: 'Uniform Detection Logs',
+  fileName: 'uniform_detection_logs', sheetName: 'Uniform Detection Logs', storagePrefix: 'uniform_detection',
+  permissionKey: 'uniformLogs', accessDenied: "You don't have permission to view Uniform Detection Logs.",
+  showIncidentName: false, showStatus: false, showSeverity: true, showSeverityFilter: true,
+  sortable: true, gridVariant: 'details', enableViewExports: true, datePickerVariant: 'preset',
+  timeLabel: 'Time of Incident',
+};

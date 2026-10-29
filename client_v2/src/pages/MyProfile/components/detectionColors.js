@@ -50,6 +50,7 @@ const SHORT_LABELS = {
   loiteringDetectionSettings: 'Loitering',
   tableOccupancyDetectionSettings: 'Table Occupancy',
   foodServicePPEDetectionSettings: 'Food PPE',
+  uniformDetectionSettings: 'Uniform Detection',
   mobilePhoneDetectionSettings: 'Mobile Phone',
   workingAtHeightDetectionSettings: 'Working at Height',
   oilLeakageDetectionSettings: 'Oil Leakage',

@@ -58,6 +58,8 @@ export function severity(sev) {
 }
 
 const CUSTOM_DETECTION_LABELS = {
+  uniformDetection: 'Uniform Detection',
+  uniformDetectionSettings: 'Uniform Detection',
   fireSmokeDetection: 'Fire & Smoke Detection',
   fireSmokeDetectionSettings: 'Fire & Smoke Detection',
   personFallSickDetection: 'Person Fall/Sick Detection',

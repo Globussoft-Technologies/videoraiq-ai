@@ -1,4 +1,5 @@
 export const DETECTION_FIELD_KEYS = [
+  'uniformDetectionSettings',
   'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',
   'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'fireSmokeDetectionSettings',
   'weaponDetectionSettings', 'unattendedBaggageDetectionSettings', 'unauthorizedAccessSettings',
