@@ -5562,6 +5562,72 @@
         ]
       }
     },
+    "/api/v2/incidents/logs/uniform-detection": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Uniform detection logs with NVR, camera, severity and date filters",
+        "parameters": [
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string",
+            "description": "Comma-separated NVR IDs"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string",
+            "description": "Comma-separated camera IDs"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD in the configured timezone"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD in the configured timezone"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer",
+            "default": 0
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "default": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
     "/api/v2/incidents/logs/blurred-camera-detection": {
       "get": {
         "tags": [

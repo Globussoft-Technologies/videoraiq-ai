@@ -798,6 +798,21 @@ class IncidentsController {
     return incidentsService.getLoadingUnloadingStockCountingAnalytics(req, res, next);
   }
 
+  async getUniformDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+       #swagger.description = 'Uniform detection logs with NVR, camera, severity and date filters'
+         #swagger.security = [{ "EncryptedAuthToken": [] }]
+         #swagger.parameters['nvrIds'] = { in: 'query', type: 'string', description: 'Comma-separated NVR IDs' }
+         #swagger.parameters['channelIds'] = { in: 'query', type: 'string', description: 'Comma-separated camera IDs' }
+         #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low', 'moderate', 'high'] }
+         #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD in the configured timezone' }
+         #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD in the configured timezone' }
+         #swagger.parameters['skip'] = { in: 'query', type: 'integer', default: 0 }
+         #swagger.parameters['limit'] = { in: 'query', type: 'integer', default: 10 }
+      */
+    return incidentsService.getUniformDetectionLogs(req, res, next);
+  }
+
   async getBlurredCameraDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Blurred Camera Detection logs.'

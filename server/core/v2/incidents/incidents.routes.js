@@ -176,6 +176,8 @@ router.get(
   viewAccessCheck,
   incidentsController.getLoadingUnloadingStockCountingLogs,
 );
+router.get("/logs/uniform-detection", viewAccessCheck, incidentsController.getUniformDetectionLogs);
+
 router.get(
   "/logs/blurred-camera-detection",
   viewAccessCheck,

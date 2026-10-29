@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { validateUniformSettings } from "../../../services/uniformDetection.js";
 import {
   WEEKDAYS as weekdays,
   findScheduleConflict,
@@ -81,6 +82,7 @@ const scheduleSchema = Joi.object({
 }).custom(validateScheduleWindows);
 
 const thresholdFieldsBySettingType = {
+  uniformDetectionSettings: ["person_threshold", "uniform_confidence"],
   personalProtectiveEquipmentSettings: [
     "person_threshold",
     "vest_threshold",
@@ -123,6 +125,10 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateUniformSettings(settingType, settings, requireZones = false) {
+    return validateUniformSettings(settingType, settings, requireZones);
+  }
+
   createDetectionSettingsValidation(body) {
     const schema = Joi.object().keys({
       name: Joi.string().required(),

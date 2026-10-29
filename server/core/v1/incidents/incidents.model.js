@@ -93,7 +93,12 @@ const MotionDetectionSchema = new Schema({
 });
 const MotionIncident = Incident.discriminator('motionDetection', MotionDetectionSchema);
 
-// Uniform Detection
+// Uniform incidents use the shared time, snapshot, camera and severity fields.
+const UniformDetectionIncident = Incident.discriminator('uniformDetection', new Schema({
+  triggerNotification: { type: Boolean, default: true },
+}));
+
+// Generic Object Detection
 const GenericObjectDetectionDetectionSchema = new Schema({
   objectsDetected: {
     type: [Schema.Types.Mixed], // Accepts any object like { bag: 3 }
@@ -897,6 +902,7 @@ export  {
   LineCrossingAuthIncident,
   FireSmokeDetectionIncident,
   PersonFallSickDetectionIncident,
+  UniformDetectionIncident,
   CroudIncident,
   SafetyHelmetIncident,
   DoorStatusIncident,

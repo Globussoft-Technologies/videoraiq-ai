@@ -107,6 +107,7 @@ const detectionFields = {
   foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
+  uniformDetectionSettings: detectionSettingSchema,
   carModelDetectionSettings: detectionSettingSchema,
   vehicleCheckInOutSettings: detectionSettingSchema,
   faceAuthenticationSettings: detectionSettingSchema,

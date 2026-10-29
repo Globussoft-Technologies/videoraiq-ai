@@ -1,3 +1,4 @@
+import { buildUniformDetector } from "./uniformDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
 import { assertDetectionServiceSuccess } from './detectionServiceResult.js';
 import logger from "../utils/logger.js";
@@ -139,6 +140,7 @@ const appendIndustrialDetectors = (
 
 const THRESHOLD_FIELDS_BY_DETECTOR = {
   faceAuth: ["person_threshold"],
+  uniformDetectionSettings: ["person_threshold", "uniform_confidence"],
   personalProtectiveEquipmentSettings: [
     "person_threshold",
     "vest_threshold",
@@ -851,7 +853,10 @@ class PythonService {
         detectors.push(buildDoorDetector(zones, zone_configs, severity, confidence_thresholds));
       }
 
-      appendIndustrialDetectors(detectors, detection_modes, {
+      if (detection_modes?.includes("uniformDetectionSettings")) {
+        detectors.push(buildUniformDetector(zones, zone_configs, severity ?? "moderate", confidence_thresholds, payload.videoResolution));
+      }
+      appendIndustrialDetectors(detectors, detection_modes?.filter(mode => mode !== "uniformDetectionSettings"), {
         zones,
         zone_configs,
         severity,
@@ -1141,7 +1146,10 @@ class PythonService {
         detectors.push(buildDoorDetector(zones, zone_configs, severity, confidence_thresholds));
       }
 
-      appendIndustrialDetectors(detectors, detection_modes, {
+      if (detection_modes?.includes("uniformDetectionSettings")) {
+        detectors.push(buildUniformDetector(zones, zone_configs, severity ?? "moderate", confidence_thresholds, payload.videoResolution));
+      }
+      appendIndustrialDetectors(detectors, detection_modes?.filter(mode => mode !== "uniformDetectionSettings"), {
         zones,
         zone_configs,
         severity,

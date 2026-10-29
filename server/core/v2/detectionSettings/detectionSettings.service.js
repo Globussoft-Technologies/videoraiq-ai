@@ -13,6 +13,7 @@ import {
   lineCrossingSettings,
   fireSmokeDetectionSettings,
   personFallSickDetectionSettings,
+  uniformDetectionSettings,
   weaponDetectionSettings,
   unattendedBaggageDetectionSettings,
   crowdDetectionSettings,
@@ -65,6 +66,7 @@ import {
   LineCrossingSetting,
   FireSmokeDetectionSetting,
   PersonFallSickDetectionSetting,
+  UniformDetectionSetting,
   WeaponDetectionSetting,
   UnattendedBaggageDetectionSetting,
   CrowdDetectionSetting,
@@ -130,6 +132,7 @@ const modelMap = {
   lineCrossingSettings: LineCrossingSetting,
   fireSmokeDetectionSettings: FireSmokeDetectionSetting,
   personFallSickDetectionSettings: PersonFallSickDetectionSetting,
+  uniformDetectionSettings: UniformDetectionSetting,
   weaponDetectionSettings: WeaponDetectionSetting,
   unattendedBaggageDetectionSettings: UnattendedBaggageDetectionSetting,
   crowdDetectionSettings: CrowdDetectionSetting,
@@ -515,6 +518,8 @@ class DetectionSettingService {
       if (hygieneValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
       }
+      const uniformValidation = DetectionSettingsValidation.validateUniformSettings(value.settingType, value.settings, true);
+      if (uniformValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", uniformValidation.error.message));
       const lightingValidation = DetectionSettingsValidation.validateLightingSettings(value.settingType, value.settings);
       if (lightingValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", lightingValidation.error.message));
@@ -962,6 +967,10 @@ class DetectionSettingService {
       if (value.settings && typeof value.settings === "object") {
         applyNormalizedTelegramSettings(detectionSetting, value.settings);
       }
+
+      // Validate the merged zones before changing any camera links.
+      const finalUniformValidation = DetectionSettingsValidation.validateUniformSettings(settingType, detectionSetting.settings, true);
+      if (finalUniformValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", finalUniformValidation.error.message));
 
       const saved = [];
       const skipped = [];
@@ -1849,6 +1858,7 @@ class DetectionSettingService {
         lineCrossingSettings,
         fireSmokeDetectionSettings,
         personFallSickDetectionSettings,
+        uniformDetectionSettings,
         weaponDetectionSettings,
         unattendedBaggageDetectionSettings,
         crowdDetectionSettings,

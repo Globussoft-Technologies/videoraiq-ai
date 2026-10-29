@@ -49,6 +49,7 @@ const detectionFields = {
   foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
+  uniformDetectionSettings: detectionSettingSchema,
   equipmentOilLeakageDetectionSettings: detectionSettingSchema,
   vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,

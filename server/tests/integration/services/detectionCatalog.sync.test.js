@@ -2,8 +2,12 @@
  * The shared detection catalog: server publishes its DETECTION_TYPES, the
  * superadmin reads them instead of its own drifting constants copy.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { connectMongo, disconnectMongo, clearCollections } from "../dbSetup.js";
+
+vi.mock("../../../services/python.service.js", () => ({ default: {
+  fetchDsDetectorNames: vi.fn().mockResolvedValue({ names: ["uniformDetectionSettings"] }),
+} }));
 
 const { syncDetectionCatalog } = await import(
   "../../../core/v2/detectionCatalog/detectionCatalog.service.js"
@@ -18,6 +22,12 @@ afterAll(async () => { await disconnectMongo(); });
 beforeEach(async () => { await clearCollections(); });
 
 describe("syncDetectionCatalog", () => {
+  it("publishes Uniform Detection with DS support for Super Admin allocations", async () => {
+    await syncDetectionCatalog();
+    const row = await DetectionCatalog.findOne({ settingType: "uniformDetectionSettings" }).lean();
+    expect(row).toMatchObject({ name: "Uniform Detection", active: true, dsSupported: true });
+  });
+
   it("publishes every DETECTION_TYPES entry into the shared collection", async () => {
     const result = await syncDetectionCatalog();
     const expected = Object.keys(DETECTION_TYPES);

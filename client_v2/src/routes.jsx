@@ -49,6 +49,7 @@ const LineCrossingLogs = lazy(() => import('./pages/LineCrossingLogs/LineCrossin
 const WaterSpillLogs = lazy(() => import('./pages/WaterSpillLogs/WaterSpillLogs'));
 const UnauthorizedAccessLogs = lazy(() => import('./pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs'));
 const FireSmokeLogs = lazy(() => import('./pages/FireSmokeLogs/FireSmokeLogs'));
+const UniformLogs = lazy(() => import('./pages/UniformLogs/UniformLogs'));
 const PersonFallSickLogs = lazy(() => import('./pages/PersonFallSickLogs/PersonFallSickLogs'));
 const WorkingAtHeightLogs = lazy(() => import('./pages/WorkingAtHeightLogs/WorkingAtHeightLogs'));
 const OilLeakageLogs = lazy(() => import('./pages/OilLeakageLogs/OilLeakageLogs'));
@@ -177,6 +178,7 @@ export const v2Routes = (
     <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />
     <Route path="logs/unauthorized-access" element={guard('logs', 'unauthorizedAccessLogs', <UnauthorizedAccessLogs />)} />
     <Route path="logs/fire-smoke" element={guard('logs', 'fireSmokeLogs', <FireSmokeLogs />)} />
+    <Route path="logs/uniform" element={guard('logs', 'uniformLogs', <UniformLogs />)} />
     <Route path="logs/person-fall-sick" element={guard('logs', 'personFallSickLogs', <PersonFallSickLogs />)} />
     <Route path="logs/working-at-height" element={guard('logs', 'workingAtHeightLogs', <WorkingAtHeightLogs />)} />
     <Route path="logs/oil-leakage" element={guard('logs', 'oilLeakageLogs', <OilLeakageLogs />)} />

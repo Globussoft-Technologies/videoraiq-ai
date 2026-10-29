@@ -1,3 +1,4 @@
+import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
 import logger from "../../../utils/logger.js";
@@ -31,6 +32,7 @@ import {
   LineCrossingAuthIncident,
   FireSmokeDetectionIncident,
   PersonFallSickDetectionIncident,
+  UniformDetectionIncident,
   LoiteringWithAuthIncident,
   CroudIncident,
   SafetyHelmetIncident,
@@ -65,6 +67,7 @@ const modelMap = {
   lineCrossing: LineCrossingAuthIncident,
   fireSmokeDetection: FireSmokeDetectionIncident,
   personFallSickDetection: PersonFallSickDetectionIncident,
+  uniformDetection: UniformDetectionIncident,
   crowdDetection: CroudIncident,
   personalProtectiveEquipment: SafetyHelmetIncident,
   doorDetection: DoorStatusIncident,
@@ -196,6 +199,9 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
+      try { normalizeUniformIncident(req.body); }
+      catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
+
       const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData, videoId } =
         req.body;
       // const userId = req?.verified?.userData?.user_id;
@@ -431,11 +437,22 @@ class IncidentsService {
       }
 
       // Else: Create new incident
+      if (incidentType === "uniformDetection" && req.body.severity === undefined) {
+        const linkedId = channel?.detections?.uniformDetectionSettings?.id;
+        const configured = linkedId ? await DetectionSetting.findById(linkedId).select("settings.levelOfImportance").lean() : null;
+        req.body.severity = configured?.settings?.levelOfImportance ?? "moderate";
+      }
       const newIncident = new Model({
         ...req.body,
         userId,
         timeOfIncident: currentTime,
       });
+
+      if (incidentType === "uniformDetection") {
+        newIncident.timeOfIncident = req.body.timeOfIncident;
+        newIncident.Image = req.body.Image;
+        newIncident.severity = req.body.severity ?? "moderate";
+      }
 
       if (incidentType === "countPersons" || incidentType === "countVehicles") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;

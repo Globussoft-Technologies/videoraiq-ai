@@ -13,6 +13,7 @@ import {
   lineCrossingSettings,
   fireSmokeDetectionSettings,
   personFallSickDetectionSettings,
+  uniformDetectionSettings,
   weaponDetectionSettings,
   unattendedBaggageDetectionSettings,
   crowdDetectionSettings,
@@ -52,6 +53,7 @@ import {
   LineCrossingSetting,
   FireSmokeDetectionSetting,
   PersonFallSickDetectionSetting,
+  UniformDetectionSetting,
   WeaponDetectionSetting,
   UnattendedBaggageDetectionSetting,
   CrowdDetectionSetting,
@@ -99,6 +101,7 @@ const modelMap = {
   lineCrossingSettings: LineCrossingSetting,
   fireSmokeDetectionSettings: FireSmokeDetectionSetting,
   personFallSickDetectionSettings: PersonFallSickDetectionSetting,
+  uniformDetectionSettings: UniformDetectionSetting,
   weaponDetectionSettings: WeaponDetectionSetting,
   unattendedBaggageDetectionSettings: UnattendedBaggageDetectionSetting,
   crowdDetectionSettings: CrowdDetectionSetting,
@@ -385,6 +388,9 @@ class DetectionSettingService {
           .status(400)
           .json(Response.userFailResp("Validation Failed", error.message));
       }
+
+      const uniformValidation = DetectionSettingsValidation.validateUniformSettings(value.settingType, value.settings, true);
+      if (uniformValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", uniformValidation.error.message));
 
       const thresholdValidation =
         DetectionSettingsValidation.validateConfidenceThresholds(
@@ -753,6 +759,9 @@ class DetectionSettingService {
         };
         detectionSetting.markModified("settings");
       }
+
+      const finalUniformValidation = DetectionSettingsValidation.validateUniformSettings(settingType, detectionSetting.settings, true);
+      if (finalUniformValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", finalUniformValidation.error.message));
 
       const saved = [];
       const skipped = [];
@@ -2035,6 +2044,7 @@ class DetectionSettingService {
         lineCrossingSettings,
         fireSmokeDetectionSettings,
         personFallSickDetectionSettings,
+        uniformDetectionSettings,
         weaponDetectionSettings,
         unattendedBaggageDetectionSettings,
         crowdDetectionSettings,

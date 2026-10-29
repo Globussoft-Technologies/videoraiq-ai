@@ -1,3 +1,4 @@
+import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
@@ -44,6 +45,7 @@ import {
   LineCrossingAuthIncident,
   FireSmokeDetectionIncident,
   PersonFallSickDetectionIncident,
+  UniformDetectionIncident,
   LoiteringWithAuthIncident,
   CroudIncident,
   SafetyHelmetIncident,
@@ -95,6 +97,7 @@ const modelMap = {
   lineCrossing: LineCrossingAuthIncident,
   fireSmokeDetection: FireSmokeDetectionIncident,
   personFallSickDetection: PersonFallSickDetectionIncident,
+  uniformDetection: UniformDetectionIncident,
   crowdDetection: CroudIncident,
   personalProtectiveEquipment: SafetyHelmetIncident,
   doorDetection: DoorStatusIncident,
@@ -388,6 +391,9 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
+      try { normalizeUniformIncident(req.body); }
+      catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
+
       // A type DS renamed is stored under our existing one (e.g. camera tampering).
       const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
       if (aliasedType) req.body.incidentType = aliasedType;
@@ -694,6 +700,12 @@ class IncidentsService {
               }),
             );
         }
+      }
+
+      if (incidentType === "uniformDetection" && req.body.severity === undefined) {
+        const linkedId = channel?.detections?.uniformDetectionSettings?.id;
+        const configured = linkedId ? await DetectionSetting.findById(linkedId).select("settings.levelOfImportance").lean() : null;
+        req.body.severity = configured?.settings?.levelOfImportance ?? "moderate";
       }
 
       // Else: Create new incident
@@ -5906,6 +5918,15 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch stock analytics", 500));
+    }
+  }
+
+  async getUniformDetectionLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({ req, res, incidentType: "uniformDetection" });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch uniform detection logs", 500));
     }
   }
 

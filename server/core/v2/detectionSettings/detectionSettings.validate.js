@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { validateUniformSettings } from "../../../services/uniformDetection.js";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 import {
   WEEKDAYS as weekdays,
@@ -85,6 +86,7 @@ export const scheduleSchema = Joi.object({
 }).custom(validateScheduleWindows);
 
 const thresholdFieldsBySettingType = {
+  uniformDetectionSettings: ["person_threshold", "uniform_confidence"],
   personalProtectiveEquipmentSettings: [
     "person_threshold",
     "vest_threshold",
@@ -128,6 +130,10 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateUniformSettings(settingType, settings, requireZones = false) {
+    return validateUniformSettings(settingType, settings, requireZones);
+  }
+
   validateHygieneSettings(settingType, settings = {}) {
     if (settingType !== "hygieneSanitationFoodSafetyDetectionSettings") return { error: null };
     const fields = {

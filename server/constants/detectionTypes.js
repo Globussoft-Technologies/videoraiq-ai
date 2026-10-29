@@ -8,6 +8,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
+  uniformDetectionSettings: "Uniform Detection",
   faceAuthenticationSettings: "Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
@@ -78,6 +79,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "boxPackingDetectionSettings",
   "hygieneSanitationFoodSafetyDetectionSettings",
   "lightingVisibilitySiteConditionsDetectionSettings",
+  "uniformDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -94,6 +96,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "boxPackingDetection",
   "hygieneSanitationFoodSafetyDetection",
   "lightingVisibilitySiteConditionsDetection",
+  "uniformDetection",
 ]);
 
 /**
@@ -108,6 +111,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
+  uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
   countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
   countVehiclesSettings: { permissionKey: "vehicleCountLogs", logsConfigKey: "vehicleCountLogs" },
   deskAbsenceSettings: { permissionKey: "deskLogs", logsConfigKey: "deskAbsenceLogs" },
@@ -159,6 +163,7 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
 export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles"];
 
 export const TYPE_MAP = {
+  uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
   genericObjectDetectionSettings: "genericObjectDetection",
@@ -211,10 +216,13 @@ export const TYPE_MAP = {
 
 // Incident types DS posts under a newer name than the one we store.
 export const INCIDENT_TYPE_ALIASES = Object.freeze({
+  uniformDetectionSettings: "uniformDetection",
+  uniform_detection: "uniformDetection",
   cameraTamperingDetection: "blurredCameraDetection",
 });
 
 export const DETECTION_MODES_MAP = {
+  uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
   doorDetectionSettings: ["door"],
@@ -280,6 +288,7 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
+  uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
   crowd: "crowdDetectionSettings",
@@ -369,6 +378,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  * lives.
  */
 export const DS_LOGIC_BY_MODE = {
+  uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
   crowd: "crowdDetectionSettings",
@@ -419,6 +429,7 @@ export const dsLogicNamesFor = (settingType) => {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },
   { path: "detections.genericObjectDetectionSettings.id" },
@@ -1738,5 +1749,21 @@ export const lightingVisibilitySiteConditionsDetectionSettings = {
     lighting_min_confidence: 0.6,
     lighting_cooldown_sec: 21600,
     trigger_notification: true,
+  },
+};
+
+export const uniformDetectionSettings = {
+  ...industrialDetectionExample("uniformDetectionSettings", "Uniform Detection"),
+  settings: {
+    ...industrialDetectionExample("uniformDetectionSettings", "Uniform Detection").settings,
+    levelOfImportance: "moderate", person_threshold: 0.45, uniform_confidence: 0.60,
+    zone_configs: [{ name: "Main Gate" }, { name: "Back Gate" }],
+    videoResolution: [1000, 1000],
+    referencePoints: {
+      "664f89e8a9d345001ee326b1": [
+        [[120, 300], [780, 300], [780, 950], [120, 950]],
+        [[10, 10], [100, 10], [100, 200], [10, 200]],
+      ],
+    },
   },
 };

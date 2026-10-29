@@ -1174,6 +1174,16 @@ const SpillsDirtyMessyAreasDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema }),
 );
 
+const UniformDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+UniformDetectionSchema.add({
+  person_threshold: { type: Number, min: 0, max: 1, default: 0.45 },
+  uniform_confidence: { type: Number, min: 0, max: 1, default: 0.60 },
+});
+UniformDetectionSchema.path("levelOfImportance").default("moderate");
+const UniformDetectionSetting = DetectionSetting.discriminator(
+  "uniformDetectionSettings", new mongoose.Schema({ settings: UniformDetectionSchema }),
+);
+
 const LoadingUnloadingStockCountingDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   mode: {
@@ -1725,4 +1735,5 @@ export {
   BoxPackingDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
   LightingVisibilitySiteConditionsDetectionSetting,
+  UniformDetectionSetting,
 };

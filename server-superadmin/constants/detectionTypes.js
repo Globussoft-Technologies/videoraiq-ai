@@ -7,6 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
+  uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedParkingDetectionSettings: "Unauthorized Parking Detection",
@@ -49,6 +50,7 @@ export const DETECTION_TYPES = {
   boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
+  uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedParkingDetectionSettings: "Unauthorized Parking Detection",
@@ -93,6 +95,7 @@ export const DETECTION_TYPES2 = {
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
+  uniformDetectionSettings: "Uniform compliance monitoring across named zones",
   personalProtectiveEquipmentSettings: "Helmet, vest & mask compliance monitoring",
   vehicleDetectionSettings: "Vehicle plate capture & watchlist",
   unauthorizedParkingDetectionSettings: "Vehicle parked in a configured no-parking zone",
@@ -130,6 +133,7 @@ export const DETECTION_DESCRIPTIONS = {
 };
 
 export const TYPE_MAP = {
+  uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
   genericObjectDetectionSettings: "genericObjectDetection",
@@ -167,6 +171,7 @@ export const TYPE_MAP = {
 };
 
 export const DETECTION_MODES_MAP = {
+  uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
   doorDetectionSettings: ["door"],
@@ -205,6 +210,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },
   { path: "detections.genericObjectDetectionSettings.id" },
