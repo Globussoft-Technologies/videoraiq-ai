@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw, MoreVertical, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw, MoreVertical, Trash2, Undo2, Save } from 'lucide-react';
 import BufferingIndicator from '../../../components/BufferingIndicator';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import { mediaUrl, shortDateTime } from '../../../lib/format';
 import { shouldShowSnapshot, canResumeLivePreview } from './DetectionZoneMarking/preview';
+import { undoAreaDrawing } from './DetectionZoneMarking/drawingDraft';
 import { useApi } from '../../../hooks/useApi';
 import { emptySchedule, buildScheduleFields, formatTime, scheduleError } from './ZoneScheduleFields';
 import { usePermissions } from '@/context/PermissionContext';
@@ -57,7 +58,7 @@ export default function DetectionZoneMarking({
   zoneSettingsOpen = false,
   onZoneSettingsClose,
 }) {
-  // Zone/detection-setting deletion (per-zone trash, Clear All, Reset
+  // Persisted zone/detection-setting deletion (per-zone trash, Reset
   // Detection UI) is gated on detectionSettings.delete â€” a write-only role
   // (view+create+edit) can still draw/edit zones but never remove them, and
   // the delete controls are hidden entirely rather than disabled.
@@ -125,6 +126,11 @@ export default function DetectionZoneMarking({
   // Saved/committed zones for this camera+type â€” each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
   const [zones, setZones] = useState([]);
+  // null follows saved zones; an array is an unsaved replacement for the
+  // canvas. Zone Settings continues showing the saved coordinates/details.
+  const [canvasZones, setCanvasZones] = useState(null);
+  const visibleZones = canvasZones ?? zones;
+  const [pointZoneDraft, setPointZoneDraft] = useState(null);
   const [doorAlertModeDraft, setDoorAlertModeDraft] = useState('open');
   const [doorSeverityDraft, setDoorSeverityDraft] = useState('moderate');
   const [doorNotificationDraft, setDoorNotificationDraft] = useState(true);
@@ -158,6 +164,8 @@ export default function DetectionZoneMarking({
   // Load this type's saved zones whenever the selected detection type changes.
   useEffect(() => {
     setZones(zonesFor(activeType?.setting, camera._id, activeType?.settingType));
+    setCanvasZones(null);
+    setPointZoneDraft(null);
     setDoorAlertModeDraft(activeType?.setting?.settings?.door_alert_mode || 'open');
     setDoorSeverityDraft(activeType?.setting?.settings?.levelOfImportance || 'moderate');
     setDoorNotificationDraft(activeType?.setting?.settings?.trigger_notification ?? true);
@@ -357,7 +365,7 @@ export default function DetectionZoneMarking({
     draggingPointIndex.current = null;
   };
 
-  const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
+  const makeZoneFromPoints = (zonePoints, index = visibleZones.length) => ({
     name: `${isDoor ? 'Door' : 'Zone'} ${index + 1}`,
     ...(isHygiene ? hygieneZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isLighting ? lightingZoneSettings({}, activeType.setting?.settings) : {}),
@@ -370,6 +378,7 @@ export default function DetectionZoneMarking({
     countMode: (isLineCrossing || isCheckInOut) ? savedDetectionMode : '',
     activityMode: 'all',
     schedule: emptySchedule(),
+    ...pointZoneDraft,
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
     points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
   });
@@ -394,6 +403,7 @@ export default function DetectionZoneMarking({
       setLinePoints(prev => prev.slice(0, -1));
       return;
     }
+    setLinePoints(lineZone.points);
     setLineZone({ points: [], insideReferencePoint: null });
   };
   const startLineDrawing = () => {
@@ -429,25 +439,29 @@ export default function DetectionZoneMarking({
     setPoints(next);
 
     if (!isLineCrossing && next.length >= effectiveMaxPoints) {
-      setDraftZones(prev => [...prev, makeZoneFromPoints(next, zones.length + prev.length)]);
+      setDraftZones(prev => [...prev, makeZoneFromPoints(next, visibleZones.length + prev.length)]);
+      setPointZoneDraft(null);
       setPoints([]);
     }
   };
 
   const handleUndo = () => {
-    if (lineDrawing) { handleLineUndo(); return; }
-    if (!drawing) return;
-    presetAreaRef.current = false;
-    if (points.length > 0) {
-      setPoints(prev => prev.slice(0, -1));
+    if (!activeType || saving) return;
+    if (lineDrawing || (!points.length && !draftZones.length && !visibleZones.length && hasLineContent)) {
+      handleLineUndo();
+      setLineDrawing(true);
       return;
     }
-    setDraftZones(prev => {
-      const last = prev[prev.length - 1];
-      if (!last) return prev;
-      setPoints(last.points.slice(0, -1));
-      return prev.slice(0, -1);
+    presetAreaRef.current = false;
+    const next = undoAreaDrawing({
+      zones: visibleZones, draftZones, points, pointZone: pointZoneDraft, isLineCrossing,
     });
+    if (next.zones !== visibleZones) setCanvasZones(next.zones);
+    setDraftZones(next.draftZones);
+    setPoints(next.points);
+    setPointZoneDraft(next.pointZone);
+    setDrawing(true);
+    setLineDrawing(false);
   };
   const handleClear = () => {
     presetAreaRef.current = false;
@@ -460,12 +474,13 @@ export default function DetectionZoneMarking({
   const hasLineContent = linePoints.length > 0 || lineZone.points.length > 0;
 
   const handleClearAllClick = () => {
-    if (points.length === 0 && draftZones.length === 0 && zones.length === 0 && !hasLineContent) return;
+    if (!hasDrawableContent || saving) return;
     setShowClearConfirm(true);
   };
 
   const handleConfirmClearAll = () => {
-    setZones([]);
+    setCanvasZones([]);
+    setPointZoneDraft(null);
     setDraftZones([]);
     setPoints([]);
     setActiveZoneIndex(null);
@@ -474,9 +489,8 @@ export default function DetectionZoneMarking({
     setLineDrawing(false);
     setLinePoints([]);
     setLineZone({ points: [], insideReferencePoint: null });
-    setLaneNameDraft('');
     setShowClearConfirm(false);
-    toast.success('Drawing cleared.');
+    toast.success('Drawing cleared. Saved settings are unchanged until you save.');
   };
 
   // Quick-start rectangle presets (V1 parity) â€” full-frame / a small fixed
@@ -497,11 +511,28 @@ export default function DetectionZoneMarking({
     setLineDrawing(false);
   };
 
-  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0 || hasLineContent;
+  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || visibleZones.length > 0 || hasLineContent;
   const canUseAreaPreset = !!activeType && !!videoSize.w && !isLineCrossing;
   const canUseDrawing = !!activeType;
-  const canUseUndo = (drawing && (points.length > 0 || draftZones.length > 0)) || (lineDrawing && hasLineContent);
-  const canUseClearAll = hasDrawableContent;
+  const canUseUndo = !!activeType && !saving && hasDrawableContent;
+  const canUseClearAll = canUseUndo;
+  const canSaveDrawing = !!activeType && !saving
+    && (visibleZones.length > 0 || draftZones.length > 0 || points.length >= minPointsToSave);
+  const hasUnsavedDrawing = canvasZones !== null || points.length > 0 || draftZones.length > 0
+    || (hasAuxiliaryLine && JSON.stringify(lineZone) !== JSON.stringify(lineFor(activeType?.setting)))
+    || linePoints.length > 0;
+
+  const discardDrawingChanges = () => {
+    setCanvasZones(null);
+    setPointZoneDraft(null);
+    setDraftZones([]);
+    setPoints([]);
+    presetAreaRef.current = false;
+    setDrawing(false);
+    setLineDrawing(false);
+    setLinePoints([]);
+    setLineZone(hasAuxiliaryLine ? lineFor(activeType?.setting) : { points: [], insideReferencePoint: null });
+  };
 
   const runFullscreenAction = (event, action) => {
     event.stopPropagation();
@@ -720,14 +751,18 @@ export default function DetectionZoneMarking({
     if (!activeType) return;
     // The in-progress polygon on the canvas is folded straight into the save,
     // so drawing once and hitting Save works without a separate commit step.
-    if (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave) return;
+    if (!canSaveDrawing) return;
+    if (points.length > 0 && points.length < minPointsToSave) {
+      toast.error('Complete the current drawing before saving, or discard the drawing changes.');
+      return;
+    }
     if (hasAuxiliaryLine && !hasLine) {
       toast.error('Draw the crossing line and its inside reference point before saving.');
       return;
     }
     const nextZones = points.length >= minPointsToSave
-      ? [...zones, ...draftZones, makeZoneFromPoints(points, zones.length + draftZones.length)]
-      : [...zones, ...draftZones];
+      ? [...visibleZones, ...draftZones, makeZoneFromPoints(points, visibleZones.length + draftZones.length)]
+      : [...visibleZones, ...draftZones];
     setPendingZones(
       isCheckInOut
         ? nextZones.map(zone => ({ ...zone, countMode: savedDetectionMode }))
@@ -746,6 +781,8 @@ export default function DetectionZoneMarking({
         setDoorNotificationDraft(doorNotification);
       }
       setZones(editedZones);
+      setCanvasZones(null);
+      setPointZoneDraft(null);
       setDraftZones([]);
       setPoints([]);
       if (isCheckInOut) setLaneNameDraft(laneName || '');
@@ -1246,6 +1283,8 @@ export default function DetectionZoneMarking({
                       },
                       { label: 'Undo', icon: Undo2, disabled: !canUseUndo, onClick: handleUndo },
                       { label: 'Clear All', icon: Trash2, disabled: !canUseClearAll, onClick: handleConfirmClearAll },
+                      { label: isLineCrossing ? 'Save Line' : 'Save Area', icon: Save, disabled: !canSaveDrawing, onClick: handleOpenSaveModal },
+                      { label: 'Discard Changes', icon: RotateCcw, disabled: !hasUnsavedDrawing || saving, onClick: discardDrawingChanges },
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
@@ -1289,7 +1328,7 @@ export default function DetectionZoneMarking({
               preserveAspectRatio="none"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
             >
-              {videoSize.w > 0 && zones.map((z, zi) => (
+              {videoSize.w > 0 && visibleZones.map((z, zi) => (
                 <g key={zi} opacity={1}>
                   {z.points.length > 1 && (
                     isLineCrossing ? (
@@ -1431,7 +1470,7 @@ export default function DetectionZoneMarking({
             </svg>
 
             {/* Zone name labels â€” plain HTML pills positioned over each committed zone's first point, matching V1's on-canvas labels */}
-            {videoSize.w > 0 && zones.map((z, zi) => z.points[0] && (
+            {videoSize.w > 0 && visibleZones.map((z, zi) => z.points[0] && (
               <span
                 key={zi}
                 style={{
@@ -1465,7 +1504,7 @@ export default function DetectionZoneMarking({
               </span>
             )}
 
-            {videoSize.w > 0 && !isBlurredCameraDetection && zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
+            {videoSize.w > 0 && !isBlurredCameraDetection && visibleZones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <span style={{
                   fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',
@@ -1496,16 +1535,24 @@ export default function DetectionZoneMarking({
             videoSize={videoSize}
             points={points}
             draftZones={draftZones}
-            zones={zones}
+            zones={visibleZones}
             hasLineContent={hasLineContent}
             minPointsToSave={minPointsToSave}
             saving={saving}
+            canUndo={canUseUndo}
+            canClearAll={canUseClearAll}
             onMaxArea={handleMaxArea}
             onMinArea={handleMinArea}
             onUndo={handleUndo}
             onClearAll={handleClearAllClick}
             onSave={handleOpenSaveModal}
           />}
+          {!isBlurredCameraDetection && hasUnsavedDrawing && (
+            <div role="status" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', color: 'var(--tx3)', fontSize: 12 }}>
+              <span>Unsaved drawing changes. Saved zone details remain unchanged until Save.</span>
+              <button type="button" onClick={discardDrawingChanges} disabled={saving} style={{ border: '1px solid var(--bd)', borderRadius: 7, padding: '5px 9px', background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}>Discard Changes</button>
+            </div>
+          )}
         </div>
 
         {/* Right rail */}
@@ -1756,7 +1803,7 @@ export default function DetectionZoneMarking({
         onCancel={() => setShowClearConfirm(false)}
         onConfirm={handleConfirmClearAll}
       >
-        This will clear the current drawing from the editor only. Saved detection settings, schedules, and recipients will stay unchanged.
+        This clears the canvas only. Saved zones and detection settings stay unchanged until you draw a replacement and save it.
       </ConfirmDialog>
 
       <ConfirmDialog

@@ -506,6 +506,6 @@ export default function SaveDetectionAreaModal({
         </div>
       </div>
     </div>,
-    document.body,
+    document.fullscreenElement || document.body,
   );
 }

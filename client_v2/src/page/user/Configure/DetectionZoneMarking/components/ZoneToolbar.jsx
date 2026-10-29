@@ -15,6 +15,8 @@ export default function ZoneToolbar({
   zones,
   minPointsToSave,
   saving,
+  canUndo,
+  canClearAll,
   onMaxArea,
   onMinArea,
   onUndo,
@@ -22,8 +24,6 @@ export default function ZoneToolbar({
   onSave,
 }) {
   const hasVideo = !!videoSize.w;
-  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0 || hasLineContent;
-  const canClearAll = (drawing || lineDrawing) && hasDrawableContent;
   const canSave = !!activeType && !saving && (zones.length > 0 || draftZones.length > 0 || points.length >= minPointsToSave);
 
   const drawLineButton = (
@@ -96,7 +96,6 @@ export default function ZoneToolbar({
         </>
       )}
       {(() => {
-        const canUndo = (drawing && (points.length > 0 || draftZones.length > 0)) || (lineDrawing && hasLineContent);
         return (
           <button
             onClick={onUndo}
@@ -115,7 +114,7 @@ export default function ZoneToolbar({
       <button
         onClick={onClearAll}
         disabled={!canClearAll}
-        title="Clear all the in-progress drawing"
+        title="Clear the canvas; saved zones stay unchanged until Save"
         style={{
           display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
           background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
