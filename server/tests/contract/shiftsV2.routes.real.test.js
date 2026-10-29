@@ -669,6 +669,12 @@ describe("POST /api/v2/shifts/assignments/preview", () => {
       .send({ search: "nadia" });
     expect(inner(byName).data.matched).toBe(1);
 
+    const byFullName = await request(app)
+      .post("/api/v2/shifts/assignments/preview")
+      .send({ search: "  NADIA   khan  " });
+    expect(inner(byFullName).data.matched).toBe(1);
+    expect(inner(byFullName).data.employees[0].email).toBe("nadia.k@t.com");
+
     const byEmail = await request(app)
       .post("/api/v2/shifts/assignments/preview")
       .send({ search: "NADIA.K@T.COM" });

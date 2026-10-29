@@ -6,6 +6,7 @@ import Shift, {
   weekOffDays,
 } from "./shifts.model.js";
 import ShiftSchedule from "./shiftSchedule.model.js";
+import ShiftEffectiveAssignment from "./shiftEffectiveAssignment.model.js";
 import Admin from "../../v1/admin/admin.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import logger from "../../../utils/logger.js";
@@ -189,10 +190,15 @@ class ShiftService {
         {
           $match: {
             adminId: asObjectId(adminId),
-            shiftId: { $in: objectIds },
             liveDemoData: { $ne: true },
           },
         },
+        { $lookup: { from: 'shifteffectiveassignments', let: { employeeId: '$_id' }, pipeline: [
+          { $match: { adminId: asObjectId(adminId), from: { $lte: date }, $expr: { $eq: ['$employee', '$$employeeId'] } } },
+          { $sort: { from: -1 } }, { $limit: 1 },
+        ], as: '__effective' } },
+        { $addFields: { shiftId: { $ifNull: [{ $arrayElemAt: ['$__effective.shiftId', 0] }, '$shiftId'] } } },
+        { $match: { shiftId: { $in: objectIds } } },
         { $group: { _id: "$shiftId", employees: { $addToSet: "$_id" } } },
       ]),
       ShiftSchedule.aggregate([
@@ -277,6 +283,18 @@ class ShiftService {
         { $set: { shiftId } },
       );
       modified += result?.modifiedCount ?? 0;
+      // A later manual standing assignment also replaces an ongoing baseline
+      // from today, while retaining the earlier effective-dated history.
+      const scheduledEmployees = await ShiftEffectiveAssignment.distinct('employee', { employee: { $in: chunk } });
+      if (scheduledEmployees.length) {
+        const employees = await authorizedUsersModel.find({ _id: { $in: scheduledEmployees } }).select('_id adminId').lean();
+        const admins = await Admin.find({ _id: { $in: employees.map(employee => employee.adminId) } }).select('_id timezone').lean();
+        const timezones = new Map(admins.map(admin => [String(admin._id), admin.timezone]));
+        await ShiftEffectiveAssignment.bulkWrite(employees.map(employee => ({ updateOne: {
+          filter: { adminId: employee.adminId, employee: employee._id, from: dateKeyInTimezone(timezones.get(String(employee.adminId)) || 'Asia/Kolkata') },
+          update: { $set: { shiftId } }, upsert: true,
+        } })));
+      }
     }
     return modified;
   }
@@ -574,8 +592,13 @@ class ShiftService {
       // Layered on here rather than inside buildEmployeeQuery so the search
       // can never reach the assign path — see assignmentPreviewValidator.
       if (value.search) {
-        const regex = new RegExp(escapeRegex(value.search), "i");
-        scopedQuery.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+        const regex = new RegExp(value.search.trim().split(/\s+/).map(escapeRegex).join("\\s+"), "i");
+        scopedQuery.$or = [
+          { firstName: regex }, { lastName: regex }, { email: regex },
+          { $expr: { $regexMatch: { input: { $concat: [
+            { $ifNull: ["$firstName", ""] }, " ", { $ifNull: ["$lastName", ""] },
+          ] }, regex } } },
+        ];
       }
 
       // Match the write path: with replacement disabled, the displayed page
@@ -732,12 +755,25 @@ class ShiftService {
 
       const selectedIds = new Set((value.employeeIds || []).map(String));
       const removedIds = value.removedEmployeeIds.filter(id => !selectedIds.has(String(id)));
-      const removed = removedIds.length ? await authorizedUsersModel.updateMany({
+      const removalTargets = removedIds.length ? await authorizedUsersModel.find({
+        adminId: asObjectId(adminId), shiftId: shift._id, _id: { $in: removedIds.map(asObjectId) },
+      }).setOptions({ memberId }).select('_id').lean() : [];
+      const removed = removalTargets.length ? await authorizedUsersModel.updateMany({
         adminId: asObjectId(adminId),
         shiftId: shift._id,
-        _id: { $in: removedIds.map(asObjectId) },
+        _id: { $in: removalTargets.map(employee => employee._id) },
       }, { $set: { shiftId: null } }).setOptions({ memberId }) : { modifiedCount: 0 };
       const unassigned = removed.modifiedCount ?? 0;
+      if (unassigned) {
+        const ongoingRemoved = await ShiftEffectiveAssignment.distinct('employee', {
+          adminId: asObjectId(adminId), employee: { $in: removalTargets.map(employee => employee._id) },
+        });
+        const admin = await Admin.findById(adminId).select('timezone').lean();
+        const from = dateKeyInTimezone(admin?.timezone || 'Asia/Kolkata');
+        if (ongoingRemoved.length) await ShiftEffectiveAssignment.bulkWrite(ongoingRemoved.map(employee => ({ updateOne: {
+          filter: { adminId: asObjectId(adminId), employee, from }, update: { $set: { shiftId: null } }, upsert: true,
+        } })));
+      }
 
       return res.status(200).json(
         Response.userSuccessResp(
@@ -830,6 +866,12 @@ class ShiftService {
       }
 
       const today = dateKeyInTimezone(admin?.timezone || "Asia/Kolkata");
+      const effectiveRows = await ShiftEffectiveAssignment.aggregate([
+        { $match: { adminId: asObjectId(adminId), from: { $lte: today } } },
+        { $sort: { from: -1 } }, { $group: { _id: '$employee', shiftId: { $first: '$shiftId' } } },
+      ]);
+      const effectiveMap = new Map(effectiveRows.map(item => [String(item._id), item.shiftId]));
+      const effectiveIds = effectiveRows.filter(item => String(item.shiftId) === String(shift._id)).map(item => item._id);
       const temporaryEmployeeIds = await ShiftSchedule.distinct("employee", {
         adminId: asObjectId(adminId),
         shiftId: shift._id,
@@ -843,7 +885,8 @@ class ShiftService {
         $and: [
           {
             $or: [
-              { shiftId: shift._id },
+              { shiftId: shift._id, _id: { $nin: effectiveRows.map(item => item._id) } },
+              { _id: { $in: effectiveIds } },
               { _id: { $in: temporaryEmployeeIds } },
             ],
           },
@@ -909,7 +952,7 @@ class ShiftService {
         );
         return {
           ...employee,
-          permanentAssignment: String(employee.shiftId || "") === String(shift._id),
+          permanentAssignment: String(effectiveMap.has(String(employee._id)) ? effectiveMap.get(String(employee._id)) : employee.shiftId || "") === String(shift._id),
           temporaryAssignment: Boolean(temporaryRange),
           temporaryFrom: temporaryRange?.from || null,
           temporaryTo: temporaryRange?.to || null,

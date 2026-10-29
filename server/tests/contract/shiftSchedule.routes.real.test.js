@@ -378,6 +378,33 @@ describe("PUT /api/v2/shifts/schedule/day", () => {
 });
 
 describe("PUT /api/v2/shifts/schedule/bulk", () => {
+  it('applies an open-ended shift from its start date across future months', async () => {
+    const oldShift = await dayShift();
+    const nextShift = await dayShift({ name: 'Evening', startTime: '20:00', endTime: '06:00', isNightShift: true });
+    const employee = await makeEmployee({ email: 'ongoing@t.com', shiftId: oldShift._id });
+    const response = await request(app).put('/api/v2/shifts/schedule/bulk').send({
+      employeeIds: [String(employee._id)], shiftId: String(nextShift._id), from: '2026-09-15',
+    });
+    expect(response.status).toBe(200);
+    expect(inner(response).data.ongoing).toBe(true);
+    let row = inner(await getSchedule()).data.employees[0];
+    expect(row.cells['2026-09-14'].shift.name).toBe('General Shift');
+    expect(row.cells['2026-09-15'].shift.name).toBe('Evening');
+    row = inner(await getSchedule({ month: '2027-03' })).data.employees[0];
+    expect(row.cells['2027-03-01'].shift.name).toBe('Evening');
+    expect(String((await AuthorizedUser.findById(employee._id)).shiftId)).toBe(String(oldShift._id));
+    await request(app).put('/api/v2/shifts/schedule/day').send({ employeeId: String(employee._id), date: '2026-09-16', shiftId: String(oldShift._id) });
+    row = inner(await getSchedule()).data.employees[0];
+    expect(row.cells['2026-09-16'].shift.name).toBe('General Shift');
+    expect(row.cells['2026-09-17'].shift.name).toBe('Evening');
+    await request(app).put('/api/v2/shifts/schedule/bulk').send({ employeeIds: [String(employee._id)], shiftId: String(oldShift._id), from: '2026-10-01' });
+    row = inner(await getSchedule({ month: '2026-10' })).data.employees[0];
+    expect(row.cells['2026-10-01'].shift.name).toBe('General Shift');
+    row = inner(await getSchedule()).data.employees[0];
+    expect(row.cells['2026-09-17'].shift.name).toBe('Evening');
+
+  });
+
   it("assigns a shift across a date range", async () => {
     const shift = await dayShift();
     const a = await makeEmployee({ email: "a@t.com" });

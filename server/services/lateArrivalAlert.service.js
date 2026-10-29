@@ -1,3 +1,4 @@
+import EffectiveAssignment from '../core/v2/shifts/shiftEffectiveAssignment.model.js';
 import moment from "moment-timezone";
 import mongoose from "mongoose";
 import Attendance from "../core/v1/attendance/attendance.model.js";
@@ -43,11 +44,13 @@ export async function processLateArrival({ attendance, employee, admin, channel,
     const yesterday = moment.tz(today, timezone).subtract(1, "day").format("YYYY-MM-DD");
     const overrides = await Schedule.find({ adminId: admin._id, employee: employee._id,
       date: { $in: [today, yesterday] } }).lean();
+    const effective = await EffectiveAssignment.find({ adminId: admin._id, employee: employee._id, from: { $lte: today } }).sort({ from: -1 }).lean();
     const shifts = await Shift.find({ adminId: admin._id,
-      _id: { $in: [employee.shiftId, ...overrides.map(o => o.shiftId)].filter(Boolean) } }).lean();
+      _id: { $in: [employee.shiftId, ...overrides.map(o => o.shiftId), ...effective.map(o => o.shiftId)].filter(Boolean) } }).lean();
     const resolve = (date) => {
       const override = overrides.find(o => o.date === date);
-      const id = override ? override.shiftId : employee.shiftId;
+      const ongoing = effective.find(item => item.from <= date);
+      const id = override ? override.shiftId : ongoing ? ongoing.shiftId : employee.shiftId;
       const shift = shifts.find(s => String(s._id) === String(id));
       return { shift, override, expectation: arrivalExpectation({ shift, override, date, timezone, arrivedAt: event.timestamp }) };
     };

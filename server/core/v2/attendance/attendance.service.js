@@ -1109,7 +1109,18 @@ class AttendanceService {
 
         // Lookup Shift. Rows whose employee holds no shift keep a null `shift`
         // and go on being graded by the org-wide duration thresholds.
-        ...shiftJoinStages("$employee.shiftId"),
+        { $lookup: {
+          from: 'shifteffectiveassignments',
+          let: { employeeId: '$employee._id', rosterDate: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: shiftTimezone } } },
+          pipeline: [{ $match: { adminId: new mongoose.Types.ObjectId(adminId), $expr: { $and: [
+            { $eq: ['$employee', '$$employeeId'] }, { $lte: ['$from', '$$rosterDate'] },
+          ] } } }, { $sort: { from: -1 } }, { $limit: 1 }],
+          as: '__initialEffective',
+        } },
+        ...shiftJoinStages({ $cond: [
+          { $gt: [{ $size: '$__initialEffective' }, 0] },
+          { $arrayElemAt: ['$__initialEffective.shiftId', 0] }, '$employee.shiftId',
+        ] }),
 
         ...(req.query.departmentIds
           ? [
@@ -1230,10 +1241,19 @@ class AttendanceService {
           as: '__rosterOverride',
         } },
         { $addFields: { __rosterOverride: { $arrayElemAt: ['$__rosterOverride', 0] } } },
+        { $lookup: {
+          from: 'shifteffectiveassignments',
+          let: { employeeId: '$_id.employee', rosterDate: '$_id.date' },
+          pipeline: [{ $match: { adminId: new mongoose.Types.ObjectId(adminId), $expr: { $and: [
+            { $eq: ['$employee', '$$employeeId'] }, { $lte: ['$from', '$$rosterDate'] },
+          ] } } }, { $sort: { from: -1 } }, { $limit: 1 }],
+          as: '__effectiveAssignment',
+        } },
+        { $addFields: { __effectiveAssignment: { $arrayElemAt: ['$__effectiveAssignment', 0] } } },
         ...shiftJoinStages({ $cond: [
           { $ne: [{ $ifNull: ['$__rosterOverride', null] }, null] },
           { $cond: ['$__rosterOverride.isOff', null, '$__rosterOverride.shiftId'] },
-          '$employee.shiftId',
+          { $cond: [{ $ne: [{ $ifNull: ['$__effectiveAssignment', null] }, null] }, '$__effectiveAssignment.shiftId', '$employee.shiftId'] },
         ] }),
         { $addFields: { shift: { $cond: [
           { $and: [

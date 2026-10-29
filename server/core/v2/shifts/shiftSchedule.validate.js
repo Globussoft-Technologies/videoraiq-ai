@@ -58,8 +58,9 @@ export const scheduleBulkAssignValidator = Joi.object({
   weekdays: Joi.array().items(Joi.number().integer().min(0).max(6)).single(),
 })
   .xor("dates", "from")
-  .with("from", "to")
+  .with("to", "from")
   .custom((value, helpers) => {
+    if (value.from && !value.to && (value.weekdays?.length || !value.shiftId || value.isOff || value.dayType)) return helpers.error("any.invalid");
     if (value.from && value.to && value.from > value.to) {
       return helpers.error("any.invalid");
     }
@@ -71,8 +72,8 @@ export const scheduleBulkAssignValidator = Joi.object({
   .messages({
     "object.missing": "Provide either an explicit `dates` list or a `from`/`to` range",
     "object.xor": "Provide either an explicit `dates` list or a `from`/`to` range, not both",
-    "object.with": "`from` requires `to`",
-    "any.invalid": "`from` must not be after `to`",
+    "object.with": "`to` requires `from`",
+    "any.invalid": "Choose a valid date range. Ongoing assignments require a shift and cannot include weekday/day-type restrictions.",
   });
 
 /** Remove overrides so the days inherit the standing shift again. */

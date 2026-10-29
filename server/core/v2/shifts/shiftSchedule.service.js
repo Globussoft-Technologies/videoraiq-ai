@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Shift from "./shifts.model.js";
 import ShiftSchedule from "./shiftSchedule.model.js";
+import ShiftEffectiveAssignment from "./shiftEffectiveAssignment.model.js";
 import {
   monthDays,
   monthRange,
@@ -167,7 +168,7 @@ class ShiftScheduleService {
 
       const employeeIds = employees.map((employee) => employee._id);
 
-      const [overrides, shifts] = await Promise.all([
+      const [overrides, shifts, effectiveAssignments] = await Promise.all([
         employeeIds.length
           ? ShiftSchedule.find({
               adminId: asObjectId(adminId),
@@ -180,6 +181,7 @@ class ShiftScheduleService {
         Shift.find({ adminId: asObjectId(adminId) })
           .sort({ isDefault: -1, createdAt: -1 })
           .lean(),
+        ShiftEffectiveAssignment.find({ adminId: asObjectId(adminId), employee: { $in: employeeIds }, from: { $lte: range.end } }).sort({ from: -1 }).lean(),
       ]);
 
       const shiftsById = new Map(shifts.map((shift) => [String(shift._id), shift]));
@@ -200,7 +202,10 @@ class ShiftScheduleService {
         for (const day of days) {
           const resolved = resolveScheduledDay({
             override: employeeOverrides?.get(day.key),
-            standingShift,
+            standingShift: (() => {
+              const effective = effectiveAssignments.find(item => String(item.employee) === String(employee._id) && item.from <= day.key);
+              return effective ? shiftsById.get(String(effective.shiftId)) || null : standingShift;
+            })(),
             weekday: day.weekday,
             shiftsById,
           });
@@ -365,6 +370,17 @@ class ShiftScheduleService {
         return res
           .status(404)
           .json(Response.notFoundResp("No matching employees found", {}));
+      }
+
+      if (value.from && !value.to) {
+        const result = await ShiftEffectiveAssignment.bulkWrite(employees.map(employee => ({ updateOne: {
+          filter: { adminId: asObjectId(adminId), employee: employee._id, from: value.from },
+          update: { $set: { shiftId: shift._id, assignedBy: adminId } }, upsert: true,
+        } })), { ordered: false });
+        return res.status(200).json(Response.userSuccessResp(
+          `${employees.length} employees scheduled from ${value.from} onward`,
+          { employees: employees.length, from: value.from, ongoing: true, cellsWritten: (result.upsertedCount || 0) + (result.modifiedCount || 0) },
+        ));
       }
 
       const dates = this.#datesInRange(value);

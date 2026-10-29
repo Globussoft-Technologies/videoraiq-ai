@@ -1,3 +1,4 @@
+vi.mock('../../../core/v2/shifts/shiftEffectiveAssignment.model.js', () => ({ default: { find: () => ({ sort: () => ({ lean: async () => [] }) }) } }));
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../../core/v1/attendance/attendance.model.js', () => ({default:{}}));
 vi.mock('../../../core/v1/shifts/shiftSchedule.model.js', () => ({default:{}}));

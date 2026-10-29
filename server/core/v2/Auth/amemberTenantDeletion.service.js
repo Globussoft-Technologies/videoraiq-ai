@@ -22,6 +22,7 @@ import OptimizedAccessLog from "../accesslogs/newAccessLogs.model.js";
 import TestAccessLog from "../accesslogs/reworkedAccesslogs.model.js";
 import Shift from "../shifts/shifts.model.js";
 import ShiftSchedule from "../shifts/shiftSchedule.model.js";
+import ShiftEffectiveAssignment from "../shifts/shiftEffectiveAssignment.model.js";
 import Entry from "../entry/entry.model.js";
 import EntryUser from "../entry/user.model.js";
 import VehicleLog from "../vehicle/vehicle.log.model.js";
@@ -112,6 +113,7 @@ export async function purgeAmemberTenantData(admin) {
     ["testAccessLogs", TestAccessLog.deleteMany({ admin: adminId })],
     ["shifts", Shift.deleteMany({ adminId })],
     ["shiftSchedules", ShiftSchedule.deleteMany({ adminId })],
+    ["shiftEffectiveAssignments", ShiftEffectiveAssignment.deleteMany({ adminId })],
     ["entries", Entry.deleteMany({ adminId })],
     ["entryUsers", ownedEntryUserIds.length
       ? EntryUser.deleteMany({ _id: { $in: ownedEntryUserIds } })

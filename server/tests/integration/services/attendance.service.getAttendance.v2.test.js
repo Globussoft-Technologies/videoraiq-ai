@@ -115,6 +115,20 @@ async function seedAttendance(
 }
 
 describe("AttendanceService (v2) getAttendance", () => {
+  it('uses an ongoing assignment after its start date without rewriting the standing shift', async () => {
+    const seeded = await seed();
+    const today = new Date().toISOString().slice(0, 10);
+    await seedAttendance(seeded, { checkinAt: new Date(`${today}T04:43:00Z`), checkoutAt: new Date(`${today}T05:30:00Z`) });
+    const shiftId = new mongoose.Types.ObjectId();
+    await mongoose.connection.collection('shifts').insertOne({ _id: shiftId, adminId: seeded.admin._id, name: 'Ongoing shift', startTime: '10:00', endTime: '19:00', graceLateMinutes: 15 });
+    await mongoose.connection.collection('shifteffectiveassignments').insertOne({ adminId: seeded.admin._id, employee: seeded.employee._id, from: '2020-01-01', shiftId });
+    const { req, res } = serviceCtx({ adminId: seeded.admin._id, query: {}, body: {} });
+    await AttendanceService.getAttendance(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.attendanceLogs[0]).toMatchObject({ shiftName: 'Ongoing shift', isLate: false, lateMinutes: 0 });
+    expect((await AuthorizedUsers.findById(seeded.employee._id)).shiftId == null).toBe(true);
+  });
+
   it("filters actual early departures independently of attendance status", async () => {
     const seeded = await seed();
     const shiftId = new mongoose.Types.ObjectId();
