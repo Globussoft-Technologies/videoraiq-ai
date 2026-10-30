@@ -53,8 +53,8 @@ const validationSchemaStep1 = Yup.object().shape({
 
 const validationSchemaStep2 = Yup.object().shape({});
 
-const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: parentLocations = [] }) => {
-  const [open, setOpen] = useState(false);
+const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: parentLocations = [], defaultOpen = false, onClose, onCreated, headerContent }) => {
+  const [open, setOpen] = useState(defaultOpen);
   const [step, setStep] = useState(1);
   const [departments, setDepartments] = useState([]);
   const [fetchedLocations, setFetchedLocations] = useState([]);
@@ -280,6 +280,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
 
     try {
       setIsSubmitting(true);
+      let createdUser;
       if (editUser) {
         const data = await updateUserDetails(editUser._id, formData);
         if (data?.body?.status !== 'success') {
@@ -293,12 +294,14 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
           toast.error(data?.body?.message || data?.body?.error || 'Failed to register user', COMPACT_TOAST);
           return;
         }
+        createdUser = data.body.data;
         toast.success('User registered successfully!', COMPACT_TOAST);
       }
       setOpen(false);
       resetState();
       resetForm();
       if (fetchUsers) fetchUsers();
+      if (createdUser && onCreated) await onCreated(createdUser);
     } catch (err) {
       console.error(err);
       const msg =
@@ -331,10 +334,11 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
         if (!val) {
           resetState();
           if (setEditUser) setEditUser(null);
+          onClose?.();
         }
       }}
     >
-      <DialogTrigger asChild>
+      {trigger && <DialogTrigger asChild>
         <div
           onClick={() => {
             resetState();
@@ -344,10 +348,10 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
         >
           {trigger}
         </div>
-      </DialogTrigger>
+      </DialogTrigger>}
       <DialogContent
         className="w-[95vw] max-w-[800px] max-h-[90vh] top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] p-0 overflow-hidden bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl flex flex-col"
-        closeBtn={`text-[var(--tx2)] hover:text-[var(--tx)] top-4 right-4 ${
+        closeBtn={`z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)] top-6 right-6 opacity-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
           isSubmitting ? 'pointer-events-none opacity-40' : ''
         }`}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -364,6 +368,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
           {({ values, validateForm, setTouched }) => (
             <Form className="flex flex-col h-full w-full overflow-hidden">
               <DialogHeader className="p-6 border-b border-[var(--bd)]">
+                {headerContent && <fieldset disabled={isSubmitting} className="border-0 p-0 pr-12 m-0 mb-3">{headerContent}</fieldset>}
                 <div className="flex items-center justify-center relative">
                   {step === 2 && (
                     <button
@@ -375,7 +380,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                       <ArrowLeft className="w-5 h-5 text-[var(--tx2)]" />
                     </button>
                   )}
-                  <DialogTitle className="text-xl font-semibold text-center text-[var(--tx)]">
+                  <DialogTitle className="px-10 text-xl font-semibold text-center text-[var(--tx)]">
                     {step === 1
                       ? editUser
                         ? 'Update User Details'

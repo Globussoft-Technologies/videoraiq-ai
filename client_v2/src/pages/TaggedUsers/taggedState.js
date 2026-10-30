@@ -30,7 +30,6 @@ export const initialState = {
 
   nvrValue: '',
   cameraValue: '',
-  removeUnknown: false,
   fromTime: '',
   toTime: '',
 
@@ -135,7 +134,7 @@ export function reducer(state, action) {
       return { ...state, selectedDepartments: action.value };
 
     case 'SET_SEARCH_INPUT':
-      return { ...state, searchInput: action.value };
+      return { ...state, searchInput: action.value, currentPage: 1 };
     case 'SET_MINDATE':
       return { ...state, mindate: action.value };
 
@@ -158,8 +157,6 @@ export function reducer(state, action) {
     case 'SET_CAMERA_VALUE':
       return { ...state, cameraValue: action.value };
 
-    case 'SET_REMOVE_UNKNOWN':
-      return { ...state, removeUnknown: action.value };
     case 'SET_FROM_TIME':
       return { ...state, fromTime: action.value };
     case 'SET_TO_TIME':

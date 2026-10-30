@@ -419,6 +419,7 @@ const AccessLogs = () => {
         <TagUserDropdown
           anchorRect={dropdown.rect}
           busy={!!taggingId}
+          canRegister={!!permissions?.Users?.create}
           onSelect={(user) => tagWithUser(dropdown.item, user)}
           onClose={() => setDropdown(null)}
         />

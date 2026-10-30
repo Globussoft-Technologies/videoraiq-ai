@@ -165,7 +165,7 @@ export default function  SelectField({
               </div>
             ))}
             {loading && <div role="status" className="px-2.5 py-2 text-xs text-[var(--tx3)]">Loading shifts…</div>}
-            {error && <button type="button" onClick={onRetry} className="px-2.5 py-2 text-xs text-[var(--crit)]">{error} Retry</button>}
+            {error && <button type="button" onClick={onRetry} className="px-2.5 py-2 text-xs text-[var(--crit)] cursor-pointer">{error} Retry</button>}
           </div>,
           document.body
         )}

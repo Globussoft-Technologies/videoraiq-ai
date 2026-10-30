@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Loader2, Tag } from 'lucide-react';
 import { authorizedUsers } from '../Api';
+import RegisterForm from '../../RegisterUser/RegisterForm';
 
 const nasUrl = import.meta.env.VITE_BACKEND || '';
 
@@ -31,7 +32,9 @@ const getInitialsPlaceholder = (firstName, lastName) => {
  */
 const PAGE_SIZE = 10;
 
-const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
+const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose, canRegister = false }) => {
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [createdUser, setCreatedUser] = useState(null);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 400);
   const [users, setUsers] = useState([]);
@@ -92,11 +95,13 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
   };
 
   useEffect(() => {
+    if (registerOpen) return;
     const handleClick = (e) => {
+      if (busy) return;
       if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
     };
     const handleKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !busy) onClose();
     };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
@@ -104,11 +109,48 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [onClose]);
+  }, [onClose, registerOpen, busy]);
+
+  const tabs = (
+    <div role="tablist" aria-label="Tag user" className="flex gap-1 p-1 rounded-lg bg-[var(--bg2)]">
+      {[['existing', 'Tag existing user'], ['register', 'Register new user']].map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={registerOpen === (id === 'register')}
+          disabled={busy || (id === 'register' && !canRegister)}
+          title={id === 'register' && !canRegister ? 'You do not have permission to register users.' : undefined}
+          onClick={() => setRegisterOpen(id === 'register')}
+          className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${registerOpen === (id === 'register') ? 'bg-[var(--brand)] text-white' : 'text-[var(--tx2)]'}`}
+        >{label}</button>
+      ))}
+    </div>
+  );
+
+  if (registerOpen) {
+    return (
+      <RegisterForm
+        defaultOpen
+        headerContent={tabs}
+        onClose={() => setRegisterOpen(false)}
+        onCreated={async (user) => {
+          setCreatedUser(user);
+          setRegisterOpen(false);
+          if (user?._id) await onSelect(user);
+        }}
+      />
+    );
+  }
+
+  // Keep a newly registered user available for retry if tagging fails.
+  const visibleUsers = createdUser?._id
+    ? [createdUser, ...users.filter((user) => user._id !== createdUser._id)]
+    : users;
 
   // Cap the panel to the viewport so it never overflows on small screens.
-  const PANEL_W = Math.min(300, window.innerWidth - 16);
-  const PANEL_H = 360;
+  const PANEL_W = Math.min(360, window.innerWidth - 16);
+  const PANEL_H = Math.min(420, window.innerHeight - 16);
   const top =
     anchorRect.bottom + PANEL_H > window.innerHeight
       ? Math.max(8, anchorRect.top - PANEL_H - 6)
@@ -125,6 +167,8 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
       className="z-[200] bg-[var(--bg1solid)] rounded-xl shadow-xl border border-[var(--bd)] flex flex-col overflow-hidden"
       onClick={(e) => e.stopPropagation()}
     >
+      <div className="p-2 border-b border-[var(--bd)]">{tabs}</div>
+      {createdUser && <p className="px-3 pt-2 text-xs text-[var(--tx2)]">User registered. Select them below to retry tagging if needed.</p>}
       <div className="p-2 border-b border-[var(--bd)]">
         <div className="relative">
           <input
@@ -144,10 +188,10 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
           <div className="flex items-center justify-center py-8 text-[var(--tx3)]">
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
-        ) : users.length === 0 ? (
+        ) : visibleUsers.length === 0 ? (
           <div className="text-center py-8 text-[var(--tx3)] text-xs">No users found.</div>
         ) : (
-          users.map((u) => {
+          visibleUsers.map((u) => {
             const tagged = !!u.tag;
             const avatar =
               u.profilePics && u.profilePics.length > 0
@@ -159,7 +203,7 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
                 type="button"
                 disabled={busy}
                 onClick={() => onSelect(u)}
-                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg2)] transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg2)] transition-colors text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <img
                   src={avatar}

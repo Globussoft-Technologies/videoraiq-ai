@@ -1662,6 +1662,10 @@ async bulkImportAuthUser(req, res, next) {
         return res.status(404).json(Response.userFailResp("Authorized user not found", "Validation Failed!"));
       }
 
+      if (accessLogId && !await OptimizedAccessLogs.exists({ _id: accessLogId, admin: isAdminExist._id })) {
+        return res.status(404).json(Response.userFailResp("Access log not found", "Validation Failed!"));
+      }
+
       // For untag, don't trust the client-supplied profileImages — when the
       // click comes from a Detected-Users-tagged row, the frontend builds
       // those URLs off VITE_BACKEND (the API host), which DS's network may
@@ -1737,7 +1741,10 @@ async bulkImportAuthUser(req, res, next) {
       );
 
       if (accessLogId) {
-        await OptimizedAccessLogs.findByIdAndUpdate(accessLogId, { tag, taggedAt: tagTimestamp });
+        await OptimizedAccessLogs.findOneAndUpdate(
+          { _id: accessLogId, admin: isAdminExist._id },
+          { $set: { tag, taggedAt: tagTimestamp, ...(tag ? { userId } : {}) } },
+        );
       }
 
       // A person can be tagged via a real camera detection (OptimizedAccessLogs)

@@ -4,6 +4,7 @@ import React, { useEffect, useCallback, useMemo, useReducer, useState } from 're
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import unknownimg from '@/assets/unknownimg.jpg';
@@ -43,6 +44,8 @@ const TaggedUsers = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
   const { timezone: region } = useTimezone();
   const [limit, setLimit] = useState(12);
+  const [exporting, setExporting] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,
@@ -88,7 +91,6 @@ const TaggedUsers = () => {
     nvrList,
     cameraList,
     channelIds,
-    removeUnknown,
     fromTime,
     toTime,
     employeeLocations,
@@ -206,7 +208,7 @@ const TaggedUsers = () => {
   // Reset to page 1 when filters change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [selectedDepartments, nvrIds, channelIds, removeUnknown, employeeLocations, limit]);
+  }, [selectedDepartments, nvrIds, channelIds, employeeLocations, limit]);
 
   /* ─────────────── Data fetch ─────────────── */
   const fetchLogs = useCallback(async ({ background = false } = {}) => {
@@ -228,7 +230,6 @@ const TaggedUsers = () => {
         channelIds,
         nvrIds,
         employeeLocations,
-        removeUnknown,
         isExport: false,
         tag: true,
         ...(fromTime && toTime && { fromTime: utcFromTime, toTime: utcToTime }),
@@ -263,7 +264,6 @@ const TaggedUsers = () => {
     selectedDepartments,
     channelIds,
     nvrIds,
-    removeUnknown,
     fromTime,
     toTime,
     employeeLocations,
@@ -346,24 +346,33 @@ const TaggedUsers = () => {
     ];
   }, [rows, totalCount]);
 
-  const handleExport = (format) =>
-    handleTaggedExport(format, {
-      startDate,
-      endDate,
-      searchInput,
-      skip,
-      limit,
-      sortOrder,
-      sortField,
-      selectedDepartments,
-      channelIds,
-      nvrIds,
-      employeeLocations,
-      removeUnknown,
-      fromTime,
-      toTime,
-      region,
-    });
+  const handleExport = async (format) => {
+    if (exporting) return;
+    setExporting(true);
+    setPdfOpen(false);
+    try {
+      await handleTaggedExport(format, {
+        startDate,
+        endDate,
+        searchInput,
+        skip,
+        limit,
+        sortOrder,
+        sortField,
+        selectedDepartments,
+        channelIds,
+        nvrIds,
+        employeeLocations,
+        fromTime,
+        toTime,
+        region,
+      });
+    } catch {
+      toast.error('Failed to export tagged users. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   /* ─────────────── Guards ─────────────── */
   if (permissionsLoading) return null;
@@ -417,8 +426,17 @@ const TaggedUsers = () => {
         <div className="flex gap-2">
           {canEdit && (
             <>
-              <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
-              <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+              <ExportButton disabled={exporting} className="disabled:opacity-60 disabled:cursor-not-allowed" onClick={() => handleExport('excel')}>Excel</ExportButton>
+              <Popover open={pdfOpen} onOpenChange={setPdfOpen}>
+                <PopoverTrigger asChild>
+                  <ExportButton disabled={exporting} className="disabled:opacity-60 disabled:cursor-not-allowed">{exporting ? 'Exporting...' : 'PDF'}</ExportButton>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-48 p-1.5 bg-[var(--bg1solid)] border-[var(--bd)]">
+                  {[['pdf', 'Export List View'], ['pdf-grid', 'Export Grid View']].map(([format, label]) => (
+                    <button key={format} type="button" disabled={exporting} onClick={() => handleExport(format)} className="w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm text-[var(--tx)] hover:bg-[var(--bg2)] disabled:cursor-not-allowed">{label}</button>
+                  ))}
+                </PopoverContent>
+              </Popover>
             </>
           )}
         </div>
@@ -441,9 +459,7 @@ const TaggedUsers = () => {
             dispatch({ type: 'SET_SELECTED_DEPARTMENTS', value: v })
           }
           showTimeRange={false}
-          showUnknownFilter={true}
-          removeUnknown={removeUnknown}
-          setRemoveUnknown={(v) => dispatch({ type: 'SET_REMOVE_UNKNOWN', value: v })}
+          showUnknownFilter={false}
           setFromTime={(v) => dispatch({ type: 'SET_FROM_TIME', value: v })}
           setToTime={(v) => dispatch({ type: 'SET_TO_TIME', value: v })}
           fromTime={fromTime}

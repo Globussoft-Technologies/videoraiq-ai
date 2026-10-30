@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { getAllAccessLogsDetails } from './Api';
+import { TAGGED_PDF_PAGE_SIZE, drawTaggedPdfPage, loadTaggedPdfImage } from './taggedPdfGrid';
 
 const convertToUTC = (date, time, region) => {
   if (!date || !time) return null;
@@ -38,11 +39,12 @@ const formatAccessTime = (enteredIn, exitTiming, region) => {
 };
 
 const getSingleImageUrl = (item) => {
-  const img =
+  const img = item?.userInfo?.profilePics?.[0] ||
     item?.sessions?.[0]?.images?.frameImage ||
     item?.sessions?.[0]?.images?.personImage ||
     item?.sessions?.[0]?.images?.faceImage;
-  return img ? `${import.meta.env.VITE_BACKEND}/uploads/${img}` : '';
+  if (!img) return '';
+  return /^https?:\/\//i.test(img) ? img : `${import.meta.env.VITE_BACKEND}/uploads/${String(img).replace(/^\/+/, '')}`;
 };
 
 /**
@@ -62,7 +64,6 @@ const fetchAllForExport = async (params) => {
     channelIds,
     nvrIds,
     employeeLocations,
-    removeUnknown,
     fromTime,
     toTime,
     region,
@@ -83,7 +84,6 @@ const fetchAllForExport = async (params) => {
     channelIds,
     nvrIds,
     employeeLocations,
-    removeUnknown,
     isExport: true,
     tag: true,
     ...(fromTime && toTime && { fromTime: utcFromTime, toTime: utcToTime }),
@@ -128,8 +128,8 @@ const exportToExcel = async (params) => {
   });
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Access Logs');
-  XLSX.writeFile(workbook, 'access_logs_report.xlsx');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Tagged Users');
+  XLSX.writeFile(workbook, 'tagged_users_report.xlsx');
 };
 
 const exportToPDF = async (params) => {
@@ -144,8 +144,8 @@ const exportToPDF = async (params) => {
   const doc = new jsPDF('landscape');
   doc.setFont('helvetica');
   doc.setFontSize(12);
-  doc.text('Access Logs Report', 14, 12);
-  doc.text(`Generated on: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 18);
+  doc.text('Tagged Users Report', 14, 12);
+  doc.text(`Generated on: ${moment().tz(region).format('DD/MM/YYYY HH:mm')} (${region})`, 14, 18);
 
   const headers = [
     'ID',
@@ -171,6 +171,7 @@ const exportToPDF = async (params) => {
       log.userInfo?.location || '--',
       formatAccessTime(enteredIn, exitTiming, region),
       sessions[0]?.channel?.name || '--',
+      '',
     ];
   });
 
@@ -201,11 +202,46 @@ const exportToPDF = async (params) => {
     },
   });
 
-  doc.save('access_logs_report.pdf');
+  doc.save('tagged_users_list.pdf');
+};
+
+const exportToGridPDF = async (params) => {
+  const logs = await fetchAllForExport(params);
+  if (!logs.length) { toast.error('No data to export'); return; }
+  const progress = toast.loading(`Preparing grid PDF: 0/${logs.length}`);
+  try {
+    const doc = new jsPDF('portrait');
+    const totalPages = Math.ceil(logs.length / TAGGED_PDF_PAGE_SIZE);
+    const generatedAt = `${moment().tz(params.region).format('DD/MM/YYYY HH:mm')} (${params.region})`;
+    for (let start = 0; start < logs.length; start += TAGGED_PDF_PAGE_SIZE) {
+      const records = logs.slice(start, start + TAGGED_PDF_PAGE_SIZE).map((log) => {
+        const sessions = log.sessions || [];
+        return {
+          name: log.userInfo?.userName || [log.userInfo?.firstName, log.userInfo?.lastName].filter(Boolean).join(' ') || 'Unknown',
+          imageUrl: getSingleImageUrl(log),
+          details: [
+            ['Department', log.department?.departmentName],
+            ['Date', log.date ? moment.utc(log.date).tz(params.region).format('DD/MM/YYYY') : '--'],
+            ['Location', log.userInfo?.location || log.nvrInfo?.location],
+            ['Access', formatAccessTime(sessions[0]?.timestamp, sessions.length > 1 ? sessions[sessions.length - 1]?.timestamp : null, params.region)],
+            ['Camera', sessions[0]?.channel?.name],
+            ['Status', 'Tagged'],
+          ],
+        };
+      });
+      // Process one page at a time: at most six photo downloads in parallel.
+      const images = await Promise.all(records.map((record) => loadTaggedPdfImage(record.imageUrl)));
+      if (start) doc.addPage();
+      drawTaggedPdfPage(doc, records, images, { pageNumber: start / TAGGED_PDF_PAGE_SIZE + 1, totalPages, generatedAt });
+      toast.loading(`Preparing grid PDF: ${Math.min(start + TAGGED_PDF_PAGE_SIZE, logs.length)}/${logs.length}`, { id: progress });
+    }
+    doc.save('tagged_users_grid.pdf');
+  } finally { toast.dismiss(progress); }
 };
 
 /** Entry point used by the page's Export buttons. */
 export const handleTaggedExport = async (format, params) => {
   if (format === 'excel') await exportToExcel(params);
   if (format === 'pdf') await exportToPDF(params);
+  if (format === 'pdf-grid') await exportToGridPDF(params);
 };
