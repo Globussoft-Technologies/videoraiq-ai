@@ -53,7 +53,7 @@ const Departments = () => {
     setOnLoading(true);
     try {
       const skip = (currentPage - 1) * limit;
-      const resp = await fetchDepartments(skip, limit, searchInput);
+      const resp = await fetchDepartments(skip, limit, searchInput, { dropdownCache: false });
       if (resp?.data?.statusCode === 200) {
         const data = resp?.data?.body?.data;
         setDepartments(data.data || []);

@@ -372,8 +372,8 @@ describe("buildStreamingUrl", () => {
     // tolerates nullish nvr (optional chaining), so we instead pass an
     // object whose access would still succeed. We can't easily force the
     // local branch to throw, so just assert the non-throwing happy null
-    // path: missing domain + path yields "undefined/undefined".
+    // Missing stream metadata must not produce a broken URL.
     const url = await rtsp.buildStreamingUrl({}, {});
-    expect(url).toBe("undefined/undefined");
+    expect(url).toBeNull();
   });
 });

@@ -8,7 +8,7 @@ import config from "config";
 import { redis } from "../utils/database.js";
 import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedChannels.model.js";
 import usersModel from "../core/v1/users/users.model.js";
-import { resolveStream } from "../utils/rtspStream.js";
+import { isInstallerManaged, resolveStream } from "../utils/rtspStream.js";
 import { toRelativeMediaPath } from "../utils/mediaStorage.js";
 import { collectMediaPaths, deleteMediaBestEffort } from "../utils/mediaCleanup.js";
 const APP_ENV = config.get("APP_ENV");
@@ -27,6 +27,7 @@ class DeleteService {
     try {
       const nvrId = nId?._id ? nId._id : nId;
       const appEnv = options.appEnv || APP_ENV;
+      const nvr = await NVR.findById(nvrId);
 
       // includeInactive: the Channel pre(/^find/) hook injects { isAdded: true }
       // into every query unless we opt out. Without it this finds only added
@@ -44,7 +45,7 @@ class DeleteService {
         // Only added cameras were ever registered with the streaming service
         // (registerCameraStream runs in the add flow), so tearing down an
         // un-added one would 404 and abort the whole delete.
-        if (appEnv === "cloud" && channel.isAdded) {
+        if (appEnv === "cloud" && !isInstallerManaged(nvr) && channel.isAdded) {
           const uid = `${nvrId.toString()}-${channel._id.toString()}`;
           const redisKey = `stream_url:${uid}`;
           await this.deleteStreamingCamera(uid, channel.userId);
@@ -164,9 +165,11 @@ class DeleteService {
     return { deleted, mediaFailures };
   }
 
-  static async deleteStreamingCamera(cameraId, userId) {
+  static async deleteStreamingCamera(cameraId, userId, nvrDomain) {
     try {
-      const { host, token } = await resolveStream(userId);
+      const stream = await resolveStream(userId);
+      const host = String(nvrDomain || stream.host).replace(/\/+$/, "");
+      const token = stream.token;
       const response = await axios.delete(
         `${host}/api/camera/${cameraId}`,
         {

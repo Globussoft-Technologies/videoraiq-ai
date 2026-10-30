@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { useEffect, useRef, useState } from 'react';
 import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDown, Check } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
@@ -426,7 +427,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   }, []);
   const gridCols = isMobile ? '1fr' : '1fr 1fr';
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -442,12 +443,12 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [], ["locations"]);
 
   // Location -> NVR -> Channels cascade, and Channels/Employee Access -> Department —
   // keep this as one guarded async flow so late responses from an earlier
   // selection cannot overwrite a newer NVR/channel list.
-  useEffect(() => {
+  useMetadataEffect(() => {
     let cancelled = false;
     const requestId = ++accessCascadeRequestRef.current;
     (async () => {
@@ -466,9 +467,9 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLocations, selectedNvrs]);
+  }, [selectedLocations, selectedNvrs], ["cameras","nvrs"]);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     let cancelled = false;
     (async () => {
       const depts = await getDepartmentsForUserAccess({ channelsIds: selectedChannels, employeeLocations });
@@ -477,7 +478,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannels, employeeLocations]);
+  }, [selectedChannels, employeeLocations], ["departments"]);
 
   const handleGeneratePassword = () => {
     const generated = genPassword();

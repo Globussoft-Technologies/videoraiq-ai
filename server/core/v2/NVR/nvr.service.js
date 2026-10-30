@@ -13,7 +13,7 @@ import adminModel from "../admin/admin.model.js";
 import net from "net";
 import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
-import { buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
+import { isInstallerManaged, buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
 import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
 import { emitCameraLimit } from "../../../socket.js";
@@ -147,12 +147,6 @@ class NVRService {
           .status(400)
           .json(Response.userFailResp("Please provide valid user_id"));
       }
-      const effectiveAppEnv = resolveAppEnv(isAdminExist);
-      if (!isLocalAppEnv(effectiveAppEnv)) {
-        return res
-          .status(400)
-          .json(Response.userFailResp("Add NVR metadata is only available in on-prem mode"));
-      }
       const { error, value } = NVRValidation.registerNvrMetadataSchema(
         req.body,
       );
@@ -165,15 +159,17 @@ class NVRService {
       }
 
       const existingNvr = await NVR.findOne({
+        userId,
+        domain: value.nvr.domain,
         localNvrId: value.nvr.localNvrId,
       });
 
       if (existingNvr) {
-        return res
-          .status(400)
-          .json(
-            Response.userFailResp("NVR with this localNvrId already exists"),
-          );
+        // Installer retries sync the same recorder rather than duplicating it.
+        req.params = { ...req.params, id: String(existingNvr._id) };
+        const { localNvrId, ...metadata } = value.nvr;
+        req.body = { ...metadata, cameras: value.cameras };
+        return this.updateNvr(req, res, _next);
       }
 
       const { nvr, cameras } = value;
@@ -207,6 +203,7 @@ class NVRService {
       const savedNvr = await NVR.create({
         userId,
         ...nvr,
+        managementSource: "installer",
         // remaining is Infinity on-prem, so Math.min keeps the real count.
         cameraCount: Math.min(cameras.length, remaining),
       });
@@ -305,8 +302,14 @@ class NVRService {
 
       // only for on premise
       const effectiveAppEnv = await this.getEffectiveAppEnv(req);
-      if (isLocalAppEnv(effectiveAppEnv)) {
-        const userId = req?.verified?.userData?.user_id;
+      const ownerId = req?.verified?.userData?.user_id;
+      const targetNvr = await NVR.findOne({ userId: ownerId, $or: [
+        ...(mongoose.Types.ObjectId.isValid(nvrId) ? [{ _id: nvrId }] : []),
+        { localNvrId: nvrId },
+      ] });
+      if (!targetNvr) return res.status(404).json(Response.notFoundResp("NVR not found"));
+      if (isInstallerManaged(targetNvr) || isLocalAppEnv(effectiveAppEnv)) {
+        const userId = ownerId;
         const { error, value } = NVRValidation.updateNvrLocalSchema(req.body);
 
         if (error) {
@@ -317,7 +320,7 @@ class NVRService {
         }
 
         // Check if NVR exists
-        const existingNvr = await NVR.findOne({ localNvrId: nvrId });
+        const existingNvr = targetNvr;
         if (!existingNvr) {
           return res.status(404).json(Response.notFoundResp("NVR not found"));
         }
@@ -338,7 +341,7 @@ class NVRService {
           // Fetch existing channels for this NVR
           const existingChannels = await Camera.find({
             nvrId: existingNvr._id,
-          });
+          }).setOptions({ includeInactive: true });
           const channelMap = new Map(
             existingChannels.map((ch) => [ch.localChannelId, ch]),
           );
@@ -367,6 +370,7 @@ class NVRService {
             }
           }
 
+          let remaining = await this.getRemainingCameraLimit(userId);
           for (const cam of cameras) {
             const existing = channelMap.get(cam.localChannelId);
 
@@ -404,7 +408,7 @@ class NVRService {
                 name: cam.name,
                 streamingPath: cam.streamingPath,
                 localChannelId: cam.localChannelId,
-                isAdded: true,
+                isAdded: remaining-- > 0,
               });
               syncResult.created.push({
                 _id: newChannel._id,
@@ -417,6 +421,7 @@ class NVRService {
           // Update camera count
           const totalCameras = await Camera.countDocuments({
             nvrId: existingNvr._id,
+            isAdded: true,
           })
           nvrUpdate.cameraCount = totalCameras;
         }
@@ -428,6 +433,7 @@ class NVRService {
             })
           : existingNvr;
 
+        emitCameraLimit({ userId });
         return res.status(200).json(
           Response.userSuccessResp("NVR updated successfully", {
             nvr: updatedNvr,
@@ -620,9 +626,13 @@ class NVRService {
           .json(Response.userFailResp("NVR ID is required"));
       }
 
-      const nvr = await NVR.findById(nvrId);
+      const nvr = await NVR.findOne({ _id: nvrId, userId: req?.verified?.userData?.user_id });
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      if (isInstallerManaged(nvr) && nvr.connectionMode !== "direct") {
+        return res.status(200).json(Response.userSuccessResp("Installer manages camera discovery", { nvr }));
       }
 
       if (nvr.connectionMode === "direct") {
@@ -2281,7 +2291,7 @@ class NVRService {
       // unregistered forever, since nothing else re-registers an existing
       // camera's stream. Re-register every selected camera here; the
       // streaming server treats it as an idempotent upsert on the same uid.
-      const newlySelected = allCameras.filter((cam) => selectedSet.has(channelKey(cam)));
+      const newlySelected = isInstallerManaged(nvr) ? [] : allCameras.filter((cam) => selectedSet.has(channelKey(cam)));
       await Promise.all(
         newlySelected.map(async (cam) => {
           try {
@@ -2336,6 +2346,15 @@ class NVRService {
       const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      if (isInstallerManaged(nvr) && nvr.connectionMode !== "direct") {
+        const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
+        return res.status(200).json(Response.userSuccessResp("Installer cameras retrieved successfully", {
+          nvr, availableCameras: cameras.map((cam) => ({
+            channelId: cam.localChannelId, name: cam.name, isAdded: cam.isAdded, dbId: cam._id,
+          })),
+        }));
       }
 
       if (nvr.connectionMode === "direct") {

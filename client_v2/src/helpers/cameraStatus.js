@@ -4,7 +4,7 @@ import { isLocalSetup } from '../utils/jwt';
 /**
  * Status API routing has two modes:
  * - Local setup: resolve per target/NVR so each recorder can answer for its own cameras.
- * - Cloud/staging: always use the fixed status host from VITE_STATUS_URL.
+ * - Cloud/staging: installer NVRs use their site; application NVRs keep VITE_STATUS_URL.
  */
 function statusBase() {
   const host = import.meta.env.VITE_STATUS_URL || '';
@@ -39,15 +39,16 @@ function nvrDomainBase(target) {
     target?.nvrId?.domain ||
     target?.nvr?.domain ||
     target?.nvrData?.domain ||
-    streamingBase(target) ||
     target?.domain ||
+    streamingBase(target) ||
     target?.config?.domain ||
     ''
   );
 }
 
 function targetStatusBase(target) {
-  if (isLocalSetup()) {
+  const nvr = target?.nvrId && typeof target.nvrId === 'object' ? target.nvrId : target?.nvr || target?.nvrData || target;
+  if (isLocalSetup() || nvr?.managementSource === 'installer' || nvr?.localNvrId) {
     const domainBase = nvrDomainBase(target);
     if (domainBase) return domainBase;
   }
@@ -133,7 +134,7 @@ export const getCamerasStatus = async (targets) => {
   const groups = targetGroups(targets);
   if (!groups.length) return {};
 
-  const responses = await Promise.all(
+  const results = await Promise.allSettled(
     groups.map(async ({ baseUrl, ids }) => {
       const res = await axios.post(statusUrl(baseUrl, '/api/cameras/status'), ids.length ? { ids } : {});
       return {
@@ -143,6 +144,8 @@ export const getCamerasStatus = async (targets) => {
     })
   );
 
+  const responses = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  if (!responses.length) throw results[0]?.reason || new Error("Camera status unavailable");
   return mergeSummaries(responses);
 };
 

@@ -226,8 +226,8 @@ export default function CommandCenter() {
  
   // Options for the filter dropdowns.
   const locationsApi = useApi(() => getLocations(0, 200), []);
-  const nvrsApi = useApi(() => getNVRs(), []);
-  const deptsApi = useApi(() => getDepartments({ limit: 200 }), []);
+  const nvrsApi = useApi(() => getNVRs(), [], { metadataDomains: ['nvrs'] });
+  const deptsApi = useApi(() => getDepartments({ limit: 200 }), [], { metadataDomains: ['departments'] });
 
   const locationOptions = useMemo(
     () => (locationsApi.data || []).map((l) => {

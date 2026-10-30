@@ -2,12 +2,13 @@ import axios from "axios";
 import getAccessToken from "@/utils/getAccessToken";
 const Api_url = import.meta.env.VITE_BACKEND;
 
-export const fetchDepartments = async (skip = 0, limit = 10, search = "") => {
+export const fetchDepartments = async (skip = 0, limit = 10, search = "", options = {}) => {
   const token = getAccessToken();
   return await axios.post(
     `${Api_url}/departments/get`,
     { skip, limit, search },
     {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         'x-access-token': token,

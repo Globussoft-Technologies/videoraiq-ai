@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'moment-timezone';
@@ -288,11 +289,11 @@ const VehicleCheckInOutLogs = () => {
     }));
 
   // Filter option sources.
-  useEffect(() => {
+  useMetadataEffect(() => {
     getNVRs()
       .then((res) => setNvrList(res?.data?.body?.data || []))
       .catch((err) => console.error('Failed to fetch NVRs', err));
-  }, []);
+  }, [], ["nvrs"]);
 
   useEffect(() => {
     getChannels({ nvrIds })

@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -172,7 +173,7 @@ const IncidentLogsPage = ({ config }) => {
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [INTERVAL_KEY, refreshInterval]);
 
   /* ─────────────── Filter metadata ─────────────── */
-  useEffect(() => {
+  useMetadataEffect(() => {
     (async () => {
       try {
         const res = config.showHygieneFields ? await getHygieneLogFilters() : await getNVRs();
@@ -181,9 +182,9 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, [config.showHygieneFields]);
+  }, [config.showHygieneFields], ["nvrs"]);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     (async () => {
       try {
         const res = config.showHygieneFields ? await getHygieneLogFilters() : await getchannels({ nvrIds });
@@ -192,7 +193,7 @@ const IncidentLogsPage = ({ config }) => {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [config.showHygieneFields, nvrIds]);
+  }, [config.showHygieneFields, nvrIds], ["cameras"]);
 
   useEffect(() => {
     if (!config.vehicleNumbersEndpoint) {

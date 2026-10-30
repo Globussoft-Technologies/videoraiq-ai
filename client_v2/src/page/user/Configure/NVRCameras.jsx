@@ -438,8 +438,10 @@ function ChannelAccessDeniedState() {
 }
 
 // ── NVR card ─────────────────────────────────────────────────────────────────
+const isInstallerNvr = (nvr) => nvr?.managementSource === 'installer' || !!nvr?.localNvrId;
+
 function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
-  const SHOW_NVR_ACTIONS = !isLocalSetup();
+  const SHOW_NVR_ACTIONS = !isLocalSetup() && !isInstallerNvr(nvr);
   const cameraCount = nvr.cameraCount ?? nvr.usedChannels ?? nvr.used ?? 0;
   const channelCapacity = inferChannelCapacity(nvr, cameraCount);
   const channelPercent = channelCapacity > 0
@@ -1102,7 +1104,7 @@ function friendlyErrorMessage(body, fallback) {
 // ── Add / Edit NVR wizard ───────────────────────────────────────────────────
 function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
-  const isLocalEdit = isLocalSetup() && isEdit;
+  const isLocalEdit = isEdit && (isLocalSetup() || editingNvr?.managementSource === 'installer' || !!editingNvr?.localNvrId);
   const [directMode, setDirectMode] = useState(editingNvr?.connectionMode === 'direct');
   const khanbasActionDisabled = isKhanbas && (directMode || !isLocalEdit);
   const isMobile = useIsMobile();
@@ -1110,6 +1112,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [step, setStep] = useState(1);
   const [locations, setLocations] = useState([]);
   const [form, setForm] = useState(isEdit ? {
+    domain: editingNvr.domain || '',
     brand: editingNvr.brand || 'hikvision',
     name: editingNvr.name || editingNvr.nvrName || '',
     location: editingNvr.location || editingNvr.locationName || '',
@@ -1328,6 +1331,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     if (directMode) {
       const found = {};
       if (!form.brand.trim()) found.brand = 'NVR brand is required.';
+      if (form.domain && !/^https?:\/\//i.test(form.domain.trim())) found.domain = 'Enter an HTTP or HTTPS streaming domain.';
       if (!form.name.trim()) found.name = 'NVR name is required.';
       if (!form.location.trim()) found.location = 'Select or create a location.';
       const invalidCamera = directCameras.some((camera) => (
@@ -1382,23 +1386,17 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 
     if (isLocalEdit) {
       const found = {};
+      if (form.domain && !/^https?:\/\//i.test(form.domain.trim())) found.domain = 'Enter an HTTP or HTTPS streaming domain.';
       if (!form.name.trim()) found.name = 'NVR name is required.';
       if (!form.location.trim()) found.location = 'Select or create a location.';
       setErrors(found);
       if (Object.keys(found).length) return;
       setConnecting(true);
       try {
-        const existingIp = editingNvr?.ip || editingNvr?.ipAddress || editingNvr?.domain || '';
         const payload = {
           nvrName: form.name.trim(), 
           location: form.location.trim(),
-          ip: existingIp,
-          port: editingNvr?.port || 80,
-          rtspPort: editingNvr?.rtspPort || 554,
-          username: editingNvr?.username || 'admin',
-          oldPassword: '',
-          newPassword: '',
-          brand: editingNvr?.brand || 'hikvision'
+          ...(form.domain?.trim() ? { domain: form.domain.trim() } : {}),
         };
         const resp = await updateNvrById(editingNvr._id, payload);
         const body = resp?.data?.body;
@@ -1882,6 +1880,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
               )}
               {!directMode && <>
                   <div style={{ gridColumn: '1 / -1' }}>
+                    {isLocalEdit && <ModalInput label="Streaming domain" required value={form.domain || ''} onChange={set('domain')} placeholder="https://site-stream.example.com" invalid={!!errors.domain} error={errors.domain} />}
                     <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
                   </div>
                   <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} autoComplete="off" />
@@ -2119,12 +2118,15 @@ export default function NVRCameras() {
     ...nvrSites.map(s => ({ v: s, l: s })),
   ];
 
+  const hasManageableNvrs = nvrs.some(nvr => !isInstallerNvr(nvr));
+
   function handleManageCamerasClick() {
     if (nvrs.length === 0) {
       toast.error('Add an NVR first before managing cameras.');
       return;
     }
-    if (nvrs.length === 1) {
+    if (!hasManageableNvrs) return;
+    if (nvrs.length === 1 && !isInstallerNvr(nvrs[0])) {
       setManageCamerasNvr(nvrs[0]);
       return;
     }
@@ -2216,12 +2218,14 @@ export default function NVRCameras() {
                   type="button"
                   aria-expanded={nvrPickerOpen}
                   aria-controls={nvrPickerOpen ? 'manage-cameras-nvr-picker' : undefined}
+                  disabled={!hasManageableNvrs}
+                  title={!hasManageableNvrs ? 'Cameras are managed through the installer.' : undefined}
                   onClick={handleManageCamerasClick}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
                     background: 'var(--bg2)', border: '1px solid var(--bd)',
-                    borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                    borderRadius: 8, padding: '7px 14px', cursor: hasManageableNvrs ? 'pointer' : 'not-allowed', opacity: hasManageableNvrs ? 1 : 0.5,
                   }}
                 >
                   <ListVideo size={13} /> Manage Cameras
@@ -2234,8 +2238,10 @@ export default function NVRCameras() {
                     <button
                       type="button"
                       key={n._id || n.id}
-                      onClick={() => { setManageCamerasNvr(n); setNvrPickerOpen(false); }}
-                      style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12.5, color: 'var(--tx)', cursor: 'pointer', border: 0, borderBottom: '1px solid var(--bd)', background: 'transparent', textAlign: 'left', overflowWrap: 'anywhere' }}
+                      disabled={isInstallerNvr(n)}
+                      title={isInstallerNvr(n) ? 'Cameras are managed through the installer.' : undefined}
+                      onClick={() => { if (isInstallerNvr(n)) return; setManageCamerasNvr(n); setNvrPickerOpen(false); }}
+                      style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12.5, color: 'var(--tx)', cursor: isInstallerNvr(n) ? 'not-allowed' : 'pointer', opacity: isInstallerNvr(n) ? 0.5 : 1, border: 0, borderBottom: '1px solid var(--bd)', background: 'transparent', textAlign: 'left', overflowWrap: 'anywhere' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
@@ -2323,7 +2329,7 @@ export default function NVRCameras() {
       )}
 
       {/* Manage Cameras */}
-      {manageCamerasNvr && (
+      {manageCamerasNvr && !isInstallerNvr(manageCamerasNvr) && (
         <ManageCamerasModal
           nvr={manageCamerasNvr}
           onClose={() => setManageCamerasNvr(null)}

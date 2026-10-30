@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Users, MapPin, Building2, UserRound, Loader2, AlertTriangle } from 'lucide-react';
 import moment from 'moment';
@@ -150,7 +151,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
 
   // Options are fetched on first open rather than on mount so the page doesn't
   // pay for three requests nobody may use.
-  useEffect(() => {
+  useMetadataEffect(() => {
     if (!open) return;
     let cancelled = false;
 
@@ -192,7 +193,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     return () => {
       cancelled = true;
     };
-  }, [open, shift]);
+  }, [open, shift], ['departments', 'locations', 'shifts']);
 
   // A different shift has a different existing roster. Clear both the visible
   // selection and the memory used to respect a user's manual deselection.

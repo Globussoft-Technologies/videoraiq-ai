@@ -96,3 +96,38 @@ describe("buildStreamingUrl (cloud branch — gap-fill)", () => {
     expect(url).toBeNull();
   });
 });
+
+
+describe("hybrid NVR routing", () => {
+  it("uses installer metadata in a cloud deployment without registering RTSP", async () => {
+    const result = await rtsp.buildStreamingUrl(
+      { managementSource: "installer", domain: "https://site.example/" },
+      { localChannelId: "edge-1", streamingPath: "/stream/edge-1/playlist.m3u8" },
+    );
+    expect(result).toBe("https://site.example/stream/edge-1/playlist.m3u8");
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it("recognizes installer records created before managementSource existed", async () => {
+    expect(await rtsp.buildStreamingUrl(
+      { localNvrId: "old-recorder", domain: "https://legacy.example" },
+      { streamingPath: "stream/legacy/playlist.m3u8" },
+    )).toBe("https://legacy.example/stream/legacy/playlist.m3u8");
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it("preserves an absolute installer stream URL", async () => {
+    expect(await rtsp.buildStreamingUrl(
+      { localNvrId: "edge", domain: "https://site.example" },
+      { streamingPath: "https://site.example/stream/edge/playlist.m3u8" },
+    )).toBe("https://site.example/stream/edge/playlist.m3u8");
+  });
+
+  it("registers application cameras on their assigned server and scopes the cache", async () => {
+    redis.get.mockResolvedValueOnce(null);
+    axios.post.mockResolvedValueOnce({ data: { status: "success", url: "stream/camera/playlist.m3u8" } });
+    await rtsp.getStreamingUrl("camera", "rtsp://camera/live", undefined, "https://assigned.example/");
+    expect(axios.post.mock.calls[0][0]).toBe("https://assigned.example/api/add-camera");
+    expect(redis.set).toHaveBeenCalledWith("stream_url:https://assigned.example:camera", "stream/camera/playlist.m3u8");
+  });
+});

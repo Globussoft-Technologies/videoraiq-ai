@@ -14,6 +14,7 @@ import { TimezoneProvider } from '@/context/TimezoneContext';
 import { applyBrowserBranding } from '@/lib/branding';
 import { router } from './App';
 import './utils/setupAxiosSession';
+import './utils/setupDropdownCache';
 import './index.css';
 
 applyBrowserBranding();

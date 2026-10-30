@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -133,10 +134,12 @@ const TaggedUsers = () => {
   }, [permissionsLoading, permissions, navigate]);
 
   /* ─────────────── Filter metadata ─────────────── */
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await filterByDepartment({ limit: 50 });
+        if (!metadataActive) return;
         const deptList =
           res?.data?.body?.data?.data?.map((d) => ({ label: d.departmentName, id: d._id })) || [];
         dispatch({ type: 'SET_DEPARTMENTS', value: deptList });
@@ -144,40 +147,54 @@ const TaggedUsers = () => {
         console.log('Failed to load departments', err);
       }
     })();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["departments"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const response = await getNVRs();
+        if (!metadataActive) return;
         dispatch({ type: 'SET_NVR_LIST', value: response?.data?.body?.data || [] });
       } catch (error) {
         console.log('Error fetching NVRs:', error);
       }
     })();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["nvrs"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getEmployeeLocations({ skip: 0, limit: 100 });
+        if (!metadataActive) return;
         dispatch({ type: 'SET_LOCATION_LIST', value: res?.data?.body?.data?.locations || [] });
       } catch (err) {
         console.log('Failed to load locations', err);
       }
     })();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["locations"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const response = await getchannels({ nvrIds });
+        if (!metadataActive) return;
         dispatch({ type: 'SET_CAMERA_LIST', value: response?.data?.body?.data || [] });
       } catch (error) {
         console.log('Error fetching channels:', error);
       }
     })();
-  }, [nvrIds]);
+
+    return () => { metadataActive = false; };
+  }, [nvrIds], ["cameras"]);
 
   // Use locationName as the option id so MultiSelect stores name strings
   // (matches the backend `employeeLocations` body contract).

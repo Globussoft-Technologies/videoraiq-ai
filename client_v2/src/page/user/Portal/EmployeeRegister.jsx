@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -223,7 +224,8 @@ export default function EmployeeRegister() {
   /* Load the register-form metadata (departments + employee locations) from the
      same endpoints RegisterUser uses; the onboarding token is passed explicitly
      since this public page has no login session. */
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     if (!AUTH_TOKEN) {
       toast.error("This registration link is invalid or has expired");
       return;
@@ -232,6 +234,7 @@ export default function EmployeeRegister() {
     const loadDepartments = async () => {
       try {
         const res = await fetchDepartments(0, 100, "", AUTH_TOKEN);
+        if (!metadataActive) return;
         const body = res?.data?.body;
         if (body?.status === "success") {
           setDepartments(body.data?.data || []);
@@ -247,6 +250,7 @@ export default function EmployeeRegister() {
     const loadLocations = async () => {
       try {
         const res = await getEmployeeLocations(AUTH_TOKEN);
+        if (!metadataActive) return;
         const locs = res?.data?.body?.data?.locations || [];
         setLocations(locs.map((l) => l.locationName).filter(Boolean));
       } catch (err) {
@@ -257,7 +261,9 @@ export default function EmployeeRegister() {
 
     loadDepartments();
     loadLocations();
-  }, [AUTH_TOKEN]);
+
+    return () => { metadataActive = false; };
+  }, [AUTH_TOKEN], ["departments","locations"]);
 
   const validateDetails = () => {
     const errs = {};

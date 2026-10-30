@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
@@ -424,29 +425,37 @@ const CarLogs = () => {
 
   useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     const fetchNvrs = async () => {
       try {
         const res = await getNVRs();
+        if (!metadataActive) return;
         setNvrList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching NVRs:', err);
       }
     };
     fetchNvrs();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["nvrs"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     const fetchChannels = async () => {
       try {
         const res = await getchannels({ nvrIds });
+        if (!metadataActive) return;
         setCameraList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching channels:', err);
       }
     };
     fetchChannels();
-  }, [nvrIds]);
+
+    return () => { metadataActive = false; };
+  }, [nvrIds], ["cameras"]);
 
   useEffect(() => {
     const handle = setTimeout(async () => {

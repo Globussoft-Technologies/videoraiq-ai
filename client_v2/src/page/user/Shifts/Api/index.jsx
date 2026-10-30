@@ -9,10 +9,10 @@ const headers = () => ({
 });
 
 /** Paginated shifts for the management table. */
-export const fetchShifts = async (skip = 0, limit = 10, name = "") => {
+export const fetchShifts = async (skip = 0, limit = 10, name = "", options = {}) => {
   const params = new URLSearchParams({ skip, limit });
   if (name) params.append("name", name);
-  return axios.get(`${Api_url}/shifts?${params.toString()}`, { headers: headers() });
+  return axios.get(`${Api_url}/shifts?${params.toString()}`, { ...options, headers: headers() });
 };
 
 export const createShift = async (data) =>

@@ -35,6 +35,7 @@ vi.mock("axios", () => ({
 
 vi.mock("../../../core/v1/NVR/nvr.model.js", () => ({
   default: {
+    findById: vi.fn().mockResolvedValue(null),
     deleteOne: vi.fn(),
     distinct: vi.fn(),
     find: vi.fn(),

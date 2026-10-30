@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -430,7 +431,7 @@ export default function CameraSettings() {
     }
   }
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     if (!canViewChannels) return;
     fetchDepartments(0, 100, '').then(res => {
       const data = res?.data?.body?.data;
@@ -439,7 +440,7 @@ export default function CameraSettings() {
     }).catch(() => {});
     loadCameraDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nvrId, canViewChannels]);
+  }, [nvrId, canViewChannels], ["departments"]);
 
   if (permissionsLoading) return null;
   if (!canViewChannels) {

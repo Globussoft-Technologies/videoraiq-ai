@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Search, Loader2, UserPlus, UserCheck, X, ChevronDown, Save } from 'lucide-react';
@@ -76,11 +77,13 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
   }, [open]);
 
   // Load department + location options lazily when the register tab opens.
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     if (!open || mode !== 'new') return;
     (async () => {
       try {
         const res = await fetchDepartments(0, 100, '');
+        if (!metadataActive) return;
         setDepartments(res?.data?.body?.data?.data || []);
       } catch (err) {
         console.error('Failed to load departments', err);
@@ -89,12 +92,15 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
     (async () => {
       try {
         const res = await getEmployeeLocations();
+        if (!metadataActive) return;
         setLocations(res?.data?.body?.data?.locations || []);
       } catch (err) {
         console.error('Failed to load locations', err);
       }
     })();
-  }, [open, mode]);
+
+    return () => { metadataActive = false; };
+  }, [open, mode], ["departments","locations"]);
 
   // Initial load + reload on search change (resets the list to page 1).
   useEffect(() => {

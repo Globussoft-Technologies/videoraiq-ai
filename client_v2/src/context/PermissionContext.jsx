@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import getAccessToken from "@/utils/getAccessToken";
 import { useAuth } from "./AuthContext";
+import { dropdownCache } from '@/utils/dropdownCache';
 
 const PermissionContext = createContext();
 
@@ -54,6 +55,7 @@ const getAllUserPermissions = async () => {
 };
 
 export const PermissionProvider = ({ children }) => {
+  const dropdownPermissionScope = useRef('');
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,6 +96,9 @@ export const PermissionProvider = ({ children }) => {
       }
       if (body.status === "success") {
         const roleData = body.data[0];
+        const scope = JSON.stringify(roleData);
+        if (dropdownPermissionScope.current && dropdownPermissionScope.current !== scope) dropdownCache.invalidate();
+        dropdownPermissionScope.current = scope;
         setPermissions(normalizePermissionConfig(roleData));
         // /auth/by-login-token only decodes the JWT payload from login time —
         // it never re-checks the DB, so user.roleId in AuthContext goes stale

@@ -64,6 +64,7 @@ vi.mock("../../../core/v1/channels/channels.model.js", () => ({
 
 vi.mock("../../../core/v1/NVR/nvr.model.js", () => ({
   default: {
+    findById: vi.fn().mockResolvedValue(null),
     deleteOne: vi.fn(async ({ _id }) => {
       h.order.push("nvr.deleteOne");
       h.deletedNvrIds.push(String(_id));
@@ -109,6 +110,7 @@ vi.mock("../../../core/v1/users/users.model.js", () => ({ default: {} }));
 vi.mock("../../../utils/database.js", () => ({ redis: { del: vi.fn(async () => 1) } }));
 vi.mock("../../../utils/rtspStream.js", () => ({
   resolveStream: vi.fn(async () => ({ host: "http://stream", token: "t" })),
+  isInstallerManaged: (nvr) => nvr?.managementSource === "installer" || Boolean(nvr?.localNvrId),
 }));
 vi.mock("axios", () => ({ default: { delete: vi.fn(async () => ({})) } }));
 
@@ -197,5 +199,25 @@ describe("DeleteService.deleteNVR", () => {
     expect(axios.delete).not.toHaveBeenCalled();
     expect(h.deletedChannelIds).toEqual(["cam-added"]);
     expect(h.deletedNvrIds).toEqual(["nvr-1"]);
+  });
+});
+
+
+describe("hybrid deletion compatibility", () => {
+  it("keeps the existing cloud host when an application NVR has a legacy domain", async () => {
+    const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
+    NVR.findById.mockResolvedValueOnce({ domain: "http://legacy-device" });
+    h.channels = [{ _id: "cam-added", userId: "u1", isAdded: true }];
+    await DeleteService.deleteNVR("nvr-1", { appEnv: "cloud" });
+    expect(axios.delete).toHaveBeenCalledWith("http://stream/api/camera/nvr-1-cam-added", expect.any(Object));
+  });
+
+  it("removes installer metadata without deleting cameras on the cloud streaming server", async () => {
+    const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
+    NVR.findById.mockResolvedValueOnce({ localNvrId: "edge", domain: "https://site.example" });
+    h.channels = [{ _id: "cam-added", userId: "u1", isAdded: true }];
+    await DeleteService.deleteNVR("nvr-1", { appEnv: "cloud" });
+    expect(axios.delete).not.toHaveBeenCalled();
+    expect(h.deletedChannelIds).toEqual(["cam-added"]);
   });
 });

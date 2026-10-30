@@ -20,6 +20,7 @@ import {
   buildStreamingUrl,
   generatePlayBackUrl,
   getStreamingUrl,
+  isInstallerManaged,
   killCurrentPlayBack,
   resolvePlaybackHost,
 } from "../../../utils/rtspStream.js";
@@ -1095,7 +1096,7 @@ class ChannelService {
       const brand = (nvr.brand || "").toLowerCase();
 
       // Tiandy: build RTSP playback URL directly from NVR — no external media server needed
-      if (brand === "tiandy") {
+      if (brand === "tiandy" && !isInstallerManaged(nvr)) {
         const ip = decrypt(nvr.ip);
         const username = nvr.username || "admin";
         const password = decrypt(nvr.password);
@@ -1118,7 +1119,7 @@ class ChannelService {
       // needs the NVR's own session cookie/csrf token on every segment fetch.
       // A browser <video>/dash.js can't attach those headers to a raw NVR URL,
       // so route it through our own proxy instead of handing back a bare link.
-      if (brand === "honeywell") {
+      if (brand === "honeywell" && !isInstallerManaged(nvr)) {
         const normalise = (t) => /^\d{8}T\d{6}Z$/.test(t)
           ? `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T${t.slice(9,11)}:${t.slice(11,13)}:${t.slice(13,15)}`
           : t;
@@ -1199,7 +1200,7 @@ class ChannelService {
       // Securus/XiongMai recordings are native DVRIP streams, not RTSP URLs.
       // Read them in this backend and expose an authenticated HLS session to
       // the existing browser player.
-      if (brand === "securus") {
+      if (brand === "securus" && !isInstallerManaged(nvr)) {
         const requestedStart = parseCompactDeviceTime(startTime);
         const requestedEnd = endTime
           ? parseCompactDeviceTime(endTime)
@@ -1254,7 +1255,7 @@ class ChannelService {
       }
 
       const effectiveAppEnv = await resolveAppEnv(channel?.userId);
-      const camera_id = isLocalAppEnv(effectiveAppEnv) ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
+      const camera_id = (isInstallerManaged(nvr) || isLocalAppEnv(effectiveAppEnv)) ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
 
       // const nvrId = channel.nvrId;
       // const allChannels = await Channel.find({ nvrId });
@@ -1288,7 +1289,7 @@ class ChannelService {
 
       return res.status(200).json(
         Response.userSuccessResp("Playback URL retrieved successfully", {
-          playbackUrl: isLocalAppEnv(effectiveAppEnv) ? `${streamHost}/${rtspUrl}` : rtspUrl,
+          playbackUrl: /^https?:\/\//i.test(rtspUrl) ? rtspUrl : `${streamHost.replace(/\/+$/, "")}/${rtspUrl.replace(/^\/+/, "")}`,
         })
       );
     } catch (error) {

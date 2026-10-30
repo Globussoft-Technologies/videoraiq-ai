@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -166,27 +167,35 @@ const ANPRLogs = () => {
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
 
   /* ─────────────── Filter metadata ─────────────── */
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getNVRs();
+        if (!metadataActive) return;
         dispatch({ type: 'SET_NVR_LIST', value: res?.data?.body?.data || [] });
       } catch (err) {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["nvrs"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getchannels({ nvrIds });
+        if (!metadataActive) return;
         dispatch({ type: 'SET_CAMERA_LIST', value: res?.data?.body?.data || [] });
       } catch (err) {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [nvrIds]);
+
+    return () => { metadataActive = false; };
+  }, [nvrIds], ["cameras"]);
 
   // Fetch distinct vehicle numbers (debounced when search changes).
   useEffect(() => {

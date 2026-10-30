@@ -11,6 +11,11 @@ import mongoose from "mongoose";
 import { connectMongo, disconnectMongo, clearCollections } from "../dbSetup.js";
 import { serviceCtx, payload } from "../../helpers/service.js";
 
+vi.mock("../../../utils/rtspStream.js", async (importOriginal) => ({
+  ...await importOriginal(),
+  generatePlayBackUrl: vi.fn().mockResolvedValue("session/playlist.m3u8"),
+}));
+
 vi.mock("../../../socket.js", () => ({
   emitCameraLimit: vi.fn(),
   sendPayloadToUser: vi.fn(),
@@ -270,5 +275,100 @@ describe("direct RTSP bypass", () => {
     expect(payload(refresh.res).message).toMatch(/do not require NVR refresh/i);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+
+describe("hybrid installer onboarding", () => {
+  it("registers and retries installer metadata for a cloud account without duplicate cameras", async () => {
+    const admin = await makeAdmin(1);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    const body = {
+      nvr: { nvrName: "Private site", brand: "hikvision", location: "Factory",
+        domain: "https://factory.example", localNvrId: "factory-1" },
+      cameras: [1, 2].map((id) => ({ name: `Camera ${id}`, localChannelId: `edge-${id}`,
+        streamingPath: `stream/edge-${id}/playlist.m3u8` })),
+    };
+    const first = serviceCtx({ user_id: USER_ID, body });
+    await NVRService.addNvr(first.req, first.res, first.next);
+    expect(first.res.statusCode).toBe(201);
+    const nvr = await NVR.findOne({ userId: USER_ID });
+    expect(nvr.managementSource).toBe("installer");
+    expect(await Channel.countDocuments({ userId: USER_ID, isAdded: true })).toBe(1);
+
+    const retry = serviceCtx({ user_id: USER_ID, body });
+    await NVRService.addNvr(retry.req, retry.res, retry.next);
+    expect(retry.res.statusCode).toBe(200);
+    expect(await NVR.countDocuments({ userId: USER_ID })).toBe(1);
+    expect(await Channel.countDocuments({ userId: USER_ID }).setOptions({ includeInactive: true })).toBe(2);
+  });
+
+  it("edits an installer domain by Mongo ID while keeping the account cloud", async () => {
+    const admin = await makeAdmin(2);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    const nvr = await makeNvr();
+    const update = serviceCtx({ user_id: USER_ID, params: { id: String(nvr._id) },
+      body: { nvrName: "Updated", domain: "https://new-site.example" } });
+    await NVRService.updateNvr(update.req, update.res, update.next);
+    expect(update.res.statusCode).toBe(200);
+    expect((await NVR.findById(nvr._id)).domain).toBe("https://new-site.example");
+    expect((await Admin.findById(admin._id)).appEnv).toBe("cloud");
+  });
+
+  it("does not discover installer cameras through the private NVR IP", async () => {
+    const nvr = await makeNvr();
+    const camera = await makeCamera(nvr._id, true);
+    const fetchSpy = vi.spyOn(NVRService, "_fetchCamerasFromNvr");
+    const ctx = serviceCtx({ user_id: USER_ID, params: { nvrId: String(nvr._id) } });
+    await NVRService.editNvrCameras(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(200);
+    expect(payload(ctx.res).data.availableCameras[0].channelId).toBe(camera.localChannelId);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("hybrid playback routing", () => {
+  it.each([true, false])("uses the owning server and camera ID (installer=%s)", async (installer) => {
+    const { default: ChannelsService } = await import("../../../core/v2/channels/channels.service.js");
+    const { generatePlayBackUrl } = await import("../../../utils/rtspStream.js");
+    const admin = await makeAdmin(2);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud", streamHost: "https://cloud.example" });
+    const nvr = await makeNvr(installer ? {} : { localNvrId: undefined, domain: undefined });
+    const camera = await makeCamera(nvr._id, true);
+    const ctx = serviceCtx({ user_id: USER_ID, body: {
+      channelId: String(camera._id), startTime: "2026-10-01T10:00:00Z", sessionId: "session",
+    } });
+    await ChannelsService.getPlaybackUrl(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(200);
+    expect(generatePlayBackUrl).toHaveBeenCalledWith(
+      "session", installer ? camera.localChannelId : `${nvr._id}-${camera._id}`,
+      "2026-10-01T10:00:00Z", undefined, USER_ID,
+      installer ? "http://nvr.local" : "https://cloud.example",
+    );
+    expect(payload(ctx.res).data.playbackUrl).toBe(
+      `${installer ? "http://nvr.local" : "https://cloud.example"}/session/playlist.m3u8`,
+    );
+  });
+});
+
+
+describe("existing installer API compatibility", () => {
+  it("accepts cloud installer registration and updates through v1", async () => {
+    const { default: LegacyService } = await import("../../../core/v1/NVR/nvr.service.js");
+    const admin = await makeAdmin(2);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    const add = serviceCtx({ user_id: USER_ID, body: {
+      nvr: { nvrName: "Existing installer", brand: "hikvision", location: "HQ",
+        domain: "https://site.example", localNvrId: "legacy-installer" },
+      cameras: [{ name: "Lobby", localChannelId: "edge", streamingPath: "stream/edge/playlist.m3u8" }],
+    } });
+    await LegacyService.addNvr(add.req, add.res, add.next);
+    expect(add.res.statusCode).toBe(201);
+    const update = serviceCtx({ user_id: USER_ID, params: { id: "legacy-installer" },
+      body: { domain: "https://updated.example" } });
+    await LegacyService.updateNvr(update.req, update.res, update.next);
+    expect(update.res.statusCode).toBe(200);
+    expect((await NVR.findOne({ userId: USER_ID })).domain).toBe("https://updated.example");
   });
 });

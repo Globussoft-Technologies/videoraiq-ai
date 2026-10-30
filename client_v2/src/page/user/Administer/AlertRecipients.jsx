@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -152,14 +153,14 @@ function DepartmentField({ value, onChange, label = 'Departments', exclude = [] 
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     fetchDepartments(0, 1000)
       .then((resp) => setOptions(
         (resp?.data?.body?.data?.data || []).map((d) => ({ id: String(d._id), label: d.departmentName })),
       ))
       .catch(() => toast.error('Failed to load departments'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [], ["departments"]);
 
   return (
     <div>

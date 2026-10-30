@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactApexChart from 'react-apexcharts';
@@ -114,23 +115,23 @@ const StockCountingAnalytics = () => {
     return () => clearInterval(timer);
   }, [canView, autoRefresh, refreshInterval, loading]);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     if (!canView) return;
     let active = true;
     getNVRs()
       .then((res) => { if (active) setNvrList(res?.data?.body?.data || []); })
       .catch(() => { if (active) setNvrList([]); });
     return () => { active = false; };
-  }, [canView]);
+  }, [canView], ["nvrs"]);
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     if (!canView) return;
     let active = true;
     getchannels({ nvrIds })
       .then((res) => { if (active) setCameraList(res?.data?.body?.data || []); })
       .catch(() => { if (active) setCameraList([]); });
     return () => { active = false; };
-  }, [nvrIds, canView]);
+  }, [nvrIds, canView], ["cameras"]);
 
   useEffect(() => {
     if (!canView) return;

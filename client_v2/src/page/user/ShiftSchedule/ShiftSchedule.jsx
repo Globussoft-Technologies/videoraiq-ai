@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { ChevronLeft, ChevronRight, Search, Plus, Loader2, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
@@ -177,7 +178,7 @@ const ShiftSchedule = () => {
   }, [load]);
 
   // Filter options load once; they don't depend on the month.
-  useEffect(() => {
+  useMetadataEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -212,7 +213,7 @@ const ShiftSchedule = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [], ["departments","locations"]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);

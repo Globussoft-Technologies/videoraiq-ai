@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import ReactApexChart from 'react-apexcharts';
@@ -142,28 +143,36 @@ const DeskAbsenceLogs = () => {
   }, [fetchLogs, manualTrigger]);
 
   // Load NVR list once.
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getNVRs();
+        if (!metadataActive) return;
         setNvrList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, []);
+
+    return () => { metadataActive = false; };
+  }, [], ["nvrs"]);
 
   // Load channels whenever the selected NVRs change.
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getchannels({ nvrIds });
+        if (!metadataActive) return;
         setCameraList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [nvrIds]);
+
+    return () => { metadataActive = false; };
+  }, [nvrIds], ["cameras"]);
 
   // Load zone-name options once.
   useEffect(() => {

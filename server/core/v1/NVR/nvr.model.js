@@ -47,6 +47,7 @@ const NVRSchema = new mongoose.Schema(
       type: String,
     },
     domain: String,
+    managementSource: { type: String, enum: ["application", "installer"], default: "application" },
     deviceName: String,
     model: String,
     serialNumber: String,

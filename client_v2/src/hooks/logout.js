@@ -1,5 +1,6 @@
 import Cookies from 'js-cookie';
 import axios from 'axios';
+import { dropdownCache } from '@/utils/dropdownCache';
 import { clearSessionId, getSessionId } from '@/utils/sessionIdentity';
 import { unregisterWebPush } from '@/utils/webPush';
 import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobileEmbed';
@@ -56,6 +57,7 @@ const shouldPreserveStorageKey = (key) =>
  * is marked logged_out instead of lingering as "active".
  */
 export async function logout({ clearSession = true, syncServer = true } = {}) {
+  dropdownCache.clear(false);
   if (isMobileEmbedded()) {
     const session = getMobileEmbed();
     if (session?.token && syncServer) {

@@ -18,6 +18,9 @@ export function streamUrl(channel) {
   const path = channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl || fallback;
   if (!path) return '';
   if (/^https?:\/\//i.test(path)) return path;
+  const nvr = channel?.nvrId && typeof channel.nvrId === 'object' ? channel.nvrId : channel?.nvr || channel;
+  const domain = (isLocalSetup() || nvr?.managementSource === 'installer' || nvr?.localNvrId) ? nvr?.domain : '';
+  if (domain) return `${domain.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
   if (isLocalSetup()) return `/${path.replace(/^\/+/, '')}`;
   const host = getStreamHost();
   if (!host) return path;

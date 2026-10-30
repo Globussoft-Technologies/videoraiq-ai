@@ -94,9 +94,9 @@ class NVRService {
       }
       const effectiveAppEnv = resolveAppEnv(isAdminExist);
       if (!isLocalAppEnv(effectiveAppEnv)) {
-        return res
-          .status(400)
-          .json(Response.userFailResp("Add NVR metadata is only available in on-prem mode"));
+        // Existing installers can keep their v1 URL for cloud hybrid accounts.
+        const { default: hybridService } = await import("../../v2/NVR/nvr.service.js");
+        return hybridService.addNvr(req, res, _next);
       }
       const { error, value } = NVRValidation.registerNvrMetadataSchema(
         req.body,
@@ -246,6 +246,17 @@ class NVRService {
 
       // only for on premise
       const effectiveAppEnv = await this.getEffectiveAppEnv(req);
+      if (!isLocalAppEnv(effectiveAppEnv)) {
+        const userId = req?.verified?.userData?.user_id;
+        const installer = await NVR.findOne({ userId, $or: [
+          { localNvrId: nvrId },
+          ...(mongoose.Types.ObjectId.isValid(nvrId) ? [{ _id: nvrId }] : []),
+        ] });
+        if (installer?.localNvrId || installer?.managementSource === "installer") {
+          const { default: hybridService } = await import("../../v2/NVR/nvr.service.js");
+          return hybridService.updateNvr(req, res, _next);
+        }
+      }
       if (isLocalAppEnv(effectiveAppEnv)) {
         const userId = req?.verified?.userData?.user_id;
         const { error, value } = NVRValidation.updateNvrLocalSchema(req.body);

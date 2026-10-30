@@ -144,7 +144,7 @@ class NVRValidation {
         }),
       deviceName: Joi.string().allow("").optional(),
       location: Joi.string().allow("").optional(),
-      domain: Joi.string().uri().required().messages({
+      domain: Joi.string().uri({ scheme: ["http", "https"] }).required().messages({
         "string.uri": "domain must be a valid URI",
         "any.required": "domain is required",
       }),
@@ -193,7 +193,7 @@ class NVRValidation {
         .optional(),
       deviceName: Joi.string().allow("").optional(),
       location: Joi.string().allow("").optional(),
-      domain: Joi.string().uri().optional(),
+      domain: Joi.string().uri({ scheme: ["http", "https"] }).optional(),
       cameras: Joi.array().items(this.cameraSchema()).optional(),
     }).validate(body);
   }

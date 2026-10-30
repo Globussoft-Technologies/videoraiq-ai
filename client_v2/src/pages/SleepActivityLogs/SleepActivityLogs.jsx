@@ -1,3 +1,4 @@
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -126,27 +127,35 @@ const SleepActivityLogs = () => {
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
 
   /* ─────────────── Filter metadata ─────────────── */
-  useEffect(() => {
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getNVRs();
+        if (!metadataActive) return;
         setNvrList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching NVRs:', err);
       }
     })();
-  }, []);
 
-  useEffect(() => {
+    return () => { metadataActive = false; };
+  }, [], ["nvrs"]);
+
+  useMetadataEffect(() => {
+    let metadataActive = true;
     (async () => {
       try {
         const res = await getchannels({ nvrIds });
+        if (!metadataActive) return;
         setCameraList(res?.data?.body?.data || []);
       } catch (err) {
         console.log('Error fetching channels:', err);
       }
     })();
-  }, [nvrIds]);
+
+    return () => { metadataActive = false; };
+  }, [nvrIds], ["cameras"]);
 
   // Reset to page 1 when filters or page size change.
   useEffect(() => {

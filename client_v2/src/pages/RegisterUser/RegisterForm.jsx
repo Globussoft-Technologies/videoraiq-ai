@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { ArrowLeft, Loader } from 'lucide-react';
@@ -91,10 +92,10 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     }
   };
 
-  useEffect(() => {
+  useMetadataEffect(() => {
     loadDepartments();
     loadLocations();
-  }, []);
+  }, [], ['departments', 'locations']);
 
   // Open in edit mode when an editUser is provided by the parent.
   useEffect(() => {

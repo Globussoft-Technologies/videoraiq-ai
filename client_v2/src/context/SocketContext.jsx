@@ -4,6 +4,7 @@ import getAccessToken from '@/utils/getAccessToken';
 import { getSessionId } from '@/utils/sessionIdentity';
 import { useAuth } from './AuthContext';
 import { isMobileEmbedded } from '@/utils/mobileEmbed';
+import { dropdownCache } from '@/utils/dropdownCache';
 
 // How often an open tab tells the server it's still here. Must stay well under
 // the server's presence TTL (PRESENCE_TTL_SECONDS) so one missed beat doesn't
@@ -87,11 +88,14 @@ export function SocketProvider({ children }) {
     socketRef.current = socket;
 
     let heartbeatTimer = null;
+    let hasConnected = false;
     const sendSessionHeartbeat = () => {
       if (socket.connected && getSessionId()) socket.emit('session-heartbeat');
     };
 
     socket.on('connect', () => {
+      if (hasConnected) dropdownCache.invalidate();
+      hasConnected = true;
       setConnected(true);
       // A fresh sessionId (e.g. after a re-login on this tab) needs to reach the
       // server on reconnect too — auth is reused from connect time otherwise.

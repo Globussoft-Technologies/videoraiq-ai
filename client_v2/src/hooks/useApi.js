@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { dropdownCache } from '@/utils/dropdownCache';
 
 // Route components unmount during navigation. Opt-in entries in this module
 // cache survive those unmounts for the lifetime of the SPA, which lets a
@@ -13,7 +14,8 @@ const responseCache = new Map();
  * @param {Object}   opts     { enabled, initialData, pollMs, cacheKey, pollSilent }
  */
 export function useApi(fetcher, deps = [], opts = {}) {
-  const { enabled = true, initialData = null, pollMs = 0, cacheKey = '', pollSilent = false } = opts;
+  const { enabled = true, initialData = null, pollMs = 0, cacheKey = '', pollSilent = false, metadataDomains = [] } = opts;
+  const metadataKey = metadataDomains.join(',');
   const hasCachedData = !!cacheKey && responseCache.has(cacheKey);
   const [data, setData] = useState(() => (
     hasCachedData ? responseCache.get(cacheKey) : initialData
@@ -53,6 +55,13 @@ export function useApi(fetcher, deps = [], opts = {}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, cacheKey]);
+
+  useEffect(() => {
+    if (!metadataKey) return undefined;
+    return dropdownCache.subscribe(changed => {
+      if (changed.some(domain => metadataKey.split(',').includes(domain))) run({ silent: true });
+    });
+  }, [metadataKey, run]);
 
   useEffect(() => {
     mounted.current = true;

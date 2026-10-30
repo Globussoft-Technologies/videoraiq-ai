@@ -10,11 +10,17 @@ const terminateHost = config.get("RTSPStream.terminateHost");
 const APP_ENV = config.get("APP_ENV");
 const resolveAppEnv = (admin) => admin?.appEnv || APP_ENV;
 
+// Legacy installer records predate managementSource.
+export const isInstallerManaged = (nvr) =>
+  nvr?.managementSource === "installer" || Boolean(nvr?.localNvrId);
+const joinStreamUrl = (host, path) => /^https?:\/\//i.test(path || "")
+  ? path : `${String(host || "").replace(/\/+$/, "")}/${String(path || "").replace(/^\/+/, "")}`;
+
 // Resolve the RTSP stream host + token for a given resource owner. A specific
 // admin can override both via admin.streamHost / admin.streamToken; everyone
 // else uses the global config defaults. Single lookup returns both.
 export const resolveStream = async (userId) => {
-  if (!userId) return { host: api_host, token: api_token };
+  if (!userId) return { host: api_host, token: api_token, appEnv: APP_ENV };
   try {
     const admin = await adminModel
       .findOne({ user_id: String(userId) })
@@ -45,13 +51,15 @@ const trimHost = (host) => String(host || "").replace(/\/+$/, "");
 export const resolvePlaybackHost = async (userId, nvrDomain) =>
   nvrDomain ? trimHost(nvrDomain) : trimHost(await resolveHost(userId));
 
-export const getStreamingUrl = async (id, rtspUrl, userId) => {
-  const redisKey = `stream_url:${id}`;
+export const getStreamingUrl = async (id, rtspUrl, userId, nvrDomain) => {
+  const redisKey = nvrDomain ? `stream_url:${trimHost(nvrDomain)}:${id}` : `stream_url:${id}`;
   let streamUrl = await redis.get(redisKey);
 
   if (!streamUrl) {
     try {
-      const { host, token } = await resolveStream(userId);
+      const stream = await resolveStream(userId);
+      const host = trimHost(nvrDomain || stream.host);
+      const token = stream.token;
       const response = await axios.post(
         `${host}/api/add-camera`,
         {
@@ -215,10 +223,12 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
   }
 };
 
-export const registerCameraStream = async (id, rtspUrl, userId) => {
-  const redisKey = `stream_url:${id}`;
+export const registerCameraStream = async (id, rtspUrl, userId, nvrDomain) => {
+  const redisKey = nvrDomain ? `stream_url:${trimHost(nvrDomain)}:${id}` : `stream_url:${id}`;
   try {
-    const { host, token } = await resolveStream(userId);
+    const stream = await resolveStream(userId);
+    const host = trimHost(nvrDomain || stream.host);
+    const token = stream.token;
     console.log(`[STREAM add-camera] id=${id} host=${host}`);
     const response = await axios.post(
       `${host}/api/add-camera`,
@@ -247,9 +257,11 @@ export const registerCameraStream = async (id, rtspUrl, userId) => {
   }
 };
 
-export const updateCameraStream = async (id, rtspUrl, bitrate, userId) => {
+export const updateCameraStream = async (id, rtspUrl, bitrate, userId, nvrDomain) => {
   try {
-    const { host, token } = await resolveStream(userId);
+    const stream = await resolveStream(userId);
+    const host = trimHost(nvrDomain || stream.host);
+    const token = stream.token;
     const payload = { rtsp_url: rtspUrl };
     if (bitrate) payload.bitrate = bitrate;
 
@@ -290,7 +302,7 @@ export const buildStreamingUrl = async (nvr, channel) => {
     let streamingUrl = null;
     const uid = `${nvr?._id}-${channel?._id}`;
     const { appEnv } = await resolveStream(nvr?.userId);
-    if (appEnv === "cloud") {
+    if (appEnv === "cloud" && !isInstallerManaged(nvr)) {
       if (nvr?.connectionMode === "direct" && !channel?.manualRtspUrl) {
         const { default: Channel } = await import("../core/v1/channels/channels.model.js");
         channel = await Channel.findById(channel?._id).select("+manualRtspUrl");
@@ -298,7 +310,7 @@ export const buildStreamingUrl = async (nvr, channel) => {
       const rtspUrl = buildRTSPUrl(nvr, channel, "main");
       streamingUrl = await getStreamingUrl(uid, rtspUrl, nvr?.userId);
     } else {
-      streamingUrl = `${nvr?.domain}/${channel?.streamingPath}`;
+      streamingUrl = channel?.streamingPath ? joinStreamUrl(nvr?.domain, channel.streamingPath) : null;
     }
     return streamingUrl;
   } catch (error) {
