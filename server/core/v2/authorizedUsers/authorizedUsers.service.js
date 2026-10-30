@@ -1310,7 +1310,7 @@ async updateAuthUser(req, res, _next) {
         }
 
         try {
-          await this.deleteUserFromDS(userToDelete);
+          if (userToDelete.verified) await this.deleteUserFromDS(userToDelete);
         } catch (error) {
           const dsFailure = dsDeleteFailure(error);
           logger.error(`DS user deletion failed; local deletion aborted. ${dsFailure.log}`);

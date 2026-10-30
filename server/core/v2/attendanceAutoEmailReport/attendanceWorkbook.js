@@ -28,6 +28,7 @@ const COLUMN_WIDTHS = {
   "Checkout Camera": 20,
   "Checkin Image": 15,
   "Checkout Image": 15,
+  "Late By (HH:mm:ss)": 20,
 };
 
 const thinBorder = {

@@ -44,7 +44,11 @@ import {
   applyPeriodTotals,
   buildCsv,
   buildPdf,
+  REPORT_HEADERS,
+  reportTableRows,
+  formatLateDuration,
 } from "../attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
+import { buildAttendanceWorkbook } from "../attendanceAutoEmailReport/attendanceWorkbook.js";
 const ImageView = config.get("ImageView");
 
 /**
@@ -1532,6 +1536,20 @@ class AttendanceService {
         const buffer = await buildPdf({ report, rows, label, timezone });
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.pdf");
+        return res.end(buffer);
+      }
+
+      if (format === "xlsx") {
+        const lateIndex = REPORT_HEADERS.indexOf("Late By (minutes)");
+        const headers = REPORT_HEADERS.map((header) => header === "Late By (minutes)" ? "Late By (HH:mm:ss)" : header);
+        const lines = reportTableRows(rows).map((line) => ({
+          ...line,
+          cells: line.cells.map((value, index) => index === lateIndex && Number.isFinite(value)
+            ? formatLateDuration(value) : value),
+        }));
+        const buffer = await buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount: rows.length });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.xlsx");
         return res.end(buffer);
       }
 

@@ -115,7 +115,7 @@ function formatPeriodDuration(minutes) {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
-function formatLateDuration(minutes) {
+export function formatLateDuration(minutes) {
   const seconds = Math.max(0, Math.round(minutes * 60));
   return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
     .map((value) => String(value).padStart(2, "0")).join(":");
@@ -765,7 +765,7 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - Date fits "01 Jun 2026"
     let preferredColumns = columnSpec || [
       { head: "S\u00A0No", width: 26, noWrap: true },
-      { head: "Employee ID", width: 48 },
+      { head: "Employee ID", width: 68, noWrap: true },
       { head: "Employee Name", width: 72, wrap: true },
       { head: "Department", width: 62, wrap: true },
       { head: "Shift Name", width: 52, wrap: true },
