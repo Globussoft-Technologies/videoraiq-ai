@@ -4,8 +4,16 @@ const present = (value) => {
 };
 
 export const recordTime = (row) => {
-  const value = row.createdAt;
-  const time = value ? new Date(value).getTime() : NaN;
+  // Older API responses omit measuredAt. The displayed dateTime still reflects
+  // dsProcessedAt, so use it before the incident's creation timestamp.
+  const display = /^(\d{2}) ([A-Za-z]{3}) (\d{4}), (\d{2}):(\d{2}):(\d{2})$/.exec(row.dateTime || '');
+  const month = display && ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(display[2]);
+  const displayTime = month >= 0 && display
+    ? Date.UTC(Number(display[3]), month, Number(display[1]), Number(display[4]), Number(display[5]), Number(display[6]))
+    : NaN;
+  const value = row.measuredAt || row.dsProcessedAt || row.createdAt || row.updatedAt;
+  const time = value && (row.measuredAt || row.dsProcessedAt || !Number.isFinite(displayTime))
+    ? new Date(value).getTime() : displayTime;
   return Number.isFinite(time) ? time : 0;
 };
 
