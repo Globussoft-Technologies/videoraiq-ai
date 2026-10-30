@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { createLocation, updateLocation } from "./Api";
+import { limitedTextError } from "@/utils/limitedText";
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
@@ -26,11 +27,17 @@ const LocationForm = ({
   onSave,
 }) => {
   const [open, setOpen] = useState(false);
+  const [nameWarning, setNameWarning] = useState("");
 
   const schema = Yup.object().shape({
     locationName: Yup.string()
       .required("Location name is required")
-      .max(100, "Location name cannot exceed 100 characters"),
+      .test("name-format", function (value) {
+        if (mode === "edit" && value === initialValues?.locationName) return true;
+        if (!value?.trim()) return this.createError({ message: "Location name is required" });
+        const error = limitedTextError(value || "");
+        return error ? this.createError({ message: error }) : true;
+      }),
     empLocationId: Yup.string()
       .test(
         "format",
@@ -78,6 +85,7 @@ const LocationForm = ({
   useEffect(() => {
     if (!open) {
       formik.resetForm();
+      setNameWarning("");
     }
   }, [open]);
 
@@ -107,9 +115,19 @@ const LocationForm = ({
                 name="locationName"
                 placeholder="e.g. Banglore"
                 value={formik.values.locationName}
-                onChange={formik.handleChange}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const error = limitedTextError(next);
+                  const legacy = mode === "edit" && !!limitedTextError(initialValues?.locationName || "");
+                  if (!error || (legacy && next.length < formik.values.locationName.length)) {
+                    formik.setFieldValue("locationName", next);
+                  }
+                  setNameWarning(error);
+                }}
+                onBlur={formik.handleBlur}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
+              {nameWarning && <div className="text-[var(--crit)] text-[10px] mt-1 ml-1">{nameWarning}</div>}
               {formik.touched.locationName && formik.errors.locationName && (
                 <div className="text-[var(--crit)] text-[10px] mt-1 ml-1">
                   {formik.errors.locationName}
@@ -151,7 +169,7 @@ const LocationForm = ({
               </Button>
               <Button
                 type="submit"
-                disabled={formik.isSubmitting || (isKhanbas && mode === "create")}
+                disabled={formik.isSubmitting || !!nameWarning || (isKhanbas && mode === "create")}
                 className={`inline-flex items-center gap-1.5 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas && mode === "create" ? 'khanbas-disabled-action' : ''}`}
               >
                 {mode === "edit" ? "Update Location" : "Add Location"}

@@ -58,7 +58,7 @@ export const getAttendanceLogs = async (
 };
 
 /**
- * Server-rendered attendance export (PDF or CSV). Returns the exact spreadsheet
+ * Server-rendered attendance export (PDF, XLSX or CSV). Returns the exact spreadsheet
  * layout the scheduled Auto Email Report sends — multi-row check-in/check-out
  * sessions and a per-employee-day total row. Response is a binary file blob.
  */

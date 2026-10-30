@@ -27,6 +27,7 @@ import { Popover, PopoverContent } from '../../../pages/AttendanceLogs/component
 import { usePermissions } from '@/context/PermissionContext';
 import { isLocalSetup } from '@/utils/jwt';
 import * as XLSX from 'xlsx';
+import { limitedTextError } from '@/utils/limitedText';
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
 
@@ -809,12 +810,13 @@ function CameraPreviewModal({ cam, onClose }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
             <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{cam.name || `Camera ${cam.channelId}`}</span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 600, color: 'var(--tx)', background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 6, padding: '2px 8px' }}>
               Channel {cam.channelId}
             </span>
+            {!isLoading && !hasError && <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 5, padding: '3px 8px', letterSpacing: '.05em' }}>LIVE PREVIEW</span>}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={toggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg2)', border: '1px solid var(--bd2)', color: 'var(--tx)', cursor: 'pointer' }}>
@@ -850,11 +852,6 @@ function CameraPreviewModal({ cam, onClose }) {
               if (e.currentTarget.currentTime > 0) { setIsLoading(false); setHasError(false); }
             }}
           />
-          {!isLoading && !hasError && (
-            <span style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1, fontSize: 9.5, fontWeight: 700, color: 'var(--crit)', background: 'rgba(0,0,0,.55)', border: '1px solid var(--crit)', borderRadius: 5, padding: '3px 8px', letterSpacing: '.05em' }}>
-              LIVE PREVIEW
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -1146,6 +1143,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [directCameras, setDirectCameras] = useState(
     editingNvr?.connectionMode === 'direct' ? [] : [{ name: 'Camera 1', rtspUrl: '' }],
   );
+  const [cameraNameWarnings, setCameraNameWarnings] = useState({});
 
   useEffect(() => {
     getLocations(0, 100).then(data => setLocations(Array.isArray(data) ? data : [])).catch(() => {});
@@ -1166,6 +1164,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         setDirectCameras(available.map((camera) => ({
           dbId: camera.dbId,
           name: camera.name,
+          originalName: camera.name,
           rtspUrl: '',
           hasRtspUrl: camera.hasRtspUrl,
         })));
@@ -1258,6 +1257,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         ...current.filter((camera) => camera.dbId || camera.rtspUrl.trim()),
         ...imported,
       ]);
+      setCameraNameWarnings({});
       setErrors((current) => ({ ...current, cameras: undefined }));
       toast.success(`${imported.length} RTSP URL${imported.length === 1 ? '' : 's'} imported`);
     } catch {
@@ -1306,6 +1306,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     if (isKhanbas) return;
     const name = locationQuery.trim();
     if (!name) return;
+    const nameError = limitedTextError(name);
+    if (nameError) { setErrors((current) => ({ ...current, location: nameError })); return; }
     setCreatingLocation(true);
     try {
       const resp = await createLocation({ locationName: name });
@@ -1336,11 +1338,12 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
       if (!form.location.trim()) found.location = 'Select or create a location.';
       const invalidCamera = directCameras.some((camera) => (
         !camera.name.trim()
+        || (camera.name !== camera.originalName && !!limitedTextError(camera.name.trim()))
         || (!camera.dbId && !camera.rtspUrl.trim())
         || (camera.rtspUrl && !/^rtsps?:\/\//i.test(camera.rtspUrl.trim()))
       ));
-      if (!directCameras.length || invalidCamera) {
-        found.cameras = 'Enter a name and valid RTSP URL for every new camera.';
+      if (!directCameras.length || invalidCamera || Object.values(cameraNameWarnings).some(Boolean)) {
+        found.cameras = 'Use a camera name of at most 50 letters, numbers, or spaces, and a valid RTSP URL for every new camera.';
       }
       setErrors(found);
       if (Object.keys(found).length) return;
@@ -1833,9 +1836,10 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                       </button>
                       <button type="button" onClick={() => downloadDirectSample('csv')} title="Download sample CSV" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx2)', fontSize: 11.5, cursor: 'pointer' }}>Sample CSV</button>
                       <button type="button" onClick={() => downloadDirectSample('xlsx')} title="Download sample XLSX" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx2)', fontSize: 11.5, cursor: 'pointer' }}>Sample XLSX</button>
-                      <button type="button" onClick={() => { setDirectCameras([]); setErrors((current) => ({ ...current, cameras: undefined })); }} title="Clear all RTSP URLs" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'transparent', color: 'var(--crit)', fontSize: 11.5, cursor: 'pointer' }}>Clear all</button>
+                      <button type="button" onClick={() => { setDirectCameras([]); setCameraNameWarnings({}); setErrors((current) => ({ ...current, cameras: undefined })); }} title="Clear all RTSP URLs" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'transparent', color: 'var(--crit)', fontSize: 11.5, cursor: 'pointer' }}>Clear all</button>
                       <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={importDirectCameras} style={{ display: 'none' }} />
                       <button type="button" onClick={() => {
+                        setCameraNameWarnings({});
                         setDirectCameras((cameras) => {
                           const camera = { name: `Camera ${cameras.length + 1}`, rtspUrl: '' };
                           const firstStored = cameras.findIndex((item) => item.dbId);
@@ -1849,13 +1853,23 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                   </div>
                   {directCameras.map((camera, index) => (
                     <div key={camera.dbId || index} style={{ padding: 10, borderRadius: 9, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '160px 1fr auto', gap: 8, alignItems: 'center' }}>
-                      <input
-                        value={camera.name}
-                        onChange={(e) => setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
-                        placeholder={`Camera ${index + 1}`}
-                        aria-label={`Camera ${index + 1} name`}
-                        style={{ width: '100%', height: 36, padding: '0 10px', boxSizing: 'border-box', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12, outline: 'none' }}
-                      />
+                      <div>
+                        <input
+                          value={camera.name}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            const error = limitedTextError(next);
+                            if (!error || (limitedTextError(camera.originalName || '') && next.length < camera.name.length)) {
+                              setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, name: next } : item));
+                            }
+                            setCameraNameWarnings((current) => ({ ...current, [index]: error }));
+                          }}
+                          placeholder={`Camera ${index + 1}`}
+                          aria-label={`Camera ${index + 1} name`}
+                          style={{ width: '100%', height: 36, padding: '0 10px', boxSizing: 'border-box', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12, outline: 'none' }}
+                        />
+                        {cameraNameWarnings[index] && <div style={{ color: 'var(--crit)', fontSize: 10, marginTop: 4 }}>{cameraNameWarnings[index]}</div>}
+                      </div>
                       <input
                         value={camera.rtspUrl}
                         onChange={(e) => setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, rtspUrl: e.target.value } : item))}
@@ -1866,7 +1880,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                       {directCameras.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => setDirectCameras((cameras) => cameras.filter((_, i) => i !== index))}
+                          onClick={() => { setDirectCameras((cameras) => cameras.filter((_, i) => i !== index)); setCameraNameWarnings({}); }}
                           aria-label={`Remove camera ${index + 1}`}
                           style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'rgba(239,68,68,.08)', color: 'var(--crit)', cursor: 'pointer' }}
                         >
@@ -2004,6 +2018,10 @@ export default function NVRCameras() {
   const [manageCamerasNvr, setManageCamerasNvr] = useState(null);
   const [nvrPickerOpen, setNvrPickerOpen] = useState(false);
   const [camSearch, setCamSearch] = useState('');
+  const [camSearchWarning, setCamSearchWarning] = useState('');
+  const [showCamSuggestions, setShowCamSuggestions] = useState(false);
+  const [cameraIdMatch, setCameraIdMatch] = useState(null);
+  const firstSuggestionRef = useRef(null);
   const [siteFilter, setSiteFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -2036,6 +2054,19 @@ export default function NVRCameras() {
 
   const nvrs      = nvrsApi.data?.nvrs ?? (Array.isArray(nvrsApi.data) ? nvrsApi.data : []);
   const channels  = channelsApi.data ?? [];
+
+  useEffect(() => {
+    const id = camSearch.trim();
+    if (!/^[a-f0-9]{24}$/i.test(id) || channels.some((camera) => String(camera._id) === id)) {
+      setCameraIdMatch(null);
+      return undefined;
+    }
+    let active = true;
+    getChannels({ camera: id, limit: 1 })
+      .then((matches) => { if (active) setCameraIdMatch(matches.find((camera) => String(camera._id) === id) || null); })
+      .catch(() => { if (active) setCameraIdMatch(null); });
+    return () => { active = false; };
+  }, [camSearch, channels]);
 
   // Manage Cameras updates the channel list, but the Sidebar health footer is
   // owned by the layout and is otherwise only refreshed by stream-probing
@@ -2080,9 +2111,13 @@ export default function NVRCameras() {
     return '';
   };
 
-  const camFiltered = channels.filter(c => {
+  const inventoryCameras = cameraIdMatch && !channels.some((camera) => String(camera._id) === String(cameraIdMatch._id))
+    ? [...channels, cameraIdMatch] : channels;
+  const camFiltered = inventoryCameras.filter(c => {
     const searchableName = `${c.name || c.channelName || ''} ${c.customName || ''}`;
-    const nameMatch = !camSearch || searchableName.toLowerCase().includes(camSearch.toLowerCase());
+    const searchableId = `${c._id || ''} ${c.id || ''} ${c.channelId || ''}`;
+    const query = camSearch.trim().toLowerCase();
+    const nameMatch = !query || `${searchableName} ${searchableId}`.toLowerCase().includes(query);
     const siteMatch = !siteFilter || siteOf(c).trim().toLowerCase() === siteFilter.trim().toLowerCase();
     return nameMatch && siteMatch;
   });
@@ -2201,7 +2236,7 @@ export default function NVRCameras() {
       )}
 
       {/* ── Camera Inventory ──────────────────────────────────────────────── */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14 }}>
 
         {/* Table header */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
@@ -2257,8 +2292,8 @@ export default function NVRCameras() {
         {/* Search + filters */}
         {canViewChannels && !permissionsLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8,
+            <div onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowCamSuggestions(false); }} style={{
+              display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8, position: 'relative',
               background: camSearch ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
               border: `1px solid ${camSearch ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`,
               color: 'var(--tx3)', transition: 'border-color .12s, background .12s',
@@ -2266,15 +2301,40 @@ export default function NVRCameras() {
               <Search size={13} style={{ color: camSearch ? 'var(--blue)' : 'var(--tx3)', flexShrink: 0 }} />
               <input
                 value={camSearch}
-                onChange={e => setCamSearch(e.target.value)}
+                onChange={e => {
+                  const error = limitedTextError(e.target.value);
+                  setCamSearchWarning(error);
+                  if (!error) { setCamSearch(e.target.value); setShowCamSuggestions(true); }
+                }}
+                onFocus={() => setShowCamSuggestions(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' && camFiltered.length) { e.preventDefault(); firstSuggestionRef.current?.focus(); }
+                  if (e.key === 'Escape') setShowCamSuggestions(false);
+                }}
                 placeholder="Search camera or ID"
+                aria-label="Search camera inventory by name, alias, or ID"
                 style={{ background: 'transparent', border: 0, outline: 'none', fontSize: 12, width: 140, color: 'var(--tx)' }}
               />
+              {showCamSuggestions && camSearch.trim() && camFiltered.length > 0 && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 5px)', left: 0, width: 280, maxWidth: 'calc(100vw - 48px)', zIndex: 20, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 8, boxShadow: '0 12px 28px rgba(0,0,0,.18)', padding: 4 }}>
+                  {camFiltered.slice(0, 5).map((camera, index) => (
+                    <button key={camera._id || camera.channelId} ref={index === 0 ? firstSuggestionRef : undefined} type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { setCamSearch(String(camera._id || camera.channelId)); setShowCamSuggestions(false); }}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setShowCamSuggestions(false); }}
+                      style={{ display: 'block', width: '100%', border: 0, borderRadius: 6, background: 'transparent', color: 'var(--tx)', padding: '7px 9px', textAlign: 'left', cursor: 'pointer' }}>
+                      <span style={{ display: 'block', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera.name || camera.channelName || 'Camera'}</span>
+                      <span style={{ display: 'block', fontSize: 10, color: 'var(--tx3)' }}>{String(camera._id || camera.channelId || '')}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+            {camSearchWarning && <span style={{ color: 'var(--crit)', fontSize: 10 }}>{camSearchWarning}</span>}
             <SiteFilterSelect options={siteOpts} value={siteFilter} onChange={setSiteFilter} />
             {(camSearch || siteFilter) && (
               <button
-                onClick={() => { setCamSearch(''); setSiteFilter(''); }}
+                onClick={() => { setCamSearch(''); setSiteFilter(''); setCamSearchWarning(''); setShowCamSuggestions(false); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 11px', borderRadius: 8,
                   fontSize: 11.5, fontWeight: 600, color: 'var(--crit)',

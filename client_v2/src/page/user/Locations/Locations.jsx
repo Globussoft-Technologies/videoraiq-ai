@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
+import { limitedTextError } from '@/utils/limitedText';
 
 const styles = {
   text: 'text-[var(--tx)] text-xs md:text-sm 2xl:text-sm font-normal',
@@ -21,6 +22,7 @@ const styles = {
 const Locations = () => {
   const [locations, setLocations] = useState([]);
   const [searchInput, setSearchInput] = useState('');
+  const [searchWarning, setSearchWarning] = useState('');
   const [onLoading, setOnLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(8);
@@ -174,15 +176,22 @@ const Locations = () => {
       <div className="w-full flex-1 flex flex-col justify-between p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] space-y-4">
         <div className="space-y-4 flex-1">
           <div className="flex flex-wrap items-center gap-3 justify-between">
-            <div className="relative w-full md:w-[30%]">
-              <Input
-                type="text"
-                placeholder="Search location..."
-                className="pl-4 pr-10 shadow-none border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] h-10 text-sm focus:border-[var(--blue)] focus:ring-1 focus:ring-[var(--blue)]"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
+            <div className="w-full md:w-[30%]">
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search location..."
+                  className="pl-4 pr-10 shadow-none border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] h-10 text-sm focus:border-[var(--blue)] focus:ring-1 focus:ring-[var(--blue)]"
+                  value={searchInput}
+                  onChange={(e) => {
+                    const error = limitedTextError(e.target.value);
+                    setSearchWarning(error);
+                    if (!error) setSearchInput(e.target.value);
+                  }}
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
+              </div>
+              {searchWarning && <div className="text-[var(--crit)] text-[10px] mt-1">{searchWarning}</div>}
             </div>
             {canCreate && (
               <LocationForm

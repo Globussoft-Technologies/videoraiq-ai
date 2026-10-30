@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
+import DraggableZoomControls from './DraggableZoomControls';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
@@ -157,16 +158,8 @@ export default function FullscreenZoomSurface({
       }}
     >
       {enabled && (
-        <div
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          onDoubleClick={(event) => {
-            event.stopPropagation();
-          }}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
+        <DraggableZoomControls
+          resetKey={resetKey}
           style={{
             position: 'absolute',
             top: 14,
@@ -240,7 +233,7 @@ export default function FullscreenZoomSurface({
           >
             <Plus size={14} />
           </button>
-        </div>
+        </DraggableZoomControls>
       )}
 
       <div

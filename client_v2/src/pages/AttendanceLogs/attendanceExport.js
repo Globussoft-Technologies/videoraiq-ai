@@ -8,7 +8,7 @@ import logoUrl from '@/assets/videoraiq-logo-white.png';
 /**
  * Attendance Logs export.
  *
- * The list PDF and CSV keep the server-rendered report, including session and
+ * The list PDF and Excel workbook keep the server-rendered report, including session and
  * period totals. The grid PDF uses the existing unpaginated attendance/get
  * response to render the page's card layout in the browser.
  *
@@ -274,8 +274,8 @@ export const handleAttendanceExport = async (format, params) => {
     }
     return;
   }
-  const apiFormat = format === 'excel' ? 'csv' : 'pdf';
-  const extension = apiFormat === 'csv' ? 'csv' : 'pdf';
+  const apiFormat = format === 'excel' ? 'xlsx' : 'pdf';
+  const extension = apiFormat === 'xlsx' ? 'xlsx' : 'pdf';
 
   try {
     const response = await exportAttendanceReport({

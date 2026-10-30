@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { createDepartment, updateDepartment } from "./Api";
+import { limitedTextError } from "@/utils/limitedText";
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
@@ -24,11 +25,17 @@ const DepartmentForm = ({
   onSave,
 }) => {
   const [open, setOpen] = useState(false);
+  const [nameWarning, setNameWarning] = useState("");
 
   const schema = Yup.object().shape({
     departmentName: Yup.string()
       .required("Department name is required")
-      .max(100, "Department name cannot exceed 100 characters"),
+      .test("name-format", function (value) {
+        if (mode === "edit" && value === initialValues?.departmentName) return true;
+        if (!value?.trim()) return this.createError({ message: "Department name is required" });
+        const error = limitedTextError(value || "");
+        return error ? this.createError({ message: error }) : true;
+      }),
     description: Yup.string().max(255, "Description cannot exceed 255 characters"),
   });
 
@@ -90,6 +97,7 @@ const DepartmentForm = ({
 
   // Close helper: close first, then reset the form on next tick
   const closeModal = () => {
+    setNameWarning("");
     try {
       formik.setTouched({});
       if (typeof formik.setErrors === 'function') formik.setErrors({});
@@ -119,6 +127,7 @@ const DepartmentForm = ({
       closeModal();
     } else {
       setOpen(true);
+      setNameWarning("");
       // ensure form is reset to current initial values when opening for edit/create
       setTimeout(() => {
         try {
@@ -167,11 +176,19 @@ const DepartmentForm = ({
                 name="departmentName"
                 placeholder="e.g. Human Resources"
                 value={formik.values.departmentName}
-                onChange={formik.handleChange}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const error = limitedTextError(next);
+                  const legacy = mode === "edit" && !!limitedTextError(initialValues?.departmentName || "");
+                  if (!error || (legacy && next.length < formik.values.departmentName.length)) {
+                    formik.setFieldValue("departmentName", next);
+                  }
+                  setNameWarning(error);
+                }}
                 onBlur={handleBlur}
-                maxLength={100}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
+              {nameWarning && <div className="text-[var(--crit)] text-[10px] mt-1 ml-1">{nameWarning}</div>}
               {formik.touched.departmentName && formik.errors.departmentName && (
                 <div className="text-[var(--crit)] text-[10px] mt-1 ml-1">
                   {formik.errors.departmentName}
@@ -213,7 +230,7 @@ const DepartmentForm = ({
               </Button>
               <Button
                 type="submit"
-                disabled={formik.isSubmitting || (isKhanbas && mode === "create")}
+                disabled={formik.isSubmitting || !!nameWarning || (isKhanbas && mode === "create")}
                 className={`inline-flex items-center gap-1.5 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed ${isKhanbas && mode === "create" ? 'khanbas-disabled-action' : ''}`}
               >
                 {mode === "edit" ? "Update Department" : "Add Department"}

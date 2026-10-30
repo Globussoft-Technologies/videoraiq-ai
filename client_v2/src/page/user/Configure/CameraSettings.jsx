@@ -11,13 +11,17 @@ import { fetchDepartments } from '../Departments/Api';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import { usePermissions } from '@/context/PermissionContext';
+import { limitedTextError } from '@/utils/limitedText';
 
 // ── Alias edit popup ─────────────────────────────────────────────────────────
 function AliasModal({ camera, onClose, onSave }) {
   const [value, setValue] = useState(camera.aliasName || '');
+  const [warning, setWarning] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function submit() {
+    const error = value === (camera.aliasName || '') ? '' : limitedTextError(value.trim());
+    if (error || warning) { setWarning(error || warning); return; }
     setSaving(true);
     try {
       await onSave(value.trim());
@@ -36,15 +40,20 @@ function AliasModal({ camera, onClose, onSave }) {
         <input
           autoFocus
           value={value}
-          onChange={e => setValue(e.target.value)}
+          onChange={e => {
+            const error = limitedTextError(e.target.value);
+            if (!error || (limitedTextError(camera.aliasName || '') && e.target.value.length < value.length)) setValue(e.target.value);
+            setWarning(error);
+          }}
           placeholder="Enter alias name"
           style={{ width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none' }}
         />
+        {warning && <div style={{ color: 'var(--crit)', fontSize: 11, marginTop: 5 }}>{warning}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button onClick={onClose} disabled={saving} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', background: 'none' }}>
             Cancel
           </button>
-          <button onClick={submit} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 9, padding: '9px 16px', cursor: saving ? 'wait' : 'pointer', border: 'none', opacity: saving ? 0.7 : 1 }}>
+          <button onClick={submit} disabled={saving || !!warning} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 9, padding: '9px 16px', cursor: saving ? 'wait' : 'pointer', border: 'none', opacity: saving ? 0.7 : 1 }}>
             {saving && <Loader2 size={13} className="animate-spin" />}
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -213,6 +222,7 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
   const [isEditing, setIsEditing] = useState(false);
   const [aliasLabel, setAliasLabel] = useState(camera.aliasName || '');
   const [aliasInput, setAliasInput] = useState(camera.aliasName || '');
+  const [aliasWarning, setAliasWarning] = useState('');
   const [selectedDepts, setSelectedDepts] = useState(camera.departments || []);
   const [saving, setSaving] = useState(false);
 
@@ -228,6 +238,7 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
     setIsEditing(false);
     setAliasLabel(activeCamera.aliasName || '');
     setAliasInput(activeCamera.aliasName || '');
+    setAliasWarning('');
     setSelectedDepts(activeCamera.departments || []);
   }, [activeCamera]);
 
@@ -249,10 +260,13 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
 
   const openEditor = () => {
     setAliasInput(aliasLabel);
+    setAliasWarning('');
     setIsEditing(true);
   };
 
   async function handleSaveSettings() {
+    const error = aliasInput === aliasLabel ? '' : limitedTextError(aliasInput.trim());
+    if (error || aliasWarning) { setAliasWarning(error || aliasWarning); return; }
     setSaving(true);
     try {
       const resp = await updateChannel(activeCamera.id, {
@@ -356,10 +370,15 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
                   <input
                     autoFocus
                     value={aliasInput}
-                    onChange={e => setAliasInput(e.target.value)}
+                    onChange={e => {
+                      const error = limitedTextError(e.target.value);
+                      if (!error || (limitedTextError(aliasLabel) && e.target.value.length < aliasInput.length)) setAliasInput(e.target.value);
+                      setAliasWarning(error);
+                    }}
                     placeholder="Enter camera alias"
                     style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 12px', borderRadius: 9, background: 'rgba(0,0,0,.25)', border: '1px solid rgba(255,255,255,.12)', fontSize: 12.5, color: '#fff', outline: 'none' }}
                   />
+                  {aliasWarning && <div style={{ color: 'var(--crit)', fontSize: 11, marginTop: 5 }}>{aliasWarning}</div>}
                 </div>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 6 }}>Assigned Departments</div>
@@ -373,7 +392,7 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
                   <button onClick={() => setIsEditing(false)} disabled={saving} style={{ flex: 1, height: 34, borderRadius: 9, background: 'none', border: '1px solid rgba(255,255,255,.14)', color: 'rgba(255,255,255,.75)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Cancel
                   </button>
-                  <button onClick={handleSaveSettings} disabled={saving} style={{ flex: 1, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: saving ? 0.7 : 1 }}>
+                  <button onClick={handleSaveSettings} disabled={saving || !!aliasWarning} style={{ flex: 1, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: saving ? 0.7 : 1 }}>
                     {saving && <Loader2 size={12} className="animate-spin" />}
                     {saving ? 'Saving…' : 'Save Details'}
                   </button>
@@ -402,6 +421,7 @@ export default function CameraSettings() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [cameraSearchWarning, setCameraSearchWarning] = useState('');
   const [aliasCamera, setAliasCamera] = useState(null);
   const [previewCamera, setPreviewCamera] = useState(null);
 
@@ -572,11 +592,16 @@ export default function CameraSettings() {
             <Search size={13} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
             <input
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => {
+                const error = limitedTextError(e.target.value);
+                setCameraSearchWarning(error);
+                if (!error) setSearch(e.target.value);
+              }}
               placeholder="Search camera, alias or department..."
               style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
             />
           </div>
+          {cameraSearchWarning && <span style={{ color: 'var(--crit)', fontSize: 10 }}>{cameraSearchWarning}</span>}
           <button
             onClick={handleRefreshAll}
             disabled={refreshing}

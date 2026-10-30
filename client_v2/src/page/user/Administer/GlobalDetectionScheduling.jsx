@@ -28,6 +28,7 @@ import {
   updateGlobalSchedule,
 } from '../../../helpers/globalSchedule';
 import { isOvernightRange, validateScheduleDays } from '../../../lib/detectionSchedule';
+import { limitedTextError } from '@/utils/limitedText';
 
 /**
  * Global Detection Scheduling — Settings section.
@@ -890,6 +891,7 @@ export default function GlobalDetectionScheduling({ canEdit = true, cacheScope =
   const [nvrData, setNvrData] = useState(null);
   const [camerasLoading, setCamerasLoading] = useState(false);
   const [cameraSearch, setCameraSearch] = useState('');
+  const [cameraSearchWarning, setCameraSearchWarning] = useState('');
   const [debouncedCameraSearch, setDebouncedCameraSearch] = useState('');
   const [cameraSearchLoading, setCameraSearchLoading] = useState(false);
 
@@ -1336,7 +1338,11 @@ export default function GlobalDetectionScheduling({ canEdit = true, cacheScope =
               <input
                 type="text"
                 value={cameraSearch}
-                onChange={(event) => setCameraSearch(event.target.value)}
+                onChange={(event) => {
+                  const error = limitedTextError(event.target.value);
+                  setCameraSearchWarning(error);
+                  if (!error) setCameraSearch(event.target.value);
+                }}
                 disabled={camerasLoading}
                 placeholder="Search cameras..."
                 aria-label="Search cameras"
@@ -1354,7 +1360,7 @@ export default function GlobalDetectionScheduling({ canEdit = true, cacheScope =
               {cameraSearch && (
                 <button
                   type="button"
-                  onClick={() => setCameraSearch('')}
+                  onClick={() => { setCameraSearch(''); setCameraSearchWarning(''); }}
                   disabled={camerasLoading}
                   title="Clear camera search"
                   aria-label="Clear camera search"
@@ -1375,6 +1381,7 @@ export default function GlobalDetectionScheduling({ canEdit = true, cacheScope =
                 </button>
               )}
             </div>
+            {cameraSearchWarning && <div style={{ color: 'var(--crit)', fontSize: 10, marginTop: 4 }}>{cameraSearchWarning}</div>}
           </div>
         )}
       </div>

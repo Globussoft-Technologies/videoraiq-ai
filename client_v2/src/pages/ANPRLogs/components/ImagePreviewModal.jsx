@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
+import DraggableZoomControls from '@/components/DraggableZoomControls';
 
 /**
  * Incident-image preview overlay. Opens as a large card that sits within the
@@ -129,12 +130,15 @@ const ImagePreviewModal = ({
   };
 
   const zoomControls = (
-    <div
+    <DraggableZoomControls
       className={
         fullscreen
           ? `absolute top-4 ${zoomControlsPosition === 'left' ? 'left-4' : 'right-16'} z-40 flex items-center gap-1 rounded-lg border border-white/20 bg-white/95 p-1 shadow-lg`
           : `absolute top-5 ${zoomControlsPosition === 'left' ? 'left-5' : 'right-5'} z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg`
       }
+      resetKey={fullscreen}
+      handleClassName="rounded-md"
+      handleStyle={{ color: 'var(--tx2)' }}
     >
       <button
         type="button"
@@ -163,7 +167,7 @@ const ImagePreviewModal = ({
       >
         <RotateCcw className="w-4 h-4" />
       </button>
-    </div>
+    </DraggableZoomControls>
   );
 
   const image = (

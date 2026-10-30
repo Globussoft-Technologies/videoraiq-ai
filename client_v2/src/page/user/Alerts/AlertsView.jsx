@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { X, Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import DraggableZoomControls from '../../../components/DraggableZoomControls';
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary, Loading } from '../../../components/States';
 import moment from 'moment';
@@ -261,12 +262,12 @@ function ImageZoomModal({ url, caption, onClose }) {
             {caption}
           </div>
         )}
-        <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <DraggableZoomControls style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, alignItems: 'center', color: '#fff' }}>
           <button onClick={() => zoomBy(-0.4)} style={ctrlBtn} title="Zoom out"><ZoomOut size={16} /></button>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: '#fff', minWidth: 42, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
           <button onClick={() => zoomBy(0.4)} style={ctrlBtn} title="Zoom in"><ZoomIn size={16} /></button>
           <button onClick={reset} style={ctrlBtn} title="Reset"><RotateCcw size={15} /></button>
-        </div>
+        </DraggableZoomControls>
         <button onClick={onClose} style={{ ...ctrlBtn, position: 'absolute', top: 14, right: 14 }} title="Close (Esc)"><X size={16} /></button>
       </div>
     </div>

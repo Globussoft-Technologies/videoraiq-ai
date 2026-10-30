@@ -13,6 +13,7 @@ const VehicleNumberSelect = ({
   vehicleNumberSearch,
   setVehicleNumberSearch,
   fullWidth = false,
+  loading = false,
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -61,7 +62,9 @@ const VehicleNumberSelect = ({
               label="All Vehicles"
               onClick={() => selectVehicleNumber('')}
             />
-            {vehicleNumberList.length === 0 ? (
+            {loading ? (
+              <div className="px-3 py-2 text-xs text-[var(--tx3)]">Searching vehicles...</div>
+            ) : vehicleNumberList.length === 0 ? (
               <div className="px-3 py-2 text-xs text-[var(--tx3)]">No vehicle numbers</div>
             ) : (
               vehicleNumberList.map((vn) => (

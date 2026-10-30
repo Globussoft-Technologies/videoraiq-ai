@@ -6,6 +6,7 @@ import { nowInConfiguredTimezone } from '../../../utils/timezone';
 import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
+import DraggableZoomControls from '../../../components/DraggableZoomControls';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { fmt } from '../../../components/DateRangePicker';
 import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
@@ -35,6 +36,18 @@ import getAccessToken from '../../../utils/getAccessToken';
 import { exportIncidentCenter } from './incidentCenterExport';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
+const lateArrivalDescription = (item) => {
+  if (item?.incidentType !== 'lateArrival') return item?.description;
+  const description = item?.description || '';
+  const minuteText = description.match(/\b(\d+)\s+minute\(s\) after the grace deadline\./);
+  const minutes = Number.isFinite(Number(item.lateMinutes)) && item.lateMinutes != null
+    ? Number(item.lateMinutes) : Number(minuteText?.[1]);
+  if (!minuteText || !Number.isFinite(minutes)) return description;
+  const totalSeconds = Math.max(0, Math.round(Number(minutes) * 60));
+  const duration = [Math.floor(totalSeconds / 3600), Math.floor(totalSeconds / 60) % 60, totalSeconds % 60]
+    .map((part) => String(part).padStart(2, '0')).join(':');
+  return description.replace(minuteText[0], `${duration} after the grace deadline.`);
+};
 const INCIDENT_LIST_DETAILS = {
   doorDetection: [
     { field: 'zone', label: 'Door Name', width: 140 },
@@ -1027,9 +1040,9 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
         )}
 
         {imgSrc && (
-          <div
-            onClick={(e) => e.stopPropagation()}
+          <DraggableZoomControls
             onWheel={(e) => e.stopPropagation()}
+            handleStyle={{ color: '#1f2a44' }}
             style={{
               position: 'absolute',
               top: 16,
@@ -1076,7 +1089,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
             >
               <RotateCcw size={15} />
             </button>
-          </div>
+          </DraggableZoomControls>
         )}
 
         {/* Exactly one spinner is visible at a time. While a page fetch is in
@@ -1164,7 +1177,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   {item.incidentName || det}
                 </h1>
                 <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
-                  {item.description || [cam, site].filter(Boolean).join(' · ')}
+                  {lateArrivalDescription(item) || [cam, site].filter(Boolean).join(' · ')}
                 </p>
                 <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
                   {shortDateTime(item.timeOfIncident)}

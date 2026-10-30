@@ -36,11 +36,11 @@ import {
   manuallyCheckoutVehicles,
   getNVRs,
   getChannels,
-  getVehicleNumbers,
 } from './Api';
 import ManualCheckoutDialog from './ManualCheckoutDialog';
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import { limitedTextError } from '@/utils/limitedText';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -153,6 +153,7 @@ const VehicleCheckInOutLogs = () => {
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState('');
+  const [searchWarning, setSearchWarning] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [custody, setCustody] = useState('');
   const [viewMode, setViewMode] = useState('custody');
@@ -165,6 +166,7 @@ const VehicleCheckInOutLogs = () => {
   const [nvrList, setNvrList] = useState([]);
   const [cameraList, setCameraList] = useState([]);
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
+  const [vehicleNumbersLoading, setVehicleNumbersLoading] = useState(false);
   const [startDate, setStartDate] = useState(moment().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
   const [page, setPage] = useState(1);
@@ -302,19 +304,35 @@ const VehicleCheckInOutLogs = () => {
   }, [nvrIds]);
 
   useEffect(() => {
+    let active = true;
+    setVehicleNumbersLoading(true);
     const timer = setTimeout(() => {
-      getVehicleNumbers({
-        search: vehicleNumberSearch,
+      // Use the same carry-forward/arrivals view as the table. The distinct
+      // numbers endpoint only checks events inside the date range, so it misses
+      // vehicles that arrived earlier and are still in custody.
+      fetchVehicleCheckInOutLogs({
+        skip: 0,
+        limit: 100,
+        search: vehicleNumberSearch.trim(),
         startDate,
         endDate,
         nvrIds,
         channelIds,
+        custody: effectiveCustody,
+        viewMode,
       })
-        .then((res) => setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []))
-        .catch((err) => console.error('Failed to fetch vehicle numbers', err));
+        .then((res) => {
+          if (!active) return;
+          const vehicles = res?.data?.body?.data?.data || [];
+          setVehicleNumberList([...new Set(vehicles
+            .map((row) => String(row.vehicleNumber || '').trim().toUpperCase())
+            .filter((plate) => plate && plate !== '--' && plate !== 'N/A'))].sort());
+        })
+        .catch((err) => { if (active) console.error('Failed to fetch vehicle numbers', err); })
+        .finally(() => { if (active) setVehicleNumbersLoading(false); });
     }, 300);
-    return () => clearTimeout(timer);
-  }, [vehicleNumberSearch, startDate, endDate, nvrIds, channelIds]);
+    return () => { active = false; clearTimeout(timer); };
+  }, [vehicleNumberSearch, startDate, endDate, nvrIds, channelIds, effectiveCustody, viewMode]);
 
   useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [autoRefresh]);
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
@@ -428,15 +446,22 @@ const VehicleCheckInOutLogs = () => {
       <div className="w-full flex-1 flex flex-col p-3 sm:p-5 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] gap-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="relative w-full md:w-[320px]">
-            <Input
-              type="text"
-              placeholder="Search plate, model, camera..."
-              className="pl-4 pr-10 shadow-none border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] h-10 text-sm focus:border-[var(--blue)]"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
+          <div className="w-full md:w-[320px]">
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Search plate, model, camera..."
+                className="pl-4 pr-10 shadow-none border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] h-10 text-sm focus:border-[var(--blue)]"
+                value={search}
+                onChange={(e) => {
+                  const error = limitedTextError(e.target.value);
+                  setSearchWarning(error);
+                  if (!error) setSearch(e.target.value);
+                }}
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
+            </div>
+            {searchWarning && <div className="text-[var(--crit)] text-[10px] mt-1">{searchWarning}</div>}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -521,6 +546,7 @@ const VehicleCheckInOutLogs = () => {
                       vehicleNumber={vehicleNumber}
                       setVehicleNumber={setVehicleNumber}
                       vehicleNumberList={filteredVehicleNumbers}
+                      loading={vehicleNumbersLoading}
                       vehicleNumberSearch={vehicleNumberSearch}
                       setVehicleNumberSearch={setVehicleNumberSearch}
                       fullWidth

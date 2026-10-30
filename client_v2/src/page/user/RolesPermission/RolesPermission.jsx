@@ -8,6 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import AccessDenied from '../../../components/AccessDenied';
 import PageLoader from '../../../components/PageLoader';
 import HScrollHint from '../../../components/HScrollHint';
+import { limitedTextError } from '@/utils/limitedText';
 import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig, syncDefaultRoles } from '../../../api/administer';
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
@@ -886,6 +887,7 @@ export default function RolesPermission() {
   );
 
   const [search, setSearch] = useState('');
+  const [searchWarning, setSearchWarning] = useState('');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1084,13 +1086,18 @@ export default function RolesPermission() {
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
           <input
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            onChange={e => {
+              const error = limitedTextError(e.target.value);
+              setSearchWarning(error);
+              if (!error) { setSearch(e.target.value); setPage(0); }
+            }}
             placeholder="Search roles…"
             style={{
               width: '100%', boxSizing: 'border-box', height: 40, padding: '0 12px 0 36px', borderRadius: 10,
               background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)', outline: 'none',
             }}
           />
+          {searchWarning && <div style={{ color: 'var(--crit)', fontSize: 10, marginTop: 4 }}>{searchWarning}</div>}
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>

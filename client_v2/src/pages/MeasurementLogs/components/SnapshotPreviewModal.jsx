@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, ImageOff, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
+import DraggableZoomControls from '@/components/DraggableZoomControls';
 
 // Measurement records carry TWO frames per incident — the QR-cam capture
 // (qrImageUrl) used to read the SKU/order payload, and the DS measurement
@@ -122,12 +123,14 @@ const SnapshotPreviewModal = ({
   const src = image;
 
   const zoomControls = (
-    <div
+    <DraggableZoomControls
       className={
         fullscreen
           ? 'absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 rounded-lg border border-white/20 bg-white/95 p-1 shadow-lg'
-          : 'flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1 shadow-sm'
+          : 'absolute top-3 right-3 z-30 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1 shadow-sm'
       }
+      resetKey={fullscreen}
+      handleStyle={{ color: 'var(--tx2)' }}
     >
       <button
         type="button"
@@ -156,7 +159,7 @@ const SnapshotPreviewModal = ({
       >
         <RotateCcw className="w-3.5 h-3.5" />
       </button>
-    </div>
+    </DraggableZoomControls>
   );
 
   const renderedImage = (
@@ -196,9 +199,7 @@ const SnapshotPreviewModal = ({
         </div>
       )}
       {!fullscreen && src && (
-        <div className="absolute top-3 right-3 z-30">
-          {zoomControls}
-        </div>
+        zoomControls
       )}
       {!fullscreen && src && (
         <button
