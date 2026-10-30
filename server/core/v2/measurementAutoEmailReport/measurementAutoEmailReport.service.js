@@ -31,7 +31,7 @@ const V2_PURPLE = "#9274f5";
 // Column layout shared by the PDF table and the CSV / XLSX exports — mirrors the
 // on-screen Measurement Records table and the client "Download Report" PDF.
 const HEADERS = [
-  "#", "Order", "Order Item", "Ref", "SKU", "Model",
+  "S.No", "Order", "Order Item", "Ref", "SKU", "Model",
   "Printed LxWxH (in)", "Measured LxWxH (in)", "Measured raw (DS)", "Unit",
   "Dev L (in)", "Dev W (in)", "Dev H (in)", "Confidence", "Match %",
   "Status", "When", "Result", "Snapshot", "Measurement Image",
@@ -39,7 +39,7 @@ const HEADERS = [
 
 // Relative column widths for the PDF table (must have one entry per HEADER).
 const PDF_COL_WEIGHTS = [
-  3, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 7, 15, 8, 9, 9,
+  7, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 15, 8, 9, 9,
 ];
 
 const SNAP_LINK_TEXT = "View image";
@@ -177,7 +177,7 @@ function linkCell(url, snap) {
 //   PDF drops both image columns via `withSnaps: false`.
 function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
   const cells = [
-    i + 1,
+    r.exportSerial ?? "",
     r.orderId, r.orderItem || "—", r.refNo, r.sku, r.model,
     r.declared, r.measured, r.measuredRaw || "—", r.measuredUnit || "—",
     r.devL, r.devB, r.devH,
@@ -190,6 +190,32 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
     cells.push(linkCell(measurementImageUrlOf(r), snap));
   }
   return cells;
+}
+
+// Match the Measurement Logs UI: latest record leads each ORDER/REF group.
+function groupReportRows(rows) {
+  const groups = new Map();
+  const present = (value) => {
+    const text = String(value ?? "").trim();
+    return text && text !== "—" ? text : "";
+  };
+  const timeOf = (row) => {
+    const time = new Date(row.createdAt || 0).getTime();
+    return Number.isFinite(time) ? time : 0;
+  };
+  [...rows].sort((a, b) => timeOf(b) - timeOf(a) || String(b.id).localeCompare(String(a.id)))
+    .forEach((row) => {
+      const order = present(row.orderId);
+      const ref = present(row.refNo);
+      const key = JSON.stringify(order && ref ? ["order-ref", order, ref]
+        : ref ? ["ref", ref] : order ? ["order", order] : ["record", row.id]);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+  return [...groups.values()].flatMap((group, groupIndex) => group.map((row, index) => ({
+    ...row,
+    exportSerial: index === 0 ? groupIndex + 1 : "",
+  })));
 }
 
 function buildCsv({ rows, label, withSnaps = true }) {
@@ -749,7 +775,7 @@ async function deliver(report, options = {}) {
   const { rows, label } = await fetchMeasurementRows(report, timezone);
 
   const typeFilter = REPORT_TYPE_FILTER[report.reportType];
-  const effectiveRows = typeFilter ? rows.filter(typeFilter) : rows;
+  const effectiveRows = groupReportRows(typeFilter ? rows.filter(typeFilter) : rows);
 
   const withSnaps = report.includeSnapshots !== false;
   const buffers = {};
