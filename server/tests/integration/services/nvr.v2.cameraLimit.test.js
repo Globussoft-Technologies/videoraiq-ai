@@ -280,9 +280,9 @@ describe("direct RTSP bypass", () => {
 
 
 describe("hybrid installer onboarding", () => {
-  it("registers and retries installer metadata for a cloud account without duplicate cameras", async () => {
+  it.each(["cloud", "onprem"])("registers and retries installer metadata for a %s account without duplicate cameras", async (appEnv) => {
     const admin = await makeAdmin(1);
-    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    await Admin.updateOne({ _id: admin._id }, { appEnv });
     const body = {
       nvr: { nvrName: "Private site", brand: "hikvision", location: "Factory",
         domain: "https://factory.example", localNvrId: "factory-1" },
@@ -301,6 +301,7 @@ describe("hybrid installer onboarding", () => {
     expect(retry.res.statusCode).toBe(200);
     expect(await NVR.countDocuments({ userId: USER_ID })).toBe(1);
     expect(await Channel.countDocuments({ userId: USER_ID }).setOptions({ includeInactive: true })).toBe(2);
+    expect((await Admin.findById(admin._id)).appEnv).toBe(appEnv);
   });
 
   it("edits an installer domain by Mongo ID while keeping the account cloud", async () => {
@@ -354,10 +355,10 @@ describe("hybrid playback routing", () => {
 
 
 describe("existing installer API compatibility", () => {
-  it("accepts cloud installer registration and updates through v1", async () => {
+  it.each(["cloud", "onprem"])("accepts %s installer registration and updates through v1 without changing account mode", async (appEnv) => {
     const { default: LegacyService } = await import("../../../core/v1/NVR/nvr.service.js");
     const admin = await makeAdmin(2);
-    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    await Admin.updateOne({ _id: admin._id }, { appEnv });
     const add = serviceCtx({ user_id: USER_ID, body: {
       nvr: { nvrName: "Existing installer", brand: "hikvision", location: "HQ",
         domain: "https://site.example", localNvrId: "legacy-installer" },
@@ -370,5 +371,6 @@ describe("existing installer API compatibility", () => {
     await LegacyService.updateNvr(update.req, update.res, update.next);
     expect(update.res.statusCode).toBe(200);
     expect((await NVR.findOne({ userId: USER_ID })).domain).toBe("https://updated.example");
+    expect((await Admin.findById(admin._id)).appEnv).toBe(appEnv);
   });
 });
