@@ -5,6 +5,7 @@ import moment from 'moment-timezone';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { STATUS_META } from './data';
+import { groupMeasurementRecords } from './groupRecords';
 
 const FILE_BASE = 'qc-measurement';
 const REPORT_TITLE = 'Mattress Measurement Logs';
@@ -17,7 +18,7 @@ const generatedAt = () => moment().format('DD/MM/YYYY hh:mm A');
 // Helvetica has no glyphs for Δ / × / ″, so the header labels stay ASCII-only;
 // the CSV / XLSX exports reuse the same list for consistency.
 const HEADERS = [
-  '#', 'Order', 'Order Item', 'Ref', 'SKU', 'Model',
+  'S.No', 'Order', 'Order Item', 'Ref', 'SKU', 'Model',
   'Printed LxWxH (in)', 'Measured LxWxH (in)', 'Measured raw (DS)', 'Unit',
   'Dev L (in)', 'Dev W (in)', 'Dev H (in)',
   'Confidence', 'Match %', 'Status', 'When', 'Result', 'Snapshot', 'Measurement Image',
@@ -64,7 +65,7 @@ const linkCell = (url, snap) => {
 //                 as a clickable "View image"; opens the snapshot on click)
 const toRow = (r, i, { asAscii = false, snap = 'text' } = {}) => {
   const cells = [
-    i + 1,
+    r.exportSerial ?? '',
     r.orderId, r.orderItem, r.refNo, r.sku, r.model,
     r.declared, r.measured, r.measuredRaw || '—', r.measuredUnit || '—',
     r.devL, r.devB, r.devH,
@@ -254,7 +255,7 @@ const exportPDF = async (rows) => {
     },
     alternateRowStyles: { fillColor: [245, 247, 250] },
     columnStyles: {
-      0: { cellWidth: 6, halign: 'center' },   // #
+      0: { cellWidth: 10, halign: 'center' },  // S.No
       9: { halign: 'center' },                 // Unit
       10: { halign: 'center' },                // Dev L
       11: { halign: 'center' },                // Dev W
@@ -310,9 +311,15 @@ export const exportMeasurementRecords = async (format, rows) => {
     return;
   }
   try {
-    if (format === 'csv') exportCSV(rows);
-    else if (format === 'xlsx') exportXLSX(rows);
-    else if (format === 'pdf') await exportPDF(rows);
+    const groupedRows = groupMeasurementRecords(rows).flatMap((group, groupIndex) =>
+      group.records.map((row, index) => ({
+        ...row,
+        exportSerial: index === 0 ? groupIndex + 1 : '',
+      })),
+    );
+    if (format === 'csv') exportCSV(groupedRows);
+    else if (format === 'xlsx') exportXLSX(groupedRows);
+    else if (format === 'pdf') await exportPDF(groupedRows);
 
     const count = `${rows.length} record${rows.length === 1 ? '' : 's'}`;
     toast.success(`${TOAST_VERB[format]} · ${count}`);

@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment';
-import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
+import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, ImageOff, History } from 'lucide-react';
 import { DOWNLOADS, STATUS_META, devColor } from '../data';
 import { exportMeasurementRecords } from '../export';
 import { getMeasurementRecords } from '../api';
 import SnapshotPreviewModal from './SnapshotPreviewModal';
 import RefreshControl from '@/components/RefreshControl';
+import { groupMeasurementRecords, groupKey } from '../groupRecords';
 
 // snap | order·ref | sku·model | printed | measured | Δ | conf | match | station | when·result
 // Every column is a fixed width so nothing stretches into a mid-table gap; the
 // MATCH bar takes any surplus on wide viewports (1fr), keeping slack at the
 // right edge. Widen ORDER·REF / SKU·MODEL to use the freed space.
 const GRID_COLS =
-  '52px 52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 82px 122px';
+  '112px 52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 82px 122px';
 // Must be at least the sum of the fixed/minimum columns, gaps and horizontal
 // padding. If this is smaller, the final STATION / STATUS / WHEN columns can
 // overflow the row itself, leaving their background and borders unpainted.
-const GRID_MIN_W = 1388;
+const GRID_MIN_W = 1448;
 
 // DS measurement confidence → colour + label. Anything under 0.6 is unreliable
 // and the printed/measured comparison should not be trusted without the photo.
@@ -204,7 +205,7 @@ const SnapThumb = ({ src, onOpen }) => {
 const ImageThumb = ({ src, label, onOpen }) => {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return <NoImageTile />;
-  return <button type="button" onClick={onOpen} title={`View ${label}`} className="w-[44px] h-[30px] shrink-0 rounded-[6px] overflow-hidden bg-[var(--bg2)] block cursor-pointer border-0 p-0 transition-opacity hover:opacity-80"><img src={src} alt="" loading="lazy" className="w-full h-full object-cover" onError={() => setFailed(true)} /></button>;
+  return <button type="button" onClick={(event) => { event.stopPropagation(); onOpen(); }} title={`View ${label}`} className="w-[44px] h-[30px] shrink-0 rounded-[6px] overflow-hidden bg-[var(--bg2)] block cursor-pointer border-0 p-0 transition-opacity hover:opacity-80"><img src={src} alt="" loading="lazy" className="w-full h-full object-cover" onError={() => setFailed(true)} /></button>;
 };
 
 // Large snapshot for the grid card — same fallback, fills its container.
@@ -311,7 +312,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     requestPending.current = true;
     if (records.length === 0) setLoading(true);
     const params = {
-      limit: 1000,
+      all: true,
       ...toIsoWindow({ from: fromDate, to: toDate }),
     };
     if (statusF !== 'all') params.status = statusF;
@@ -376,14 +377,23 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     setPage(1);
   }, [statusF, dbStatusF, skuF, qDebounced, fromDate, toDate, pageSize]);
 
+  const groups = useMemo(() => groupMeasurementRecords(filtered), [filtered]);
+  const [expanded, setExpanded] = useState(() => new Set());
+  // A silent refresh replaces `records` even when the user is reviewing the
+  // same ORDER. Keep that group open; only a filter change resets the view.
+  useEffect(() => setExpanded(new Set()), [statusF, dbStatusF, skuF, qDebounced, fromDate, toDate]);
+  const toggleGroup = (key) => setExpanded((previous) => {
+    return previous.has(key) ? new Set() : new Set([key]);
+  });
   const totalRows = filtered.length;
-  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
+  const pageCount = Math.max(1, Math.ceil(groups.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const pageStart = (safePage - 1) * pageSize;
-  const pageRows = useMemo(
-    () => filtered.slice(pageStart, pageStart + pageSize),
-    [filtered, pageStart, pageSize],
-  );
+  const pageGroups = useMemo(() => groups.slice(pageStart, pageStart + pageSize), [groups, pageStart, pageSize]);
+  const pageRows = useMemo(() => pageGroups.flatMap((group) => expanded.has(group.key) ? group.records : group.records.slice(0, 1)), [pageGroups, expanded]);
+  const pageGroupByKey = useMemo(() => new Map(pageGroups.map((group) => [group.key, group])), [pageGroups]);
+  const hasExpandedPageGroup = pageGroups.some((group) => expanded.has(group.key) && group.records.length > 1);
+  const selectedPageGroup = pageGroups.find((group) => expanded.has(group.key));
   const previewItems = useMemo(
     () => pageRows.flatMap((r) => [
       (r.qrImageUrl || r.shot) && { src: r.qrImageUrl || r.shot, label: 'QR Capture' },
@@ -531,7 +541,6 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           ))}
           <RefreshControl
             storageKey="measurement_logs"
-            defaultActive
             onManualRefresh={() => { if (!requestPending.current) setRefreshKey((key) => key + 1); }}
           />
         </span>
@@ -551,18 +560,25 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           <div>
             {pageRows.map((r, idx) => {
               const sm = STATUS_META[r.status];
+              const group = pageGroupByKey.get(groupKey(r));
+              const isLatest = group?.records[0] === r;
+              const canExpand = isLatest && group.records.length > 1;
+              const isExpanded = expanded.has(group.key);
               return (
                 <div
                   key={r.id}
-                  className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)] [&>*:nth-child(3)]:pl-[12px]"
+                  onClick={canExpand || !isLatest ? () => toggleGroup(group.key) : undefined}
+                  title={!isLatest ? 'Click to collapse measurements' : canExpand ? 'Click to expand or collapse measurements' : undefined}
+                  className={`grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)] ${canExpand || !isLatest ? 'cursor-pointer' : ''} ${isLatest ? 'bg-[var(--bg1)]' : 'bg-[var(--bg2)] border-l-[3px] border-l-[var(--blue)] ml-[24px]'}`}
                   style={{ gridTemplateColumns: GRID_COLS }}
                 >
-                  <ImageThumb src={r.qrImageUrl || r.shot} label="QR capture" onOpen={() => setPreviewIdx(previewIndexFor(r, 'qr'))} />
+                  <span className="flex items-center gap-2">
+                    {canExpand ? <button type="button" aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${group.records.length - 1} previous measurements for order ${r.orderId}, ref ${r.refNo}`} aria-expanded={isExpanded} onClick={(event) => { event.stopPropagation(); toggleGroup(group.key); }} className="inline-flex shrink-0 items-center gap-[3px] rounded-[5px] border border-[var(--blue)] px-[4px] py-[2px] font-[var(--mono)] text-[9px] font-bold text-[var(--blue)] cursor-pointer hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]" style={{ background: 'color-mix(in srgb, var(--blue) 12%, var(--bg1))' }}>{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{group.records.length - 1}</button> : <span className="w-[40px] shrink-0" />}
+                    <ImageThumb src={r.qrImageUrl || r.shot} label="QR capture" onOpen={() => setPreviewIdx(previewIndexFor(r, 'qr'))} />
+                  </span>
                   <ImageThumb src={r.measurementImageUrl} label="measurement frame" onOpen={() => setPreviewIdx(previewIndexFor(r, 'measurement'))} />
                   <span className="min-w-0">
-                    <span className="block font-[var(--mono)] text-[11.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-                      {r.orderId}
-                    </span>
+                    <span className="block font-[var(--mono)] text-[11.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{r.orderId}</span>
                     <span className="block font-[var(--mono)] text-[10px] text-[var(--tx3)] whitespace-nowrap overflow-hidden text-ellipsis">
                       {r.refNo}
                       {r.orderItem && r.orderItem !== '—' ? ` · ${r.orderItem}` : ''}
@@ -633,21 +649,26 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           </div>
         </div>
       ) : (
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-[13px]">
-          {pageRows.map((r, idx) => {
+        <div className={`p-4 grid gap-4 ${hasExpandedPageGroup ? 'grid-cols-1 lg:grid-cols-2 lg:h-[770px]' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 items-start'}`}>
+          <div className={`grid auto-rows-max gap-[13px] ${hasExpandedPageGroup ? 'grid-cols-1 sm:grid-cols-2 max-h-[700px] lg:max-h-none lg:min-h-0 lg:h-full overflow-y-auto content-start pr-1' : 'col-span-full grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
+          {pageGroups.map((group) => {
+            const isExpanded = expanded.has(group.key);
+            return <div key={group.key} className="min-w-0 rounded-[13px] overflow-hidden border border-[var(--bd)] bg-[var(--bg2)]">
+              {group.records.slice(0, 1).map((r, idx) => {
             const sm = STATUS_META[r.status];
+            const canExpand = idx === 0 && group.records.length > 1;
             const cm = confMeta(r.confidence);
             const matchP = matchPctOf(r);
             const hasShot = Boolean(r.shot || r.qrImageUrl || r.measurementImageUrl);
             return (
               <div
                 key={r.id}
-                className="bg-[var(--bg2)] border border-[var(--bd)] rounded-[13px] overflow-hidden transition-colors hover:border-[var(--blue)] flex flex-col"
+                className="overflow-hidden transition-colors hover:border-[var(--blue)] flex flex-col"
               >
                 {/* Snapshot */}
                 <div
                   onClick={() => hasShot && setPreviewIdx(previewIndexFor(r, 'qr'))}
-                  className={`relative aspect-[16/10] bg-[#0a0e15] shrink-0 ${
+                  className={`relative ${hasExpandedPageGroup ? 'aspect-[16/9]' : 'aspect-[16/10]'} bg-[#0a0e15] shrink-0 ${
                     hasShot ? 'cursor-pointer' : ''
                   }`}
                   title={hasShot ? 'View snapshot' : undefined}
@@ -675,6 +696,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                 {/* Body */}
                 <div className="p-[11px] flex flex-col gap-[7px] flex-1">
                   <div>
+                    {canExpand && <button type="button" aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${group.records.length - 1} previous measurements for order ${r.orderId}, ref ${r.refNo}`} aria-expanded={isExpanded} onClick={() => toggleGroup(group.key)} className="mb-2 inline-flex items-center gap-[3px] rounded-[6px] border border-[var(--blue)] px-[6px] py-[3px] text-[9px] font-bold text-white shadow-sm cursor-pointer hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]" style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}>{isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}{isExpanded ? 'Collapse' : 'Expand'}<span className="ml-[2px] rounded-full bg-white/20 px-[5px] font-[var(--mono)] text-[8px]">{group.records.length - 1}</span></button>}
                     <div className="text-[12px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
                       {[r.sku, r.model].filter((v) => v && v !== '—').join(' · ')}
                     </div>
@@ -742,12 +764,50 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                 </div>
               </div>
             );
+              })}
+            </div>;
           })}
-          {!pageRows.length && (
+          {!pageGroups.length && (
             <div className="col-span-full p-8 text-center text-[12.5px] text-[var(--tx3)]">
               {loading ? 'Loading…' : 'No records match these filters.'}
             </div>
           )}
+          </div>
+          {hasExpandedPageGroup && <div className="min-w-0 lg:min-h-0 lg:h-full lg:flex lg:flex-col lg:border-l-[3px] lg:border-l-[var(--blue)] lg:pl-4">
+            <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[10px] rounded-[12px] border border-[var(--blue)] p-[14px] shadow-sm" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--blue) 10%, var(--bg1)), color-mix(in srgb, var(--violet) 7%, var(--bg1)))' }}>
+                <span className="shrink-0 rounded-[9px] p-[8px] text-white shadow-sm" style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}><History size={17} /></span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><h3 className="text-[14px] font-semibold text-[var(--tx)]">Measurement history</h3><span className="rounded-full px-[8px] py-[2px] font-[var(--mono)] text-[10px] font-bold text-white" style={{ background: 'var(--blue)' }}>{Math.max(0, (selectedPageGroup?.records.length || 0) - 1)}</span></div>
+                  <p className="mt-[5px] text-[11px] leading-[1.8] text-[var(--tx2)]">View all measurement records associated with <strong className="inline-block rounded-[5px] border border-[var(--bd2)] bg-[var(--bg2)] px-[6px] py-px font-[var(--mono)] text-[var(--tx2)]">ORDER {selectedPageGroup?.records[0]?.orderId}</strong>, with the latest entry displayed first.</p>
+                </div>
+              <button type="button" onClick={() => setExpanded(new Set())} aria-label="Close measurement history" className="inline-flex shrink-0 items-center gap-1 rounded-[7px] border border-[var(--blue)] bg-[var(--bg1)] px-[10px] py-[6px] text-[11px] font-bold text-[var(--blue)] cursor-pointer hover:bg-[var(--bg2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]"><X size={13} />Close</button>
+            </div>
+            {hasExpandedPageGroup ? (
+              <div className="grid auto-rows-max grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 content-start gap-[13px] max-h-[700px] lg:max-h-none lg:min-h-0 lg:flex-1 overflow-y-auto pr-1">
+                {pageGroups.filter((group) => expanded.has(group.key)).flatMap((group) => group.records.slice(1).map((r, index) => {
+                  const sm = STATUS_META[r.status];
+                  const cm = confMeta(r.confidence);
+                  const image = r.qrImageUrl || r.shot || r.measurementImageUrl;
+                  return <article key={r.id} className="min-w-0 overflow-hidden rounded-[12px] border border-[var(--bd)] bg-[var(--bg2)]">
+                    <button type="button" disabled={!image} onClick={() => setPreviewIdx(previewIndexFor(r, r.qrImageUrl || r.shot ? 'qr' : 'measurement'))} className="relative block w-full aspect-[16/9] bg-[#0a0e15] overflow-hidden disabled:cursor-default cursor-pointer">
+                      <SnapImage src={image} />
+                      <span className="absolute left-2 top-2 rounded bg-black/75 px-2 py-1 font-[var(--mono)] text-[10px] font-bold text-white">#{index + 1}</span>
+                      <span className="absolute right-2 top-2 rounded bg-black/70 px-2 py-1 text-[9px] font-semibold" style={{ color: sm.color }}>{sm.label}</span>
+                    </button>
+                    <div className="p-3 space-y-2 text-[10px]">
+                      <div className="border-b border-[var(--bd)] pb-2"><div className="font-[var(--mono)] text-[11px] font-bold text-[var(--tx)]">Measurement #{index + 1}</div><div className="mt-1 truncate font-[var(--mono)] text-[var(--tx2)]" title={`${r.sku} · ${r.model}`}>SKU {r.sku} · {r.model}</div></div>
+                      <div className="grid grid-cols-2 gap-2 rounded-[6px] border border-[var(--bd)] bg-[var(--bg1)] p-2 font-[var(--mono)]">
+                        <span className="min-w-0"><span className="block text-[var(--tx3)]">Printed size</span><span className="font-semibold text-[var(--tx2)]">{r.declared}&#8243;</span></span>
+                        <span className="min-w-0"><span className="block text-[var(--tx3)]">Measured size</span><span className="font-semibold text-[var(--tx)]">{r.measured}&#8243;</span></span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2 text-[var(--tx3)]"><span>Confidence <strong style={{ color: cm.color }}>{cm.label}</strong></span><span className="font-semibold" style={{ color: r.status === 'pass' ? 'var(--ok)' : r.status === 'mismatch' ? 'var(--crit)' : 'var(--warn)' }}>{matchLabel(r)}</span></div>
+                      <div className="border-t border-[var(--bd)] pt-2 font-[var(--mono)] text-[var(--tx3)]">{r.date} · {r.time}</div>
+                    </div>
+                  </article>;
+                }))}
+              </div>
+            ) : null}
+          </div>}
         </div>
       )}
 
@@ -755,7 +815,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
       {totalRows > 0 && (
         <div className="flex items-center gap-3 flex-wrap p-[11px_16px] border-t border-[var(--bd)] bg-[var(--bg1solid)]">
           <span className="font-[var(--mono)] text-[11px] text-[var(--tx3)]">
-            {pageStart + 1}–{Math.min(pageStart + pageSize, totalRows)} of {totalRows}
+            {pageStart + 1}–{Math.min(pageStart + pageSize, groups.length)} of {groups.length} groups · {totalRows} records
           </span>
 
           <span className="flex items-center gap-1 ml-auto">
