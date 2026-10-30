@@ -26,7 +26,7 @@ import LogsFilterPopover from '@/pages/AttendanceLogs/components/LogsFilterPopov
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import LogEmployeeProfileDialog from '@/pages/AttendanceLogs/components/LogEmployeeProfileDialog';
 import ActionCameraPreview from '@/pages/AttendanceLogs/components/ActionCameraPreview';
-import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import ExportButton, { PdfViewExportButton } from '@/pages/AttendanceLogs/components/ExportButton';
 
 const ACCESS_REFRESH_KEY = 'access_auto_refresh_enabled';
 const ACCESS_INTERVAL_KEY = 'access_auto_refresh_interval';
@@ -471,7 +471,7 @@ const AccessLogs = () => {
         {canEdit && (
           <div className="flex gap-2">
             <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
-            <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+            <PdfViewExportButton onSelect={handleExport} />
           </div>
         )}
 

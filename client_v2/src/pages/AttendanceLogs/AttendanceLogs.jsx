@@ -18,7 +18,7 @@ import AutoRefreshComponent from './components/AutoRefreshComponent';
 import LogEmployeeProfileDialog from './components/LogEmployeeProfileDialog';
 import BreakLogsDialog from './components/BreakLogsDialog';
 import ActionCameraPreview from './components/ActionCameraPreview';
-import ExportButton from './components/ExportButton';
+import ExportButton, { PdfViewExportButton } from './components/ExportButton';
 import {
   getAttendanceLogs,
   filterByDepartment,
@@ -716,7 +716,7 @@ const AttendanceLogs = () => {
         {canEdit && (
           <div className="flex gap-2">
             <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
-            <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+            <PdfViewExportButton onSelect={handleExport} />
           </div>
         )}
 

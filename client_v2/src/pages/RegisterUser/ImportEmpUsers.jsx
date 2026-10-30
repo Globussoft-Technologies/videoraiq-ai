@@ -141,7 +141,14 @@ const ImportEmpUsersModal = ({ open, onClose, fetchUsers, refreshLocations, refr
       setLoading(true);
       const res = await addEmpEmails({ emails: [email] });
       if (res?.statusCode === 200 && res?.body?.status === 'success') {
-        toast.success(res?.body?.message || 'Employee email added successfully.');
+        const emailStatus = res?.body?.data?.find((item) => item.email === email)?.status;
+        if (emailStatus === 'success') {
+          toast.success('Employee email added successfully.');
+        } else if (emailStatus === 'not_found') {
+          toast.error('Employee email not found. Check the address and try again.');
+        } else {
+          toast.error('Could not add employee email. Please try again.');
+        }
         fetchLocations();
         const data = res?.body?.data || [{ email, status: 'success' }];
         const mapped = data.map((item) => ({ email: item.email, status: item.status || 'success' }));
