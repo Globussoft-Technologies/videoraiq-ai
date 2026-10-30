@@ -374,3 +374,45 @@ describe("existing installer API compatibility", () => {
     expect((await Admin.findById(admin._id)).appEnv).toBe(appEnv);
   });
 });
+
+
+describe("installer camera deletion protection", () => {
+  it.each([
+    { managementSource: "installer", localNvrId: undefined },
+    { localNvrId: "legacy-edge" },
+  ])("rejects deletion for installer marker %j without side effects", async (markers) => {
+    const { default: DeleteService } = await import("../../../services/delete.service.js");
+    const nvr = await makeNvr(markers);
+    const camera = await makeCamera(nvr._id, true);
+    const ctx = serviceCtx({ user_id: USER_ID, params: { cameraId: String(camera._id) } });
+    await NVRService.removeCamera(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(403);
+    expect(payload(ctx.res).error.code).toBe("INSTALLER_MANAGED_CAMERA");
+    expect(DeleteService.deleteChannel).not.toHaveBeenCalled();
+    expect(emitCameraLimit).not.toHaveBeenCalled();
+    expect(await Channel.findById(camera._id)).toBeTruthy();
+  });
+
+  it("preserves deletion for application-managed cameras", async () => {
+    const { default: DeleteService } = await import("../../../services/delete.service.js");
+    const nvr = await makeNvr({ localNvrId: undefined });
+    const camera = await makeCamera(nvr._id, true);
+    const ctx = serviceCtx({ user_id: USER_ID, params: { cameraId: String(camera._id) } });
+    await NVRService.removeCamera(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(200);
+    expect(DeleteService.deleteChannel).toHaveBeenCalledWith(String(camera._id));
+  });
+
+  it("also rejects the legacy v1 application endpoint for a cloud installer camera", async () => {
+    const { default: LegacyService } = await import("../../../core/v1/NVR/nvr.service.js");
+    const { default: DeleteService } = await import("../../../services/delete.service.js");
+    const admin = await makeAdmin(2);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud" });
+    const nvr = await makeNvr();
+    const camera = await makeCamera(nvr._id, true);
+    const ctx = serviceCtx({ user_id: USER_ID, params: { cameraId: String(camera._id) } });
+    await LegacyService.removeCamera(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(403);
+    expect(DeleteService.deleteChannel).not.toHaveBeenCalled();
+  });
+});

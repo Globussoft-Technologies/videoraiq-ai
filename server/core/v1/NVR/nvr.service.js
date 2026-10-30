@@ -14,7 +14,7 @@ import { emitCameraLimit } from "../../../socket.js";
 import net from "net";
 import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
-import { buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
+import { isInstallerManaged, buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
 import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
 const APP_ENV = config.get("APP_ENV");
@@ -2068,6 +2068,16 @@ class NVRService {
       }
 
       const nvrId = camera.nvrId;
+      const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
+      if (!nvr) {
+        return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+      if (isInstallerManaged(nvr) && !isLocalAppEnv(await this.getEffectiveAppEnv(req))) {
+        return res.status(403).json(Response.accessDeniedResp(
+          "This camera is managed through the installer and cannot be deleted from the application.",
+          { code: "INSTALLER_MANAGED_CAMERA" },
+        ));
+      }
 
       await DeleteService.deleteChannel(cameraId);
 

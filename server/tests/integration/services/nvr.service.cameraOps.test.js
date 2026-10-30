@@ -68,6 +68,7 @@ vi.mock("../../../core/v1/NVR/nvr.brands.js", () => ({
   updateHandlers: {},
 }));
 vi.mock("../../../utils/rtspStream.js", () => ({
+  isInstallerManaged: (nvr) => nvr?.managementSource === "installer" || Boolean(nvr?.localNvrId),
   buildRTSPUrl: vi.fn(() => "rtsp://stub/main"),
   registerCameraStream: vi.fn().mockResolvedValue(true),
   updateCameraStream: vi.fn().mockResolvedValue(true),

@@ -2480,6 +2480,16 @@ class NVRService {
       }
 
       const nvrId = camera.nvrId;
+      const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
+      if (!nvr) {
+        return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+      if (isInstallerManaged(nvr)) {
+        return res.status(403).json(Response.accessDeniedResp(
+          "This camera is managed through the installer and cannot be deleted from the application.",
+          { code: "INSTALLER_MANAGED_CAMERA" },
+        ));
+      }
 
       await DeleteService.deleteChannel(cameraId);
 
