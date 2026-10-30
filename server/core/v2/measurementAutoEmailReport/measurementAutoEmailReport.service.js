@@ -12,7 +12,7 @@ import { putMediaV2 as putMedia } from "../adminStorage/mediaStorage.v2.js";
 import Admin from "../admin/admin.model.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import MeasurementIncident from "../measurementLogs/measurementLog.model.js";
-import { toRow } from "../measurementLogs/measurementLog.service.js";
+import { toRow, measurementDateSort } from "../measurementLogs/measurementLog.service.js";
 import Report from "./measurementAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./measurementAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
@@ -122,7 +122,8 @@ async function fetchMeasurementRows(report, timezone) {
     adminId: String(report.adminId),
     $or: [
       { dsProcessedAt: { $gte: start.toDate(), $lte: end.toDate() } },
-      { createdAt: { $gte: start.toDate(), $lte: end.toDate() } },
+      { dsProcessedAt: null, createdAt: { $gte: start.toDate(), $lte: end.toDate() } },
+      { dsProcessedAt: null, createdAt: null, updatedAt: { $gte: start.toDate(), $lte: end.toDate() } },
     ],
   };
 
@@ -142,16 +143,17 @@ async function fetchMeasurementRows(report, timezone) {
     match.status = report.recordStatus;
   }
 
-  const docs = await MeasurementIncident.find(match)
-    .sort({ dsProcessedAt: -1, createdAt: -1 })
-    .limit(5000)
-    .lean();
+  const docs = await MeasurementIncident.aggregate([
+    { $match: match }, ...measurementDateSort, { $limit: 5000 },
+  ]);
 
   const rows = docs.map((d) => {
     const row = toRow(d, timezone);
     row.result = RESULT_LABEL[row.status] || row.status;
     return row;
   });
+  rows.sort((a, b) => Date.parse(b.measuredAt || 0) - Date.parse(a.measuredAt || 0)
+    || String(b.id).localeCompare(String(a.id)));
 
   return { rows, label, timezone };
 }
@@ -200,7 +202,7 @@ function groupReportRows(rows) {
     return text && text !== "—" ? text : "";
   };
   const timeOf = (row) => {
-    const time = new Date(row.createdAt || 0).getTime();
+    const time = new Date(row.measuredAt || row.dsProcessedAt || row.createdAt || row.updatedAt || 0).getTime();
     return Number.isFinite(time) ? time : 0;
   };
   [...rows].sort((a, b) => timeOf(b) - timeOf(a) || String(b.id).localeCompare(String(a.id)))

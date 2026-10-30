@@ -8,6 +8,12 @@ import { getRequestTimezone } from "../../../utils/timezone.js";
 const CM_PER_INCH = 2.54;
 const MM_PER_INCH = 25.4;
 
+// Sort by the same timestamp shown in the table, before applying a result cap.
+export const measurementDateSort = [
+  { $addFields: { _measurementDate: { $ifNull: ["$dsProcessedAt", { $ifNull: ["$createdAt", "$updatedAt"] }] } } },
+  { $sort: { _measurementDate: -1, _id: -1 } },
+];
+
 // Resolve a stored media path (qr / measurement image) to an absolute URL so the
 // table thumbnail, the preview modal and the PDF/XLSX/CSV exports all link the
 // same place. Previously stored absolute backend URLs are re-based onto the
@@ -301,6 +307,7 @@ function toRow(doc, timezone, publicBackendDomain) {
     qrImageUrl: mediaUrl(doc.qrImage?.url || doc.qrImagePath || "", publicBackendDomain),
     measurementImage: doc.measurementImage || "",
     measurementImageUrl: mediaUrl(doc.measurementImage || "", publicBackendDomain),
+    measuredAt: when ? new Date(when).toISOString() : null,
     createdAt: doc.createdAt,
   };
 }
@@ -345,7 +352,11 @@ function buildMatch(req, adminId) {
     const range = {};
     if (from && !Number.isNaN(+from)) range.$gte = from;
     if (to && !Number.isNaN(+to)) range.$lte = to;
-    match.$and = [{ $or: [{ dsProcessedAt: range }, { createdAt: range }] }];
+    match.$and = [{ $or: [
+      { dsProcessedAt: range },
+      { dsProcessedAt: null, createdAt: range },
+      { dsProcessedAt: null, createdAt: null, updatedAt: range },
+    ] }];
   }
   return match;
 }
@@ -452,13 +463,15 @@ class MeasurementLogService {
       // the analytics endpoint so both views scope to the same window.
       const match = buildMatch(req, adminId);
 
-      const docs = await MeasurementIncident.find(match)
-        .sort({ dsProcessedAt: -1, createdAt: -1 })
-        .limit(allRows ? 20000 : limit + skip + 500) // headroom for the post-map status filter
-        .lean();
+      const docs = await MeasurementIncident.aggregate([
+        { $match: match }, ...measurementDateSort,
+        { $limit: allRows ? 20000 : limit + skip + 500 }, // headroom for the post-map status filter
+      ]);
 
       const publicBackendDomain = requestBackendDomain(req);
       let rows = docs.map((d) => toRow(d, timezone, publicBackendDomain));
+      rows.sort((a, b) => Date.parse(b.measuredAt || 0) - Date.parse(a.measuredAt || 0)
+        || String(b.id).localeCompare(String(a.id)));
 
       const statusF = req.query.status;
       if (statusF && statusF !== "all") rows = rows.filter((r) => r.status === statusF);
@@ -519,10 +532,9 @@ class MeasurementLogService {
       }
       const match = buildMatch(req, adminId);
 
-      const docs = await MeasurementIncident.find(match)
-        .sort({ dsProcessedAt: -1, createdAt: -1 })
-        .limit(20000)
-        .lean();
+      const docs = await MeasurementIncident.aggregate([
+        { $match: match }, ...measurementDateSort, { $limit: 20000 },
+      ]);
 
       const total = docs.length;
       let pass = 0;
@@ -667,10 +679,9 @@ class MeasurementLogService {
       const { q: _drop, ...rest } = req.query;
       const match = buildMatch({ ...req, query: rest }, adminId);
 
-      const docs = await MeasurementIncident.find(match)
-        .sort({ dsProcessedAt: -1, createdAt: -1 })
-        .limit(20000)
-        .lean();
+      const docs = await MeasurementIncident.aggregate([
+        { $match: match }, ...measurementDateSort, { $limit: 20000 },
+      ]);
 
       const all = skuMismatchRows(docs, q);
 
