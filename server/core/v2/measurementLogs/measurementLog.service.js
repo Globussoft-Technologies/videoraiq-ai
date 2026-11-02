@@ -291,9 +291,10 @@ function toRow(doc, timezone, publicBackendDomain) {
     matchPct,
     station: stationLabel(doc.stationId),
     stationId: doc.stationId || null,
-    time: when ? moment(when).tz(timezone).format("HH:mm:ss") : "—",
+    time: when ? moment(when).tz(timezone).format("hh:mm:ss A") : "—",
+    time24: when ? moment(when).tz(timezone).format("HH:mm:ss") : "—",
     date: when ? moment(when).tz(timezone).format("DD MMM YYYY") : "—",
-    dateTime: when ? moment(when).tz(timezone).format("DD MMM YYYY, HH:mm:ss") : "—",
+    dateTime: when ? moment(when).tz(timezone).format("DD MMM YYYY, hh:mm:ss A") : "—",
     recordStatus: doc.status || "—",
     status,
     confidence,
@@ -478,8 +479,8 @@ class MeasurementLogService {
 
       const from = req.query.from;
       const to = req.query.to;
-      if (from) rows = rows.filter((r) => r.time !== "—" && r.time >= from);
-      if (to) rows = rows.filter((r) => r.time !== "—" && r.time <= to);
+      if (from) rows = rows.filter((r) => r.time24 !== "—" && r.time24 >= from);
+      if (to) rows = rows.filter((r) => r.time24 !== "—" && r.time24 <= to);
 
       const total = rows.length;
       const paged = allRows ? rows : rows.slice(skip, skip + limit);

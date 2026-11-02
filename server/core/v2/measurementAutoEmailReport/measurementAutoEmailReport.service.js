@@ -13,6 +13,7 @@ import Admin from "../admin/admin.model.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import MeasurementIncident from "../measurementLogs/measurementLog.model.js";
 import { toRow, measurementDateSort } from "../measurementLogs/measurementLog.service.js";
+import { formatWhen12 } from "./formatWhen.js";
 import Report from "./measurementAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./measurementAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
@@ -185,7 +186,7 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : "—",
     matchPctCell(r),
-    r.recordStatus || "—", r.dateTime || r.time, r.result,
+    r.recordStatus || "—", formatWhen12(r), r.result,
   ];
   if (withSnaps) {
     cells.push(linkCell(snapUrlOf(r), snap));
@@ -194,7 +195,7 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
   return cells;
 }
 
-// Match the Measurement Logs UI: latest record leads each ORDER/REF group.
+// Match the Measurement Logs UI: original record first, newer children next.
 function groupReportRows(rows) {
   const groups = new Map();
   const present = (value) => {
@@ -202,7 +203,7 @@ function groupReportRows(rows) {
     return text && text !== "—" ? text : "";
   };
   const timeOf = (row) => {
-    const time = new Date(row.measuredAt || row.dsProcessedAt || row.createdAt || row.updatedAt || 0).getTime();
+    const time = new Date(row.createdAt || row.measuredAt || row.dsProcessedAt || row.updatedAt || 0).getTime();
     return Number.isFinite(time) ? time : 0;
   };
   [...rows].sort((a, b) => timeOf(b) - timeOf(a) || String(b.id).localeCompare(String(a.id)))
@@ -214,10 +215,24 @@ function groupReportRows(rows) {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     });
-  return [...groups.values()].flatMap((group, groupIndex) => group.map((row, index) => ({
-    ...row,
-    exportSerial: index === 0 ? groupIndex + 1 : "",
-  })));
+  const activityTime = (row) => {
+    const time = new Date(row.measuredAt || row.dsProcessedAt || row.createdAt || row.updatedAt || 0).getTime();
+    return Number.isFinite(time) ? time : 0;
+  };
+  const orderedGroups = [...groups.values()].map((group) => {
+    const original = group.reduce((oldest, row) => timeOf(row) < timeOf(oldest) ? row : oldest);
+    return [original, ...group.filter((row) => row !== original)
+      .sort((a, b) => activityTime(b) - activityTime(a) || String(b.id).localeCompare(String(a.id)))];
+  }).sort((a, b) =>
+    Math.max(...(b.length > 1 ? b.slice(1) : b).map(activityTime))
+    - Math.max(...(a.length > 1 ? a.slice(1) : a).map(activityTime))
+    || String(b[0].id).localeCompare(String(a[0].id)));
+  return orderedGroups.flatMap((group, groupIndex) => {
+    return group.map((row, index) => ({
+      ...row,
+      exportSerial: index === 0 ? groupIndex + 1 : "",
+    }));
+  });
 }
 
 function buildCsv({ rows, label, withSnaps = true }) {
