@@ -122,7 +122,7 @@ export const DOOR_DETECTION_CONFIG = {
   storagePrefix: 'door_detection',
   permissionKey: 'doorDetectionLogs',
   accessDenied: "You don't have permission to view Door Logs.",
-  showIncidentName: false,
+  showIncidentName: true,
   showStatus: false,
   showDoorFields: true,
   statsLabel: 'Door Logs',

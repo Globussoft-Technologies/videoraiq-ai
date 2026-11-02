@@ -34,6 +34,7 @@ import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { exportIncidentCenter } from './incidentCenterExport';
+import { doorDurationLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 const lateArrivalDescription = (item) => {
@@ -51,7 +52,7 @@ const lateArrivalDescription = (item) => {
 const INCIDENT_LIST_DETAILS = {
   doorDetection: [
     { field: 'zone', label: 'Door Name', width: 140 },
-    { field: 'presenceSec', label: 'Door Open Duration', width: 130 },
+    { field: 'presenceSec', label: 'Duration', width: 170 },
     { field: 'done', label: 'Door Status', width: 120 },
   ],
   deskSolarShoulderDetection: [
@@ -1205,7 +1206,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                       {formatDoorStatus(item)}
                     </span>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      Door Open Duration
+                      {doorDurationLabel(item)}
                     </span>
                     <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
                       {formatDoorDuration(item.durationSec)}
@@ -1492,7 +1493,7 @@ function IncidentListRow({
               <span style={{ fontWeight: 500, textTransform: field === 'done' ? 'capitalize' : undefined }}>
                 {{
                   zone: item.zoneName || item.zone || '—',
-                  presenceSec: formatDoorDuration(item.durationSec),
+                  presenceSec: `${doorDurationLabel(item)}: ${formatDoorDuration(item.durationSec)}`,
                   done: formatDoorStatus(item),
                 }[field]}
               </span>

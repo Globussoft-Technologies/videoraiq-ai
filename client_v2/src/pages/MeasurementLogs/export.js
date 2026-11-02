@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { STATUS_META } from './data';
 import { groupMeasurementRecords } from './groupRecords';
+import { formatWhen12 } from './formatWhen';
 
 const FILE_BASE = 'qc-measurement';
 const REPORT_TITLE = 'Mattress Measurement Logs';
@@ -70,7 +71,7 @@ const toRow = (r, i, { asAscii = false, snap = 'text' } = {}) => {
     r.declared, r.measured, r.measuredRaw || '—', r.measuredUnit || '—',
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : '—',
-    matchPct(r), r.recordStatus || '—', r.dateTime || r.time,
+    matchPct(r), r.recordStatus || '—', formatWhen12(r),
     STATUS_META[r.status]?.label || r.status,
     linkCell(snapshotUrl(r), snap),
     linkCell(measurementImageUrl(r), snap),

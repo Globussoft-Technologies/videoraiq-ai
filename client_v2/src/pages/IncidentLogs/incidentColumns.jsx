@@ -9,6 +9,7 @@ import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import IncidentHygieneDetails from '@/page/user/Incidents/IncidentHygieneDetails';
 import { isMobileEmbedded } from '@/utils/mobileEmbed';
+import { doorDurationLabel, doorStatusLabel, isDoorResolved } from './doorIncident';
 
 const severityClass = (severity) => {
   const s = (severity || '--').toLowerCase();
@@ -51,12 +52,13 @@ export const formatDoorDuration = (seconds) => {
   return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
 };
 
-const doorStatusStyle = (status) => {
-  const isOpen = String(status || '').toLowerCase() === 'open';
-  const color = isOpen ? 'var(--crit)' : 'var(--ok)';
+const doorStatusStyle = (row) => {
+  const resolved = isDoorResolved(row);
+  const isOpen = !isDoorResolved(row) && String(row.doorStatus || '').toLowerCase() === 'open';
+  const color = resolved ? 'var(--violet)' : isOpen ? 'var(--crit)' : 'var(--ok)';
   return {
     color,
-    backgroundColor: isOpen ? 'color-mix(in srgb, var(--crit) 15%, transparent)' : 'color-mix(in srgb, var(--ok) 15%, transparent)',
+    backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`,
     border: 'none',
     borderRadius: 999,
     padding: '4px 10px',
@@ -324,19 +326,40 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
         accessorKey: 'doorStatus',
         header: sortHeader('Door Status', 'doorStatus'),
         cell: ({ row }) => {
-          const status = String(row.original.doorStatus || '').toLowerCase();
-          const isOpen = status === 'open';
+          const status = doorStatusLabel(row.original);
+          const isOpen = status === 'Open';
+          const resolved = status === 'Resolved';
           return (
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${isOpen ? 'bg-[var(--crit)]/15 text-[var(--crit)]' : 'bg-[var(--ok)]/15 text-[var(--ok)]'}`}>
-              {status || '--'}
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${resolved ? 'bg-[var(--violet)]/15 text-[var(--violet)]' : isOpen ? 'bg-[var(--crit)]/15 text-[var(--crit)]' : 'bg-[var(--ok)]/15 text-[var(--ok)]'}`}>
+              {status}
             </span>
           );
         },
       },
       {
         accessorKey: 'durationSec',
-        header: sortHeader('Door Open Duration', 'durationSec'),
-        cell: ({ row }) => <span className={styles.text}>{formatDoorDuration(row.original.durationSec)}</span>,
+        header: sortHeader('Duration', 'durationSec'),
+        cell: ({ row }) => <div className="whitespace-nowrap"><span className="text-xs text-[var(--tx2)]">{doorDurationLabel(row.original)}: </span><span className={styles.text}>{formatDoorDuration(row.original.durationSec)}</span></div>,
+      },
+      {
+        id: 'doorPeriod',
+        header: 'Since / Period',
+        cell: ({ row }) => {
+          const item = row.original;
+          if (!item.stateSince) return <span className={styles.text}>--</span>;
+          const since = moment.utc(item.stateSince).tz(getConfiguredTimezone()).format('hh:mm A');
+          const until = isDoorResolved(item) && item.createdAt
+            ? ` – ${moment.utc(item.createdAt).tz(getConfiguredTimezone()).format('hh:mm A')}` : '';
+          return <span className={`${styles.text} whitespace-nowrap`}>{since}{until}</span>;
+        },
+      },
+      {
+        id: 'doorAlerts',
+        header: 'Alerts',
+        cell: ({ row }) => {
+          const item = row.original;
+          return <span className={`${styles.text} whitespace-nowrap`}>{item.alertCount == null ? '--' : isDoorResolved(item) ? `${item.alertCount} alerts raised` : `Alert ${item.alertCount}`}</span>;
+        },
       },
     );
   }
@@ -544,7 +567,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
       </div>
     ) : config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
-        {config.showIncidentName !== false && (
+        {config.showIncidentName !== false && !config.showDoorFields && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
         )}
         {config.showSeverity !== false && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
@@ -599,11 +622,12 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <IncidentCardRow
               icon={DoorOpen}
               label="Door Status"
-              value={row.doorStatus || '--'}
-              valueClassName="capitalize"
-              valueStyle={doorStatusStyle(row.doorStatus)}
+              value={doorStatusLabel(row)}
+              valueStyle={doorStatusStyle(row)}
             />
-            <IncidentCardRow icon={Clock} label="Door Open Duration" value={formatDoorDuration(row.durationSec)} />
+            <IncidentCardRow icon={Clock} label={doorDurationLabel(row)} value={formatDoorDuration(row.durationSec)} />
+            {row.stateSince && <IncidentCardRow icon={Clock} label={isDoorResolved(row) ? 'From – To' : 'Since'} value={isDoorResolved(row) ? `${moment.utc(row.stateSince).tz(getConfiguredTimezone()).format('hh:mm A')} – ${moment.utc(row.createdAt).tz(getConfiguredTimezone()).format('hh:mm A')}` : moment.utc(row.stateSince).tz(getConfiguredTimezone()).format('hh:mm A')} />}
+            {row.alertCount != null && <IncidentCardRow icon={AlertTriangle} label="Alerts" value={isDoorResolved(row) ? `${row.alertCount} alerts raised` : `Alert ${row.alertCount}`} />}
           </>
         )}
         {(config.showHygieneFields || config.showLightingFields) && <IncidentHygieneDetails item={row} showIssueCount={false} showViolationSeverity={false} showConfidence={false} />}

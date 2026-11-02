@@ -1,5 +1,6 @@
 import axios from 'axios';
 import getAccessToken from '@/utils/getAccessToken';
+import { matchesDoorFilter } from '../doorIncident';
 
 const HOST = import.meta.env.VITE_BACKEND;
 
@@ -111,7 +112,7 @@ export const fetchDoorStatusLogs = async ({ doorStatus, ...params }) => {
   let totalCount = Infinity;
 
   while (allRows.length < totalCount) {
-    const response = await fetchIncidentLogs({ ...params, doorStatus, skip: allRows.length, limit: batchSize });
+    const response = await fetchIncidentLogs({ ...params, doorStatus: undefined, skip: allRows.length, limit: batchSize });
     const page = response?.data?.body?.data;
     const rows = Array.isArray(page?.data) ? page.data : [];
     totalCount = Number(page?.totalCount) || 0;
@@ -119,7 +120,7 @@ export const fetchDoorStatusLogs = async ({ doorStatus, ...params }) => {
     if (!rows.length) break;
   }
 
-  return allRows.filter((row) => String(row.doorStatus || '').trim().toLowerCase() === doorStatus);
+  return allRows.filter((row) => matchesDoorFilter(row, doorStatus));
 };
 
 export const fetchIncidentBoxTypes = async ({

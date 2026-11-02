@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { fetchDoorStatusLogs, fetchIncidentLogs } from './Api';
 import { formatDoorDuration, formatStatus } from './incidentColumns';
+import { doorDurationLabel, doorStatusLabel, isDoorResolved } from './doorIncident';
 import { boxSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
@@ -71,8 +72,14 @@ const fetchAllForExport = async (config, params) => {
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
       door: item.zoneName || item.zone || '--',
-      doorStatus: item.doorStatus || '--',
-      doorOpenDuration: formatDoorDuration(item.durationSec),
+      doorStatus: doorStatusLabel(item),
+      doorOpenDuration: `${doorDurationLabel(item)}: ${formatDoorDuration(item.durationSec)}`,
+      doorDuration: formatDoorDuration(item.durationSec),
+      doorDurationLabel: doorDurationLabel(item),
+      doorPeriod: item.stateSince
+        ? `${moment.utc(item.stateSince).tz(getConfiguredTimezone()).format('hh:mm A')}${isDoorResolved(item) && (item.timeOfIncident || item.createdAt) ? ` - ${moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('hh:mm A')}` : ''}`
+        : '--',
+      doorAlerts: item.alertCount == null ? '--' : isDoorResolved(item) ? `${item.alertCount} alerts raised` : `Alert ${item.alertCount}`,
       createdAt: item.timeOfIncident || item.createdAt
         ? moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
         : '--',
@@ -116,7 +123,9 @@ const buildExportColumns = (config) => {
     cols.push(
       { key: 'door', label: 'Door Name' },
       { key: 'doorStatus', label: 'Door Status' },
-      { key: 'doorOpenDuration', label: 'Door Open Duration' },
+      { key: 'doorOpenDuration', label: 'Duration' },
+      { key: 'doorPeriod', label: 'Since / Period' },
+      { key: 'doorAlerts', label: 'Alerts' },
     );
   }
 
@@ -207,8 +216,9 @@ const exportToPDF = async (config, params) => {
         const statusColumnIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
         if (config.showDoorFields && statusColumnIndex > 0 && data.section === 'body' && data.column.index === statusColumnIndex) {
           const isOpen = String(data.cell.raw || '').toLowerCase() === 'open';
-          data.cell.styles.textColor = isOpen ? [220, 38, 38] : [22, 163, 74];
-          data.cell.styles.fillColor = isOpen ? [254, 226, 226] : [220, 252, 231];
+          const resolved = String(data.cell.raw || '').toLowerCase() === 'resolved';
+          data.cell.styles.textColor = resolved ? [124, 58, 237] : isOpen ? [220, 38, 38] : [22, 163, 74];
+          data.cell.styles.fillColor = resolved ? [237, 233, 254] : isOpen ? [254, 226, 226] : [220, 252, 231];
           data.cell.styles.fontStyle = 'bold';
         }
       },
@@ -337,7 +347,7 @@ const exportToGridPDF = async (config, params) => {
     const rowGap = 5.2;
     const bodyTopGap = 5.4;
     const details = [];
-    if (config.showIncidentName !== false) details.push(['Incident', 'incidentName']);
+    if (config.showIncidentName !== false && !config.showDoorFields) details.push(['Incident', 'incidentName']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);
     if (config.showSeverity !== false && !config.showDoorFields) details.push(['Severity', 'severity']);
     if (config.showFireSmokeFields) {
@@ -359,7 +369,9 @@ const exportToGridPDF = async (config, params) => {
       details.push(
         ['Door Name', 'door'],
         ['Door Status', 'doorStatus'],
-        ['Door Open Duration', 'doorOpenDuration'],
+        ['Duration', 'doorDuration'],
+        ['Since / Period', 'doorPeriod'],
+        ['Alerts', 'doorAlerts'],
       );
     }
     if (config.showLightingFields || config.showHygieneFields) {
@@ -439,13 +451,14 @@ const exportToGridPDF = async (config, params) => {
       details.forEach(([label, key]) => {
         const isDoorStatus = config.showDoorFields && key === 'doorStatus';
         const isOpen = String(row[key] || '').toLowerCase() === 'open';
+        const resolved = isDoorStatus && String(row[key] || '').toLowerCase() === 'resolved';
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(5, 24, 55);
         doc.setFontSize(5.2);
-        doc.text(label.toUpperCase(), labelX, textY);
+        doc.text(key === 'doorDuration' ? row.doorDurationLabel.toUpperCase() : label.toUpperCase(), labelX, textY);
 
         doc.setFont('helvetica', isDoorStatus ? 'bold' : 'normal');
-        doc.setTextColor(isDoorStatus ? (isOpen ? 220 : 22) : 26, isDoorStatus ? (isOpen ? 38 : 163) : 42, isDoorStatus ? (isOpen ? 38 : 74) : 103);
+        doc.setTextColor(isDoorStatus ? (resolved ? 124 : isOpen ? 220 : 22) : 26, isDoorStatus ? (resolved ? 58 : isOpen ? 38 : 163) : 42, isDoorStatus ? (resolved ? 237 : isOpen ? 38 : 74) : 103);
         doc.setFontSize(6.3);
         if (key === 'selectedCategories') {
           const lines = doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 7).slice(0, 2);
@@ -457,7 +470,7 @@ const exportToGridPDF = async (config, params) => {
           doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 22).slice(0, 1)[0] || '--';
         if (isDoorStatus) {
           const pillWidth = doc.getTextWidth(valueText) + 6;
-          doc.setFillColor(isOpen ? 254 : 220, isOpen ? 226 : 252, isOpen ? 226 : 231);
+          doc.setFillColor(resolved ? 237 : isOpen ? 254 : 220, resolved ? 233 : isOpen ? 226 : 252, resolved ? 254 : isOpen ? 226 : 231);
           doc.roundedRect(valueX - pillWidth, textY - 3.2, pillWidth, 4.8, 1.4, 1.4, 'F');
         }
         doc.text(valueText, valueX, textY, { align: 'right' });
@@ -512,9 +525,10 @@ const exportToExcel = async (config, params) => {
         const statusCell = worksheet[statusCellRef];
         if (statusCell) {
           const isOpen = String(row.doorStatus || '').toLowerCase() === 'open';
+          const resolved = String(row.doorStatus || '').toLowerCase() === 'resolved';
           statusCell.s = {
-            fill: { patternType: 'solid', fgColor: { rgb: isOpen ? 'FEE2E2' : 'DCFCE7' } },
-            font: { bold: true, color: { rgb: isOpen ? 'DC2626' : '16A34A' } },
+            fill: { patternType: 'solid', fgColor: { rgb: resolved ? 'EDE9FE' : isOpen ? 'FEE2E2' : 'DCFCE7' } },
+            font: { bold: true, color: { rgb: resolved ? '7C3AED' : isOpen ? 'DC2626' : '16A34A' } },
             alignment: { horizontal: 'center', vertical: 'center' },
           };
         }

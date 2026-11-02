@@ -7,6 +7,7 @@ import { fetchIncidents } from '../../../helpers/incidents';
 import { detectionLabel, mediaUrl } from '../../../lib/format';
 import { formatUtcInConfiguredTimezone } from '../../../utils/timezone';
 import { incidentPackingExportFields, PACKING_INCIDENT_EXPORT_COLUMNS } from '../../../helpers/incidentPackingExport.js';
+import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident.js';
 
 const EXPORT_BATCH_SIZE = 500;
 const MAX_EXPORT_ROWS = 10000;
@@ -92,8 +93,8 @@ const mapRow = (item, index) => {
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
     ...(isDoorDetection ? {
       'Door Name': text(item?.zoneName || item?.zone),
-      'Door Status': text(item?.doorStatus),
-      'Door Open Duration': formatDoorDuration(item?.durationSec),
+      'Door Status': doorStatusLabel(item),
+      'Door Duration': `${doorDurationLabel(item)}: ${formatDoorDuration(item?.durationSec)}`,
     } : {}),
     ...incidentPackingExportFields(item),
     Severity: severityLabel(item?.severity),
@@ -139,10 +140,11 @@ const exportExcel = (rows, showVehicleNumber) => {
       if (!cell) return;
 
       const value = String(row[key] || '').toLowerCase();
-      const isGreen = value === 'resolved' || value === 'closed';
+      const isPurple = key === 'Door Status' && value === 'resolved';
+      const isGreen = value === 'closed' || (key === 'Status' && value === 'resolved');
       const isAmber = value === 'reported';
-      const color = isGreen ? '166534' : isAmber ? '92400E' : 'B91C1C';
-      const fill = isGreen ? 'DCFCE7' : isAmber ? 'FEF3C7' : 'FEE2E2';
+      const color = isPurple ? '7C3AED' : isGreen ? '166534' : isAmber ? '92400E' : 'B91C1C';
+      const fill = isPurple ? 'EDE9FE' : isGreen ? 'DCFCE7' : isAmber ? 'FEF3C7' : 'FEE2E2';
       cell.s = {
         ...(cell.s || {}),
         font: { ...(cell.s?.font || {}), bold: true, color: { rgb: color } },
@@ -181,7 +183,7 @@ const exportListPdf = (rows, showVehicleNumber) => {
 
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
-    ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Open Duration'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
     'Severity', 'Status', 'Time of Incident',
     ...(showVehicleNumber ? ['Vehicle Number'] : []),
@@ -195,7 +197,7 @@ const exportListPdf = (rows, showVehicleNumber) => {
     Camera: showVehicleNumber ? 31 : 35,
     'Door Name': 24,
     'Door Status': 24,
-    'Door Open Duration': 30,
+    'Door Duration': 38,
     Severity: 18,
     Status: 18,
     'Time of Incident': 31,
@@ -230,8 +232,9 @@ const exportListPdf = (rows, showVehicleNumber) => {
       const column = columns[data.column.index];
       if (column === 'Door Status') {
         const isOpen = String(data.cell.raw || '').toLowerCase() === 'open';
-        data.cell.styles.textColor = isOpen ? [220, 38, 38] : [22, 163, 74];
-        data.cell.styles.fillColor = isOpen ? [254, 226, 226] : [220, 252, 231];
+        const resolved = String(data.cell.raw || '').toLowerCase() === 'resolved';
+        data.cell.styles.textColor = resolved ? [124, 58, 237] : isOpen ? [220, 38, 38] : [22, 163, 74];
+        data.cell.styles.fillColor = resolved ? [237, 233, 254] : isOpen ? [254, 226, 226] : [220, 252, 231];
         data.cell.styles.fontStyle = 'bold';
       }
     },
@@ -331,7 +334,7 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
     ...(Object.hasOwn(row, 'Door Name') ? [
       ['Door Name', 'Door Name'],
       ['Door Status', 'Door Status'],
-      ['Door Open Duration', 'Door Open Duration'],
+      ['Door Duration', 'Door Duration'],
     ] : []),
     ...(Object.hasOwn(row, 'Box ID') ? PACKING_INCIDENT_EXPORT_COLUMNS.map((key) => [key, key]) : []),
     ['Severity', 'Severity'],
@@ -399,7 +402,8 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
       doc.setFontSize(6.3);
       const isDoorStatus = key === 'Door Status';
       const isOpen = String(row[key] || '').toLowerCase() === 'open';
-      doc.setTextColor(isDoorStatus ? (isOpen ? 220 : 22) : 26, isDoorStatus ? (isOpen ? 38 : 163) : 42, isDoorStatus ? (isOpen ? 38 : 74) : 103);
+      const resolved = isDoorStatus && String(row[key] || '').toLowerCase() === 'resolved';
+      doc.setTextColor(isDoorStatus ? (resolved ? 124 : isOpen ? 220 : 22) : 26, isDoorStatus ? (resolved ? 58 : isOpen ? 38 : 163) : 42, isDoorStatus ? (resolved ? 237 : isOpen ? 38 : 74) : 103);
       const value = doc.splitTextToSize(text(row[key]), cardWidth - 24).slice(0, 1)[0] || '--';
       doc.text(value, x + cardWidth - 3.5, textY, { align: 'right' });
       textY += detailGap;

@@ -8,6 +8,7 @@ import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import IncidentZoneDetails from './IncidentZoneDetails';
+import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const SEV_COLOR = {
   high: '#ef4444', critical: '#ef4444',
@@ -58,12 +59,8 @@ const formatDoorDuration = (seconds) => {
   return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
 };
 
-// Door status is the state reported by the detector. Incident workflow
-// resolution is shown separately through the card's existing status indicator.
-export const formatDoorStatus = (item) => {
-  const state = String(item?.doorStatus || '').trim().toLowerCase();
-  return state || '--';
-};
+// Detector resolution is separate from the staff review status.
+export const formatDoorStatus = doorStatusLabel;
 
 /**
  * Plate + who it belongs to, for detections that carry a vehicle number
@@ -695,7 +692,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                  <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Status</span>
                  <span style={{
-                   color: String(item.doorStatus || '').toLowerCase() === 'open' ? 'var(--crit)' : 'var(--ok)',
+                   color: formatDoorStatus(item) === 'Resolved' ? 'var(--violet)' : formatDoorStatus(item) === 'Open' ? 'var(--crit)' : 'var(--ok)',
                    fontSize: 11.5,
                    fontWeight: 600,
                    textTransform: 'capitalize',
@@ -704,7 +701,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                  </span>
                </div>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Open Duration</span>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>{doorDurationLabel(item)}</span>
                  <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{formatDoorDuration(item.durationSec)}</span>
                </div>
              </div>

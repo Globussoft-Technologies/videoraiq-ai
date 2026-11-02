@@ -7,6 +7,7 @@ import { getMeasurementRecords } from '../api';
 import SnapshotPreviewModal from './SnapshotPreviewModal';
 import RefreshControl from '@/components/RefreshControl';
 import { groupMeasurementRecords, groupKey } from '../groupRecords';
+import { formatTime12, formatWhen12 } from '../formatWhen';
 
 // snap | order·ref | sku·model | printed | measured | Δ | conf | match | station | when·result
 // Every column is a fixed width so nothing stretches into a mid-table gap; the
@@ -383,7 +384,10 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   // same ORDER. Keep that group open; only a filter change resets the view.
   useEffect(() => setExpanded(new Set()), [statusF, dbStatusF, skuF, qDebounced, fromDate, toDate]);
   const toggleGroup = (key) => setExpanded((previous) => {
-    return previous.has(key) ? new Set() : new Set([key]);
+    const next = new Set(previous);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
   });
   const totalRows = filtered.length;
   const pageCount = Math.max(1, Math.ceil(groups.length / pageSize));
@@ -393,7 +397,8 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   const pageRows = useMemo(() => pageGroups.flatMap((group) => expanded.has(group.key) ? group.records : group.records.slice(0, 1)), [pageGroups, expanded]);
   const pageGroupByKey = useMemo(() => new Map(pageGroups.map((group) => [group.key, group])), [pageGroups]);
   const hasExpandedPageGroup = pageGroups.some((group) => expanded.has(group.key) && group.records.length > 1);
-  const selectedPageGroup = pageGroups.find((group) => expanded.has(group.key));
+  const expandedPageGroups = pageGroups.filter((group) => expanded.has(group.key) && group.records.length > 1);
+  const expandedChildCount = expandedPageGroups.reduce((count, group) => count + group.records.length - 1, 0);
   const previewItems = useMemo(
     () => pageRows.flatMap((r) => [
       (r.qrImageUrl || r.shot) && { src: r.qrImageUrl || r.shot, label: 'QR Capture' },
@@ -550,10 +555,10 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
         <div className="max-h-[520px] overflow-auto">
           <div style={{ minWidth: GRID_MIN_W }}>
           <div
-            className="relative grid w-full min-w-full h-[42px] box-border items-center gap-x-[10px] p-[8px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[11px] font-bold tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[5] isolate [&>span]:min-w-0 [&>span]:whitespace-nowrap [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span:nth-child(3)]:pl-[12px]"
+            className="relative grid w-full min-w-full h-[42px] box-border items-center gap-x-[10px] p-[8px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[11px] font-bold tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[5] isolate [&>span]:min-w-0 [&>span]:whitespace-nowrap [&>span]:overflow-hidden [&>span]:text-ellipsis"
             style={{ gridTemplateColumns: GRID_COLS }}
           >
-            <span>SNAP</span><span>MEAS</span><span>ORDER · REF</span><span>SKU · MODEL</span>
+            <span className="pl-[54px]">SNAP</span><span className="pl-[4px]">MEAS</span><span>ORDER · REF</span><span>SKU · MODEL</span>
             <span>PRINTED L×W×H (in)</span><span>MEASURED L×W×H (in)</span><span>Δ L / W / H (in)</span>
             <span>CONF</span><span>MATCH</span><span>STATUS</span><span>WHEN · RESULT</span>
           </div>
@@ -569,11 +574,11 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   key={r.id}
                   onClick={canExpand || !isLatest ? () => toggleGroup(group.key) : undefined}
                   title={!isLatest ? 'Click to collapse measurements' : canExpand ? 'Click to expand or collapse measurements' : undefined}
-                  className={`grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)] ${canExpand || !isLatest ? 'cursor-pointer' : ''} ${isLatest ? 'bg-[var(--bg1)]' : 'bg-[var(--bg2)] border-l-[3px] border-l-[var(--blue)] ml-[24px]'}`}
-                  style={{ gridTemplateColumns: GRID_COLS }}
+                  className={`relative grid gap-x-[10px] p-[10px_16px] items-center text-[12.5px] transition-colors ${canExpand || !isLatest ? 'cursor-pointer' : ''} ${isLatest ? isExpanded ? 'border-b border-b-[var(--blue)] shadow-[inset_4px_0_0_var(--violet),inset_0_0_0_1px_var(--blue)]' : 'border-b border-b-[var(--bd)] bg-[var(--bg1)] hover:bg-[var(--bg2)]' : 'bg-[var(--bg2)] before:absolute before:left-[24px] before:top-0 before:bottom-0 before:w-[3px] before:bg-[var(--blue)] before:pointer-events-none after:absolute after:left-[27px] after:right-0 after:bottom-0 after:h-px after:bg-[var(--bd)] after:pointer-events-none hover:brightness-[0.98]'}`}
+                  style={{ gridTemplateColumns: GRID_COLS, ...(isLatest && isExpanded ? { background: 'linear-gradient(90deg, color-mix(in srgb, var(--violet) 14%, var(--bg1)), color-mix(in srgb, var(--blue) 7%, var(--bg1)))' } : {}) }}
                 >
                   <span className="flex items-center gap-2">
-                    {canExpand ? <button type="button" aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${group.records.length - 1} previous measurements for order ${r.orderId}, ref ${r.refNo}`} aria-expanded={isExpanded} onClick={(event) => { event.stopPropagation(); toggleGroup(group.key); }} className="inline-flex shrink-0 items-center gap-[3px] rounded-[5px] border border-[var(--blue)] px-[4px] py-[2px] font-[var(--mono)] text-[9px] font-bold text-[var(--blue)] cursor-pointer hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]" style={{ background: 'color-mix(in srgb, var(--blue) 12%, var(--bg1))' }}>{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{group.records.length - 1}</button> : <span className="w-[40px] shrink-0" />}
+                    {canExpand ? <button type="button" aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${group.records.length - 1} additional measurements for order ${r.orderId}, ref ${r.refNo}`} aria-expanded={isExpanded} onClick={(event) => { event.stopPropagation(); toggleGroup(group.key); }} className="inline-flex shrink-0 items-center gap-[3px] rounded-[6px] border border-[var(--blue)] px-[5px] py-[3px] font-[var(--mono)] text-[9px] font-bold text-white shadow-sm cursor-pointer hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]" style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}>{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{group.records.length - 1}</button> : <span className="w-[40px] shrink-0" />}
                     <ImageThumb src={r.qrImageUrl || r.shot} label="QR capture" onOpen={() => setPreviewIdx(previewIndexFor(r, 'qr'))} />
                   </span>
                   <ImageThumb src={r.measurementImageUrl} label="measurement frame" onOpen={() => setPreviewIdx(previewIndexFor(r, 'measurement'))} />
@@ -623,8 +628,8 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   >
                     {r.recordStatus}
                   </span>
-                  <span title={r.dateTime}>
-                    <span className="block font-[var(--mono)] text-[11px] text-[var(--tx2)]">{r.time}</span>
+                  <span title={formatWhen12(r)}>
+                    <span className="block font-[var(--mono)] text-[11px] text-[var(--tx2)]">{formatTime12(r.time)}</span>
                     <span className="block font-[var(--mono)] text-[9px] text-[var(--tx3)]">{r.date}</span>
                     <span
                       className="flex items-center gap-[5px] text-[10px] font-semibold mt-[2px]"
@@ -653,7 +658,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           <div className={`grid auto-rows-max gap-[13px] ${hasExpandedPageGroup ? 'grid-cols-1 sm:grid-cols-2 max-h-[700px] lg:max-h-none lg:min-h-0 lg:h-full overflow-y-auto content-start pr-1' : 'col-span-full grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
           {pageGroups.map((group) => {
             const isExpanded = expanded.has(group.key);
-            return <div key={group.key} className="min-w-0 rounded-[13px] overflow-hidden border border-[var(--bd)] bg-[var(--bg2)]">
+            return <div key={group.key} className={`min-w-0 rounded-[13px] overflow-hidden border bg-[var(--bg2)] ${isExpanded ? 'border-[var(--blue)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--blue)_18%,transparent)]' : 'border-[var(--bd)]'}`}>
               {group.records.slice(0, 1).map((r, idx) => {
             const sm = STATUS_META[r.status];
             const canExpand = idx === 0 && group.records.length > 1;
@@ -664,6 +669,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
               <div
                 key={r.id}
                 className="overflow-hidden transition-colors hover:border-[var(--blue)] flex flex-col"
+                style={isExpanded ? { background: 'linear-gradient(135deg, color-mix(in srgb, var(--violet) 12%, var(--bg2)), color-mix(in srgb, var(--blue) 7%, var(--bg2)))' } : undefined}
               >
                 {/* Snapshot */}
                 <div
@@ -759,7 +765,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
 
                   {/* footer: time */}
                   <div className="mt-auto flex items-center justify-end font-[var(--mono)] text-[9.5px] text-[var(--tx3)] pt-[3px] border-t border-[var(--bd)]">
-                    <span className="shrink-0">{r.date} · {r.time}</span>
+                    <span className="shrink-0">{r.date} · {formatTime12(r.time)}</span>
                   </div>
                 </div>
               </div>
@@ -777,14 +783,14 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
             <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[10px] rounded-[12px] border border-[var(--blue)] p-[14px] shadow-sm" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--blue) 10%, var(--bg1)), color-mix(in srgb, var(--violet) 7%, var(--bg1)))' }}>
                 <span className="shrink-0 rounded-[9px] p-[8px] text-white shadow-sm" style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}><History size={17} /></span>
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><h3 className="text-[14px] font-semibold text-[var(--tx)]">Measurement history</h3><span className="rounded-full px-[8px] py-[2px] font-[var(--mono)] text-[10px] font-bold text-white" style={{ background: 'var(--blue)' }}>{Math.max(0, (selectedPageGroup?.records.length || 0) - 1)}</span></div>
-                  <p className="mt-[5px] text-[11px] leading-[1.8] text-[var(--tx2)]">View all measurement records associated with <strong className="inline-block rounded-[5px] border border-[var(--bd2)] bg-[var(--bg2)] px-[6px] py-px font-[var(--mono)] text-[var(--tx2)]">ORDER {selectedPageGroup?.records[0]?.orderId}</strong>, with the latest entry displayed first.</p>
+                  <div className="flex flex-wrap items-center gap-2"><h3 className="text-[14px] font-semibold text-[var(--tx)]">Measurement history</h3><span className="rounded-full px-[8px] py-[2px] font-[var(--mono)] text-[10px] font-bold text-white" style={{ background: 'var(--blue)' }}>{expandedChildCount}</span></div>
+                  <p className="mt-[5px] text-[11px] leading-[1.8] text-[var(--tx2)]">{expandedPageGroups.length} expanded order{expandedPageGroups.length === 1 ? '' : 's'} · newer measurements first within each order.</p>
                 </div>
               <button type="button" onClick={() => setExpanded(new Set())} aria-label="Close measurement history" className="inline-flex shrink-0 items-center gap-1 rounded-[7px] border border-[var(--blue)] bg-[var(--bg1)] px-[10px] py-[6px] text-[11px] font-bold text-[var(--blue)] cursor-pointer hover:bg-[var(--bg2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--blue)]"><X size={13} />Close</button>
             </div>
             {hasExpandedPageGroup ? (
               <div className="grid auto-rows-max grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 content-start gap-[13px] max-h-[700px] lg:max-h-none lg:min-h-0 lg:flex-1 overflow-y-auto pr-1">
-                {pageGroups.filter((group) => expanded.has(group.key)).flatMap((group) => group.records.slice(1).map((r, index) => {
+                {expandedPageGroups.flatMap((group) => group.records.slice(1).map((r, index) => {
                   const sm = STATUS_META[r.status];
                   const cm = confMeta(r.confidence);
                   const image = r.qrImageUrl || r.shot || r.measurementImageUrl;
@@ -795,13 +801,13 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                       <span className="absolute right-2 top-2 rounded bg-black/70 px-2 py-1 text-[9px] font-semibold" style={{ color: sm.color }}>{sm.label}</span>
                     </button>
                     <div className="p-3 space-y-2 text-[10px]">
-                      <div className="border-b border-[var(--bd)] pb-2"><div className="font-[var(--mono)] text-[11px] font-bold text-[var(--tx)]">Measurement #{index + 1}</div><div className="mt-1 truncate font-[var(--mono)] text-[var(--tx2)]" title={`${r.sku} · ${r.model}`}>SKU {r.sku} · {r.model}</div></div>
+                      <div className="border-b border-[var(--bd)] pb-2"><div className="font-[var(--mono)] text-[11px] font-bold text-[var(--tx)]">ORDER {r.orderId} · {r.refNo}</div><div className="mt-1 truncate font-[var(--mono)] text-[var(--tx2)]" title={`${r.sku} · ${r.model}`}>Measurement #{index + 1} · SKU {r.sku} · {r.model}</div></div>
                       <div className="grid grid-cols-2 gap-2 rounded-[6px] border border-[var(--bd)] bg-[var(--bg1)] p-2 font-[var(--mono)]">
                         <span className="min-w-0"><span className="block text-[var(--tx3)]">Printed size</span><span className="font-semibold text-[var(--tx2)]">{r.declared}&#8243;</span></span>
                         <span className="min-w-0"><span className="block text-[var(--tx3)]">Measured size</span><span className="font-semibold text-[var(--tx)]">{r.measured}&#8243;</span></span>
                       </div>
                       <div className="flex flex-wrap justify-between gap-2 text-[var(--tx3)]"><span>Confidence <strong style={{ color: cm.color }}>{cm.label}</strong></span><span className="font-semibold" style={{ color: r.status === 'pass' ? 'var(--ok)' : r.status === 'mismatch' ? 'var(--crit)' : 'var(--warn)' }}>{matchLabel(r)}</span></div>
-                      <div className="border-t border-[var(--bd)] pt-2 font-[var(--mono)] text-[var(--tx3)]">{r.date} · {r.time}</div>
+                      <div className="border-t border-[var(--bd)] pt-2 font-[var(--mono)] text-[var(--tx3)]">{r.date} · {formatTime12(r.time)}</div>
                     </div>
                   </article>;
                 }))}

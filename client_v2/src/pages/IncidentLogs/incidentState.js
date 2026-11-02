@@ -32,7 +32,7 @@ export const initialState = {
   // additional filters
   severity: '',
   status: '', // ON / OFF (conveyor only)
-  doorStatus: '', // both / open / closed (door detection only)
+  doorStatus: '', // all / open / closed / resolved (door detection only)
   vehicleNumber: '',
   boxType: '',
 

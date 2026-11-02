@@ -709,7 +709,7 @@ const IncidentLogsPage = ({ config }) => {
         datePickerVariant={config.datePickerVariant}
         dateFilterActions={config.showDoorFields ? (
           <div role="group" aria-label="Door status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
-            {[['', 'Both'], ['open', 'Open'], ['closed', 'Closed']].map(([value, label]) => (
+            {[['', 'All'], ['open', 'Open'], ['closed', 'Closed'], ['resolved', 'Resolved']].map(([value, label]) => (
               <button
                 key={value || 'both'}
                 type="button"
