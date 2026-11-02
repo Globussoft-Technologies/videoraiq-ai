@@ -69,10 +69,8 @@ export async function syncTemplates(adminId) {
     after = response.paging.cursors?.after;
     if (!after || page === 19) throw new Error('Template list is too large to sync completely');
   }
-  const fallbackStillApproved = templates.some(item => item.name === settings.fallbackTemplate?.name && item.language === settings.fallbackTemplate?.language && supportedTemplate(item) && !isImageTemplate(item));
-  const selectedIsImage = templates.some(item => item.name === settings.selectedTemplate?.name && item.language === settings.selectedTemplate?.language && isImageTemplate(item));
   const selectedStillApproved = templates.some(item => item.name === settings.selectedTemplate?.name && item.language === settings.selectedTemplate?.language && supportedTemplate(item));
-  await WhatsAppSettings.updateOne({ adminId }, { $set: { templates, lastSyncAt: new Date(), ...(settings.enabled && (!selectedStillApproved || (selectedIsImage && !fallbackStillApproved)) ? { enabled: false } : {}) } });
+  await WhatsAppSettings.updateOne({ adminId }, { $set: { templates, lastSyncAt: new Date(), ...(settings.enabled && !selectedStillApproved ? { enabled: false } : {}) } });
   return publicSettings(adminId);
 }
 export async function requestTemplate(adminId, { name, language, imageHeader = false, sampleHandle }) {
@@ -92,7 +90,7 @@ export async function selectTemplate(adminId, selection) {
   const template = settings.templates.find(item => item.name === selection.name && item.language === selection.language);
   if (!template || !supportedTemplate(template)) throw new Error('Select an approved template with one body parameter and an optional image header');
   let fallback = null;
-  if (isImageTemplate(template)) {
+  if (isImageTemplate(template) && selection.fallback) {
     fallback = settings.templates.find(item => item.name === selection.fallback?.name && item.language === selection.fallback?.language);
     if (!fallback || !supportedTemplate(fallback) || isImageTemplate(fallback)) throw new Error('Select an approved text-only fallback for incidents without images');
   }
@@ -108,9 +106,9 @@ export async function sendTemplateAlert(adminId, incident, recipients, nvr = {},
   let imageUrl = buildIncidentImageUrl(incident);
   try { const url = new URL(imageUrl); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) imageUrl = ''; } catch { imageUrl = ''; }
   const fallback = settings.templates.find(item => item.name === settings.fallbackTemplate?.name && item.language === settings.fallbackTemplate?.language);
+  const missingImage = isImageTemplate(selected) && !imageUrl;
   if (isImageTemplate(selected) && !imageUrl) {
-    if (!fallback || !supportedTemplate(fallback) || isImageTemplate(fallback)) throw new Error('No approved text-only fallback is configured');
-    selected = fallback;
+    if (fallback && supportedTemplate(fallback) && !isImageTemplate(fallback)) selected = fallback;
   }
   // Our templates have a single bounded, single-line body parameter.
   const summary = buildIncidentWhatsAppMessage(incident, nvr, channel, timezone).replace(/\s+/g, ' ').slice(0, 800);
@@ -118,6 +116,7 @@ export async function sendTemplateAlert(adminId, incident, recipients, nvr = {},
   const results = [];
   for (const recipient of phones) {
     try {
+      if (missingImage && isImageTemplate(selected)) throw new Error('Incident image is missing and no approved text-only fallback is configured');
       const send = current => graph(settings, 'post', `${settings.phoneNumberId}/messages`, {
         messaging_product: 'whatsapp', to: recipient.replace(/^\+/, ''), type: 'template',
         template: { name: current.name, language: { code: current.language }, components: [

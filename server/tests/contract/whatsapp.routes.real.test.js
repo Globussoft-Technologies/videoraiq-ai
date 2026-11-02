@@ -132,7 +132,11 @@ describe('WhatsApp alert configuration', () => {
     expect(submitted.status).toBe(200);
     const payload = axios.mock.calls.find(([options]) => options.method === 'post' && options.url.endsWith('/message_templates'))[0].data;
     expect(payload.components[0]).toEqual({ type: 'HEADER', format: 'IMAGE', example: { header_handle: ['4:sample-handle'] } });
-    expect((await request(app).put('/whatsapp/template').send({ name: 'incident_photo', language: 'en_US' })).status).toBe(400);
+    expect((await request(app).put('/whatsapp/template').send({ name: 'incident_photo', language: 'en_US' })).status).toBe(200);
+    expect((await request(app).post('/whatsapp/templates/sync').send({})).body.enabled).toBe(true);
+    const missingImage = await sendTemplateAlert(admin._id, {}, ['+919999999999']);
+    expect(missingImage[0]).toMatchObject({ status: 'failed', error: expect.stringContaining('Incident image is missing') });
+    expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/messages'))).toHaveLength(0);
     expect((await request(app).put('/whatsapp/template').send({ name: 'incident_photo', language: 'en_US', fallback: { name: template.name, language: template.language } })).status).toBe(200);
     await sendTemplateAlert(admin._id, { Image: 'https://media.example.com/incident.jpg' }, ['+919999999999']);
     const imageSend = axios.mock.calls.find(([options]) => options.url.endsWith('/messages'))[0].data;
