@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Search,
   CirclePlus,
@@ -72,6 +72,18 @@ const deleteErrorMessage = (error, fallback) => {
   return fallback;
 };
 
+const normalizeEmployeeSearch = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+const matchesEmployeeSearch = (user, query) => {
+  const terms = normalizeEmployeeSearch(query).split(' ').filter(Boolean);
+  const fields = [
+    normalizeEmployeeSearch(`${user.firstName || ''} ${user.lastName || ''}`),
+    normalizeEmployeeSearch(user.userName),
+    normalizeEmployeeSearch(user.email),
+  ];
+  return terms.every((term) => fields.some((field) => field.includes(term)));
+};
+
 const AddProfile = () => {
   const { theme } = useTheme();
   const token = getAccessToken();
@@ -86,6 +98,10 @@ const AddProfile = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const usersRequestId = useRef(0);
+  const searchInputRef = useRef(null);
+  const suggestionListRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -172,6 +188,7 @@ const AddProfile = () => {
   };
 
   const fetchUsers = async () => {
+    const requestId = ++usersRequestId.current;
     setLoading(true);
     try {
       const skip = (currentPage - 1) * limit;
@@ -181,7 +198,36 @@ const AddProfile = () => {
       if (statusFilter) data.status = statusFilter;
       if (verificationFilter === 'verified') data.verified = true;
       if (verificationFilter === 'not_verified') data.verified = false;
+      const normalizedQuery = normalizeEmployeeSearch(debouncedSearch);
+      if (normalizedQuery.includes(' ')) {
+        // The API searches userName/email, while cards show firstName + lastName.
+        // Read the filtered roster so names absent from userName are not missed.
+        const batchSize = 100;
+        const firstResult = await authorizedUsers(0, batchSize, '', data);
+        if (requestId !== usersRequestId.current) return;
+        if (firstResult?.body?.status !== 'success') throw new Error('Employee search failed');
+        const candidates = [...(firstResult.body.data.users || [])];
+        const candidateCount = firstResult.body.data.totalCount || 0;
+        for (let offset = batchSize; offset < candidateCount; offset += batchSize) {
+          const nextResult = await authorizedUsers(offset, batchSize, '', data);
+          if (requestId !== usersRequestId.current) return;
+          if (nextResult?.body?.status !== 'success') throw new Error('Employee search failed');
+          candidates.push(...(nextResult.body.data.users || []));
+        }
+        const seen = new Set();
+        const matches = candidates.filter((user) => {
+          const id = String(user._id || user.id || '');
+          if (id && seen.has(id)) return false;
+          if (id) seen.add(id);
+          return matchesEmployeeSearch(user, normalizedQuery);
+        });
+        setUsers(matches.slice(skip, skip + limit).map(stripPlaceholderEmail));
+        setTotalCount(matches.length);
+        setTotalPages(Math.max(1, Math.ceil(matches.length / limit)));
+        return;
+      }
       const result = await authorizedUsers(skip, limit, debouncedSearch, data);
+      if (requestId !== usersRequestId.current) return;
       if (result?.body?.status === 'success') {
         const count = result.body.data.totalCount || 0;
         setUsers((result.body.data.users || []).map(stripPlaceholderEmail));
@@ -189,10 +235,11 @@ const AddProfile = () => {
         setTotalPages(Math.max(1, Math.ceil(count / limit)));
       }
     } catch (error) {
+      if (requestId !== usersRequestId.current) return;
       console.error('Error fetching users:', error);
       toast.error('Failed to fetch users');
     } finally {
-      setLoading(false);
+      if (requestId === usersRequestId.current) setLoading(false);
     }
   };
 
@@ -467,6 +514,10 @@ const AddProfile = () => {
   const actionBtn =
     'flex grow shrink-0 items-center justify-center focus:outline-none gap-1.5 h-10 px-3 whitespace-nowrap bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-lg text-xs font-medium transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20';
 
+  const normalizedSearch = normalizeEmployeeSearch(search);
+  const suggestionsReady = normalizedSearch && normalizedSearch === normalizeEmployeeSearch(debouncedSearch) && !loading;
+  const suggestions = suggestionsReady ? users.filter((user) => matchesEmployeeSearch(user, normalizedSearch)).slice(0, 5) : [];
+
   return (
     <div className="p-[22px] flex flex-col gap-[18px] min-h-full min-w-0">
       {/* Register New User (inline, two-step) */}
@@ -479,15 +530,52 @@ const AddProfile = () => {
       <div data-tour="reg-directory" className="w-full min-w-0 flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
         <div className="flex min-w-0 flex-col gap-3">
-          <div data-tour="reg-search" className="relative w-full md:w-56">
+          <div data-tour="reg-search" className="relative w-full md:w-56" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setShowSearchSuggestions(false);
+          }}>
             <Input
+              ref={searchInputRef}
               type="text"
               placeholder="Search employees..."
               className="pl-4 pr-10 shadow-none border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] h-10 text-sm focus:border-[var(--blue)]"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              aria-controls="employee-search-suggestions"
+              aria-expanded={Boolean(showSearchSuggestions && suggestionsReady)}
+              onFocus={() => setShowSearchSuggestions(true)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCurrentPage(1);
+                setShowSearchSuggestions(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setShowSearchSuggestions(false);
+                if (event.key === 'ArrowDown' && suggestions.length) {
+                  event.preventDefault();
+                  suggestionListRef.current?.querySelector('button')?.focus();
+                }
+              }}
             />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
+            <Search className="pointer-events-none absolute right-3 top-3 w-4 h-4 text-[var(--tx3)]" />
+            {showSearchSuggestions && suggestionsReady && suggestions.length > 0 && (
+              <div id="employee-search-suggestions" ref={suggestionListRef} aria-label="Employee suggestions" className="absolute left-0 top-full z-30 mt-1 w-full md:min-w-[280px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg">
+                {suggestions.map((user) => {
+                  const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.userName || user.email;
+                  return <button key={user._id || user.id} type="button" onClick={() => {
+                    setSearch(name);
+                    setCurrentPage(1);
+                    setShowSearchSuggestions(false);
+                  }} onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setShowSearchSuggestions(false);
+                      searchInputRef.current?.focus();
+                    }
+                  }} className="block w-full px-3 py-2 text-left hover:bg-[var(--bg2)] focus:bg-[var(--bg2)] focus:outline-none">
+                    <span className="block truncate text-xs font-semibold text-[var(--tx)]">{name}</span>
+                    {user.email && <span className="block truncate text-[11px] text-[var(--tx3)]">{user.email}</span>}
+                  </button>;
+                })}
+              </div>
+            )}
           </div>
 
           {/* Share spare width between controls; scroll within the card on narrow screens. */}

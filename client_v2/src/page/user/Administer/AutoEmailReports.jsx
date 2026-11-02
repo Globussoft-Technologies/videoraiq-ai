@@ -140,6 +140,23 @@ function formatsLabel(formats = []) {
   return formats.map((item) => item.toUpperCase()).join(', ');
 }
 
+function scheduledSendStatus(report) {
+  if (typeof report.lastError === 'string' && report.lastError.trim()) {
+    return { label: 'Failed', detail: report.lastError.trim(), color: 'var(--crit)' };
+  }
+  if (report.lastSentAt) {
+    const sentAt = moment(report.lastSentAt);
+    const timezone = report.timezone;
+    const detail = sentAt.isValid()
+      ? timezone && moment.tz.zone(timezone)
+        ? sentAt.tz(timezone).format('D MMM YYYY, hh:mm A')
+        : sentAt.utc().format('D MMM YYYY, hh:mm A [UTC]')
+      : 'Time unavailable';
+    return { label: 'Sent', detail, color: 'var(--ok)' };
+  }
+  return { label: 'Pending', detail: 'No scheduled send recorded', color: 'var(--tx3)' };
+}
+
 function reportContentTypes(report = {}) {
   if (Array.isArray(report.contentTypes) && report.contentTypes.length) return report.contentTypes;
   return [report.contentType === 'incidents' ? 'incidents' : 'attendance'];
@@ -238,6 +255,7 @@ function reportFormError(form, adminTimezone) {
   if (!form.pdf && !form.xlsx && !(hasAttendance && (form.breakPdf || form.breakXlsx))) return 'Select at least one report format.';
   if (hasAttendance && form.scope === 'employees' && !form.employeeIds.length) return 'Select at least one employee.';
   if (hasAttendance && form.scope === 'departments' && !form.departmentIds.length) return 'Select at least one department.';
+  if (form.frequency === 'monthly' && (!Number.isInteger(Number(form.dayOfMonth)) || Number(form.dayOfMonth) < 1 || Number(form.dayOfMonth) > 28)) return 'Monthly day must be between 1 and 28.';
   if (form.frequency === 'custom' && (!form.startDate || !form.endDate)) return 'Select the custom report start and end dates.';
   return '';
 }
@@ -393,7 +411,23 @@ function ReportFormModal({
               {form.frequency === 'monthly' && (
                 <div>
                   <FieldLabel required>Monthly day</FieldLabel>
-                  <input type="number" min="1" max="28" value={form.dayOfMonth} onChange={(event) => setForm((current) => ({ ...current, dayOfMonth: event.target.value }))} style={inputStyle} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={2}
+                    aria-describedby="monthly-day-hint"
+                    value={form.dayOfMonth}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === '' || (/^[1-9][0-9]?$/.test(value) && Number(value) <= 28)) {
+                        setForm((current) => ({ ...current, dayOfMonth: value }));
+                      }
+                    }}
+                    onBlur={() => setForm((current) => current.dayOfMonth === '' ? { ...current, dayOfMonth: 1 } : current)}
+                    style={inputStyle}
+                  />
+                  <p id="monthly-day-hint" style={{ margin: '6px 0 0', color: 'var(--tx3)', fontSize: 11 }}>(Monthly day must be between 1 and 28)</p>
                 </div>
               )}
               {form.frequency === 'custom' && (
@@ -692,6 +726,47 @@ function PreviewModal({ preview, onClose }) {
   );
 }
 
+function SendHistoryModal({ report, onClose }) {
+  const entries = Array.isArray(report.history) ? report.history : [];
+  const timezone = report.timezone && moment.tz.zone(report.timezone) ? report.timezone : null;
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Send history for ${report.title}`} style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
+      <div style={{ width: 'min(100%, 720px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Send History · {report.title}</div>
+            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>Recent successful send records · {timezone || 'UTC'} · Inbox delivery is not confirmed</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close send history" style={{ width: 30, height: 30, flexShrink: 0, display: 'grid', placeItems: 'center', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: 16 }}>
+          {entries.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No successful sends recorded.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {entries.map((entry, index) => {
+                const sentAt = moment(entry.sentAt);
+                const sentAtLabel = sentAt.isValid() ? timezone ? sentAt.tz(timezone).format('D MMM YYYY, hh:mm:ss A') : sentAt.utc().format('D MMM YYYY, hh:mm:ss A [UTC]') : 'Time unavailable';
+                const recipients = Array.isArray(entry.recipients) ? entry.recipients.join(', ') : '';
+                const files = Array.isArray(entry.files) ? entry.files.map((file) => file.format).filter(Boolean).join(', ') : '';
+                return (
+                  <div key={entry._id || `${entry.sentAt || 'send'}-${index}`} style={{ padding: '12px 14px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 11.5, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}><strong style={{ color: 'var(--ok)' }}>Sent</strong><strong style={{ color: 'var(--tx)' }}>{sentAtLabel}</strong></div>
+                    <div>Period: {entry.period || 'Not recorded'}</div>
+                    <div>Recipients: {recipients || 'Not recorded'}</div>
+                    <div>Records: {Number.isFinite(entry.rowCount) ? entry.rowCount : 'Not recorded'}</div>
+                    {files && <div>Files: {files}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AutoEmailReports() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -706,6 +781,7 @@ export default function AutoEmailReports() {
   const [timezoneValue, setTimezoneValue] = useState('');
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [historyTarget, setHistoryTarget] = useState(null);
   const [busyActionId, setBusyActionId] = useState('');
 
   const { permissions, loading: permissionsLoading } = usePermissions();
@@ -714,7 +790,7 @@ export default function AutoEmailReports() {
   const canEditReports = permissions?.autoEmailReports?.edit === true;
   const canDeleteReports = permissions?.autoEmailReports?.delete === true;
 
-  const reportsApi = useApi(() => getAutoEmailReports({ page, limit: PAGE_SIZE, search }), [page, search], { enabled: canViewReports });
+  const reportsApi = useApi(() => getAutoEmailReports({ page, limit: PAGE_SIZE, search }), [page, search], { enabled: canViewReports, pollMs: 60000, pollSilent: true });
   const recipientsApi = useApi(() => getRecipients({ alertType: 'email', filterByStatus: 'verified', skip: 0, limit: 100 }), [], { enabled: canViewReports });
   const timezoneApi = useApi(() => fetchTimezone(), [], { enabled: canViewReports });
   const timezonesApi = useApi(() => getTimezones('asia'), [], { enabled: canViewReports && !timezoneApi.data });
@@ -867,6 +943,7 @@ export default function AutoEmailReports() {
     try {
       await sendAutoEmailReportNow(report._id);
       toast.success('Test mail sent.', progressToastId ? { id: progressToastId } : undefined);
+      await reportsApi.refetch({ silent: true });
     } catch (error) {
       toast.error(
         errorMessage(error, 'Failed to send test mail.'),
@@ -901,8 +978,10 @@ export default function AutoEmailReports() {
       frequencyLabel: frequencyLabel(report.schedule, report.timezone || adminTimezone),
       recipientsLabel: recipientsLabel(report.recipients),
       contentLabel: `${contentLabels.join(' + ')} · ${formatsLabel(report.formats)}`,
+      sendStatus: scheduledSendStatus(report),
     };
   }), [reports, adminTimezone]);
+  const historyReport = historyTarget && (reports.find((report) => report._id === historyTarget._id) || historyTarget);
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -926,16 +1005,21 @@ export default function AutoEmailReports() {
         </div>
 
         <div className="vq-auto-report-table-scroll" style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 780 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1.1fr 1.5fr .8fr 180px', gap: 12, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
-              <span>TITLE</span><span>FREQUENCY</span><span>RECIPIENTS</span><span>CONTENT</span><span>ACTION</span>
+          <div style={{ minWidth: 1080 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.3fr .9fr 1.1fr 90px 180px', gap: 12, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
+              <span>TITLE</span><span>FREQUENCY</span><span>RECIPIENTS</span><span>CONTENT</span><span title="Latest scheduled send result; test mails are separate">SEND STATUS</span><span>HISTORY</span><span>ACTION</span>
             </div>
             {reportsApi.loading ? <div style={{ padding: 38, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>Loading reports...</div> : reportsApi.error ? <div style={{ padding: 38, textAlign: 'center', color: 'var(--crit)', fontSize: 12.5 }}>Failed to load reports. <button type="button" onClick={reportsApi.refetch} style={{ border: 0, background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontWeight: 700 }}>Retry</button></div> : tableRows.length === 0 ? <div style={{ padding: 44, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No auto email reports found.</div> : tableRows.map((report) => (
-              <div key={report._id} style={{ display: 'grid', gridTemplateColumns: '1.35fr 1.1fr 1.5fr .8fr 180px', gap: 12, alignItems: 'center', minHeight: 64, padding: '10px 16px', borderBottom: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12.5 }}>
+              <div key={report._id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.3fr .9fr 1.1fr 90px 180px', gap: 12, alignItems: 'center', minHeight: 64, padding: '10px 16px', borderBottom: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12.5 }}>
                 <div style={{ minWidth: 0 }}><div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}><span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={report.title}>{report.title}</span><span style={{ flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: report.enabled ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.16)', color: report.enabled ? 'var(--ok)' : 'var(--tx3)', fontSize: 10, fontWeight: 700 }}>{report.enabled ? 'Enabled' : 'Paused'}</span></div><div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--tx3)' }}>{report.timezone || adminTimezone || 'Timezone not set'}</div></div>
                 <span style={{ color: 'var(--tx2)' }}>{report.frequencyLabel}</span>
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--tx2)' }} title={Array.isArray(report.recipients) ? report.recipients.join(', ') : ''}>{report.recipientsLabel}</span>
                 <span style={{ color: 'var(--tx2)' }} title={includesContent(report, 'incidents') ? (report.incidentTypes || []).join(', ') : ''}>{report.contentLabel}</span>
+                <div style={{ minWidth: 0 }} title={report.sendStatus.detail}>
+                  <strong style={{ color: report.sendStatus.color, fontSize: 11.5 }}>{report.sendStatus.label}</strong>
+                  <div style={{ color: 'var(--tx3)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{report.sendStatus.detail}</div>
+                </div>
+                <button type="button" onClick={() => setHistoryTarget(report)} aria-label={`View send history for ${report.title}`} style={{ justifySelf: 'start', border: '1px solid var(--bd)', borderRadius: 7, background: 'var(--bg2)', color: 'var(--blue)', padding: '5px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>View ({Array.isArray(report.history) ? report.history.length : 0})</button>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <IconButton data-tour="reports-preview" title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
                   {canEditReports && (
@@ -989,6 +1073,7 @@ export default function AutoEmailReports() {
         />
       )}
       {preview && <PreviewModal preview={preview} onClose={() => setPreview(null)} />}
+      {historyReport && <SendHistoryModal report={historyReport} onClose={() => setHistoryTarget(null)} />}
       {canDeleteReports && (
         <ConfirmationModal open={!!deleteTarget} title="Delete Auto Email Report" message={<>Delete <strong>{deleteTarget?.title}</strong>? This action cannot be undone.</>} confirmLabel="Delete" onClose={() => setDeleteTarget(null)} onConfirm={deleteReport} loading={deleting} />
       )}

@@ -33,6 +33,17 @@ const ImportEmpUsersModal = ({ open, onClose, fetchUsers, refreshLocations, refr
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
 
+  const handleClose = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setOrgEmailInput('');
+    setSelectedLocation(null);
+    setSelected([]);
+    setCurrentPage(1);
+    setRemoveConfirm(null);
+    onClose();
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
@@ -267,7 +278,7 @@ const ImportEmpUsersModal = ({ open, onClose, fetchUsers, refreshLocations, refr
           <h2 className="text-sm sm:text-base md:text-lg font-semibold">
             Import Employees by Organization Email ID
           </h2>
-          <button onClick={onClose} className="cursor-pointer hover:opacity-80">
+          <button onClick={handleClose} className="cursor-pointer hover:opacity-80">
             <X className="w-5 h-5" />
           </button>
         </div>
