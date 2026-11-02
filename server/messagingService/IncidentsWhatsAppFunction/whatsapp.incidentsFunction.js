@@ -1,3 +1,5 @@
+import { WhatsAppSettings } from '../../core/v2/whatsapp/whatsapp.model.js';
+import { sendTemplateAlert } from '../../core/v2/whatsapp/whatsapp.service.js';
 import axios from "axios";
 import config from "config";
 import logger from "../../utils/logger.js";
@@ -22,9 +24,16 @@ const toE164 = (raw) => {
 // Send an incident alert to one or more numbers via the WhatsApp Cloud API.
 // Non-blocking by design at the call site; here it resolves with per-number
 // results and never throws for a single failed send.
-export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}, timezone = null) => {
-  const phoneNumberId = config.get("WhatsApp.phoneNumberId");
-  const accessToken = config.get("WhatsApp.accessToken");
+export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}, timezone = null, adminId = null) => {
+  if (adminId) {
+    const settings = await WhatsAppSettings.findOne({ adminId }).select('enabled recipients');
+    if (settings) {
+      const phones = settings.recipients.filter(item => item.optedInAt).map(item => item.phone);
+      return sendTemplateAlert(adminId, incident, phones, nvrData, channelData, timezone);
+    }
+  }
+  const phoneNumberId = config.has("WhatsApp.phoneNumberId") ? config.get("WhatsApp.phoneNumberId") : '';
+  const accessToken = config.has("WhatsApp.accessToken") ? config.get("WhatsApp.accessToken") : "";
 
   if (!phoneNumberId || !accessToken) {
     logger.warn("[WHATSAPP] Skipped — WhatsApp.phoneNumberId/accessToken not configured");

@@ -226,8 +226,8 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         .lean();
 
       const phoneNumbers = smsRecipients.map(recipient => recipient.value);
-      if (phoneNumbers?.length) {
-        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz);
+      if (phoneNumbers?.length || resolvedAdminId) {
+        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz, resolvedAdminId);
       }
     } catch (err) {
       logger.error(`[ALERT_WHATSAPP_ERROR] WhatsApp alert failed`, {

@@ -84,7 +84,9 @@ app.use(helmet(isOnPrem ? {
   },
 } : {}));
 app.use(prometheusMiddleware);
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "50mb", verify: (req, res, buffer) => {
+  if (/\/whatsapp\/webhook\//.test(req.originalUrl || '')) req.rawBody = Buffer.from(buffer);
+} }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(mongoSanitize());

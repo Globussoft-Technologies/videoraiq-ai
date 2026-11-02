@@ -1,3 +1,5 @@
+import WhatsAppAlerts from './WhatsAppAlerts';
+import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -49,6 +51,9 @@ const STATUS_FILTERS = [
 const RECIPIENT_VIEWS = [
   { key: 'email', label: 'Email' },
   { key: 'telegram', label: 'Telegram' },
+  ...(IS_FLO_MATTRESS
+    ? []
+    : [{ key: 'whatsapp', label: 'WhatsApp' }]),
 ];
 
 const TELEGRAM_CHANNELS_PER_PAGE = 4;
@@ -1636,7 +1641,9 @@ export default function AlertRecipients() {
         </div>
       )}
 
-      {activeView === 'email' ? (
+      {activeView === 'whatsapp' && <WhatsAppAlerts />}
+
+      {activeView !== 'whatsapp' && (activeView === 'email' ? (
         <>
           <div
             className="vq-recipients-toolbar"
@@ -2036,7 +2043,7 @@ export default function AlertRecipients() {
           </div>
           </div>
         </>
-      )}
+      ))}
 
       {showAddModal && activeView === 'email' && (
         <AddRecipientModal

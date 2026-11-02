@@ -1,3 +1,4 @@
+import whatsappRoutes from '../../core/v2/whatsapp/whatsapp.routes.js';
 import express from "express";
 import verifyToken from "../../middlewares/verifyToken.js";
 import apiKeyRoutes from '../../core/v2/apiKeys/apiKey.routes.js';
@@ -77,6 +78,7 @@ router.get("/health", allowCrossOriginResource, (_req, res) => {
 // Swap any import above to a core/v2/<module> file when that module needs
 // v2-specific behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
+router.use('/whatsapp', whatsappRoutes);
 router.use("/auth", authRoutes);
 router.use('/api-keys', apiKeyRoutes);
 router.use("/integrations/amember", amemberIntegrationRoutes);

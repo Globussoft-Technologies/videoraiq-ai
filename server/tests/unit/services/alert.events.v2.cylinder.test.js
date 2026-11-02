@@ -129,6 +129,7 @@ describe("v2 cylinder incident alerts", () => {
       expect.anything(),
       expect.anything(),
       "UTC",
+      "admin-1",
     );
     expect(TelegramService.sendIncident).toHaveBeenCalledWith(
       expect.anything(),

@@ -1,3 +1,4 @@
+import { WhatsAppSettings, WhatsAppDelivery } from '../whatsapp/whatsapp.model.js';
 import Admin from "../admin/admin.model.js";
 import { Incident } from "../incidents/incidents.model.js";
 import NVR from "../NVR/nvr.model.js";
@@ -113,6 +114,8 @@ export async function purgeAmemberTenantData(admin) {
     ["testAccessLogs", TestAccessLog.deleteMany({ admin: adminId })],
     ["shifts", Shift.deleteMany({ adminId })],
     ["shiftSchedules", ShiftSchedule.deleteMany({ adminId })],
+    ["whatsappSettings", WhatsAppSettings.deleteMany({ adminId })],
+    ["whatsappDeliveries", WhatsAppDelivery.deleteMany({ adminId })],
     ["shiftEffectiveAssignments", ShiftEffectiveAssignment.deleteMany({ adminId })],
     ["entries", Entry.deleteMany({ adminId })],
     ["entryUsers", ownedEntryUserIds.length
