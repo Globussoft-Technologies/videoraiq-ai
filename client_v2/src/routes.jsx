@@ -75,6 +75,7 @@ const SleepActivityLogs = lazy(() => import('./pages/SleepActivityLogs/SleepActi
 const MeasurementLogs = lazy(() => import('./pages/MeasurementLogs/MeasurementLogs'));
 const EmailMonitoringDashboard = lazy(() => import('./page/user/EmailMonitoring/EmailMonitoringDashboard'));
 const AssistantPage = lazy(() => import('./page/user/Assistant/AssistantPage'));
+const AgentUI = lazy(() => import('./page/user/AgentUI/AgentUI'));
 const RaspberryPiDevices = lazy(() => import('./page/user/Administer/RaspberryPiDevices'));
 const StorageSettings = lazy(() => import('./page/user/Administer/StorageSettings'));
 const MeasurementCalibration = lazy(() => import('./page/user/Configure/MeasurementCalibration'));
@@ -138,6 +139,7 @@ export const v2Routes = (
         Ungated for now (same as email-monitoring) until an `assistant`
         permission module exists server-side. */}
     <Route path="assistant" element={<AssistantPage />} />
+    <Route path="agent" element={<AgentUI />} />
     <Route path="roles" element={guard('roles', undefined, <RolesPermission />)} />
     <Route path="locations" element={guard('locations', undefined, <Locations />)} />
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />

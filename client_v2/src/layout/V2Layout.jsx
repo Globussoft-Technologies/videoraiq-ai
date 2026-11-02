@@ -5,7 +5,7 @@ import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AppTour from '../components/Tour/AppTour';
-import AssistantLauncher from '../components/AssistantLauncher';
+import AgentLauncher from '../components/AgentLauncher';
 import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
@@ -149,7 +149,7 @@ function Shell() {
   // Playback and Assistant both manage their own internal scrollers. Keeping
   // the outer shell fixed prevents the chat composer from falling below the
   // viewport and avoids rendering the normal page footer inside the chat UI.
-  const fixedViewportPage = viewKey === 'camera' || viewKey === 'assistant';
+  const fixedViewportPage = viewKey === 'camera' || viewKey === 'assistant' || viewKey === 'agent';
   const isLiveDemoRoute = viewKey === 'live-demo';
   const isLiveDemo = isLiveDemoRoute && canUseLiveDemo;
   const [hasVisitedLiveDemo, setHasVisitedLiveDemo] = useState(isLiveDemo);
@@ -396,8 +396,7 @@ function Shell() {
     
       </main>
       {!embedded && <AppTour />}
-      {/* chatbot */}
-      {/* <AssistantLauncher /> */}
+      {/* {!embedded && <AgentLauncher />} */}
     </div>
   );
 }

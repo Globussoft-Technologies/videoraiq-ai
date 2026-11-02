@@ -59,7 +59,9 @@ export function useConversations() {
     totalPages: 1,
   });
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState('');
   const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const abortRef = useRef(null);
@@ -98,6 +100,7 @@ export function useConversations() {
 
   const loadHistoryPage = useCallback(async (page = 1) => {
     setHistoryLoading(true);
+    setHistoryError('');
     try {
       const result = await listAssistantConversations({ page, limit: PAGE_SIZE, search: historySearch });
       setConversations(result?.conversations || []);
@@ -105,6 +108,7 @@ export function useConversations() {
     } catch {
       setConversations([]);
       setHistoryPagination({ page, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+      setHistoryError('Conversation history could not be loaded. Please try again.');
     } finally {
       setHistoryLoading(false);
     }
@@ -140,6 +144,7 @@ export function useConversations() {
     activeIdRef.current = id;
     setActiveId(id);
     setThreadLoading(true);
+    setThreadError('');
     try {
       const conversation = await getAssistantConversation(id);
       const hydrated = await hydrateMessages(conversation?.messages || [], id);
@@ -148,6 +153,7 @@ export function useConversations() {
       if (requestId === selectedRequestRef.current) {
         setActiveId(null);
         setMessages([]);
+        setThreadError('Conversation could not be loaded. Please try again.');
       }
     } finally {
       if (requestId === selectedRequestRef.current) setThreadLoading(false);
@@ -177,6 +183,7 @@ export function useConversations() {
     abortRef.current = null;
     setSending(false);
     setThreadLoading(false);
+    setThreadError('');
     activeIdRef.current = null;
     setActiveId(null);
     setMessages([]);
@@ -470,7 +477,9 @@ export function useConversations() {
     sending,
     uploading,
     historyLoading,
+    historyError,
     threadLoading,
+    threadError,
     historyPage,
     historyPagination,
     changeHistoryPage,

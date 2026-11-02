@@ -269,6 +269,7 @@ export const VIEW_META = {
   analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
   'email-monitoring': { title: 'Email Monitoring', sub: 'SMTP traffic, delivery health & queue status' },
   assistant: { title: 'AI Assistant', sub: 'Ask questions about your live operational data' },
+  agent: { title: 'VideoraAI', sub: 'Ask questions about incidents, cameras, and detections' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
   'camera-settings': { title: 'Camera Settings', sub: 'Camera alias names & department assignment' },
