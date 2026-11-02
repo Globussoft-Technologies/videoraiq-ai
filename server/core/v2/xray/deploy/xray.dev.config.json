@@ -1,0 +1,24 @@
+{
+  "_comment": "X-ray mode: merge this `xray` block into config/<NODE_ENV>.json (e.g. development.json). Every key also has an env-var form -- see xray.dev.env -- and env always wins over the file. Full reference: core/v2/xray/README.md and docs/xray/00_CONTRACT.md. Replace every <ANGLE_BRACKET> value; keep the rest as-is.",
+
+  "xray": {
+    "enabled": true,
+
+    "serviceUrl": "",
+
+    "apiKey": "<SHARED_SERVICE_KEY>",
+    "jwtSecret": "<SHARED_JWT_SECRET>",
+
+    "licenseCheck": "off",
+
+    "wsPath": "/internal/xray/ws",
+    "wsUnknownGraceMs": 3000,
+    "wsPingSec": 20,
+
+    "idleTimeoutSec": 45,
+    "reapIntervalSec": 15,
+    "closeMaxAttempts": 5,
+    "serviceTimeoutMs": 15000,
+    "jwtTtlSec": 120
+  }
+}

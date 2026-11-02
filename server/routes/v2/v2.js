@@ -61,6 +61,11 @@ import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measuremen
 import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
 import assistantRoutes from "../../core/v2/assistant/assistant.routes.js";
 import measurementMediaRoutes from "../../core/v2/measurementMedia/measurementMedia.routes.js";
+// X-Ray mode. Both imports are side-effect-free by design: xray.config.js reads
+// only env/config, and xray.routes.js defers its controller (and so its Mongoose
+// model) to the first request. See the guarded mount at the bottom of this file.
+import { isXrayEnabled } from "../../core/v2/xray/xray.config.js";
+import xrayRoutes from "../../core/v2/xray/xray.routes.js";
 
 const router = express.Router();
 
@@ -142,6 +147,13 @@ router.use("/measurement-calibration", measurementCalibrationRoutes);
 // Measurement-only upload path with local MinIO fallback. The shared uploads
 // API remains unchanged for every other product flow.
 router.use("/measurement-media", measurementMediaRoutes);
+
+// X-Ray mode — mounted ONLY when XRAY_ENABLED is true. With the flag off (the
+// default) /api/v2/xray/* 404s exactly as it did before this feature existed,
+// and nothing under core/v2/xray/ beyond the two inert modules is ever loaded.
+// Authority: docs/xray/00_CONTRACT.md §3. Switch it on with the XRAY_ENABLED
+// env var, or `xray.enabled` in the config file.
+if (isXrayEnabled()) router.use("/xray", verifyToken, xrayRoutes);
 
 export default router;
 

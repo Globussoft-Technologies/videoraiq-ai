@@ -51,9 +51,9 @@ const STATUS_FILTERS = [
 const RECIPIENT_VIEWS = [
   { key: 'email', label: 'Email' },
   { key: 'telegram', label: 'Telegram' },
-  // ...(IS_FLO_MATTRESS
-  //   ? []
-  //   : [{ key: 'whatsapp', label: 'WhatsApp' }]),
+  ...(IS_FLO_MATTRESS
+    ? []
+    : [{ key: 'whatsapp', label: 'WhatsApp' }]),
 ];
 
 const TELEGRAM_CHANNELS_PER_PAGE = 4;
@@ -1641,7 +1641,7 @@ export default function AlertRecipients() {
         </div>
       )}
 
-      {/* {activeView === 'whatsapp' && <WhatsAppAlerts />} */}
+      {activeView === 'whatsapp' && <WhatsAppAlerts />}
 
       {activeView !== 'whatsapp' && (activeView === 'email' ? (
         <>

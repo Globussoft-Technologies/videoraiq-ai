@@ -14,6 +14,10 @@ import {
 } from "./core/v2/clientConfig/detectionLicense.service.js";
 import { DETECTION_TYPES } from "./constants/detectionTypes.js";
 import { validateStationToken } from "./core/v2/measurements/stationToken.middleware.js";
+// X-Ray mode: the flag only. xray.config.js reads env/config and has no side
+// effects, so importing it here changes nothing when the feature is off; the
+// reaper it guards is imported per-disconnect, not at module scope.
+import { isXrayEnabled } from "./core/v2/xray/xray.config.js";
 
 // Compute an admin's camera-limit snapshot
 // { purchasedCameras, added, remaining, licensed }.
@@ -451,6 +455,26 @@ export const initSocket = (server) => {
         // Tab closed / navigated away / network dropped — session is offline
         // immediately (the TTL is only the fallback for when this never fires).
         await markSessionOffline(sessionId);
+      }
+
+      // X-Ray mode: close any X-ray session this tab owned.
+      //
+      // Each one holds a GPU slot on another machine, and the browser is the
+      // only side that knows it left. The X-ray service also reaps on missing
+      // heartbeats, so this is the fast path rather than the only one —
+      // deliberate belt and braces (contract §10: both ends reap).
+      //
+      // Guarded: with XRAY_ENABLED off, nothing under core/v2/xray is imported
+      // and this block costs one boolean check.
+      if (isXrayEnabled()) {
+        try {
+          const { closeXraySessionsForSocket } = await import(
+            "./core/v2/xray/xray.reaper.js"
+          );
+          await closeXraySessionsForSocket(socket.id);
+        } catch (e) {
+          logger.error(`[XRAY] socket-disconnect cleanup failed: ${e?.message || e}`);
+        }
       }
     });
   });

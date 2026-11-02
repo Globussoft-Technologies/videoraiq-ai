@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { XRAY_ENABLED } from '@/xray/flag';
 import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw, MoreVertical, Trash2, Undo2, Save } from 'lucide-react';
 import BufferingIndicator from '../../../components/BufferingIndicator';
 import { toast } from 'sonner';
@@ -41,6 +42,19 @@ import {
   updateDetectionAlerts,
   updateZoneDetectionSetting,
 } from './DetectionZoneMarking/api/detectionZoneApi';
+
+/**
+ * X-ray mode, contract `docs/xray/00_CONTRACT.md` §3: when `VITE_XRAY_ENABLED`
+ * is not "true", "no module imported". A plain top-level import would load the
+ * module and merely render nothing, so the gate is on the import itself.
+ *
+ * This only holds because `XRAY_ENABLED` folds to a literal — see the comment in
+ * `src/xray/flag.js`, which explains what breaks it. Verified by building and
+ * grepping `dist/`, not by assumption: an earlier version of that guard was not
+ * foldable and this line shipped a live `import()` plus an `XrayMode` chunk into
+ * the off build.
+ */
+const XrayMode = XRAY_ENABLED ? lazy(() => import('@/xray/XrayMode')) : null;
 
 const normalizeUiCountMode = (mode) => {
   const normalized = String(mode || '').trim().toLowerCase();
@@ -221,7 +235,10 @@ export default function DetectionZoneMarking({
     return () => clearTimeout(timer);
   }, [url, videoState, cameraId]);
 
-  useHlsPlayer(videoRef, url, {
+  // The returned Hls instance ref was previously discarded. X-ray needs it to
+  // read which HLS fragment is on screen — `(seq, offset)` for a click — and
+  // capturing an already-returned value changes nothing about playback.
+  const hlsRef = useHlsPlayer(videoRef, url, {
     enabled: !!url,
     onError: () => { setVideoState('error'); setStreamTimedOut(true); },
     onStarted: () => setVideoState(s => (s === 'ready' ? s : 'loading')), // retrying after a 404 â€” stay in loading, don't clear a real error into limbo
@@ -1518,6 +1535,36 @@ export default function DetectionZoneMarking({
                     : 'click "Start Drawing", then click to place zone points'}
                 </span>
               </div>
+            )}
+
+            {/* X-ray mode — the whole feature's only insertion into this page.
+                `XrayMode` is null unless VITE_XRAY_ENABLED=true, so an off build
+                renders nothing here and never loads the module. Last child of
+                the stage, so X-ray chrome layers above the zone overlay.
+
+                These props are raw facts, not a pre-computed verdict: X-ray owns
+                both the decision about what it can do and the wording of why, so
+                the copy for every unavailable case lives in
+                `src/xray/buttonState.js` instead of leaking into this page.
+
+                `videoRef`/`hlsRef` are passed because a click has to be tied to
+                the exact HLS fragment on screen: the browser plays ~6 s behind
+                live, so the server must be told *which* frame was clicked, not
+                just where. X-ray reads `FRAG_CHANGED` off the player itself
+                rather than this page tracking fragments it has no use for. */}
+            {XrayMode && (
+              <Suspense fallback={null}>
+                <XrayMode
+                  cameraId={cameraId}
+                  nvrId={cameraNvrId}
+                  videoRef={videoRef}
+                  hlsRef={hlsRef}
+                  hasStreamUrl={!!url}
+                  videoState={streamTimedOut ? 'error' : videoState}
+                  isSnapshot={showSnapshot}
+                  videoWidth={videoSize.w}
+                />
+              </Suspense>
             )}
           </div>
 

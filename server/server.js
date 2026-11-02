@@ -21,7 +21,7 @@ import { connectDB } from "./utils/database.js";
 import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import attendanceSwaggerRouter from './views/attendanceSwagger.routes.js';
-import { initSocket } from "./socket.js"; // <-- Socket.io setup
+import { initSocket, getIO } from "./socket.js"; // <-- Socket.io setup
 import { syncDetectionCatalog } from "./core/v2/detectionCatalog/detectionCatalog.service.js";
 import { reconcileAddedCameraLicenses } from "./core/v2/clientConfig/detectionLicense.service.js";
 import pythonService from "./services/python.service.js";
@@ -202,6 +202,20 @@ const startServer = async () => {
 
     const server = http.createServer(app); // 👈 Create HTTP server
     initSocket(server); // 👈 Initialize Socket.IO with HTTP server
+
+    // X-Ray mode: the WebSocket the Python X-ray service dials into, sharing
+    // this server and this port (so ws://host:<PORT>/internal/xray/ws).
+    //
+    // Guarded by XRAY_ENABLED (env var, or `xray.enabled` in the config file).
+    // With the flag off this is a single function call that returns before
+    // importing anything — no listener is bound, the `ws` dependency is never
+    // loaded, and the behaviour of this file is unchanged.
+    //
+    // `getIO` is passed in rather than imported by the X-ray module, so the
+    // dependency points this way only. Authority: docs/xray/00_CONTRACT.md §8.
+    import("./core/v2/xray/xray.ws.js")
+      .then(({ attachXrayWebSocket }) => attachXrayWebSocket(server, { getIO }))
+      .catch((err) => logger.error(`X-ray WebSocket setup failed: ${err.message}`));
 
     // Existing clients who added cameras before licensing existed default to
     // purchasedCameras: 0 until their next login. For anyone already using the
