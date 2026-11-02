@@ -36,6 +36,7 @@ import AttendanceAutoEmailReportService from "./core/v2/attendanceAutoEmailRepor
 import MeasurementAutoEmailReportService from "./core/v2/measurementAutoEmailReport/measurementAutoEmailReport.service.js";
 import SolderAutoEmailReportService from "./core/v2/solderAutoEmailReport/solderAutoEmailReport.service.js";
 import { startMeasurementMediaRetryWorker } from "./core/v2/measurementMedia/measurementMedia.service.js";
+import { startOneTimeScheduleRunner } from "./core/v2/agentData/oneTimeSchedule.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -240,6 +241,7 @@ const startServer = async () => {
     // Suspends VideoRDB users whose EmpMonitor record shows they've exited. Never throws.
     scheduleEmpExitSync();
     DetectionSettingService.startDetectionScheduleRunner();
+    startOneTimeScheduleRunner();
     AttendanceAutoEmailReportService.startRunner();
     MeasurementAutoEmailReportService.startRunner();
     SolderAutoEmailReportService.startRunner();
@@ -262,7 +264,7 @@ process.on("unhandledRejection", (err) => {
 });
 
 process.on("uncaughtException", (err) => {
-  logger.error(`Uncaught Exception: ${err.message}`);
+  logger.error(`Uncaught Exception: ${err?.stack || err?.message || err}`);
   process.exit(1);
 });
 

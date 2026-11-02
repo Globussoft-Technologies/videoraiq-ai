@@ -668,6 +668,9 @@ class AdminService {
       return res.status(200).json(
         Response.userSuccessResp("Detection config fetched successfully", {
           detectionConfig: admin.detectionConfig || {},
+          // This legacy map contains display overrides. Licensing is enforced
+          // through dashboard sidebar configuration, so an empty map is not a deny-all.
+          emptyDetectionConfigMeans: 'no_display_overrides',
         })
       );
     } catch (error) {

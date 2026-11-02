@@ -304,7 +304,8 @@ export async function putMedia({ buffer, mediaType, folderName, originalName, ob
 }
 
 /** Stream media from its marked provider, or the active provider for legacy paths. */
-export async function streamMedia(mediaPath, res) {
+export async function streamMedia(mediaPath, res, { signal } = {}) {
+  signal?.throwIfAborted();
   const explicitProvider = providerFromPath(mediaPath);
   const activeProvider = getActiveProvider();
   const objectProvider =
@@ -314,15 +315,17 @@ export async function streamMedia(mediaPath, res) {
     try {
       const { client, bucket } = getObjectStore(objectProvider);
       const data = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: objectKeyFor(mediaPath) })
+        new GetObjectCommand({ Bucket: bucket, Key: objectKeyFor(mediaPath) }),
+        { abortSignal: signal }
       );
+      signal?.throwIfAborted();
       if (!res.headersSent && typeof res.setHeader === "function") {
         if (data.ContentType) res.setHeader("Content-Type", data.ContentType);
         if (data.ContentLength != null) {
           res.setHeader("Content-Length", String(data.ContentLength));
         }
       }
-      await pipeline(data.Body, res);
+      await pipeline(data.Body, res, { signal });
       return;
     } catch (error) {
       // Only unmarked legacy paths may predate cloud storage and fall back to NAS.
@@ -331,11 +334,13 @@ export async function streamMedia(mediaPath, res) {
   }
 
   await withSFTPConnection(async (sftp) => {
+    signal?.throwIfAborted();
     if (!(await sftp.exists(mediaPath))) {
       const error = new Error("File not found in storage.");
       error.statusCode = 404;
       throw error;
     }
+    signal?.throwIfAborted();
     const sftpStream = await sftp.createReadStream(mediaPath);
     sftpStream.on("error", (error) => {
       logger.error("SFTP stream error:", error);
@@ -346,7 +351,7 @@ export async function streamMedia(mediaPath, res) {
         });
       }
     });
-    await pipeline(sftpStream, res);
+    await pipeline(sftpStream, res, { signal });
   });
 }
 

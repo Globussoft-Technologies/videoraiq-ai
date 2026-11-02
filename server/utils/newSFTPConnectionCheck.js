@@ -129,12 +129,10 @@ class SFTPConnectionPool {
         nasLogger.info({ nas_info: `Creating SFTP connection (${key})...`, server_id: key });
         await client.connect(SFTP_CONFIG);
 
-        // Remove all listeners before adding new ones — fixes MaxListenersExceededWarning
-        ["error", "close", "end"].forEach((event) =>
-          client.client?.removeAllListeners(event)
-        );
-
-        client.client?.once("error", (err) => {
+        // The SSH client and ssh2-sftp-client install their own lifecycle
+        // listeners. Removing them can turn a disconnected stream into an
+        // uncaught "No response from server" exception.
+        client.client?.on("error", (err) => {
           nasLogger.error({ nas_err: `Connection error (${key}): ${err.message}`, server_id: key });
         });
 
@@ -151,7 +149,6 @@ class SFTPConnectionPool {
   async closeConnection(conn, key) {
     if (!conn?.sftp) return;
     try {
-      conn.sftp.client?.removeAllListeners();
       await conn.sftp.end();
       nasLogger.info({ nas_info: `Connection closed (${key})`, server_id: key });
     } catch (err) {

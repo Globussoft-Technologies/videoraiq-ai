@@ -2,11 +2,39 @@ import { cacheReads } from "../../../services/apiCache.service.js";
 import express from "express";
 import ChannelControllerontroller from "./channels.controller.js";
 import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck } from '../../../middlewares/permissionMiddleware.js';
+import { getCameraDetails, listCameraDetails } from './cameraDetails.service.js';
+import Response from '../../../utils/response.js';
+import logger from '../../../utils/logger.js';
 
 
 const router = express.Router();
 
 router.get("/", viewAccessCheck,ChannelControllerontroller.getAllChannels);
+router.get("/details", viewAccessCheck, async (req, res) => {
+  try {
+    const result = await listCameraDetails(req.verified?.userData,
+      req.verified?.authorizedChannel?.channels || [], req.query);
+    if (result.code !== 200) return res.status(result.code).json(
+      result.code === 403 ? Response.accessDeniedResp(result.message) : Response.userFailResp(result.message));
+    return res.status(200).json(Response.userSuccessResp("Camera details retrieved successfully", result.data));
+  } catch (error) {
+    logger.error(error);
+    return res.status(500).json(Response.errorResp("Failed to retrieve camera details"));
+  }
+});
+router.get("/:id/details", viewAccessCheck, async (req, res) => {
+  try {
+    const result = await getCameraDetails(req.params.id, req.verified?.userData,
+      req.verified?.authorizedChannel?.channels || []);
+    if (result.code !== 200) return res.status(result.code).json(
+      result.code === 404 ? Response.notFoundResp(result.message) :
+      result.code === 403 ? Response.accessDeniedResp(result.message) : Response.userFailResp(result.message));
+    return res.status(200).json(Response.userSuccessResp("Camera details retrieved successfully", result.data));
+  } catch (error) {
+    logger.error(error);
+    return res.status(500).json(Response.errorResp("Failed to retrieve camera details"));
+  }
+});
 router.get("/nvr-camera-detections", viewAccessCheck, ChannelControllerontroller.getNvrCameraDetections);
 router.get("/nvr-camera-detections/:adminId", viewAccessCheck, ChannelControllerontroller.getNvrCameraDetections);
 router.get("/nvr/:nvrId",viewAccessCheck, ChannelControllerontroller.getAllChannelsByNvrId);

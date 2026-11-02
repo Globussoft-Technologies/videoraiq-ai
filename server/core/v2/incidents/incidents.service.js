@@ -1460,7 +1460,7 @@ class IncidentsService {
         --------------------------------------------------- */
       const ppeFilters = req.body?.incidentpersonalProtectiveEquipmentFilters;
 
-      if (ppeFilters?.incidentType === "personProtectiveEquipment") {
+      if (["personalProtectiveEquipment", "personProtectiveEquipment"].includes(ppeFilters?.incidentType)) {
         const ppeMatch = {
           incidentType: "personalProtectiveEquipment",
         };

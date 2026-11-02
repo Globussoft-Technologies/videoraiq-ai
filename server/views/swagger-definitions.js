@@ -241,7 +241,10 @@ export const definitions = {
     createRecipients: {
       email: "admin@example.com",
       phoneNumber: "+919876543210",
+      fullName: "Test recipient",
       incidentTypes: ["crowdDetection", "personProtectiveEquipment"],
+      departmentIds: ["68493b14b176a495112b6522"],
+      severityByType: { crowdDetection: ["high"] },
     },
     updateRecipient: {
       incidentTypes: ["crowdDetection", "personProtectiveEquipment"],

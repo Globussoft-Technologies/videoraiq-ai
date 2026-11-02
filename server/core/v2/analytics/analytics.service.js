@@ -19,7 +19,7 @@ import {
   resolveAttendanceSettings,
 } from "../attendance/attendanceStatus.js";
 import AnalyticsValidator from "./analytics.validate.js";
-import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
+import { ALERT_FEED_EXCLUDED_TYPES, TYPE_MAP } from "../../../constants/detectionTypes.js";
 import { getRequestTimezone } from "../../../utils/timezone.js";
 
 const DEFAULT_DAYS = 30;
@@ -295,6 +295,12 @@ class AnalyticsService {
 
     if (nvrId) match.nvrId = { $in: toObjectIds(nvrId) };
     if (channelId) match.channelId = { $in: toObjectIds(channelId) };
+    if (data.memberId) {
+      const allowed = toObjectIds(req.verified?.authorizedChannel?.channels || []);
+      match.channelId = { $in: match.channelId
+        ? allowed.filter((id) => match.channelId.$in.some((requested) => requested.equals(id)))
+        : allowed };
+    }
 
     if (location) {
       const locations = Array.isArray(location) ? location : String(location).split(",").map((l) => l.trim());
@@ -1222,11 +1228,12 @@ class AnalyticsService {
       const days = Number(req.query.days) || DEFAULT_DAYS;
       const limit = Number(req.query.limit) || DEFAULT_TOP_CAMERAS_LIMIT;
       const match = await this._buildBaseMatch(req, { days });
+      if (req.query.detectionType) match.incidentType = TYPE_MAP[req.query.detectionType];
 
       const rows = await Incident.aggregate([
         { $match: match },
         { $group: { _id: "$channelId", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
+        { $sort: { count: -1, _id: 1 } },
         { $limit: limit },
         {
           $lookup: {
@@ -1294,6 +1301,7 @@ class AnalyticsService {
 
       return res.status(200).json(Response.userSuccessResp("Activity heatmap fetched successfully", {
         ...describeRange(req, 7),
+        timezone: tz,
         dayLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         max,
         grid,

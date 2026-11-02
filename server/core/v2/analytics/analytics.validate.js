@@ -1,5 +1,6 @@
 import Joi from "joi";
 import moment from "moment-timezone";
+import { TYPE_MAP } from "../../../constants/detectionTypes.js";
 
 const objectIdPattern = /^[0-9a-fA-F]{24}$/;
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,6 +59,7 @@ class AnalyticsValidator {
   topCameras(query) {
     const schema = Joi.object({
       ...commonRangeFields,
+      detectionType: Joi.string().valid(...Object.keys(TYPE_MAP)),
       days: Joi.number().integer().min(1).max(90),
       limit: Joi.number().integer().min(1).max(50).messages({
         'number.min': 'limit must be at least 1',

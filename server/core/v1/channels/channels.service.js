@@ -33,6 +33,7 @@ import {
 } from "../../../services/detectionSchedule.resolver.js";
 import DetectionSettingService from "../detectionSettings/detectionSettings.service.js";
 import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
+import { AuditEvent } from "../../v2/agentActions/agentActions.model.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import config from "config"
 const APP_ENV = config.get("APP_ENV");
@@ -87,6 +88,9 @@ const updateSettingsWithModelThresholds = async (detectionSetting, backendRespon
 class ChannelService {
   async updateChannel(req, res, _next) {
     try {
+      if ((req?.verified?.userData?.credentialType === "agent" || req?.verified?.userData?.actorType === "agent" || req?.verified?.userData?.isAgent === true) && !req?.verified?.agentActionId) {
+        return res.status(403).json(Response.userFailResp("Direct agent camera writes are blocked; use the agent action gateway."));
+      }
       const cameraId = req.params.id;
       const updates = { ...req.body };
       delete updates.detectionBulkPaused;
@@ -773,6 +777,9 @@ class ChannelService {
   }
   async updateChannelConfiguration(req, res, _next) {
     try {
+      if ((req?.verified?.userData?.credentialType === "agent" || req?.verified?.userData?.actorType === "agent" || req?.verified?.userData?.isAgent === true) && !req?.verified?.agentActionId) {
+        return res.status(403).json(Response.userFailResp("Direct agent configuration writes are blocked; use the agent action gateway."));
+      }
       const { id: cameraId, detectionKey } = req.query;
       const updates = req.body;
 
@@ -824,6 +831,20 @@ class ChannelService {
         return res.send(
           Response.userFailResp("Validation Failed", "Channel not found")
         );
+      }
+
+      if (mongoose.Types.ObjectId.isValid(String(req?.verified?.userData?.adminId || ""))) {
+        await AuditEvent.create({
+          accountId: String(req.verified.userData.adminId),
+          actor: { subject: String(req.verified.userData.memberId || req.verified.userData.userId || req.verified.userData.adminId), source: req?.verified?.agentActionId ? "agent" : "product" },
+          action: "product_detection_configuration_update",
+          target: { channelId: String(cameraId), detectionType: String(detectionKey) },
+          before: null,
+          after: { enabled: updates.enabled, settings: updates.settings },
+          outcome: { status: "success" },
+          correlationId: String(req.header?.("x-correlation-id") || req.verified?.agentActionId || new mongoose.Types.ObjectId()),
+          requestId: String(req.header?.("x-request-id") || new mongoose.Types.ObjectId()),
+        });
       }
 
       return res.status(200).json(
@@ -1404,6 +1425,9 @@ class ChannelService {
   }
   async toggleDetection(req, res, _next) {
     try {
+      if ((req?.verified?.userData?.credentialType === "agent" || req?.verified?.userData?.actorType === "agent" || req?.verified?.userData?.isAgent === true) && !req?.verified?.agentActionId) {
+        return res.status(403).json(Response.userFailResp("Direct agent detector writes are blocked; use the agent action gateway."));
+      }
       const { channelId, detectionType, enable } = req.body;
       const adminId = await resolveAdminObjectId({
         adminId: req?.verified?.userData?.adminId,

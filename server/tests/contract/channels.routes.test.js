@@ -5,6 +5,7 @@ vi.mock("../../core/v1/channels/channels.controller.js", () => ({
   default: {
     getNvrCameraDetections: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     getAllChannels: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    getNvrCameraDetections: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     getAllChannelsByNvrId: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     toggleDetection: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     updateChannel: vi.fn(async (req, res) => res.status(200).json({ success: true })),

@@ -36,10 +36,10 @@ class ChannelValidator {
 
   validateUpdateChannelConfig(body) {
     const schema = Joi.object({
-      videoLinkRequirement: Joi.boolean().required(),
+      videoLinkRequirement: Joi.boolean(),
       video_min_length: Joi.number().allow(null),
       video_max_length: Joi.number().allow(null),
-      level_of_importance: Joi.string().valid('low', 'medium', 'high').required(),
+      level_of_importance: Joi.string().valid('low', 'medium', 'high'),
       alertThreshold: Joi.number().integer().min(0),
       faceAuth: Joi.boolean(),
       videoResolution: Joi.array()

@@ -54,6 +54,7 @@ import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import DetectionSettingsValidation from "./detectionSettings.validate.js";
+import { rejectAgentGatewayBypass } from "../agentActions/agentGateway.js";
 import {
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,
@@ -346,9 +347,13 @@ const buildNormalizedDetectionSettingResponse = (detectionSetting) => {
   if (!detectionSetting) return detectionSetting;
 
   const serialized = detectionSetting?.toObject?.() || detectionSetting?._doc || detectionSetting;
+  const settingType = serialized.settingType;
+  const saved = DetectionSettingsValidation.extractModelThresholds(settingType, { [settingType]: serialized.modelThresholds || {} });
+  const fallback = Object.keys(saved).length ? saved : DetectionSettingsValidation.extractModelThresholds(settingType, { [settingType]: serialized.settings || {} });
   return {
     ...serialized,
     settings: normalizeTelegramSettings(serialized?.settings || {}),
+    hasSavedModelThresholds: Object.keys(fallback).length > 0,
   };
 };
 
@@ -468,6 +473,7 @@ class DetectionSettingService {
 
   async createDetectionSettings(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const user_id = req?.verified?.userData?.user_id;
 
       // 1. Validate input
@@ -594,7 +600,7 @@ class DetectionSettingService {
         }),
       );
     } catch (error) {
-      logger.error("Error creating detection settings:", error);
+      logger.error(`Error creating detection settings requestId=${req.header?.("x-request-id") || "none"}:`, error);
       return res
         .status(500)
         .json(
@@ -693,14 +699,17 @@ class DetectionSettingService {
   }
 
   async resetAllDetections(req, res, _next) {
+    if (rejectAgentGatewayBypass(req, res)) return;
     return this.resetAdminConfiguration(req, res, "detections");
   }
 
   async resetAllCameraTypes(req, res, _next) {
+    if (rejectAgentGatewayBypass(req, res)) return;
     return this.resetAdminConfiguration(req, res, "camera-types");
   }
 
   async resetAdminConfiguration(req, res, target) {
+    if (rejectAgentGatewayBypass(req, res)) return;
     const user = req.verified?.userData;
     if (!user || user.memberId || !isMongoObjectId(user.adminId) || !user.user_id) {
       return res.status(403).json(Response.accessDeniedResp("An admin account is required for this reset"));
@@ -763,6 +772,7 @@ class DetectionSettingService {
 
   async deleteDetectionSettings(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id } = req.params;
       const user_id = req?.verified?.userData?.user_id;
 
@@ -892,6 +902,7 @@ class DetectionSettingService {
   }
   async updateDetectionSettings(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id } = req.params;
       const user_id = req?.verified?.userData?.user_id;
       const value = { ...req.body };
@@ -1235,6 +1246,7 @@ class DetectionSettingService {
 
   async updateCameraDetectionSchedule(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id, channelId } = req.params;
       const user_id = req?.verified?.userData?.user_id;
       const adminId = req?.verified?.userData?.adminId;
@@ -1331,6 +1343,7 @@ class DetectionSettingService {
 
   async resetCameraDetectionSchedule(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id, channelId } = req.params;
       const user_id = req?.verified?.userData?.user_id;
 
@@ -1910,6 +1923,7 @@ class DetectionSettingService {
   }
   async attachDetectionSetting(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { channelId, detectionSettingId } = req.body;
       const user_id = req?.verified?.userData?.user_id;
 
@@ -2002,6 +2016,7 @@ class DetectionSettingService {
 
   async detachDetectionSetting(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { channelId, detectionSettingId } = req.body;
       const user_id = req?.verified?.userData?.user_id;
 
@@ -2080,6 +2095,7 @@ class DetectionSettingService {
 
   async resetDetectionThresholds(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id } = req.params;
       const user_id = req?.verified?.userData?.user_id;
 
@@ -2108,9 +2124,9 @@ class DetectionSettingService {
       }
 
       if (!Object.keys(thresholds).length) {
-        return res.status(400).json(
-          Response.userFailResp("No saved model thresholds available to reset"),
-        );
+        const failure = Response.userFailResp("No saved model thresholds available to reset");
+        failure.body.errorCode = "NO_SAVED_THRESHOLDS";
+        return res.status(400).json(failure);
       }
 
       await applyResetThresholds(detectionSetting, thresholds);
@@ -2172,6 +2188,7 @@ class DetectionSettingService {
 
   async resetCameraDetectionThresholds(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { channelId, detectionSettingIds } = req.body || {};
       const user_id = req?.verified?.userData?.user_id;
       const adminId = req?.verified?.userData?.adminId;

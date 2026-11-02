@@ -63,7 +63,7 @@ class UserController {
   async createAuthUser(req, res, next) {
     /* 
     #swagger.tags = ['Users']
-    #swagger.description = 'To add AuthorizedUsers .'
+    #swagger.description = 'Create an authorized user after email verification. Send POST /users/email-verification/send, wait for the link, then check GET /users/email-verification/status?email=... . Unverified addresses return EMAIL_NOT_VERIFIED.'
     #swagger.parameters['data'] = {
       in: 'body',
       description: 'Provide Filters',

@@ -1,0 +1,13 @@
+import express from "express";
+import controller from "./agentActions.controller.js";
+const router = express.Router();
+router.post("/prepare", controller.prepare);
+router.post("/:actionId/decision", controller.decision);
+router.post("/:actionId/execute", controller.execute);
+router.get("/:actionId", controller.get);
+router.get("/", controller.list);
+export const auditEventsRouter = express.Router();
+auditEventsRouter.get("/", controller.auditEvents);
+export const detectionStatusRouter = express.Router();
+detectionStatusRouter.get("/", controller.detectionStatus);
+export default router;

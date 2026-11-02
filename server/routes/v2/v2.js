@@ -1,6 +1,7 @@
 import whatsappRoutes from '../../core/v2/whatsapp/whatsapp.routes.js';
 import express from "express";
 import verifyToken from "../../middlewares/verifyToken.js";
+import v2ErrorContract from "../../middlewares/v2ErrorContract.js";
 import apiKeyRoutes from '../../core/v2/apiKeys/apiKey.routes.js';
 import allowCrossOriginResource from "../../middlewares/allowCrossOriginResource.js";
 
@@ -11,6 +12,7 @@ import allowCrossOriginResource from "../../middlewares/allowCrossOriginResource
 import nvrRoutes from "../../core/v2/NVR/nvr.routes.js";
 import channelRoutes from "../../core/v2/channels/channels.routes.js";
 import authRoutes from "../../core/v2/Auth/auth.routes.js";
+import agentAuthRoutes from '../../core/v2/agentChat/agentAuth.routes.js';
 import raspberryPiRoutes from "../../core/v2/raspberryPi/raspberryPi.routes.js";
 import incidentsRoutes from "../../core/v2/incidents/incidents.routes.js";
 import alertRoutes from "../../core/v2/alerts/alerts.routes.js";
@@ -60,14 +62,19 @@ import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/m
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
 import assistantRoutes from "../../core/v2/assistant/assistant.routes.js";
+import agentChatRoutes from "../../core/v2/agentChat/agentChat.routes.js";
 import measurementMediaRoutes from "../../core/v2/measurementMedia/measurementMedia.routes.js";
 // X-Ray mode. Both imports are side-effect-free by design: xray.config.js reads
 // only env/config, and xray.routes.js defers its controller (and so its Mongoose
 // model) to the first request. See the guarded mount at the bottom of this file.
 import { isXrayEnabled } from "../../core/v2/xray/xray.config.js";
 import xrayRoutes from "../../core/v2/xray/xray.routes.js";
+import agentActionsRoutes, { auditEventsRouter, detectionStatusRouter } from "../../core/v2/agentActions/agentActions.routes.js";
+import agentDataRoutes from "../../core/v2/agentData/agentData.routes.js";
+import authenticateAgentData from "../../core/v2/agentData/producerAuth.js";
 
 const router = express.Router();
+router.use(v2ErrorContract);
 
 // Health-check — confirms v2 prefix is alive
 router.get("/health", allowCrossOriginResource, (_req, res) => {
@@ -94,6 +101,9 @@ router.use("/authorizedUsers", authorizedUsersRoutes);
 router.use("/authorizedChannels", authorizedChannels);
 router.use("/users", usersRoutes);
 router.use("/nvr", verifyToken, nvrRoutes);
+// This must be mounted before /channel because the channel router's /:id
+// handler would otherwise treat "detection-status" as a channel identifier.
+router.use("/channel/detection-status", verifyToken, detectionStatusRouter);
 router.use("/channel", verifyToken, channelRoutes);
 router.use("/incidents", verifyToken, incidentsRoutes);
 router.use("/alert", verifyToken, alertRoutes);
@@ -123,6 +133,11 @@ router.use("/vehicle", verifyToken, vehicleRoutes);
 router.use("/locations", verifyToken, locationRoutes);
 router.use("/analytics", verifyToken, analyticsRoutes);
 router.use("/assistant", verifyToken, assistantRoutes);
+router.use("/agent-chat", verifyToken, agentChatRoutes);
+router.use('/agent-auth', verifyToken, agentAuthRoutes);
+router.use("/agent-actions", verifyToken, agentActionsRoutes);
+router.use("/agent-data", authenticateAgentData, agentDataRoutes);
+router.use("/audit-events", verifyToken, auditEventsRouter);
 // faceImages.routes.js applies verifyToken per-route, so mount plain (like v1).
 router.use("/faceImages", faceImagesRoutes);
 // Telegram: /link-code + /unlink are authed inside the router; /webhook is

@@ -33,7 +33,7 @@ class UploadController {
       async fetchMedia(req, res, next) {
             /* #swagger.tags = ['Uploads']
             #swagger.description = 'This route is used to fetch uploaded media.' */
-        /*#swagger.security = [] */
+        /*#swagger.security = [{ EncryptedAuthToken: [] }] */
             return await uploadsService.fetchMedia(req, res, next);
       }
       async downloadZip(req, res, next) {

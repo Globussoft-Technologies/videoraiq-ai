@@ -137,8 +137,15 @@ class UploadService {
 
 
     async fetchMedia(req, res) {
+        const cancellation = new AbortController();
+        const deadline = setTimeout(() => cancellation.abort(), 20_000);
+        const onDisconnect = () => {
+            if (!res.writableEnded) cancellation.abort();
+        };
+        req.once?.("aborted", onDisconnect);
+        res.once?.("close", onDisconnect);
         try {
-            const mediaPath = decodeURIComponent(req.params.mediaPath);
+            const mediaPath = req.params.mediaPath;
 
             if (!mediaPath || !mediaPath.trim()) {
                 return res.status(400).json({ status: "failed", message: "mediaPath parameter is required." });
@@ -170,13 +177,20 @@ class UploadService {
             res.setHeader("Cross-Origin-Opener-Policy", "*");
             res.setHeader("Cross-Origin-Resource-Policy", "*");
 
-            await streamMediaV2(mediaPath, res);
+            await streamMediaV2(mediaPath, res, { signal: cancellation.signal });
 
         } catch (error) {
+            if (cancellation.signal.aborted && (res.destroyed || req.aborted)) return;
             console.error("Error fetching media:", error);
             if (!res.headersSent) {
-                res.status(error.statusCode || 500).json({ status: "failed", message: `Failed to fetch media: ${error.message}` });
+                res.status(cancellation.signal.aborted ? 504 : error.statusCode || 500).json({ status: "failed", message: cancellation.signal.aborted ? 'Media storage timed out.' : `Failed to fetch media: ${error.message}` });
+            } else if (!res.writableEnded) {
+                res.destroy(error);
             }
+        } finally {
+            clearTimeout(deadline);
+            req.off?.("aborted", onDisconnect);
+            res.off?.("close", onDisconnect);
         }
     }
 

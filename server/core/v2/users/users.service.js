@@ -319,7 +319,9 @@ class UsersService {
         // The address must have been verified from the link mailed to it
         // (Add User form → /users/email-verification/send).
         if (!(await isEmailVerified(isAdminExist._id, email))) {
-            return res.send(Response.userFailResp("Verify this email address before adding the user.", "Validation Failed!"));
+            const failure = Response.userFailResp("Verify this email address before adding the user.", "Validation Failed!");
+            failure.body.errorCode = "EMAIL_NOT_VERIFIED";
+            return res.status(400).json(failure);
         }
         
         //Checking if the role is biometric

@@ -445,7 +445,7 @@ class DetectionSettingsController {
 
   async resetDetectionThresholds(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
-         #swagger.description = 'Reset saved detection thresholds for one detection setting'
+         #swagger.description = 'Reset saved detection thresholds for one detection setting. GET /detection-settings/{id} exposes detectionSetting.hasSavedModelThresholds. A missing saved threshold returns NO_SAVED_THRESHOLDS.'
          #swagger.parameters['id'] = {
            in: 'path',
            description: 'ID of the detection setting to reset',
@@ -457,6 +457,9 @@ class DetectionSettingsController {
          }
          #swagger.responses[404] = {
              description: 'Detection setting not found'
+         }
+         #swagger.responses[400] = {
+             description: 'No saved model thresholds (NO_SAVED_THRESHOLDS)'
          }
          #swagger.responses[500] = {
              description: 'Internal server error'

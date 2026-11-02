@@ -16,6 +16,34 @@ import { checkKeyOwnership } from '../core/v2/apiKeys/apiKey.ownership.js';
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
 
+const AGENT_READ_POST = [
+  /^\/api\/v2\/(?:attendance\/(?:get|user-logs)|accessLogs\/(?:getAccessLogs|getUserSessionReport)|authorizedChannels\/(?:fetchChannels|getChannels|locations)|authorizedUsers\/fetch|dashboard\/headerStats|incidents\/?|users\/fetch|roles\/get|locations\/fetch|departments\/get|recipients\/fetch|agent-data\/analytics\/query|channel\/playback-url)\/?$/,
+];
+const AGENT_READ_GET = [
+  /^\/api\/v2\/admin\/(?:allowed-detections|timezone)\/?$/,
+  /^\/api\/v2\/agent-actions(?:\/[^/]+)?\/?$/,
+  /^\/api\/v2\/agent-data\/(?:contexts|evidence|groups|lifecycles|outages|reviews|schedules)\/?$/,
+  /^\/api\/v2\/analytics\/(?:activity-heatmap|attendance-presence|attendance-summary|detections-by-hour|detection-volume|engine-share|overview|peak-activity|response-funnel|site-performance|top-cameras)\/?$/,
+  /^\/api\/v2\/attendance\/settings\/?$/,
+  /^\/api\/v2\/audit-events\/?$/,
+  /^\/api\/v2\/channel\/(?:details|detection-status|[0-9a-fA-F]{24})\/?$/,
+  /^\/api\/v2\/dashboard\/recentIncidents\/?$/,
+  /^\/api\/v2\/detection-settings(?:\/[^/]+(?:\/schedule(?:\/[^/]+)?)?)?\/?$/,
+  /^\/api\/v2\/incidents\/(?:getIncident|logs\/[^/]+(?:\/[^/]+){0,2})\/?$/,
+  /^\/api\/v2\/permissions\/user-permissions\/?$/,
+  /^\/api\/v2\/shifts(?:\/[^/]+)?\/?$/,
+  /^\/api\/v2\/uploads\/[^?]+$/,
+];
+export function delegatedRouteAllowed(req, scopes) {
+  const path = req.originalUrl.split('?')[0];
+  if (req.method === 'GET') return AGENT_READ_GET.some((pattern) => pattern.test(path));
+  if (req.method !== 'POST') return false;
+  if (AGENT_READ_POST.some((pattern) => pattern.test(path))) return true;
+  if (scopes.includes('prepare') && path === '/api/v2/agent-actions/prepare') return true;
+  if (scopes.includes('prepare') && /^\/api\/v2\/agent-actions\/[^/]+\/execute$/.test(path)) return true;
+  return false;
+}
+
 export const isRegistrationLinkActive = (decoded, registrationLink, now = Date.now()) => {
   if (!decoded?.registrationLinkId) return true;
   return Boolean(
@@ -62,6 +90,10 @@ async function verifyToken(req, res, next) {
     // Verify the token
     jwt.verify(token, jwtSecret, async (_error, decoded) => {
       if (decoded) {
+        if (decoded.tokenType === 'detection-agent' &&
+          (!Array.isArray(decoded.scopes) || !delegatedRouteAllowed(req, decoded.scopes))) {
+          return res.status(403).json(Response.accessDeniedResp('Delegated token is not permitted for this route'));
+        }
         if (decoded.tokenType === 'mobile-embed') {
           try {
             const { enforceEmbeddedAccess } = await import('../core/v2/mobileAccess/mobileAccess.service.js');
@@ -88,6 +120,7 @@ async function verifyToken(req, res, next) {
               .status(401)
               .send(Response.tokenFailResp("Registration link is invalid or has expired"));
           }
+          decoded.adminTimezoneConfigured = Boolean(validTimezone(admin.timezone));
           decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           // Check if the password was changed after the token was issued
           // if (admin.passwordChangedAt && decoded.iat * 1000 < admin.passwordChangedAt.getTime()) {
@@ -102,6 +135,7 @@ async function verifyToken(req, res, next) {
               .status(401)
               .send(Response.tokenFailResp("admin not found"));
           }
+          decoded.adminTimezoneConfigured = Boolean(validTimezone(admin.timezone));
           decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           const user = await User.findOne({ _id: decoded?.memberId }); // Replace with your ID field
           authorizedChannel = await authorizedChannelsModel.findOne({

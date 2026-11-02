@@ -55,17 +55,19 @@ function clientFor(provider, cfg) {
   return objectClients.get(fingerprint);
 }
 
-async function withSftp(cfg, callback) {
+async function withSftp(cfg, callback, signal) {
   assertConfigured("nas", cfg);
   const client = new Client();
-  await client.connect({
-    host: cfg.host,
-    port: Number(cfg.port) || 22,
-    username: cfg.username,
-    password: cfg.password,
-    readyTimeout: 30000,
-  });
   try {
+    signal?.throwIfAborted();
+    await client.connect({
+      host: cfg.host,
+      port: Number(cfg.port) || 22,
+      username: cfg.username,
+      password: cfg.password,
+      readyTimeout: 30000,
+    });
+    signal?.throwIfAborted();
     return await callback(client);
   } finally {
     await client.end().catch(() => {});
@@ -133,9 +135,11 @@ export async function putMediaV2({ adminId, buffer, mediaType, folderName, origi
   }
 }
 
-export async function streamMediaV2(mediaPath, res) {
-  if (legacyPath(mediaPath)) return streamLegacyMedia(mediaPath, res);
+export async function streamMediaV2(mediaPath, res, { signal } = {}) {
+  signal?.throwIfAborted();
+  if (legacyPath(mediaPath)) return streamLegacyMedia(mediaPath, res, { signal });
   const context = await resolveStorageConfig({ storagePath: mediaPath });
+  signal?.throwIfAborted();
   if (context.provider === "nas") {
     return withSftp(context.config, async (sftp) => {
       const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${context.parsed.relativeKey}`;
@@ -144,17 +148,20 @@ export async function streamMediaV2(mediaPath, res) {
         error.statusCode = 404;
         throw error;
       }
-      await pipeline(await sftp.createReadStream(remotePath), res);
-    });
+      signal?.throwIfAborted();
+      const source = await sftp.createReadStream(remotePath);
+      await pipeline(source, res, { signal });
+    }, signal);
   }
   const client = clientFor(context.provider, context.config);
   const result = await client.send(new GetObjectCommand({
     Bucket: context.config.bucket,
     Key: context.parsed.relativeKey,
-  }));
+  }), { abortSignal: signal });
+  signal?.throwIfAborted();
   if (!res.headersSent && result.ContentType) res.setHeader("Content-Type", result.ContentType);
   if (!res.headersSent && result.ContentLength != null) res.setHeader("Content-Length", String(result.ContentLength));
-  await pipeline(result.Body, res);
+  await pipeline(result.Body, res, { signal });
 }
 
 /** Read a remotely stored media object into memory for an immediate downstream

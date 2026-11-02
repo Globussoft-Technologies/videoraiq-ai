@@ -1,4 +1,5 @@
 import Channel from "./channels.model.js";
+import crypto from "node:crypto";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import { refreshLogsConfiguration } from "../logsConfiguration/logsConfiguration.service.js";
@@ -68,6 +69,8 @@ import {
   stripUnlicensedDetections,
   stripUnlicensedDetectionsFromList,
 } from "../clientConfig/detectionLicense.service.js";
+import { AuditEvent } from "../agentActions/agentActions.model.js";
+import { rejectAgentGatewayBypass } from "../agentActions/agentGateway.js";
 const APP_ENV = config.get("APP_ENV");
 const isLocalAppEnv = (appEnv) => appEnv === "local" || appEnv === "onprem";
 
@@ -94,7 +97,6 @@ const licenseDeniedResponse = (res, verdict) =>
   );
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
-
 const resolveAdminObjectId = async ({
   adminId,
   userId,
@@ -152,6 +154,7 @@ const updateModelThresholds = async (detectionSetting, backendResponse) => {
 class ChannelService {
   async updateChannel(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const cameraId = req.params.id;
       const updates = { ...req.body };
       delete updates.detectionBulkPaused;
@@ -161,6 +164,11 @@ class ChannelService {
       if (!existingChannel) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
       }
+      const beforeAudit = {
+        control: existingChannel.control,
+        detections: existingChannel.detections,
+        configurationVersion: String(existingChannel.configurationVersion ?? 0),
+      };
 
       const detectionFields = Object.keys(DETECTION_TYPES);
 
@@ -338,6 +346,29 @@ class ChannelService {
       Object.assign(existingChannel, updates);
 
       const updatedCamera = await existingChannel.save();
+
+      try {
+        const auditAccountId = await resolveAdminObjectId({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: updatedCamera?.userId,
+        });
+        if (isMongoObjectId(auditAccountId)) await AuditEvent.create({
+          accountId: auditAccountId,
+          source: req?.verified?.agentActionId ? "agent" : "product",
+          actionId: req?.verified?.agentActionId && isMongoObjectId(req.verified.agentActionId) ? req.verified.agentActionId : null,
+          actor: { subject: String(req?.verified?.userData?.memberId || req?.verified?.userData?.userId || req?.verified?.userData?.user_id || auditAccountId), source: req?.verified?.agentActionId ? "agent" : "product" },
+          action: "product_channel_update",
+          target: { channelId: String(cameraId) },
+          before: beforeAudit,
+          after: { control: updatedCamera.control, detections: updatedCamera.detections, configurationVersion: String(updatedCamera.configurationVersion ?? 0) },
+          outcome: { status: "succeeded" },
+          correlationId: String(req.header?.("x-correlation-id") || req.header?.("x-request-id") || crypto.randomUUID()),
+          requestId: String(req.header?.("x-request-id") || crypto.randomUUID()),
+        });
+      } catch (auditError) {
+        logger.error(`Channel audit write failed after successful update: ${auditError.message}`);
+      }
 
       // Refresh logs configuration and broadcast to frontend if detections/checkType changed
       const adminId = req?.verified?.userData?.adminId || existingChannel?.userId;
@@ -864,6 +895,7 @@ class ChannelService {
 
   async bulkUpdateChannels(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { ids, inReview, control, profile } = req.body;
 
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -886,7 +918,21 @@ class ChannelService {
 
       const bulkOps = [];
 
-      const channels = await Channel.find({ _id: { $in: ids } });
+      const principal = req.verified?.userData || {};
+      const requestedOwnerId = principal.user_id || principal.userId;
+      const allowed = new Set((req.verified?.authorizedChannel?.channels || []).map(String));
+      if (principal.memberId && ids.some((id) => !allowed.has(String(id)))) {
+        return res.status(403).json(Response.userFailResp("A requested camera is outside your scope."));
+      }
+      const channels = await Channel.find({ _id: { $in: ids }, ...(requestedOwnerId ? { userId: String(requestedOwnerId) } : {}) });
+      if (channels.length !== new Set(ids.map(String)).size) {
+        return res.status(403).json(Response.userFailResp("A requested camera is outside your scope."));
+      }
+      const ownerId = String(requestedOwnerId || channels[0]?.userId || "");
+      if (!ownerId || channels.some((channel) => String(channel.userId) !== ownerId)) {
+        return res.status(403).json(Response.userFailResp("Camera owner scope is required."));
+      }
+      const auditAccountId = await resolveAdminObjectId({ adminId: principal.adminId, userId: ownerId });
 
       // Starting cameras in bulk enables every linked detector on each of them.
       // Check against one snapshot, then account for each camera this request
@@ -901,7 +947,7 @@ class ChannelService {
           : null;
 
       for (const channel of channels) {
-        const update = { $set: { ...updateFields } };
+        const update = { $set: { ...updateFields }, $inc: { configurationVersion: 1 } };
 
         if ([0, 1].includes(control)) {
           const updatedDetections = {};
@@ -958,7 +1004,32 @@ class ChannelService {
           .json(Response.userFailResp("No matching channels found."));
       }
 
-      const result = await Channel.bulkWrite(bulkOps);
+      const correlationId = crypto.randomUUID();
+      const requestId = String(req.header?.("x-request-id") || correlationId);
+      let modifiedCount = 0;
+      for (let index = 0; index < bulkOps.length; index++) {
+        const before = channels[index];
+        const operation = bulkOps[index].updateOne;
+        const version = Number(before.configurationVersion ?? 0);
+        const updated = await Channel.findOneAndUpdate({
+          ...operation.filter,
+          ...(version === 0 ? { $or: [{ configurationVersion: 0 }, { configurationVersion: { $exists: false } }] } : { configurationVersion: version }),
+        }, operation.update, { new: true });
+        if (!updated) return res.status(409).json({ statusCode: 409, body: {
+          status: "failed", errorCode: "STALE_CONFIGURATION", message: "A camera changed during the bulk update.", data: { modifiedCount, correlationId },
+        } });
+        modifiedCount++;
+        if (isMongoObjectId(auditAccountId)) await AuditEvent.create({
+          accountId: auditAccountId, source: req.verified?.agentActionId ? "agent" : "product",
+          actionId: req.verified?.agentActionId || null,
+          actor: { subject: String(principal.memberId || ownerId), adminId: String(auditAccountId) },
+          action: "camera_bulk_update", target: { channelId: String(before._id) },
+          before: { control: before.control, profile: before.profile, detections: before.detections, configurationVersion: String(version) },
+          after: { control: updated.control, profile: updated.profile, detections: updated.detections, configurationVersion: String(updated.configurationVersion) },
+          outcome: { status: "completed" }, correlationId, requestId,
+        });
+      }
+      const result = { modifiedCount, matchedCount: modifiedCount, correlationId };
 
       return res.status(200).json(
         Response.userSuccessResp("Channels updated successfully", {
@@ -977,6 +1048,7 @@ class ChannelService {
   }
   async updateChannelConfiguration(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { id: cameraId, detectionKey } = req.query;
       const updates = req.body;
 
@@ -984,7 +1056,7 @@ class ChannelService {
         updates.settings
       );
       if (error)
-        return res.send(Response.userFailResp("Validation Failed", error));
+        return res.status(400).json(Response.userFailResp("Invalid detector settings", error.message));
 
       // Validate ObjectId
       if (!mongoose.Types.ObjectId.isValid(cameraId)) {
@@ -992,6 +1064,12 @@ class ChannelService {
           Response.userFailResp("Validation Failed", "Invalid camera ID")
         );
       }
+
+      const beforeChannel = await Channel.findById(cameraId)
+        .select("userId configurationVersion detections")
+        .lean();
+      if (!beforeChannel) return res.send(Response.userFailResp("Validation Failed", "Channel not found"));
+      const beforeDetection = beforeChannel.detections?.[detectionKey] || null;
 
       // Licensing gate — this endpoint can flip `enabled` alongside the zone /
       // threshold settings, so it is an enable path like any other.
@@ -1009,32 +1087,36 @@ class ChannelService {
 
       const updatePath = `detections.${detectionKey}`;
 
-      const updateFields = {
-        [`${updatePath}.enabled`]: updates.enabled,
-        [`${updatePath}.settings.videoLinkRequirement`]:
-          updates.settings.videoLinkRequirement,
-        [`${updatePath}.settings.video_min_length`]:
-          updates.settings.video_min_length,
-        [`${updatePath}.settings.video_max_length`]:
-          updates.settings.video_max_length,
-        [`${updatePath}.settings.level_of_importance`]:
-          updates.settings.level_of_importance,
-        [`${updatePath}.settings.alertThreshold`]:
-          updates.settings.alertThreshold,
-        [`${updatePath}.settings.faceAuth`]: updates.settings.faceAuth,
-        [`${updatePath}.settings.videoResolution`]:
-          updates.settings.videoResolution,
-        [`${updatePath}.settings.referencePoints`]:
-          updates.settings.referencePoints || {},
+      const settingId = beforeDetection?.id;
+      const detectionSetting = settingId ? await DetectionSetting.findById(settingId) : null;
+      if (!detectionSetting) return res.send(Response.userFailResp("Validation Failed", "Detection setting not found"));
+      const settingValues = detectionSetting.settings || (detectionSetting.settings = {});
+      const settingAliases = {
+        videoLinkRequirement: ["videoLinkRequirement"],
+        video_min_length: ["video_min_length", "videoMinLength"],
+        video_max_length: ["video_max_length", "videoMaxLength"],
+        level_of_importance: ["level_of_importance", "levelOfImportance"],
+        alertThreshold: ["alertThreshold"],
+        faceAuth: ["faceAuth"],
+        videoResolution: ["videoResolution"],
+        referencePoints: ["referencePoints"],
       };
+      for (const [field, aliases] of Object.entries(settingAliases)) {
+        if (updates.settings[field] === undefined) continue;
+        const destination = aliases.find((alias) => Object.prototype.hasOwnProperty.call(settingValues, alias)) || aliases[0];
+        settingValues[destination] = updates.settings[field];
+      }
+      detectionSetting.markModified("settings");
+      await detectionSetting.save();
+      const updateFields = { [`${updatePath}.enabled`]: updates.enabled };
 
       // Update and return the updated detection config only
       const updatedChannel = await Channel.findOneAndUpdate(
         { _id: new mongoose.Types.ObjectId(cameraId) },
-        { $set: updateFields },
+        { $set: updateFields, $inc: { configurationVersion: 1 } },
         {
           new: true,
-          projection: { [`detections.${detectionKey}`]: 1, userId: 1, _id: 0 },
+          projection: { [`detections.${detectionKey}`]: 1, userId: 1, configurationVersion: 1, _id: 0 },
         }
       );
 
@@ -1050,6 +1132,34 @@ class ChannelService {
         refreshLogsConfiguration(adminId).catch((err) =>
           logger.error("Error refreshing logs configuration:", err)
         );
+      }
+
+      try {
+        const auditAccountId = await resolveAdminObjectId({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: updatedChannel?.userId || beforeChannel.userId,
+        });
+        if (isMongoObjectId(auditAccountId)) await AuditEvent.create({
+          accountId: auditAccountId,
+          source: req?.verified?.agentActionId ? "agent" : "product",
+          actionId: req?.verified?.agentActionId && isMongoObjectId(req.verified.agentActionId) ? req.verified.agentActionId : null,
+          actor: {
+            subject: String(req?.verified?.userData?.memberId || req?.verified?.userData?.userId || req?.verified?.userData?.user_id || auditAccountId),
+            memberId: req?.verified?.userData?.memberId ? String(req.verified.userData.memberId) : undefined,
+            adminId: String(auditAccountId),
+            source: req?.verified?.agentActionId ? "agent" : "product",
+          },
+          action: "product_detection_configuration_update",
+          target: { channelId: String(cameraId), detectionType: String(detectionKey), settingId: beforeDetection?.id ? String(beforeDetection.id) : null },
+          before: { enabled: beforeDetection?.enabled, settings: beforeDetection?.settings || null, configurationVersion: String(beforeChannel.configurationVersion ?? 0) },
+          after: { enabled: updates.enabled, settings: updates.settings, configurationVersion: String(updatedChannel.configurationVersion ?? Number(beforeChannel.configurationVersion ?? 0) + 1) },
+          outcome: { status: "succeeded" },
+          correlationId: String(req.header?.("x-correlation-id") || req.header?.("x-request-id") || crypto.randomUUID()),
+          requestId: String(req.header?.("x-request-id") || crypto.randomUUID()),
+        });
+      } catch (auditError) {
+        logger.error(`Detection configuration audit write failed after successful update: ${auditError.message}`);
       }
 
       return res.status(200).json(
@@ -2044,6 +2154,7 @@ class ChannelService {
   }
   async toggleDetection(req, res, _next) {
     try {
+      if (rejectAgentGatewayBypass(req, res)) return;
       const { channelId, detectionType, enable } = req.body;
       const adminId = await resolveAdminObjectId({
         adminId: req?.verified?.userData?.adminId,
@@ -2170,6 +2281,33 @@ class ChannelService {
         await updateModelThresholds(detectionSettingDoc, beResponse);
 
         await channel.save();
+        // Record legacy/UI configuration changes as well as agent actions so
+        // audit queries can answer who changed a detector and what changed.
+        const auditAccountId = await resolveAdminObjectId({
+          adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: channel?.userId,
+        });
+        if (isMongoObjectId(auditAccountId)) {
+          try { await AuditEvent.create({
+            accountId: auditAccountId,
+            source: req?.verified?.agentActionId ? "agent" : "product",
+            actionId: req?.verified?.agentActionId && isMongoObjectId(req.verified.agentActionId) ? req.verified.agentActionId : null,
+            actor: {
+              subject: String(req?.verified?.userData?.memberId || req?.verified?.userData?.userId || req?.verified?.userData?.user_id || auditAccountId),
+              memberId: req?.verified?.userData?.memberId ? String(req.verified.userData.memberId) : undefined,
+              adminId: String(auditAccountId),
+              source: req?.verified?.agentActionId ? "agent" : "product",
+            },
+            action: "product_detection_toggle",
+            target: { channelId: String(channelId), detectionType },
+            before: { enabled: currentStatus },
+            after: { enabled: enable, configurationVersion: String(channel.configurationVersion ?? 0) },
+            outcome: { status: "succeeded", backendResponse: beResponse?.status || beResponse?.message || null },
+            correlationId: String(req.header?.("x-correlation-id") || req.header?.("x-request-id") || crypto.randomUUID()),
+            requestId: String(req.header?.("x-request-id") || crypto.randomUUID()),
+          }); } catch (auditError) { logger.error(`Detection audit write failed after successful toggle: ${auditError.message}`); }
+        }
         return res.status(200).json(
           Response.userSuccessResp("Detection updated successfully", {
             channelId,

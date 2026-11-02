@@ -59,6 +59,7 @@ describe("Add User email verification (v2)", () => {
   it("refuses to create a user whose email was not verified", async () => {
     const res = await createUser("new.user@test.com");
     expect(res.status).toBe("failed");
+    expect(res.errorCode).toBe("EMAIL_NOT_VERIFIED");
     expect(res.message).toMatch(/Verify this email address/);
     expect(await Users.countDocuments()).toBe(0);
   });

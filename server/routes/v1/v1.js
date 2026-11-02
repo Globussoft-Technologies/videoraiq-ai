@@ -4,6 +4,14 @@ import channelRoutes from "../../core/v1/channels/channels.routes.js";
 import authRoutes from "../../core/v1/Auth/auth.routes.js";
 import incidentsRoutes from "../../core/v1/incidents/incidents.routes.js";
 import verifyToken from "../../middlewares/verifyToken.js";
+import { rejectAgentGatewayBypass } from "../../core/v2/agentActions/agentGateway.js";
+
+const rejectLegacyAgentMutation = (req, res, next) => {
+  const changesDetector = ["PUT", "PATCH", "DELETE"].includes(req.method)
+    || (req.baseUrl.endsWith("/detection-settings") && req.method === "POST" && ["/", "/attach", "/detach"].includes(req.path));
+  if (changesDetector && rejectAgentGatewayBypass(req, res)) return;
+  next();
+};
 import alertRoutes from "../../core/v1/alerts/alerts.routes.js";
 import recipientsRoutes from "../../core/v1/verifyRecipients/recipients.routes.js";
 import adminRoutes from "../../core/v1/admin/admin.routes.js";
@@ -44,7 +52,7 @@ router.use("/faceImages", faceImagesRoutes);
 router.use("/authorizedChannels", authorizedChannels);
 router.use("/users", usersRoutes);
 router.use("/nvr", verifyToken, nvrRoutes);
-router.use("/channel", verifyToken, channelRoutes);
+router.use("/channel", verifyToken, rejectLegacyAgentMutation, channelRoutes);
 router.use("/auth", authRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/incidents", verifyToken, incidentsRoutes);
@@ -54,7 +62,7 @@ router.use("/dashboard", verifyToken, dashboardRoutes);
 router.use("/analytics", verifyToken, analyticsRoutes);
 router.use("/authorizedUsers", verifyToken, authorizedUsersRoutes);
 router.use("/authorizedObjects", verifyToken, authorizedObjectsRoutes);
-router.use("/detection-settings", verifyToken, detectionSettingsRoutes);
+router.use("/detection-settings", verifyToken, rejectLegacyAgentMutation, detectionSettingsRoutes);
 router.use("/storage", storageRoutes);
 router.use("/profiles", verifyToken, profilesRoutes);
 router.use("/attendance", verifyToken, attendanceRoutes);

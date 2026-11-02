@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import config from "config";
 import { encrypt } from "../../../utils/cryptoUtils.js";
+import { isChannelConfigurationPath, versionChannelUpdate } from "../../../utils/channelVersion.js";
 const APP_ENV = config.get("APP_ENV");
 
 // The {mode, timezone, days} shape used by the per-camera detection schedule
@@ -188,6 +189,9 @@ const ChannelSchema = new mongoose.Schema(
       enum: [0, 1],
       default: 0,
     },
+    // Monotonic optimistic-concurrency version for agent proposals and all
+    // detector/configuration writes. Legacy documents start at zero.
+    configurationVersion: { type: Number, default: 0, min: 0 },
     customName: String,
     department: [
       {
@@ -258,6 +262,7 @@ const localSchema = new mongoose.Schema(
       enum: [0, 1],
       default: 0,
     },
+    configurationVersion: { type: Number, default: 0, min: 0 },
     customName: String,
     department: [
       {
@@ -297,6 +302,9 @@ ChannelSchema.pre("save", function (next) {
 
 ChannelSchema.pre("save", function (next) {
   try {
+    if (!this.isNew && this.modifiedPaths().some(isChannelConfigurationPath)) {
+      this.$inc("configurationVersion", 1);
+    }
     const detectionFields = Object.keys(this.detections || {});
 
     // Check if any detection is enabled
@@ -332,7 +340,10 @@ const applyChannelFilters = async function () {
   const authorized = await authorizedChannelsModel.findOne({
     userId: memberId,
   });
-  if (!authorized) return;
+  if (!authorized) {
+    this.where({ _id: { $in: [] } });
+    return;
+  }
 
   const allowed = authorized.channels; // ensure correct field
 
@@ -352,6 +363,24 @@ const applyChannelFilters = async function () {
 
 ChannelSchema.pre(/^find/, applyChannelFilters);
 ChannelSchema.pre('countDocuments', applyChannelFilters);
+
+ChannelSchema.pre(["updateOne", "updateMany", "findOneAndUpdate"], function () {
+  this.setUpdate(versionChannelUpdate(this.getUpdate()));
+});
+ChannelSchema.pre(["replaceOne", "findOneAndReplace"], function () {
+  throw new Error("Channel replacement writes are unsupported; use an atomic update to preserve configurationVersion.");
+});
+ChannelSchema.pre("bulkWrite", function (next, operations) {
+  try {
+    for (const operation of operations) {
+      if (operation.replaceOne) throw new Error("Channel replacement writes are unsupported.");
+      for (const kind of ["updateOne", "updateMany"]) {
+        if (operation[kind]) operation[kind].update = versionChannelUpdate(operation[kind].update);
+      }
+    }
+    next();
+  } catch (error) { next(error); }
+});
 
 ChannelSchema.statics.findActive = function (filter = {}) {
   return this.find({ ...filter, isAdded: true });

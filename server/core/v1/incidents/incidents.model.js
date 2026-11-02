@@ -3,6 +3,7 @@ import { invalidateApiCache } from "../../../services/apiCache.service.js";
 
 import mongoose from 'mongoose';
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
+import { AgentIncidentLifecycle, AgentEventGroup, AgentEvidence } from '../../v2/agentData/agentData.model.js';
 
 const { Schema, model } = mongoose;
 const options = { discriminatorKey: 'incidentType', collection: 'incidents' ,timestamps: true };
@@ -53,6 +54,29 @@ incidentSchema.index({ userId: 1, resolved: 1, timeOfIncident: -1 });
 incidentSchema.index({ userId: 1, incidentType: 1, vehicleNumber: 1, timeOfIncident: -1 });
 
 incidentSchema.plugin(invalidateApiCache, { domains: ["incidents"] });
+
+// Populate durable agent projections from the canonical incident write path.
+// Projection errors are isolated so they can never reject an incident write.
+incidentSchema.post('save', async function populateAgentProjections(doc) {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(String(doc.userId))) return;
+    const accountId = String(doc.userId);
+    const channelId = mongoose.Types.ObjectId.isValid(String(doc.channelId)) ? doc.channelId : null;
+    const detectorType = doc.incidentType || doc.type || null;
+    const detectedAt = doc.timeOfIncident || new Date();
+    await AgentIncidentLifecycle.updateOne({ accountId, incidentId: doc._id }, { $setOnInsert: { accountId, incidentId: doc._id, channelId, detectorType, detectedAt, slaStatus: 'unknown' }, ...(doc.resolved || doc.report?.resolvedAt ? { $set: { resolvedAt: doc.report?.resolvedAt || new Date() } } : {}) }, { upsert: true });
+    const bucket = Math.floor(new Date(detectedAt).getTime() / 300000);
+    const groupId = `${channelId || 'unknown'}:${detectorType || 'unknown'}:${bucket}`;
+    const existingGroup = await AgentEventGroup.findOne({ accountId, groupId }).select('incidentIds').lean();
+    if (!existingGroup) await AgentEventGroup.create({ accountId, groupId, channelId, detectorType, incidentIds: [doc._id], groupingRuleVersion: 'time-window-5m-v1', firstSeenAt: detectedAt, lastSeenAt: detectedAt, eventCount: 1, rawEventCount: 1, dedupeVersion: 'v1' });
+    else if (!existingGroup.incidentIds?.some((id) => String(id) === String(doc._id))) await AgentEventGroup.updateOne({ accountId, groupId }, { $addToSet: { incidentIds: doc._id }, $max: { lastSeenAt: detectedAt }, $inc: { rawEventCount: 1, eventCount: 1 } });
+    const mediaPath = doc.videoLink || doc.Image;
+    if (mediaPath) await AgentEvidence.updateOne({ accountId, incidentId: doc._id, evidenceId: `${doc._id}:primary` }, { $set: { accountId, incidentId: doc._id, evidenceId: `${doc._id}:primary`, mediaPath: String(mediaPath), mediaType: doc.videoLink ? 'video' : 'image', occurrenceAt: detectedAt, available: true, machineAccess: false, authorizationScope: 'account' } }, { upsert: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Agent incident projection failed:', error.message);
+  }
+});
 
 const Incident = model('Incident', incidentSchema);
 
