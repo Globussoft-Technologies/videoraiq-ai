@@ -5,6 +5,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export async function copyRuntimeAssets(root = process.cwd()) {
+  const approvalImage = path.join('core', 'v2', 'whatsapp', 'assets', 'default-approval.png');
+  await mkdir(path.dirname(path.join(root, 'dist', approvalImage)), { recursive: true });
+  await copyFile(path.join(root, approvalImage), path.join(root, 'dist', approvalImage));
   for (const name of ['attendance-openapi.json', 'swagger-api-view.json', 'swagger-api-v2-view.json']) {
     const relativePath = path.join('views', name);
     const source = path.join(root, relativePath);

@@ -13,6 +13,8 @@ const zoneConfigsField = {
   zone_configs: [
     {
       name: { type: String },
+      // Undefined preserves legacy account routing; [] explicitly disables this zone.
+      whatsappRecipientIds: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
       fire_outside_zone_enabled: { type: Boolean },
       capacity: { type: Number },
       threshold_sec: { type: Number },

@@ -1,11 +1,11 @@
-import multer from 'multer';
 import { Router } from 'express';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import Admin from '../admin/admin.model.js';
 import verifyToken from '../../../middlewares/verifyToken.js';
-import { WhatsAppSettings, WhatsAppDelivery } from './whatsapp.model.js';
+import { WhatsAppSettings } from './whatsapp.model.js';
+import { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE } from './whatsapp.defaultTemplate.js';
 import * as service from './whatsapp.service.js';
 
 const router = Router();
@@ -27,6 +27,16 @@ router.post('/webhook/:adminId', async (req, res) => {
   } catch { return res.sendStatus(500); }
 });
 router.use(verifyToken);
+// Zone editors may read opted-in recipient names, never sender credentials.
+router.get('/recipient-options', async (req, res, next) => {
+  try {
+    const adminId = req.verified?.userData?.adminId;
+    if (!adminId || req.verified.userData.system || !await Admin.exists({ _id: adminId })) return res.sendStatus(403);
+    const settings = await WhatsAppSettings.findOne({ adminId }).select('recipients enabled selectedTemplate');
+    res.set('Cache-Control', 'no-store');
+    return res.json({ recipients: (settings?.recipients || []).filter(item => item.optedInAt).map(item => ({ id: String(item._id), name: item.name, phone: item.phone })), enabled: settings?.enabled || false, template: settings?.selectedTemplate?.name || '' });
+  } catch (error) { return next(error); }
+});
 router.use(async (req, res, next) => {
   // Credentials and recipient consent are managed by the account owner only.
   if (!req.verified?.userData?.adminId || req.verified.userData.memberId || req.verified.userData.system) return res.status(403).json({ message: 'Only the account owner can manage WhatsApp alerts' });
@@ -52,20 +62,17 @@ const settingsSchema = Joi.object({ phoneNumberId: numericId, businessAccountId:
 router.get('/settings', run(null, service.publicSettings));
 router.put('/settings', run(settingsSchema, service.saveSettings));
 router.post('/templates/sync', run(Joi.object({}), service.syncTemplates));
-router.post('/templates/sample', (req, res, next) => {
-  multer({ limits: { fileSize: 5 * 1024 * 1024, files: 1 } }).single('file')(req, res, error => error ? res.status(400).json({ message: 'Choose one JPEG or PNG up to 5 MB' }) : next());
-}, run(null, (adminId, input, req) => service.uploadTemplateSample(adminId, req.file)));
-router.post('/templates', run(Joi.object({ imageHeader: Joi.boolean().default(false), sampleHandle: Joi.when('imageHeader', { is: true, then: Joi.string().max(4096).required(), otherwise: Joi.forbidden() }), name: Joi.string().pattern(/^[a-z][a-z0-9_]{2,100}$/).required(), language: Joi.string().pattern(/^[a-z]{2,3}(?:_[A-Z]{2})?$/).required() }), service.requestTemplate));
-router.put('/template', run(Joi.object({ fallback: Joi.object({ name: Joi.string().required(), language: Joi.string().required() }), name: Joi.string().max(512).required(), language: Joi.string().max(20).required() }), service.selectTemplate));
+router.post('/templates', run(Joi.object({}), service.requestTemplate));
+// Older clients may only select the same fixed default; custom templates are rejected.
+router.put('/template', run(Joi.object({ name: Joi.string().valid(DEFAULT_TEMPLATE_NAME).required(), language: Joi.string().valid(DEFAULT_TEMPLATE_LANGUAGE).required() }), service.selectTemplate));
 router.put('/enabled', run(Joi.object({ enabled: Joi.boolean().required() }), async (adminId, { enabled }) => {
-  if (enabled) throw new Error('Select an approved template to enable WhatsApp alerts');
-  await WhatsAppSettings.updateOne({ adminId }, { $set: { enabled: false } });
+  if (enabled) return service.selectTemplate(adminId);
+  await WhatsAppSettings.updateOne({ adminId }, { $set: { enabled: false, alertsPaused: true } });
   return service.publicSettings(adminId);
 }));
 router.post('/recipients', run(Joi.object({ name: Joi.string().trim().min(1).max(100).required(), phone: Joi.string().pattern(/^\+[1-9]\d{7,14}$/).required(), optedIn: Joi.boolean().valid(true).required() }), async (adminId, input) => {
   const settings = await WhatsAppSettings.findOne({ adminId });
   if (!settings) throw new Error('Configure WhatsApp first');
-  if (settings.recipients.length >= 100) throw new Error('Maximum 100 WhatsApp recipients');
   if (settings.recipients.some(item => item.phone === input.phone)) throw new Error('This number is already added');
   settings.recipients.push({ name: input.name, phone: input.phone, optedInAt: new Date() });
   await settings.save();
@@ -77,15 +84,9 @@ router.delete('/recipients/:id', run(null, async (adminId, input, req) => {
   return service.publicSettings(adminId);
 }));
 router.post('/test-sample', run(Joi.object({ recipientId: Joi.string().hex().length(24).required() }), (adminId, { recipientId }) => service.sendSampleMessage(adminId, recipientId)));
-router.post('/test', run(Joi.object({ recipientId: Joi.string().hex().length(24).required() }), async (adminId, { recipientId }) => {
-  const settings = await WhatsAppSettings.findOne({ adminId });
-  const recipient = settings?.recipients.find(item => String(item._id) === recipientId && item.optedInAt);
-  if (!recipient || !settings.enabled) throw new Error('Enable alerts and choose an opted-in recipient');
-  return { results: await service.sendTemplateAlert(adminId, { incidentName: 'Test incident', severity: 'low', timeOfIncident: new Date(), description: 'WhatsApp alert setup test' }, [recipient.phone]) };
-}));
+router.post('/test', run(Joi.object({ recipientId: Joi.string().hex().length(24).required() }), (adminId, { recipientId }) => service.sendTestAlert(adminId, recipientId)));
 router.get('/webhook-config', run(null, async adminId => {
   const settings = await WhatsAppSettings.findOne({ adminId }).select('+webhookVerifyToken');
   return { path: `/api/v2/whatsapp/webhook/${adminId}`, verifyToken: settings?.webhookVerifyToken || '', field: 'messages' };
 }));
-router.get('/deliveries', run(null, async adminId => ({ deliveries: await WhatsAppDelivery.find({ adminId }).sort({ createdAt: -1 }).limit(30).select('-__v -expiresAt').lean() })));
 export default router;

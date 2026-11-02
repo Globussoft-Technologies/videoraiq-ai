@@ -1,3 +1,4 @@
+import WhatsAppRecipientSelect from './WhatsAppRecipientSelect';
 import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
@@ -52,6 +53,7 @@ export default function ZoneSettingsPanel({
   canDelete,
   errors = {},
   telegramChannels = [],
+  whatsappApi,
 }) {
   const [expanded, setExpanded] = useState(null);
   const areaLabel = isDoor ? 'door' : isLineCrossing ? 'line' : 'zone';
@@ -228,6 +230,7 @@ export default function ZoneSettingsPanel({
                       </select>
                     </div>
                   )}
+                  <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => onUpdateField(i, 'whatsappRecipientIds', selected)} />
                   {showZoneExtras && (
                   <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>

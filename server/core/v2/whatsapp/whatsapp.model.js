@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 const settings = new mongoose.Schema({
   adminId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
   enabled: { type: Boolean, default: false },
+  alertsPaused: { type: Boolean, default: false },
   phoneNumberId: String, businessAccountId: String, apiVersion: String,
   credentials: { type: String, select: false },
   webhookVerifyToken: { type: String, select: false },
@@ -12,6 +13,8 @@ const settings = new mongoose.Schema({
   lastSyncAt: Date,
 }, { timestamps: true });
 export const WhatsAppSettings = mongoose.model('WhatsAppSettings', settings);
+// Legacy schema retained only for tenant deletion and expiry of existing records.
+// Alert sends and webhook callbacks no longer create or update these records.
 const delivery = new mongoose.Schema({
   adminId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
   messageId: { type: String, unique: true, sparse: true }, recipient: String,

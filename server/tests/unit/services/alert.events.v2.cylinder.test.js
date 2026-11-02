@@ -66,7 +66,12 @@ const queryResult = (value) => ({
 beforeEach(() => vi.clearAllMocks());
 
 describe("v2 cylinder incident alerts", () => {
-  it("fans out email, WhatsApp, and Telegram alerts", async () => {
+  it.each([
+    [undefined, undefined, undefined],
+    ['North', [{ name: 'North', whatsappRecipientIds: ['recipient-1', 'recipient-2'] }], ['recipient-1', 'recipient-2']],
+    ['North', [{ name: 'North', whatsappRecipientIds: [] }], []],
+    ['South', [{ name: 'North', whatsappRecipientIds: ['recipient-1'] }], []],
+  ])('fans out alerts with zone %s and scoped WhatsApp recipients', async (zone, zoneConfigs, expectedIds) => {
     Channel.findOne
       .mockReturnValueOnce({
         populate: () => ({
@@ -85,7 +90,7 @@ describe("v2 cylinder incident alerts", () => {
                 id: {
                   name: "Cylinder Area 1",
                   alerts: ["email-1", "phone-1"],
-                  settings: { telegramChatIds: ["chat-1"] },
+                  settings: { telegramChatIds: ["chat-1"], zone_configs: zoneConfigs },
                 },
               },
             },
@@ -98,6 +103,7 @@ describe("v2 cylinder incident alerts", () => {
         lean: async () => ({
           _id: "incident-1",
           incidentType: "cylinderDetection",
+          zone,
           timeOfIncident: new Date("2026-09-15T10:00:00.000Z"),
         }),
       }),
@@ -130,6 +136,7 @@ describe("v2 cylinder incident alerts", () => {
       expect.anything(),
       "UTC",
       "admin-1",
+      expectedIds,
     );
     expect(TelegramService.sendIncident).toHaveBeenCalledWith(
       expect.anything(),

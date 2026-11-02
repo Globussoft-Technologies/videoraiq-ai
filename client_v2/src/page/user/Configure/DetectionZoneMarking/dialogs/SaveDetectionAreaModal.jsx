@@ -1,3 +1,4 @@
+import WhatsAppRecipientSelect from '../components/WhatsAppRecipientSelect';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
@@ -48,6 +49,7 @@ export default function SaveDetectionAreaModal({
   onCancel,
   onSubmit,
   telegramChannels = [],
+  whatsappApi,
 }) {
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
@@ -366,6 +368,7 @@ export default function SaveDetectionAreaModal({
                   </select>
                 </div>
               )}
+              <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => updateZoneField(i, 'whatsappRecipientIds', selected)} />
               {showZoneExtras && (
               <div>
                 {isDoor && <div style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.4, marginBottom: 8 }}>Optional Telegram delivery: select a channel, then set its active time range below.</div>}

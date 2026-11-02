@@ -13,6 +13,9 @@ async function fixture(spec) {
   const root = await mkdtemp(path.join(tmpdir(), 'attendance-assets-'));
   roots.push(root);
   await mkdir(path.join(root, 'views'));
+  const imagePath = path.join('core', 'v2', 'whatsapp', 'assets', 'default-approval.png');
+  await mkdir(path.dirname(path.join(root, imagePath)), { recursive: true });
+  await writeFile(path.join(root, imagePath), await readFile(new URL('../../core/v2/whatsapp/assets/default-approval.png', import.meta.url)));
   if (spec !== undefined) await writeFile(path.join(root, 'views', 'attendance-openapi.json'), spec);
   for (const name of ['swagger-api-view.json', 'swagger-api-v2-view.json']) {
     await writeFile(path.join(root, 'views', name), JSON.stringify({ paths: { '/test': { get: {} } } }));
@@ -25,6 +28,8 @@ describe('production runtime assets', () => {
     const source = await readFile(new URL('../../views/attendance-openapi.json', import.meta.url), 'utf8');
     const root = await fixture(source);
     await copyRuntimeAssets(root);
+    expect(await readFile(path.join(root, 'dist/core/v2/whatsapp/assets/default-approval.png')))
+      .toEqual(await readFile(new URL('../../core/v2/whatsapp/assets/default-approval.png', import.meta.url)));
     expect(await readFile(path.join(root, 'dist/views/attendance-openapi.json'), 'utf8')).toBe(source);
     const scripts = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')).scripts;
     expect(scripts.obfuscate).toMatch(/javascript-obfuscator .* && npm run build:assets$/);

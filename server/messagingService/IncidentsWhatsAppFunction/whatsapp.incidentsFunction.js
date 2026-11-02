@@ -24,14 +24,15 @@ const toE164 = (raw) => {
 // Send an incident alert to one or more numbers via the WhatsApp Cloud API.
 // Non-blocking by design at the call site; here it resolves with per-number
 // results and never throws for a single failed send.
-export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}, timezone = null, adminId = null) => {
+export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}, timezone = null, adminId = null, recipientIds) => {
   if (adminId) {
     const settings = await WhatsAppSettings.findOne({ adminId }).select('enabled recipients');
     if (settings) {
-      const phones = settings.recipients.filter(item => item.optedInAt).map(item => item.phone);
+      const phones = settings.recipients.filter(item => item.optedInAt && (!Array.isArray(recipientIds) || recipientIds.includes(String(item._id)))).map(item => item.phone);
       return sendTemplateAlert(adminId, incident, phones, nvrData, channelData, timezone);
     }
   }
+  if (Array.isArray(recipientIds)) return []; // Explicit zone selections never fall back to legacy numbers.
   const phoneNumberId = config.has("WhatsApp.phoneNumberId") ? config.get("WhatsApp.phoneNumberId") : '';
   const accessToken = config.has("WhatsApp.accessToken") ? config.get("WhatsApp.accessToken") : "";
 

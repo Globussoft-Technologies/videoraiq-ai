@@ -31,6 +31,8 @@ import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
 import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
+import { whatsappRequest } from '@/helpers/whatsapp';
+import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
@@ -92,6 +94,7 @@ export default function DetectionZoneMarking({
 
   const typesApi = useApi(() => fetchDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
+  const whatsappApi = useApi(() => IS_FLO_MATTRESS ? Promise.resolve({ recipients: [] }) : whatsappRequest('recipient-options'), []);
   const telegramApi = useApi(() => getTelegramLinkCode(), []);
   const telegramChannels = useMemo(
     () =>
@@ -391,6 +394,7 @@ export default function DetectionZoneMarking({
     threshold: isDoor ? String(DOOR_DEFAULT_THRESHOLD_SEC) : '0',
     company: '',
     telegramChatIds: [],
+    whatsappRecipientIds: [],
     telegramChatId: '',
     countMode: (isLineCrossing || isCheckInOut) ? savedDetectionMode : '',
     activityMode: 'all',
@@ -650,6 +654,7 @@ export default function DetectionZoneMarking({
       telegramChatIds: Array.isArray(z.telegramChatIds)
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
+      ...(Array.isArray(z.whatsappRecipientIds) ? { whatsappRecipientIds: z.whatsappRecipientIds } : {}),
       name: z.name,
       ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isLighting ? lightingZonePayload(z) : {}),
@@ -1656,6 +1661,7 @@ export default function DetectionZoneMarking({
                 onSaveHeader={handleSaveCheckInOutHeader}
                 detectionModeSaving={savingMode}
                 telegramChannels={telegramChannels}
+                whatsappApi={whatsappApi}
               />
             )}
 
@@ -1794,6 +1800,7 @@ export default function DetectionZoneMarking({
                 onSaveHeader={handleSaveCheckInOutHeader}
                 detectionModeSaving={savingMode}
                 telegramChannels={telegramChannels}
+                whatsappApi={whatsappApi}
               />
             ) : (
               <div style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: '30px 18px', textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>
@@ -1828,6 +1835,7 @@ export default function DetectionZoneMarking({
       onCancel={() => setShowSaveModal(false)}
       onSubmit={handleSubmitSave}
       telegramChannels={telegramChannels}
+                whatsappApi={whatsappApi}
     />
       )}
 

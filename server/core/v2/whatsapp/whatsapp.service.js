@@ -1,9 +1,11 @@
 import axios from 'axios';
+import { readFile } from 'node:fs/promises';
+import { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, isDefaultTemplate, supportedDefaultTemplate, buildDefaultTemplateValues } from './whatsapp.defaultTemplate.js';
 import config from 'config';
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { encryptData, decryptData } from '../../../utils/cryptoUtils.js';
-import { WhatsAppSettings, WhatsAppDelivery } from './whatsapp.model.js';
-import { buildIncidentWhatsAppMessage, buildIncidentImageUrl } from '../../../messagingService/message.helper.js';
+import { WhatsAppSettings } from './whatsapp.model.js';
+import { buildIncidentImageUrl } from '../../../messagingService/message.helper.js';
 
 const defaultVersion = () => config.has('WhatsApp.apiVersion') ? config.get('WhatsApp.apiVersion') : 'v24.0';
 const graph = async (settings, method, path, data, params) => {
@@ -13,22 +15,18 @@ const graph = async (settings, method, path, data, params) => {
   return response.data;
 };
 export const isImageTemplate = template => template?.components?.some(item => item.type === 'HEADER' && item.format === 'IMAGE');
-export const supportedTemplate = template => {
-  if (template.status !== 'APPROVED' || template.parameter_format === 'NAMED') return false;
-  const components = template.components || [];
-  if (components.some(component => !['BODY', 'FOOTER'].includes(component.type) && !(component.type === 'HEADER' && component.format === 'IMAGE'))) return false;
-  if (components.filter(component => component.type === 'HEADER').length > 1) return false;
-  const body = components.find(component => component.type === 'BODY')?.text;
-  if (!body) return false;
-  const variables = [...body.matchAll(/\{\{(.*?)\}\}/g)].map(match => match[1]);
-  return variables.length === 1 && variables[0] === '1';
+export const supportedTemplate = supportedDefaultTemplate;
+const defaultTemplateInfo = templates => {
+  const template = templates.find(isDefaultTemplate);
+  return { name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, body: DEFAULT_TEMPLATE_BODY,
+    status: template?.status || 'NOT_SUBMITTED', approved: Boolean(template && supportedTemplate(template)) };
 };
 export async function publicSettings(adminId) {
   const settings = await WhatsAppSettings.findOne({ adminId });
-  if (!settings) return { enabled: false, configured: false, templates: [], recipients: [], apiVersion: defaultVersion() };
+  if (!settings) return { enabled: false, configured: false, templates: [], recipients: [], defaultTemplate: defaultTemplateInfo([]), apiVersion: defaultVersion() };
   return { enabled: settings.enabled, configured: Boolean(settings.phoneNumberId && settings.businessAccountId),
     phoneNumberId: settings.phoneNumberId, businessAccountId: settings.businessAccountId, apiVersion: settings.apiVersion,
-    templates: settings.templates.map(template => ({ ...template, supported: supportedTemplate(template) })),
+    defaultTemplate: defaultTemplateInfo(settings.templates), templates: settings.templates.map(template => ({ ...template, supported: supportedTemplate(template) })),
     selectedTemplate: settings.selectedTemplate, fallbackTemplate: settings.fallbackTemplate, recipients: settings.recipients, lastSyncAt: settings.lastSyncAt };
 }
 export async function saveSettings(adminId, input) {
@@ -69,106 +67,73 @@ export async function syncTemplates(adminId) {
     after = response.paging.cursors?.after;
     if (!after || page === 19) throw new Error('Template list is too large to sync completely');
   }
-  const selectedStillApproved = templates.some(item => item.name === settings.selectedTemplate?.name && item.language === settings.selectedTemplate?.language && supportedTemplate(item));
-  await WhatsAppSettings.updateOne({ adminId }, { $set: { templates, lastSyncAt: new Date(), ...(settings.enabled && !selectedStillApproved ? { enabled: false } : {}) } });
+  const approved = templates.find(supportedTemplate);
+  await WhatsAppSettings.updateOne({ adminId }, { $set: { templates, lastSyncAt: new Date(),
+    selectedTemplate: approved ? { name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE } : null,
+    fallbackTemplate: null, enabled: Boolean(approved) && !settings.alertsPaused } });
   return publicSettings(adminId);
 }
-export async function requestTemplate(adminId, { name, language, imageHeader = false, sampleHandle }) {
+const approvalImage = () => readFile(new URL('./assets/default-approval.png', import.meta.url));
+export async function requestTemplate(adminId) {
+  await syncTemplates(adminId);
   const settings = await WhatsAppSettings.findOne({ adminId }).select('+credentials');
-  if (!settings?.credentials) throw new Error('Configure WhatsApp first');
-  await graph(settings, 'post', `${settings.businessAccountId}/message_templates`, {
-    name, language, category: 'UTILITY', parameter_format: 'POSITIONAL', components: [...(imageHeader ? [{ type: 'HEADER', format: 'IMAGE', example: { header_handle: [sampleHandle] } }] : []), { type: 'BODY',
-      text: 'VideoRAIQ incident alert: {{1}}. Please review the incident in your VideoRAIQ dashboard.',
-      example: { body_text: [['High severity fire detected at Reception camera, Main Office, 10:30 AM']] },
-    }],
+  const existing = settings.templates.find(isDefaultTemplate);
+  if (existing && (supportedTemplate(existing) || ['PENDING', 'IN_APPEAL'].includes(existing.status))) return publicSettings(adminId);
+  const sample = await uploadTemplateSample(adminId, { buffer: await approvalImage(), mimetype: 'image/png' });
+  const components = [{ type: 'HEADER', format: 'IMAGE', example: { header_handle: [sample.handle] } },
+    { type: 'BODY', text: DEFAULT_TEMPLATE_BODY, example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE] } }];
+  await graph(settings, 'post', existing?.id || `${settings.businessAccountId}/message_templates`, {
+    ...(existing?.id ? {} : { name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, parameter_format: 'POSITIONAL' }),
+    category: 'UTILITY', components,
   });
   return syncTemplates(adminId);
 }
-export async function selectTemplate(adminId, selection) {
+export async function selectTemplate(adminId) {
   await syncTemplates(adminId);
   const settings = await WhatsAppSettings.findOne({ adminId });
-  const template = settings.templates.find(item => item.name === selection.name && item.language === selection.language);
-  if (!template || !supportedTemplate(template)) throw new Error('Select an approved template with one body parameter and an optional image header');
-  let fallback = null;
-  if (isImageTemplate(template) && selection.fallback) {
-    fallback = settings.templates.find(item => item.name === selection.fallback?.name && item.language === selection.fallback?.language);
-    if (!fallback || !supportedTemplate(fallback) || isImageTemplate(fallback)) throw new Error('Select an approved text-only fallback for incidents without images');
-  }
-  await WhatsAppSettings.updateOne({ adminId }, { $set: { selectedTemplate: { name: selection.name, language: selection.language }, fallbackTemplate: fallback ? { name: fallback.name, language: fallback.language } : null, enabled: true } });
+  if (!settings.templates.some(supportedTemplate)) throw new Error('The default incident template must be approved. Submit it for approval, then sync.');
+  await WhatsAppSettings.updateOne({ adminId }, { $set: { selectedTemplate: { name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE }, fallbackTemplate: null, alertsPaused: false, enabled: true } });
   return publicSettings(adminId);
 }
-export async function sendTemplateAlert(adminId, incident, recipients, nvr = {}, channel = {}, timezone) {
+export async function sendTemplateAlert(adminId, incident, recipients, nvr = {}, channel = {}, timezone, testImageId) {
   const settings = await WhatsAppSettings.findOne({ adminId }).select('+credentials');
   if (!settings) return null; // Preserve legacy sending for accounts without new configuration.
   if (!settings.enabled || !settings.credentials) return [];
-  let selected = settings.templates.find(item => item.name === settings.selectedTemplate?.name && item.language === settings.selectedTemplate?.language);
+  const selected = settings.templates.find(supportedTemplate);
   if (!selected || !supportedTemplate(selected)) throw new Error('WhatsApp alert template is not approved or supported');
   let imageUrl = buildIncidentImageUrl(incident);
   try { const url = new URL(imageUrl); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) imageUrl = ''; } catch { imageUrl = ''; }
-  const fallback = settings.templates.find(item => item.name === settings.fallbackTemplate?.name && item.language === settings.fallbackTemplate?.language);
-  const missingImage = isImageTemplate(selected) && !imageUrl;
-  if (isImageTemplate(selected) && !imageUrl) {
-    if (fallback && supportedTemplate(fallback) && !isImageTemplate(fallback)) selected = fallback;
-  }
-  // Our templates have a single bounded, single-line body parameter.
-  const summary = buildIncidentWhatsAppMessage(incident, nvr, channel, timezone).replace(/\s+/g, ' ').slice(0, 800);
+  const values = buildDefaultTemplateValues(incident, nvr, channel, timezone);
   const phones = [...new Set(recipients)];
   const results = [];
   for (const recipient of phones) {
     try {
-      if (missingImage && isImageTemplate(selected)) throw new Error('Incident image is missing and no approved text-only fallback is configured');
+      if (!imageUrl && !testImageId) throw new Error('Incident image is missing; the default image template requires an incident snapshot');
       const send = current => graph(settings, 'post', `${settings.phoneNumberId}/messages`, {
         messaging_product: 'whatsapp', to: recipient.replace(/^\+/, ''), type: 'template',
         template: { name: current.name, language: { code: current.language }, components: [
-          ...(isImageTemplate(current) ? [{ type: 'header', parameters: [{ type: 'image', image: { link: imageUrl } }] }] : []),
-          { type: 'body', parameters: [{ type: 'text', text: summary }] },
+          ...(isImageTemplate(current) ? [{ type: 'header', parameters: [{ type: 'image', image: testImageId ? { id: testImageId } : { link: imageUrl } }] }] : []),
+          { type: 'body', parameters: values.map(text => ({ type: 'text', text })) },
         ] },
       });
-      let response;
-      let deliveryTemplate = selected;
-      try { response = await send(selected); }
-      catch (error) {
-        const code = error.response?.data?.error?.code;
-        // Retry only a definitive media rejection, never timeouts or unknown outcomes.
-        if (!isImageTemplate(selected) || ![131052, 131053].includes(code) || !fallback || !supportedTemplate(fallback) || isImageTemplate(fallback)) throw error;
-        deliveryTemplate = fallback;
-        response = await send(fallback);
-      }
+      const response = await send(selected);
       const messageId = response.messages?.[0]?.id;
       if (!messageId) throw new Error('Meta did not return a message ID');
-      await WhatsAppDelivery.updateOne({ messageId }, { $setOnInsert: { adminId, messageId, recipient,
-        incidentId: incident?._id ? String(incident._id) : undefined, template: deliveryTemplate.name, status: 'accepted', statusAt: new Date(0) } }, { upsert: true });
       results.push({ recipient, messageId, status: 'accepted' });
     } catch (error) {
       const message = error.response?.data?.error?.message || error.message;
-      await WhatsAppDelivery.create({ adminId, recipient, template: selected.name, status: 'failed', error: message, statusAt: new Date() });
       results.push({ recipient, status: 'failed', error: message });
     }
   }
   return results;
 }
-export async function webhook(settings, rawBody, signature, body) {
+export async function webhook(settings, rawBody, signature) {
   const { appSecret } = decryptData(settings.credentials);
   if (!appSecret || !Buffer.isBuffer(rawBody)) return false;
   const expected = Buffer.from('sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex'));
   const actual = Buffer.from(signature || '');
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
-  for (const entry of body.entry || []) {
-    if (String(entry.id) !== settings.businessAccountId) continue;
-    for (const change of entry.changes || []) {
-      if (change.value?.metadata?.phone_number_id !== settings.phoneNumberId) continue;
-      for (const status of change.value.statuses || []) {
-        if (!['sent', 'delivered', 'read', 'failed'].includes(status.status)) continue;
-        const statusAt = new Date(Number(status.timestamp) * 1000);
-        if (!Number.isFinite(statusAt.getTime())) continue;
-        // Do not overwrite a newer status with an out-of-order webhook.
-        await WhatsAppDelivery.updateOne({ adminId: settings.adminId, messageId: status.id,
-          $or: [{ statusAt: { $lt: statusAt } }, { statusAt: { $exists: false } },
-            { statusAt, status: { $in: { sent: ['accepted'], delivered: ['accepted', 'sent'], read: ['accepted', 'sent', 'delivered'], failed: ['accepted', 'sent'] }[status.status] } }] },
-          { $set: { status: status.status, statusAt, error: status.errors?.map(item => item.message || item.title).join('; ') || '' } });
-      }
-    }
-  }
+  // Acknowledge signed callbacks from existing Meta subscriptions without storing delivery history.
   return true;
 }
 
@@ -204,11 +169,24 @@ export async function sendSampleMessage(adminId, recipientId) {
     });
     const messageId = response.messages?.[0]?.id;
     if (!messageId) throw new Error('Meta did not return a message ID');
-    await WhatsAppDelivery.updateOne({ messageId }, { $setOnInsert: { adminId, messageId, recipient: recipient.phone, template: sample.name, status: 'accepted', statusAt: new Date(0) } }, { upsert: true });
     return { results: [{ recipient: recipient.phone, messageId, status: 'accepted' }] };
   } catch (error) {
     const message = error.response?.data?.error?.message || error.message;
-    await WhatsAppDelivery.create({ adminId, recipient: recipient.phone, template: sample.name, status: 'failed', error: message, statusAt: new Date() });
     throw new Error(message);
   }
+}
+
+// Explicit test messages use the bundled sample; live alerts always use the incident image.
+export async function sendTestAlert(adminId, recipientId) {
+  const settings = await WhatsAppSettings.findOne({ adminId }).select('+credentials');
+  const recipient = settings?.recipients.find(item => String(item._id) === recipientId && item.optedInAt);
+  if (!recipient || !settings.enabled) throw new Error('Enable alerts and choose an opted-in recipient');
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', 'image/png');
+  form.append('file', new Blob([await approvalImage()], { type: 'image/png' }), 'incident-sample.png');
+  const media = await graph(settings, 'post', `${settings.phoneNumberId}/media`, form);
+  if (!media.id) throw new Error('Meta did not return a test image ID');
+  return { results: await sendTemplateAlert(adminId, { incidentType: 'deskAbsence', incidentName: 'Test incident', severity: 'low',
+    timeOfIncident: new Date(), zone: 'Test zone', description: 'WhatsApp alert setup test (sample image)' }, [recipient.phone], {}, {}, undefined, media.id) };
 }

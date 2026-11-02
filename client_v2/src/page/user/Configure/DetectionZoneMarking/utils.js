@@ -47,6 +47,7 @@ export function zonesFor(setting, cameraId, settingType) {
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? (settingType === 'doorDetectionSettings' ? 300 : '0'),
     company: configs[i]?.company ?? '',
+    whatsappRecipientIds: configs[i]?.whatsappRecipientIds,
     countMode: (() => {
       const raw = configs[i]?.count_mode ?? setting?.settings?.count_mode;
       return raw === 'all' ? 'both' : (raw || 'entry');

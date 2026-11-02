@@ -227,7 +227,12 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
 
       const phoneNumbers = smsRecipients.map(recipient => recipient.value);
       if (phoneNumbers?.length || resolvedAdminId) {
-        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz, resolvedAdminId);
+        const zoneName = String(incidentZoneName || '').trim().toLowerCase();
+        const zone = detectionZoneConfigs.find(item => String(item.name || '').trim().toLowerCase() === zoneName);
+        const recipientIds = Array.isArray(zone?.whatsappRecipientIds)
+          ? zone.whatsappRecipientIds.map(String)
+          : (!zone && detectionZoneConfigs.some(item => Array.isArray(item.whatsappRecipientIds)) ? [] : undefined);
+        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz, resolvedAdminId, recipientIds);
       }
     } catch (err) {
       logger.error(`[ALERT_WHATSAPP_ERROR] WhatsApp alert failed`, {
