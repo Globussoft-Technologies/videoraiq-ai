@@ -2,6 +2,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { connectMongo, disconnectMongo, clearCollections } from "../dbSetup.js";
 import { payload, serviceCtx } from "../../helpers/service.js";
 
+vi.mock("../../../utils/database.js", () => ({
+  redis: { publish: vi.fn().mockResolvedValue(1) },
+}));
+
 const { default: ClientConfigService } = await import(
   "../../../core/v1/clientConfig/clientConfig.service.js"
 );
@@ -15,6 +19,8 @@ const { default: CameraDetection } = await import(
 const { default: Channel } = await import("../../../core/v1/channels/channels.model.js");
 const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
 const { redis } = await import("../../../utils/database.js");
+const { default: DetectionCatalog } = await import("../../../core/v1/detectionCatalog/detectionCatalog.model.js");
+const { default: DetectionCatalogService } = await import("../../../core/v1/detectionCatalog/detectionCatalog.service.js");
 
 const PPE = "personalProtectiveEquipmentSettings";
 const STOCK_COUNTING = "loadingUnloadingStockCountingSettings";
@@ -30,6 +36,7 @@ beforeEach(async () => {
 
 describe("detection allocation revocation", () => {
   it.each([
+    ["emotion detection", "emotionDetection"],
     ["loading/unloading stock counting", STOCK_COUNTING],
     ["blurred camera detection", BLURRED_CAMERA],
   ])("licenses %s with a camera allocation", async (_label, settingType) => {
@@ -51,6 +58,28 @@ describe("detection allocation revocation", () => {
       cameraAllocation: 3,
       enabled: true,
     });
+  });
+
+  it("lists emotion in client licenses and the detection catalog before the publisher catches up", async () => {
+    const admin = await Admin.create({
+      user_id: "emotion-client", login: "emotion-client", email: "emotion@test.com", purchasedCameras: 5,
+    });
+    await DetectionCatalog.create({ settingType: PPE, name: "PPE Detection" });
+    await Allocation.create({
+      adminId: admin._id, settingType: "emotionDetection", cameraAllocation: 2, enabled: true,
+    });
+
+    const config = serviceCtx({ params: { adminId: String(admin._id) } });
+    await ClientConfigService.getConfig(config.req, config.res);
+    expect(payload(config.res).data.detections).toContainEqual(expect.objectContaining({
+      settingType: "emotionDetection", name: "Emotion Detection", cameraAllocation: 2, enabled: true,
+    }));
+
+    const catalog = serviceCtx();
+    await DetectionCatalogService.list(catalog.req, catalog.res);
+    expect(payload(catalog.res).data.detections).toContainEqual(expect.objectContaining({
+      settingType: "emotionDetection", name: "Emotion Detection", clientCount: 1,
+    }));
   });
 
   it("turns a detection off and publishes a revoke when allocation reaches zero", async () => {

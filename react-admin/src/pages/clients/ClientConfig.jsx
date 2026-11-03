@@ -746,8 +746,8 @@ const ClientConfig = () => {
 
               {stats?.detectionsStale && (
                 <p className="border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-xs font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                  Showing a local fallback list — the client backend has not published its
-                  detection catalog yet. Restart it, then press Sync detections.
+                  Some detections use local defaults because the published catalog is missing
+                  or out of date. Press Sync detections to refresh it.
                 </p>
               )}
 

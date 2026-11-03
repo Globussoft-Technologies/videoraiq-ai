@@ -103,8 +103,8 @@ class ClientConfigService {
         detectionsEnabled: detections.filter((d) => d.enabled).length,
         // Cameras holding a camera-license slot right now (any detection on).
         licenseInUse,
-        // true when the client backend has not published its catalog yet, so
-        // the list above came from this service's local fallback.
+        // True when some or all entries came from local defaults because the
+        // published catalog is missing or out of date.
         detectionsStale: catalog.stale,
       };
 

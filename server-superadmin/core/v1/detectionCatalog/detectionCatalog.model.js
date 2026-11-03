@@ -16,6 +16,7 @@ const detectionCatalogSchema = new mongoose.Schema(
     name: { type: String, required: true },
     description: { type: String, default: "" },
     active: { type: Boolean, default: true },
+    dsSupported: { type: Boolean, default: null },
     source: { type: String, default: "server" },
     syncedAt: { type: Date, default: Date.now },
   },

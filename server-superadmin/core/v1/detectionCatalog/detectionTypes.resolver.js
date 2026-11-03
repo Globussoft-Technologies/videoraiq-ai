@@ -14,6 +14,8 @@ import logger from "../../../utils/logger.js";
  * owns the list — a detection only works once it is implemented there — so
  * reading it is what stops the two hand-maintained constants files drifting.
  *
+ * Emotion detection is also offered before an older published catalog has
+ * picked it up. An explicitly retired row still takes precedence.
  * Falls back to this service's local DETECTION_TYPES2 when the collection is
  * empty, which is the case until the client backend has booted once with the
  * publishing code. The fallback keeps the screens working; it is just possibly
@@ -22,19 +24,27 @@ import logger from "../../../utils/logger.js";
 export const resolveDetectionTypes = async () => {
   try {
     const rows = await catalogModel
-      .find({ active: true })
-      .select("settingType name description syncedAt dsSupported")
+      .find({})
+      .select("settingType name description active syncedAt dsSupported")
       .sort({ createdAt: 1 })
       .lean();
 
     if (rows.length > 0) {
+      const missingEmotion = !rows.some((row) => row.settingType === "emotionDetection");
+      const activeRows = rows.filter((row) => row.active !== false);
+      if (missingEmotion) {
+        activeRows.push({
+          settingType: "emotionDetection",
+          name: DETECTION_TYPES2.emotionDetection,
+        });
+      }
       return {
-        stale: false,
+        stale: missingEmotion,
         syncedAt: rows.reduce(
           (latest, row) => (row.syncedAt > latest ? row.syncedAt : latest),
           rows[0].syncedAt || null,
         ),
-        detections: rows.map((row) => ({
+        detections: activeRows.map((row) => ({
           settingType: row.settingType,
           name: row.name,
           // false = DS answered and does not implement this detection, so it can

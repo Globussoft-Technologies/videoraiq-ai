@@ -97,6 +97,7 @@ export const DETECTION_TYPES2 = {
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
+  emotionDetection: "Facial emotion recognition and expression monitoring",
   uniformDetectionSettings: "Uniform compliance monitoring across named zones",
   personalProtectiveEquipmentSettings: "Helmet, vest & mask compliance monitoring",
   vehicleDetectionSettings: "Vehicle plate capture & watchlist",

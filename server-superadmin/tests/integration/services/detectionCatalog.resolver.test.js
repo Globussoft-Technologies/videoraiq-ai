@@ -23,6 +23,7 @@ describe("resolveDetectionTypes", () => {
     await DetectionCatalog.insertMany([
       { settingType: "crowdDetectionSettings", name: "Crowd Detection" },
       { settingType: "carModelDetectionSettings", name: "Car Model Detection" },
+      { settingType: "emotionDetection", name: "Emotion Detection", dsSupported: true },
     ]);
 
     const result = await resolveDetectionTypes();
@@ -31,6 +32,7 @@ describe("resolveDetectionTypes", () => {
     expect(result.detections.map((d) => d.settingType).sort()).toEqual([
       "carModelDetectionSettings",
       "crowdDetectionSettings",
+      "emotionDetection",
     ]);
     // The detection this service's own constants never had.
     expect(result.detections.find((d) => d.settingType === "carModelDetectionSettings").name)
@@ -44,7 +46,47 @@ describe("resolveDetectionTypes", () => {
     ]);
 
     const result = await resolveDetectionTypes();
-    expect(result.detections.map((d) => d.settingType)).toEqual(["crowdDetectionSettings"]);
+    expect(result.detections.map((d) => d.settingType)).toEqual([
+      "crowdDetectionSettings", "emotionDetection",
+    ]);
+  });
+
+  it("includes emotion detection when an older published catalog is missing it", async () => {
+    await DetectionCatalog.create({ settingType: "crowdDetectionSettings", name: "Crowd Detection" });
+
+    const result = await resolveDetectionTypes();
+
+    expect(result.stale).toBe(true);
+    expect(result.detections.find((d) => d.settingType === "emotionDetection"))
+      .toMatchObject({ name: "Emotion Detection", dsSupported: null });
+    expect(result.detections.find((d) => d.settingType === "emotionDetection").description)
+      .not.toBe("");
+  });
+
+  it.each([true, false, null])("preserves published emotion metadata and support=%s without duplicates", async (dsSupported) => {
+    await DetectionCatalog.create({
+      settingType: "emotionDetection", name: "Published Emotion Detection",
+      description: "Published description", dsSupported,
+    });
+
+    const result = await resolveDetectionTypes();
+
+    expect(result.stale).toBe(false);
+    expect(result.detections).toEqual([{
+      settingType: "emotionDetection", name: "Published Emotion Detection",
+      description: "Published description", dsSupported,
+    }]);
+  });
+
+  it("does not reintroduce explicitly retired emotion detection", async () => {
+    await DetectionCatalog.create({
+      settingType: "emotionDetection", name: "Emotion Detection", active: false,
+    });
+
+    const result = await resolveDetectionTypes();
+
+    expect(result.stale).toBe(false);
+    expect(result.detections).toEqual([]);
   });
 
   it("falls back to the local list, flagged stale, before the first publish", async () => {
@@ -52,6 +94,7 @@ describe("resolveDetectionTypes", () => {
 
     expect(result.stale).toBe(true);
     expect(result.detections).toHaveLength(Object.keys(DETECTION_TYPES2).length);
+    expect(result.detections.some((d) => d.settingType === "emotionDetection")).toBe(true);
     // The fallback keeps the screens working — it is just possibly out of date,
     // which is exactly what `stale` reports.
     expect(result.detections.some((d) => d.settingType === "carModelDetectionSettings"))

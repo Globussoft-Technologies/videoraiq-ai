@@ -40,8 +40,7 @@ class DetectionCatalogService {
       return res.send(
         Response.SuccessResp("Detection catalog fetched", {
           detections,
-          // stale === true means the client backend has not published yet and
-          // these came from this service's local fallback list.
+          // Stale means some or all entries came from local defaults.
           stale: catalog.stale,
           syncedAt: catalog.syncedAt,
         })
@@ -77,7 +76,7 @@ class DetectionCatalogService {
       return res.send(
         Response.SuccessResp(
           catalog.stale
-            ? "Detection list refreshed from the local fallback — the client backend has not published its catalog yet."
+            ? "Detection list includes local defaults — the published catalog is missing or out of date."
             : `Detection list synced — ${catalog.detections.length} detections available.`,
           {
             total: catalog.detections.length,
