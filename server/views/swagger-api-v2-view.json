@@ -37,6 +37,286 @@
         }
       }
     },
+    "/api/v2/whatsapp/incident-image/{incidentId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "adminId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "expires",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "signature",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/webhook/{adminId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "adminId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      },
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "adminId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/recipient-options": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/settings": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/templates/sync": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/templates": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/template": {
+      "put": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/enabled": {
+      "put": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/recipients": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/recipients/{id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/test-sample": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/test": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/whatsapp/webhook-config": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
     "/api/v2/auth/by-login-pass": {
       "post": {
         "tags": [
@@ -512,8 +792,14 @@
       "post": {
         "description": "",
         "responses": {
-          "default": {
-            "description": ""
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "504": {
+            "description": "Gateway Timeout"
           }
         }
       }
@@ -537,7 +823,11 @@
             "description": ""
           }
         },
-        "security": []
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
       }
     },
     "/api/v2/uploads/deleteMedia": {
@@ -2350,7 +2640,7 @@
         "tags": [
           "Users"
         ],
-        "description": "To add AuthorizedUsers .",
+        "description": "Create an authorized user after email verification. Send POST /users/email-verification/send, wait for the link, then check GET /users/email-verification/status?email=... . Unverified addresses return EMAIL_NOT_VERIFIED.",
         "parameters": [
           {
             "name": "data",
@@ -3278,6 +3568,40 @@
             "EncryptedAuthToken": []
           }
         ]
+      }
+    },
+    "/api/v2/channel/details": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/channel/{id}/details": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
       }
     },
     "/api/v2/channel/nvr-camera-detections": {
@@ -8696,7 +9020,7 @@
         "tags": [
           "Detection Settings"
         ],
-        "description": "Reset saved detection thresholds for one detection setting",
+        "description": "Reset saved detection thresholds for one detection setting. GET /detection-settings/{id} exposes detectionSetting.hasSavedModelThresholds. A missing saved threshold returns NO_SAVED_THRESHOLDS.",
         "parameters": [
           {
             "name": "id",
@@ -8711,7 +9035,7 @@
             "description": "Detection thresholds reset successfully"
           },
           "400": {
-            "description": "Bad Request"
+            "description": "No saved model thresholds (NO_SAVED_THRESHOLDS)"
           },
           "404": {
             "description": "Detection setting not found"
@@ -14601,6 +14925,615 @@
         }
       }
     },
+    "/api/v2/agent-chat/conversations": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/conversations/{cid}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/conversations/{cid}/messages": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "request_id": {
+                  "example": "any"
+                },
+                "message": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/runs/{rid}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/runs/{rid}/cancel": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/runs/{rid}/recover": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/actions/{aid}/decision": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "decision": {
+                  "example": "any"
+                },
+                "proposalVersion": {
+                  "example": "any"
+                },
+                "digest": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/capabilities": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/actions/{aid}/preview": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/sign-out": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/runs/{rid}/events": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-auth/token": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "some((scope": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-actions/prepare": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-actions/{actionId}/decision": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-actions/{actionId}/execute": {
+      "post": {
+        "description": "Execute an approved action. Failed and invalidated target results may omit desired/observed state, versions, and verifiedAt.",
+        "parameters": [
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Action result; individual targets may fail",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "integer"
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "targets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "result": {
+                                "type": "object",
+                                "required": [
+                                  "status",
+                                  "errorCode",
+                                  "message",
+                                  "retryStatus",
+                                  "reconciliationStatus"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "failed",
+                                      "invalidated"
+                                    ]
+                                  },
+                                  "errorCode": {
+                                    "type": "string",
+                                    "example": "STALE_CONFIGURATION"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "retryStatus": {
+                                    "type": "string"
+                                  },
+                                  "reconciliationStatus": {
+                                    "type": "string"
+                                  },
+                                  "desiredState": {
+                                    "type": "object",
+                                    "description": "Optional on failure"
+                                  },
+                                  "observedState": {
+                                    "type": "object",
+                                    "description": "Optional on failure"
+                                  },
+                                  "desiredVersion": {
+                                    "type": "string",
+                                    "description": "Optional on failure"
+                                  },
+                                  "observedVersion": {
+                                    "type": "string",
+                                    "description": "Optional on failure"
+                                  },
+                                  "verifiedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "description": "Optional on failure"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Agent Actions"
+        ],
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/agent-actions/{actionId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-actions/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/outages": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/reviews": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/lifecycles": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/groups": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/contexts": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/schedules": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/evidence": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/runtime": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/agent-data/analytics/query": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/v2/faceImages/upload": {
       "post": {
         "tags": [
@@ -17016,6 +17949,146 @@
           }
         }
       }
+    },
+    "/api/v2/xray/sessions": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/xray/sessions/{sessionId}/prompt": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/xray/sessions/{sessionId}/heartbeat": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/xray/sessions/{sessionId}/objects/{objId}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "objId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/xray/sessions/{sessionId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/audit-events": {
+      "get": {
+        "tags": [
+          "Agent Actions"
+        ],
+        "description": "List scoped agent and product audit events.",
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events and pagination"
+          }
+        }
+      }
+    },
+    "/api/v2/channel/detection-status": {
+      "get": {
+        "tags": [
+          "Agent Actions"
+        ],
+        "description": "List camera detector configuration and runtime observations.",
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detector statuses and pagination"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -18008,6 +19081,10 @@
           "type": "string",
           "example": "+919876543210"
         },
+        "fullName": {
+          "type": "string",
+          "example": "Test recipient"
+        },
         "incidentTypes": {
           "type": "array",
           "example": [
@@ -18016,6 +19093,29 @@
           ],
           "items": {
             "type": "string"
+          }
+        },
+        "departmentIds": {
+          "type": "array",
+          "example": [
+            "68493b14b176a495112b6522"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "severityByType": {
+          "type": "object",
+          "properties": {
+            "crowdDetection": {
+              "type": "array",
+              "example": [
+                "high"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
           }
         }
       },

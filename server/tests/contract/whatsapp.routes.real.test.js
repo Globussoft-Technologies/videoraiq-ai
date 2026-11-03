@@ -17,10 +17,11 @@ const { WhatsAppSettings, WhatsAppDelivery } = await import('../../core/v2/whats
 const { sendIncidentWhatsApp } = await import('../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js');
 const { FireSmokeDetectionSetting } = await import('../../core/v2/detectionSettings/detectionSettings.model.js');
 const { supportedTemplate, sendTemplateAlert } = await import('../../core/v2/whatsapp/whatsapp.service.js');
-const { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
+const { FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
 const { prepareIncidentImage } = await import('../../core/v2/whatsapp/whatsapp.incidentMedia.js');
 let app, admin;
 const template = { id: 'template1', name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, status: 'APPROVED', components: [{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: DEFAULT_TEMPLATE_BODY }] };
+const textTemplate = { ...template, id: 'text-template', name: FALLBACK_TEMPLATE_NAME, components: [{ type: 'BODY', text: FALLBACK_TEMPLATE_BODY }] };
 const settings = { phoneNumberId: '1234567', businessAccountId: '7654321', apiVersion: 'v24.0', accessToken: 'secret-test-access-token', appSecret: 'secret-test-app-secret' };
 beforeAll(connectMongo);
 afterAll(disconnectMongo);
@@ -72,12 +73,12 @@ describe('WhatsApp alert configuration', () => {
     expect((await request(app).put('/whatsapp/settings').send(settings)).status).toBe(400);
     expect(await WhatsAppSettings.countDocuments()).toBe(0);
   });
-  it('submits only the default template using the bundled image and selects it after approval', async () => {
+  it('submits both fixed templates, uploads only the bundled image, and avoids duplicate submissions', async () => {
     await configure();
-    let submitted = false;
+    const submitted = [];
     axios.mockImplementation(async options => {
-      if (options.url.endsWith('/message_templates') && options.method === 'get') return { data: { data: submitted ? [{ ...template, status: 'PENDING' }] : [] } };
-      if (options.url.endsWith('/message_templates') && options.method === 'post') { submitted = true; return { data: { id: 'template1' } }; }
+      if (options.url.endsWith('/message_templates') && options.method === 'get') return { data: { data: submitted.map(name => ({ ...(name === DEFAULT_TEMPLATE_NAME ? template : textTemplate), status: 'PENDING' })) } };
+      if (options.url.endsWith('/message_templates') && options.method === 'post') { submitted.push(options.data.name); return { data: { id: 'template1' } }; }
       if (options.url.endsWith('/app/uploads')) return { data: { id: 'upload:123' } };
       if (options.url.includes('/upload:123')) return { data: { h: '4:bundled-sample' } };
       return { data: {} };
@@ -95,7 +96,10 @@ describe('WhatsApp alert configuration', () => {
     expect(Buffer.isBuffer(upload.data)).toBe(true);
     expect(upload.data.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     await request(app).post('/whatsapp/templates').send({});
-    expect(axios.mock.calls.filter(([options]) => options.method === 'post' && options.url.endsWith('/message_templates'))).toHaveLength(1);
+    expect(axios.mock.calls.filter(([options]) => options.method === 'post' && options.url.endsWith('/message_templates'))).toHaveLength(2);
+    const textPayload = axios.mock.calls.find(([options]) => options.method === 'post' && options.data?.name === FALLBACK_TEMPLATE_NAME)[0].data;
+    expect(textPayload.components).toEqual([{ type: 'BODY', text: FALLBACK_TEMPLATE_BODY, example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE.filter((_, index) => index !== 8)] } }]);
+    expect(response.body.defaultTemplate.fallback.status).toBe('PENDING');
     axios.mockResolvedValue({ data: { data: [template] } });
     const synced = await request(app).post('/whatsapp/templates/sync').send({});
     expect(synced.body).toMatchObject({ enabled: true, selectedTemplate: { name: DEFAULT_TEMPLATE_NAME, language: 'en_US' } });
@@ -239,5 +243,97 @@ describe('WhatsApp alert configuration', () => {
     const result = await sendTemplateAlert(admin._id, { Image: 'https://media.example.com/incident.jpg' }, ['+919999999999']);
     expect(result[0]).toMatchObject({ status: 'failed', error: 'Recipient is not in allowed list' });
     expect(await WhatsAppDelivery.countDocuments()).toBe(0);
+  });
+  it('uses the approved text fallback for missing or unreadable snapshots, and retries only definite media rejections', async () => {
+    await enable();
+    let failure;
+    axios.mockImplementation(async options => {
+      if (options.url.endsWith('/message_templates')) return { data: { data: [template, textTemplate] } };
+      if (options.url.endsWith('/media')) return { data: { id: 'snapshot-media' } };
+      if (options.url.endsWith('/messages')) {
+        if (options.data.template.name === DEFAULT_TEMPLATE_NAME && failure) throw failure;
+        return { data: { messages: [{ id: 'wamid.fallback' }] } };
+      }
+      return { data: {} };
+    });
+    expect((await request(app).post('/whatsapp/templates/sync').send({})).body.fallbackTemplate.name).toBe(FALLBACK_TEMPLATE_NAME);
+    const incident = { incidentName: 'Fire', description: 'Smoke detected', severity: 'high' };
+    expect((await sendTemplateAlert(admin._id, incident, ['+919999999999']))[0].status).toBe('accepted');
+    let sent = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).at(-1)[0].data.template;
+    expect(sent.name).toBe(FALLBACK_TEMPLATE_NAME);
+    expect(sent.components).toHaveLength(1);
+    expect(sent.components[0].parameters).toHaveLength(9);
+    expect(sent.components[0].parameters[8].text).toBe('SMOKE DETECTED');
+    prepareIncidentImage.mockRejectedValueOnce(new Error('File not found in storage'));
+    expect((await sendTemplateAlert(admin._id, { ...incident, Image: '/missing.jpg' }, ['+919999999999']))[0].status).toBe('accepted');
+    failure = { response: { data: { error: { code: 131052, message: 'Media unavailable' } } } };
+    expect((await sendTemplateAlert(admin._id, { ...incident, Image: '/photo.jpg' }, ['+919999999999']))[0].status).toBe('accepted');
+    sent = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).at(-1)[0].data.template;
+    expect(sent.name).toBe(FALLBACK_TEMPLATE_NAME);
+    const before = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).length;
+    failure = { code: 'ETIMEDOUT', message: 'Unknown send outcome' };
+    expect((await sendTemplateAlert(admin._id, { ...incident, Image: '/photo.jpg' }, ['+919999999999']))[0].status).toBe('failed');
+    expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/messages'))).toHaveLength(before + 1);
+    expect(await WhatsAppDelivery.countDocuments()).toBe(0);
+  });
+  it('can send text alerts when only the text default is approved', async () => {
+    await configure();
+    axios.mockImplementation(async options => ({ data: options.url.endsWith('/message_templates') ? { data: [textTemplate] } : { messages: [{ id: 'wamid.text-only' }] } }));
+    const synced = await request(app).post('/whatsapp/templates/sync').send({});
+    expect(synced.body).toMatchObject({ enabled: true, selectedTemplate: { name: FALLBACK_TEMPLATE_NAME } });
+    expect((await sendTemplateAlert(admin._id, { description: 'No snapshot' }, ['+919999999999']))[0].status).toBe('accepted');
+    expect(prepareIncidentImage).not.toHaveBeenCalled();
+  });
+  it('creates owner-named shared-key requests and rejects duplicates or member requests', async () => {
+    const requested = await request(app).post('/whatsapp/shared-key-request').send({ type: 'enable' });
+    expect(requested.status).toBe(200);
+    expect(requested.body).toMatchObject({ credentialSource: 'own', sharedKeyRequest: { type: 'enable', status: 'pending', adminName: 'wa-test' } });
+    expect((await request(app).post('/whatsapp/shared-key-request').send({ type: 'enable' })).status).toBe(409);
+    expect((await request(app).post('/whatsapp/shared-key-request').set('x-test-member', 'member').send({ type: 'enable' })).status).toBe(403);
+    expect((await request(app).post('/whatsapp/shared-key-request').send({ type: 'cancel' })).status).toBe(409);
+  });
+  it('uses approved ENV sender keys at runtime without persisting or exposing them', async () => {
+    vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', '1111111'); vi.stubEnv('WHATSAPP_BUSINESS_ACCOUNT_ID', '2222222');
+    vi.stubEnv('WHATSAPP_ACCESS_TOKEN', 'shared-env-token'); vi.stubEnv('WHATSAPP_APP_SECRET', 'shared-env-secret');
+    try {
+      await configure();
+      const own = (await WhatsAppSettings.findOne({ adminId: admin._id }).select('+credentials')).credentials;
+      await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'env', templates: [], enabled: false } });
+      const read = await request(app).get('/whatsapp/settings');
+      expect(read.body).toMatchObject({ credentialSource: 'env', configured: true });
+      expect(read.body).not.toHaveProperty('phoneNumberId');
+      expect(JSON.stringify(read.body)).not.toMatch(/shared-env-token|shared-env-secret/);
+      expect((await request(app).put('/whatsapp/settings').send(settings)).status).toBe(409);
+      const synced = await request(app).post('/whatsapp/templates/sync').send({});
+      expect(synced.body.enabled).toBe(true);
+      const call = axios.mock.calls.find(([options]) => options.url.endsWith('/2222222/message_templates'))[0];
+      expect(call.headers.Authorization).toBe('Bearer shared-env-token');
+      const stored = await WhatsAppSettings.findOne({ adminId: admin._id }).select('+credentials');
+      expect(stored.credentials).toBe(own);
+      expect(JSON.stringify(stored)).not.toMatch(/shared-env-token|shared-env-secret/);
+      vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', '3333333');
+      const changedSender = (await request(app).get('/whatsapp/settings')).body;
+      expect(changedSender.enabled).toBe(false);
+      expect(changedSender.templates).toEqual([]);
+      expect((await request(app).post('/whatsapp/templates/sync').send({})).body.enabled).toBe(true);
+      expect((await request(app).post('/whatsapp/shared-key-request').send({ type: 'cancel' })).body).toMatchObject({ credentialSource: 'env', sharedKeyRequest: { type: 'cancel', status: 'pending' } });
+      // Approved cancellation must force a fresh own-sender verification.
+      await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'own', ownReverificationRequired: true, enabled: false, templates: [], 'sharedKeyRequest.status': 'approved' } });
+      const before = axios.mock.calls.length;
+      expect((await request(app).post('/whatsapp/templates/sync').send({})).status).toBe(400);
+      expect(axios.mock.calls.length).toBe(before);
+      expect((await request(app).put('/whatsapp/settings').send(settings)).status).toBe(200);
+      expect((await request(app).get('/whatsapp/settings')).body.ownReverificationRequired).toBe(false);
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('does not expose or silently fall back to own keys when shared ENV keys are unavailable', async () => {
+    await configure();
+    vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', ''); vi.stubEnv('WHATSAPP_BUSINESS_ACCOUNT_ID', '');
+    vi.stubEnv('WHATSAPP_ACCESS_TOKEN', ''); vi.stubEnv('WHATSAPP_APP_SECRET', '');
+    try {
+      await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'env', enabled: true } });
+      expect((await request(app).get('/whatsapp/settings')).body).toMatchObject({ configured: false, enabled: false, credentialSource: 'env', senderError: expect.any(String) });
+      expect((await request(app).post('/whatsapp/templates/sync').send({})).status).toBe(503);
+    } finally { vi.unstubAllEnvs(); }
   });
 });

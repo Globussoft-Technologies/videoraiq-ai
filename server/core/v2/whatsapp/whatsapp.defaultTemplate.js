@@ -16,6 +16,11 @@ export const DEFAULT_TEMPLATE_EXAMPLE = [
   'NVR12', 'DA', 'https://example.com/incident.jpg', '2 PERSON(S) MISSING FROM DA',
 ];
 export const isDefaultTemplate = template => template?.name === DEFAULT_TEMPLATE_NAME && template?.language === DEFAULT_TEMPLATE_LANGUAGE;
+export const FALLBACK_TEMPLATE_NAME = 'videoraiq_incident_text_v2';
+export const FALLBACK_TEMPLATE_BODY = DEFAULT_TEMPLATE_BODY.replace('*Image Link:* {{9}}', '*Snapshot:* Snapshot unavailable').replace('{{10}}', '{{9}}');
+export const supportedFallbackTemplate = template => template?.name === FALLBACK_TEMPLATE_NAME
+  && template.language === DEFAULT_TEMPLATE_LANGUAGE && template.status === 'APPROVED' && template.parameter_format !== 'NAMED'
+  && template.components?.length === 1 && template.components[0].type === 'BODY' && template.components[0].text === FALLBACK_TEMPLATE_BODY;
 export const supportedDefaultTemplate = template => {
   if (!isDefaultTemplate(template) || template.status !== 'APPROVED' || template.parameter_format === 'NAMED') return false;
   const components = template.components || [];

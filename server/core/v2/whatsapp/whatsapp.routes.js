@@ -8,6 +8,8 @@ import { WhatsAppSettings } from './whatsapp.model.js';
 import { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE } from './whatsapp.defaultTemplate.js';
 import * as service from './whatsapp.service.js';
 import { serveIncidentImage } from './whatsapp.incidentMedia.js';
+import { requestSharedKeys } from './whatsapp.keyRequests.js';
+import { resolveSender } from './whatsapp.sender.js';
 
 const router = Router();
 // A signed capability for one incident image, not an account login token.
@@ -25,7 +27,8 @@ router.post('/webhook/:adminId', async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.adminId)) return res.sendStatus(404);
     const settings = await WhatsAppSettings.findOne({ adminId: req.params.adminId }).select('+credentials');
-    if (!settings?.credentials || !await service.webhook(settings, req.rawBody, req.get('x-hub-signature-256'), req.body)) return res.sendStatus(403);
+    const sender = resolveSender(settings);
+    if (!sender?.credentials || !await service.webhook(sender, req.rawBody, req.get('x-hub-signature-256'), req.body)) return res.sendStatus(403);
     return res.sendStatus(200);
   } catch { return res.sendStatus(500); }
 });
@@ -56,13 +59,17 @@ const run = (schema, handler) => async (req, res) => {
     const input = schema ? await schema.validateAsync(req.body, { abortEarly: false }) : {};
     return res.json(await handler(req.whatsappAdminId, input, req));
   } catch (error) {
-    return res.status(error.response?.status === 429 ? 429 : 400).json({ message: error.response?.data?.error?.message || error.message });
+    return res.status(error.statusCode || (error.response?.status === 429 ? 429 : 400)).json({ message: error.response?.data?.error?.message || error.message });
   }
 };
 const numericId = Joi.string().trim().pattern(/^\d{5,30}$/).required();
 const settingsSchema = Joi.object({ phoneNumberId: numericId, businessAccountId: numericId,
   apiVersion: Joi.string().pattern(/^v\d{1,2}\.0$/).required(), accessToken: Joi.string().max(4096).allow(''), appSecret: Joi.string().max(256).allow('') });
 router.get('/settings', run(null, service.publicSettings));
+router.post('/shared-key-request', run(Joi.object({ type: Joi.string().valid('enable', 'cancel').required() }), async (adminId, { type }) => {
+  await requestSharedKeys(adminId, type);
+  return service.publicSettings(adminId);
+}));
 router.put('/settings', run(settingsSchema, service.saveSettings));
 router.post('/templates/sync', run(Joi.object({}), service.syncTemplates));
 router.post('/templates', run(Joi.object({}), service.requestTemplate));

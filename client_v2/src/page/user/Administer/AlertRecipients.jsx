@@ -48,12 +48,10 @@ const STATUS_FILTERS = [
   { key: 'unverified', label: 'Unverified' },
 ];
 
-// Keep WhatsApp hidden for the current release.
-const WHATSAPP_UI_ENABLED = false;
 const RECIPIENT_VIEWS = [
   { key: 'email', label: 'Email' },
   { key: 'telegram', label: 'Telegram' },
-  ...(WHATSAPP_UI_ENABLED && !IS_FLO_MATTRESS
+  ...(!IS_FLO_MATTRESS
     ? [{ key: 'whatsapp', label: 'WhatsApp' }]
     : []),
 ];
@@ -1643,7 +1641,7 @@ export default function AlertRecipients() {
         </div>
       )}
 
-      {WHATSAPP_UI_ENABLED && activeView === 'whatsapp' && <WhatsAppAlerts />}
+      {activeView === 'whatsapp' && <WhatsAppAlerts />}
 
       {activeView !== 'whatsapp' && (activeView === 'email' ? (
         <>

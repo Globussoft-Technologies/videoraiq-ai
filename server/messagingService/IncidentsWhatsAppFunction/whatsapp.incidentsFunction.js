@@ -31,6 +31,8 @@ export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData =
       const phones = settings.recipients.filter(item => item.optedInAt && (!Array.isArray(recipientIds) || recipientIds.includes(String(item._id)))).map(item => item.phone);
       return sendTemplateAlert(adminId, incident, phones, nvrData, channelData, timezone);
     }
+    // Tenant accounts must configure their own sender or receive explicit shared-key approval.
+    return [];
   }
   if (Array.isArray(recipientIds)) return []; // Explicit zone selections never fall back to legacy numbers.
   const phoneNumberId = config.has("WhatsApp.phoneNumberId") ? config.get("WhatsApp.phoneNumberId") : '';

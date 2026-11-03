@@ -1,4 +1,5 @@
 import express from "express";
+import whatsappKeyRoutes from '../../core/v1/whatsappKeys/whatsappKeys.routes.js';
 import nvrRoutes from "../../core/v1/NVR/nvr.routes.js";
 import channelRoutes from "../../core/v1/channels/channels.routes.js";
 import authRoutes from "../../core/v1/Auth/auth.routes.js";
@@ -41,6 +42,7 @@ import streamMonitoringRoutes from "../../core/v1/streamMonitoring/routes.js";
 import telegramRoutes from "../../core/v1/telegram/telegram.routes.js";
 
 const router = express.Router();
+router.use('/whatsapp-key-requests', whatsappKeyRoutes);
 
 router.use("/auth", authRoutes);
 router.use("/sessions", verifySessionAccess, sessionRoutes);

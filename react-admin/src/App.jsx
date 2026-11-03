@@ -14,6 +14,7 @@ import ComingSoon from "./pages/placeholder/ComingSoon";
 import Profile from "./pages/profile/Profile";
 import StreamMonitoring from "./pages/streamMonitoring/StreamMonitoring";
 import AlertRecipients from "./pages/alertRecipients/AlertRecipients";
+import WhatsAppKeyRequests from './pages/whatsappKeys/WhatsAppKeyRequests';
 
 const App = () => {
   return (
@@ -41,6 +42,7 @@ const App = () => {
           element={<StreamMonitoring />}
         />
         <Route path="/alert-recipients" element={<AlertRecipients />} />
+        <Route path="/whatsapp-key-requests" element={<WhatsAppKeyRequests />} />
         <Route path="/session-management" element={<SessionManagement />} />
         <Route
           path="/session-management/:ownerType/:ownerId"

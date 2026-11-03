@@ -8,7 +8,7 @@ const upload = multer(); // memory storage
 
 router.post('/media', verifyToken, upload.single('file'), uploadsController.uploadMedia);
 router.post('/zip', verifyToken, authorizeMediaRead, uploadsController.downloadZip);
-router.get('/:mediaPath(*)', verifyToken, authorizeMediaRead, uploadsController.fetchMedia);
+router.get('/:mediaPath(*)', uploadsController.fetchMedia);
 router.delete('/deleteMedia', verifyToken, upload.single('file'), uploadsController.deleteMedia);
 router.delete('/deleteUserMedia', verifyToken, upload.single('file'), uploadsController.deleteUserMedia);
 

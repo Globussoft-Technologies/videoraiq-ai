@@ -174,6 +174,7 @@ export const NAV_GROUPS = [
   },
   {
     label: 'BOX PACKING QC',
+    hideForFloMattress: true,
     items: [
       { key: 'box-packing', label: 'Box Packing', path: 'box-packing', icon: Package, moduleKey: 'boxPackingQc', modulePageKey: 'boxPacking', permissionKey: 'logs', permissionSubKey: 'boxPackingLogs', logsConfigKey: 'boxPackingLogs' },
     ],
@@ -181,6 +182,7 @@ export const NAV_GROUPS = [
   {
     // Desk Solar Shoulder detection: one page with three tabs (SolderLine.jsx).
     label: 'SOLAR LINE QC',
+    hideForFloMattress: true,
     items: [
       { key: 'solder-line', label: 'JB Solder Line', path: 'solder-line', end: true, icon: Grid3x3, moduleKey: 'solarLineQc', modulePageKey: 'solderLine', permissionKey: 'logs', permissionSubKey: 'deskSolarShoulderLogs', logsConfigKey: 'deskSolarShoulderLogs' },
       { key: 'solder-line-logs', label: 'Solder Alert Logs', path: 'solder-line/logs', icon: TriangleAlert, moduleKey: 'solarLineQc', modulePageKey: 'solderAlertLogs', permissionKey: 'logs', permissionSubKey: 'deskSolarShoulderLogs', logsConfigKey: 'deskSolarShoulderLogs' },

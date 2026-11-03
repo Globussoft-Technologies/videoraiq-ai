@@ -37,13 +37,45 @@ export default function WhatsAppAlerts() {
     catch (failure) { const message = failure.response?.data?.message || failure.message || 'WhatsApp request failed'; setError(message); toast.error(message); }
     finally { setBusy(''); }
   };
+  useEffect(() => {
+    if (!owner || settings?.sharedKeyRequest?.status !== 'pending') return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      whatsappRequest('settings').then(value => { if (!cancelled) {
+        if (value.sharedKeyRequest?.status === 'pending') setSettings(value);
+        else apply(value);
+      } }).catch(() => {});
+    }, 15000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [owner, settings?.sharedKeyRequest?.status]);
   if (!owner) return <div className={panelClass}>Only the account owner can configure WhatsApp alerts.</div>;
   if (!settings) return <div className={panelClass}>{error || 'Loading WhatsApp settings?'}</div>;
 
   const defaultTemplate = settings.defaultTemplate;
+  const shared = settings.credentialSource === 'env';
+  const request = settings.sharedKeyRequest;
+  const pending = request?.status === 'pending';
   return <div className="space-y-4">
     {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
-    <section className={panelClass}>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="text-xs text-[var(--tx2)]" role="status">
+        {pending ? (request.type === 'cancel' ? 'Cancellation pending Super Admin approval. Admin keys remain active.' : 'Admin key request pending Super Admin approval.')
+          : request?.status === 'rejected' ? 'Your last request was rejected. Your current key mode is unchanged.'
+          : shared ? 'Using Admin keys for WhatsApp.'
+          : settings.ownReverificationRequired ? 'Cancellation approved. Verify your own sender keys to resume alerts.' : 'Using your own WhatsApp sender.'}
+      </div>
+      <button type="button" className={buttonClass} disabled={!!busy || pending} onClick={() => action('key-request', async () => {
+        apply(await whatsappRequest('shared-key-request', 'post', { type: shared ? 'cancel' : 'enable' }));
+        toast.success('Request sent to Super Admin');
+      })}>{pending ? 'Request pending' : shared ? 'Request Cancellation' : 'Request Admin Keys'}</button>
+    </div>
+    {settings.senderError && <p role="alert" className="text-sm text-red-500">{settings.senderError}</p>}
+    {shared && <section className={panelClass}>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">Using Admin keys</h2><span className="text-xs text-[var(--tx2)]">{settings.enabled ? 'Alerts enabled' : 'Alerts paused'}</span></div>
+      <p className="text-xs text-[var(--tx3)]">Your WhatsApp sender is managed by the Super Admin. Your recipients and zone selections remain available.</p>
+      {settings.enabled && <button disabled={!!busy} className={buttonClass} onClick={() => action('pause', async () => apply(await whatsappRequest('enabled', 'put', { enabled: false })))}>Pause WhatsApp alerts</button>}
+    </section>}
+    {!shared && <section className={panelClass}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">WhatsApp configuration</h2><span className="text-xs text-[var(--tx2)]">{settings.enabled ? 'Alerts enabled' : 'Alerts paused'}</span></div>
       <p className="text-xs text-[var(--tx3)]">Connect this account?s Meta WhatsApp Business sender. In Meta testing, add and verify each test recipient first. Production recipients must consent to alerts.</p>
       <form className="space-y-4" onSubmit={event => { event.preventDefault(); action('save', async () => {
@@ -58,19 +90,20 @@ export default function WhatsAppAlerts() {
           {settings.enabled && <button type="button" disabled={!!busy} className={buttonClass} onClick={() => action('pause', async () => apply(await whatsappRequest('enabled', 'put', { enabled: false })))}>Pause WhatsApp alerts</button>}
         </div>
       </form>
-    </section>
+    </section>}
 
     {settings.configured && <>
       <section className={panelClass}>
         <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">Default incident template</h2>
           <button disabled={!!busy} className={buttonClass} onClick={() => action('sync', async () => { apply(await whatsappRequest('templates/sync', 'post', {})); toast.success('Default template status synced'); })}>{busy === 'sync' ? 'Syncing...' : 'Sync approval status'}</button>
         </div>
-        <p className="text-xs text-[var(--tx3)]">Submit our default incident template with its included sample image. Once approved, sync to select it automatically. Every zone uses this same template with its own incident details and snapshot.</p>
+        <p className="text-xs text-[var(--tx3)]">Submit both default templates: an image alert with our included sample image, and a text-only fallback. Once approved, sync to select it automatically. Every zone uses this same template with its own incident details and snapshot.</p>
         <div className="flex flex-wrap gap-3 text-sm text-[var(--tx)]"><span>{defaultTemplate?.name}</span><span>{defaultTemplate?.language}</span><strong>{defaultTemplate?.status || 'NOT_SUBMITTED'}</strong></div>
+        <p className="text-xs text-[var(--tx2)]">Text fallback: {defaultTemplate?.fallback?.name} - {defaultTemplate?.fallback?.status || 'NOT_SUBMITTED'}</p>
         <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3 text-xs text-[var(--tx)]">{defaultTemplate?.body?.replace(/\{\{(\d+)\}\}/g, (_, index) => ['[Detection type]', '[Detection name]', '[Day]', '[Incident time]', '[Severity]', '[Camera]', '[NVR]', '[Zone]', '[Incident image URL]', '[Description]'][Number(index) - 1])}</pre>
-        <p className="text-xs text-[var(--tx3)]">The sample image is only for approval and explicit test messages. Live alerts require the actual incident snapshot. No fallback template is required.</p>
+        <p className="text-xs text-[var(--tx3)]">The sample image is only for approval and explicit test messages. Live alerts use the incident snapshot when available; otherwise the approved text fallback says "Snapshot unavailable".</p>
         <div className="flex flex-wrap gap-2">
-          <button disabled={!!busy || defaultTemplate?.approved || ['PENDING', 'IN_APPEAL'].includes(defaultTemplate?.status)} className={buttonClass} onClick={() => action('request', async () => { apply(await whatsappRequest('templates', 'post', {})); toast.success('Default template submitted. Sync to check Meta approval.'); })}>{busy === 'request' ? 'Submitting...' : 'Submit default template for approval'}</button>
+          <button disabled={!!busy || defaultTemplate?.submissionComplete} className={buttonClass} onClick={() => action('request', async () => { apply(await whatsappRequest('templates', 'post', {})); toast.success('Default templates submitted. Sync to check Meta approval.'); })}>{busy === 'request' ? 'Submitting...' : 'Submit default templates for approval'}</button>
           {defaultTemplate?.approved && !settings.enabled && <button disabled={!!busy} className={buttonClass} onClick={() => action('resume', async () => apply(await whatsappRequest('enabled', 'put', { enabled: true })))}>Resume WhatsApp alerts</button>}
         </div>
         {settings.lastSyncAt && <p className="text-xs text-[var(--tx3)]">Last synced: {new Date(settings.lastSyncAt).toLocaleString()}</p>}
