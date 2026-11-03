@@ -64,6 +64,17 @@ export const getChannels = async ({
   return data?.channels ?? [];
 };
 
+/** Load the complete filtered inventory for views that count every camera. */
+export const getEveryChannel = async (filters = {}) => {
+  const pageSize = 200;
+  const channels = [];
+  for (let skip = 0; ; skip += pageSize) {
+    const page = await getChannels({ ...filters, skip, limit: pageSize });
+    channels.push(...page);
+    if (page.length < pageSize) return channels;
+  }
+};
+
 export const getAllChannels = async ({
   nvrId = '',
   location = '',

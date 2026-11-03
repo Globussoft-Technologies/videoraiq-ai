@@ -17,7 +17,7 @@ import {
   deleteNvrById,
   getNvrCamerasForEdit,
 } from '../../../helpers/configure';
-import { getChannels, getLocations } from '../../../helpers/monitoring';
+import { getChannels, getEveryChannel, getLocations } from '../../../helpers/monitoring';
 import { createLocation } from '../Locations/Api';
 import { encrypt, decrypt } from '../../../helpers/decryptNvr';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
@@ -2028,7 +2028,7 @@ export default function NVRCameras() {
 
   const nvrsApi     = useApi(() => getNvrs(0, 100), []);
   const channelsApi = useApi(
-    () => (canViewChannels ? getChannels({ limit: 200 }) : Promise.resolve([])),
+    () => (canViewChannels ? getEveryChannel() : Promise.resolve([])),
     [canViewChannels]
   );
   const refetchNvrs = nvrsApi.refetch;

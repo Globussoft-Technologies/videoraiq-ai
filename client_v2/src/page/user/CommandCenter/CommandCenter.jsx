@@ -12,7 +12,7 @@ import MultiSiteNetwork from './MultiSiteNetwork';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
-import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
+import { getEveryChannel, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { usePermissions } from '@/context/PermissionContext';
 import { utcToConfiguredTimezone } from '@/utils/timezone';
@@ -209,21 +209,13 @@ export default function CommandCenter() {
   // Real "N of the filtered cameras are actually streaming" tally — LiveCamera
   // probes every tab's stream in the background (not just the active one) since
   // there's no backend field for per-camera online status.
-  const [onlineCameras, setOnlineCameras] = useState(() => ctx.camHealth || { online: 0, total: 0 });
+  const [onlineCameras, setOnlineCameras] = useState({ online: 0, total: 0, scope: null });
   // Also hand it to the layout so the Sidebar footer can show the same number
   // — but only when LiveCamera is looking at the whole estate. While an NVR
   // filter is active it's reporting a deliberately narrower count, which
   // isn't a health reading for the account; leave the Sidebar showing its
   // last known full-estate reading rather than overwrite it with the
   // filtered one.
-  const onOnlineCountChange = useCallback((online, total) => {
-    setOnlineCameras({ online, total });
-    if (selectedNvrs.length) return;
-    ctx.setCamHealth?.({ online, total });
-  }, [ctx.setCamHealth, selectedNvrs]);
-
-
- 
   // Options for the filter dropdowns.
   const locationsApi = useApi(() => getLocations(0, 200), []);
   const nvrsApi = useApi(() => getNVRs(), [], { metadataDomains: ['nvrs'] });
@@ -303,6 +295,11 @@ export default function CommandCenter() {
     return f;
   }, [selectedLocations, selectedNvrs, selectedDepts, selectedCamTypes, location, locNameByKey]);
   const filterKey = JSON.stringify(filters);
+  const onOnlineCountChange = useCallback((online, total) => {
+    setOnlineCameras({ online, total, scope: filterKey });
+    if (Object.keys(filters).length) return;
+    ctx.setCamHealth?.({ online, total });
+  }, [ctx.setCamHealth, filterKey]);
 
   // No NVR is selected by default — the dashboard opens across every NVR.
   // This used to force `[nvrOptions[0].id]` on mount and again whenever a
@@ -402,7 +399,7 @@ export default function CommandCenter() {
   // mid-flight, which aborted the first status stream and reopened it for a
   // broader second list (often the full estate).
   const networkChannelsApi = useApi(
-    () => getChannels({ ...filters, limit: 500 }),
+    () => getEveryChannel(filters),
     [filterKey],
     { pollMs: 60000 }
   );
@@ -485,32 +482,15 @@ export default function CommandCenter() {
       }),
     [networkChannelsApi.data, nvrLookup]
   );
-  const normalizedFilterLocations = filters.location || [];
-  const scopedNvrs = useMemo(() => {
-    const allNvrs = nvrsApi.data || [];
-    return allNvrs.filter((nvr) => {
-      const nvrId = nvr._id || nvr.id;
-      const nvrLocation = nvr.location || nvr.locationName || nvr.site || '';
-      if (selectedNvrs.length && !selectedNvrs.includes(nvrId)) return false;
-      if (normalizedFilterLocations.length && !normalizedFilterLocations.includes(nvrLocation)) return false;
-      return true;
-    });
-  }, [nvrsApi.data, selectedNvrs, normalizedFilterLocations]);
-  const cameraInventoryTotal = useMemo(
-    () => scopedNvrs.reduce((sum, nvr) => sum + (Number(nvr.cameraCount ?? nvr.usedChannels ?? nvr.used) || 0), 0),
-    [scopedNvrs]
-  );
-
   const camerasOnline = useMemo(
     () => ({
-      online: onlineCameras.online,
-      // Keep the dashboard denominator aligned with Live Wall: use the same
-      // filtered channel inventory / status-stream target count first. NVR
-      // cameraCount metadata can be stale or broader than the current filter,
-      // so it should only be a fallback.
-      total: onlineCameras.total || networkChannels.length || cameraInventoryTotal,
+      // A status response for the previous filter must not be paired with the
+      // current inventory while the new request is in flight.
+      online: onlineCameras.scope === filterKey && onlineCameras.total === networkChannels.length
+        ? onlineCameras.online : 0,
+      total: networkChannels.length,
     }),
-    [onlineCameras.online, onlineCameras.total, networkChannels.length, cameraInventoryTotal]
+    [onlineCameras.online, onlineCameras.total, onlineCameras.scope, filterKey, networkChannels.length]
   );
 
   const today = moment().format('YYYY-MM-DD');

@@ -89,7 +89,7 @@ export default function KpiRow({
   const navigate = useNavigate();
   const todayEvents = eventsToday ?? (dailyTotals.length ? dailyTotals[todayIndex()] : 0);
   const eventsDelta = dayOverDayDelta(dailyTotals);
-  const camerasTotal = onlineCameras.total || Number(stats.overAllCameraCount ?? 0);
+  const camerasTotal = onlineCameras.total;
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
   const activeAlerts = incidentCounts?.status?.new ?? stats.totalAlerts ?? 0;
   const highAlerts = incidentCounts?.severity?.high ?? stats.criticalAlerts ?? 0;

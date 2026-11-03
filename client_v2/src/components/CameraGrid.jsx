@@ -7,7 +7,7 @@ import PlaybackTimeline from './PlaybackTimeline';
 import SingleDatePicker from './SingleDatePicker';
 import ActiveDetectionsPanel from './ActiveDetectionsPanel';
 import { useApi } from '../hooks/useApi';
-import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { getChannels, getEveryChannel, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
 import { fetchIncidentById } from '../helpers/incidents';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -195,7 +195,7 @@ export default function CameraGrid() {
      applied client-side so its own selection never shrinks the options. */
   const effLoc = ctxLoc ? [ctxLoc] : selLoc;
   const channels = useApi(
-    () => getChannels({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType, limit: 200 }),
+    () => getEveryChannel({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType }),
     [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
   );
 

@@ -60,7 +60,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   // configured — a camera you own but can't stream is still a camera, and it
   // correctly reads OFFLINE (isCamLive returns false when cameraStatusId is null).
   const onlineCount = cams.filter((channel) => isCameraRtspOnline(statusById[cameraStatusId(channel)])).length;
-  const hasStatus = !!statusApi.data;
+  const hasStatus = !loading && (cams.length === 0 || statusTargets.length === 0 || !!statusApi.data);
   useEffect(() => {
     // Keep the last known Sidebar tally until the first status response lands,
     // instead of publishing an initial 0/0 that would make navigation look

@@ -29,11 +29,12 @@ export function useCameraStatusStream(targets, { enabled = true } = {}) {
       '';
     return `${id}@${domain}`;
   }).join(',');
-  const [data, setData] = useState(null);
+  const [result, setResult] = useState({ key: null, data: null });
   const [loading, setLoading] = useState(enabled && normalizedTargets.length > 0);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    setResult({ key: null, data: null });
     if (!enabled || !normalizedTargets.length) {
       setLoading(false);
       return undefined;
@@ -54,12 +55,13 @@ export function useCameraStatusStream(targets, { enabled = true } = {}) {
       if (stopped) return;
       unsubscribe = subscribeCamerasStatus(normalizedTargets, {
         onData: (summary) => {
-          setData(summary);
+          setResult({ key: targetsKey, data: summary });
           setLoading(false);
           setError(null);
         },
         onError: (err) => {
           setError(err);
+          setResult({ key: null, data: null });
           unsubscribe?.();
           unsubscribe = null;
           scheduleReconnect();
@@ -77,5 +79,5 @@ export function useCameraStatusStream(targets, { enabled = true } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetsKey, enabled]);
 
-  return { data, loading, error };
+  return { data: result.key === targetsKey && enabled ? result.data : null, loading, error };
 }

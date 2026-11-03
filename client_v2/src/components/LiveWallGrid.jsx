@@ -10,7 +10,7 @@ import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
-import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { getEveryChannel, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
 import { isCameraLive, isCameraRtspOnline, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
@@ -282,7 +282,7 @@ export default function LiveWallGrid() {
      applied client-side so its own selection never shrinks the options. */
   const effLoc = ctxLoc ? [ctxLoc] : selLoc;
   const channels = useApi(
-    () => getChannels({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType, limit: 200 }),
+    () => getEveryChannel({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType }),
     [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
   );
 
@@ -386,14 +386,15 @@ export default function LiveWallGrid() {
   // Publish to the Sidebar once the first status response lands. Deleting
   // every camera must still publish 0/0 immediately.
   useEffect(() => {
-    if (channels.loading || !Array.isArray(channels.data)) return;
+    if (channels.loading || channels.error || !Array.isArray(channels.data)) return;
+    if (effLoc.length || selNvr.length || selDept.length || selType.length) return;
     if (inventoryCameras.length === 0) {
       ctx.setCamHealth?.({ online: 0, total: 0 });
       return;
     }
-    if (!statusApi.data) return;
+    if (statusTargets.length > 0 && !statusApi.data) return;
     ctx.setCamHealth?.({ online: rtspOnlineCount, total: inventoryCameras.length });
-  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, statusApi.data, rtspOnlineCount]);
+  }, [channels.data, channels.loading, channels.error, ctx.setCamHealth, inventoryCameras.length, statusTargets.length, statusApi.data, rtspOnlineCount, ctxLoc, selLoc, selNvr, selDept, selType]);
 
   // Filters other than status.
   const preStatusList = useMemo(() => {
