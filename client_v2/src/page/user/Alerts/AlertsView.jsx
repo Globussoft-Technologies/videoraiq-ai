@@ -7,8 +7,9 @@ import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary, Loading } from '../../../components/States';
 import moment from 'moment';
 import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
+import MultiSelect from '../../../components/MultiSelect';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, fetchIncidentById, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentById, fetchDetectionTypes, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 
 const PAGE_SIZE = 50;
@@ -79,7 +80,8 @@ function confidenceOf(item) {
   const rawConfidence = apiPercentage
     ?? item?.confidence
     ?? item?.accuracy
-    ?? item?.score;
+    ?? item?.score
+    ?? (Array.isArray(item?.violations) ? item.violations.find((violation) => violation?.confidence != null)?.confidence : null);
 
   if (rawConfidence == null || rawConfidence === '') return null;
   const hasPercentageSuffix = typeof rawConfidence === 'string' && rawConfidence.includes('%');
@@ -452,6 +454,8 @@ export default function AlertsView() {
     || new URLSearchParams(routerLocation.search).get('alertId')
     || incidentIdOf(routedAlert);
   const [sev, setSev] = useState('all');
+  const [detectionTypes, setDetectionTypes] = useState([]);
+  const [selectedDetectionTypes, setSelectedDetectionTypes] = useState([]);
   const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
   const [selected, setSelected] = useState(routedAlert);
   const [deepLinkedIncident, setDeepLinkedIncident] = useState(routedAlert);
@@ -486,6 +490,16 @@ export default function AlertsView() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchDetectionTypes().then((types) => {
+      if (cancelled) return;
+      setDetectionTypes([...new Set(types.map((type) => type?.incidentType || type?.type || type?.value || type).filter((type) => typeof type === 'string' && type))]
+        .map((id) => ({ id, label: detectionLabel(id) })));
+    }).catch(() => { /* Keep the alert list usable if the filter catalog is unavailable. */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const filter = useMemo(() => {
     const f = {};
     if (location) f.location = location;
@@ -504,17 +518,22 @@ export default function AlertsView() {
   // must search the full incident set, not only the first loaded page.
   const listFilter = useMemo(() => {
     const f = { ...filter };
+    if (selectedDetectionTypes.length) f.incidentTypeFilter = selectedDetectionTypes;
     if (sev !== 'all') f.severity = severityFilterValue(sev);
     // The v2 API defaults missing statusFilter to unresolved/active only.
     // Alerts "All" should mean Active + Resolved, so send both explicitly.
     f.statusFilter = statusFilter === 'all' ? ALL_STATUS_FILTER : statusFilter;
     return f;
-  }, [filter, sev, statusFilter, severityFilterValue]);
+  }, [filter, sev, statusFilter, selectedDetectionTypes, severityFilterValue]);
+  const countFilter = useMemo(() => selectedDetectionTypes.length
+    ? { ...filter, incidentTypeFilter: selectedDetectionTypes }
+    : filter, [filter, selectedDetectionTypes]);
 
-  const hasFilters = sev !== 'all' || statusFilter !== 'all' || !!(dateFrom && dateTo);
+  const hasFilters = sev !== 'all' || statusFilter !== 'all' || selectedDetectionTypes.length > 0 || !!(dateFrom && dateTo);
   const clearAllFilters = useCallback(() => {
     setSev('all');
     setStatusFilter('all');
+    setSelectedDetectionTypes([]);
     setDateFrom('');
     setDateTo('');
   }, []);
@@ -575,19 +594,19 @@ export default function AlertsView() {
   const loadCounts = useCallback(async () => {
     const requestId = ++countsRequestIdRef.current;
     try {
-      const result = await fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: ALL_STATUS_FILTER });
+      const result = await fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, statusFilter: ALL_STATUS_FILTER });
       if (requestId !== countsRequestIdRef.current) return;
 
       // Backward-compatible fallback for a running backend that has not been
       // restarted with aggregate `counts` yet: ask the existing paginated API
       // for one row per chip filter and use only each response's totalCount.
       const [high, moderate, low, active, resolved, reported] = await Promise.all([
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('moderate'), statusFilter: ALL_STATUS_FILTER }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('low'), statusFilter: ALL_STATUS_FILTER }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'new' }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'resolved' }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'reported' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, severity: severityFilterValue('moderate'), statusFilter: ALL_STATUS_FILTER }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, severity: severityFilterValue('low'), statusFilter: ALL_STATUS_FILTER }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, statusFilter: 'new' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, statusFilter: 'resolved' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...countFilter, statusFilter: 'reported' }),
       ]);
       if (requestId !== countsRequestIdRef.current) return;
       setCountSummary({
@@ -607,7 +626,7 @@ export default function AlertsView() {
     } catch {
       // Keep the current chip counts if the count requests fail.
     }
-  }, [filter, severityFilterValue]);
+  }, [countFilter, severityFilterValue]);
 
   // Filter change (e.g. site switch or chip click) resets back to page 1.
   useEffect(() => {
@@ -790,6 +809,7 @@ export default function AlertsView() {
             setDateTo(toIso(end));
           }}
         />
+        <div style={{ minWidth: 190 }}><MultiSelect options={detectionTypes} value={selectedDetectionTypes} onChange={setSelectedDetectionTypes} placeholder="Select Detection" /></div>
         {hasFilters && (
           <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
             <X size={13} /> Clear
@@ -886,7 +906,7 @@ export default function AlertsView() {
                     </div>
                   );
                 })}
-                {loadingMore && <Loading label="Loading moreâ€¦" minH={60} />}
+                {loadingMore && <Loading label="Loading more…" minH={60} />}
               </div>
             )}
           </AsyncBoundary>
@@ -929,13 +949,13 @@ export default function AlertsView() {
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', wordBreak: 'break-word' }}>{activeDescription}</div>
                 <div style={{ fontSize: 12, color: 'var(--tx2)', wordBreak: 'break-word' }}>{activeCameraLine}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 1 }}>
-                  <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: confidenceOf(active) == null ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 1 }}>
+                  {confidenceOf(active) != null && <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
                     <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 4 }}>Confidence</div>
-                    <div style={{ fontSize: 16, lineHeight: 1.1, fontWeight: 800, color: confidenceOf(active) == null ? 'var(--tx3)' : '#ff6b00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 16, lineHeight: 1.1, fontWeight: 800, color: '#ff6b00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       { activeConfidence}
                     </div>
-                  </div>
+                  </div>}
                   <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
                     <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 4 }}>Status</div>
                     <div style={{ fontSize: 14, lineHeight: 1.15, fontWeight: 800, color: activeStatus.color, minWidth: 0 }}>

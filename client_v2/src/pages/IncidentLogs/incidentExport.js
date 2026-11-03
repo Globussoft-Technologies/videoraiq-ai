@@ -59,13 +59,13 @@ const fetchAllForExport = async (config, params) => {
     return {
       ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
       ...((config.showLightingFields || config.showHygieneFields) ? {
-        zone: item.zone || '--',
+        zone: item.zoneName || item.zone || '--',
         selectedCategories: (item.selectedCategories || []).map(config.showLightingFields ? lightingCategoryLabel : hygieneCategoryLabel).join(', '),
         violationCount: item.violationCount ?? item.violations?.length ?? 0,
-        violations: (item.violations || []).map(violation => [
+        violations: (item.violations || []).filter(Boolean).map(violation => [
           violation.categoryName || (config.showLightingFields ? lightingCategoryLabel : hygieneCategoryLabel)(violation.category),
           violation.description,
-        ].filter(Boolean).join(' - ')).join('\n'),
+        ].filter(Boolean).join(' - ')).join('\n') || item.description || '--',
       } : {}),
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
@@ -153,8 +153,8 @@ const buildExportColumns = (config) => {
   }
 
   if (config.showLightingFields || config.showHygieneFields) {
-    cols.push({ key: 'zone', label: 'Zone Name' }, { key: 'selectedCategories', label: 'Selected Categories' },
-      { key: 'violationCount', label: 'Issues Detected' }, { key: 'violations', label: 'Violations' });
+    cols.push({ key: 'violationCount', label: 'Issues Detected' }, { key: 'zone', label: 'Zone Name' },
+      { key: 'violations', label: config.showLightingFields ? 'Lighting / Site Condition Violations and Description' : 'Hygiene Violations and Description' });
   }
 
   if (config.showIndustrialFields) {
@@ -205,13 +205,17 @@ const exportToPDF = async (config, params) => {
     const cols = buildExportColumns(config);
     const headers = ['#', ...cols.map((c) => c.label), 'Image'];
     const imageColIndex = headers.length - 1;
+    const violationsColIndex = cols.findIndex((column) => column.key === 'violations') + 1;
     const tableRows = allLogs.map((row, i) => [i + 1, ...cols.map((c) => row[c.key]), '']);
 
     autoTable(doc, {
       ...reportTableOptions,
       head: [headers],
       body: tableRows,
-      columnStyles: { [imageColIndex]: { cellWidth: 40 } },
+      columnStyles: {
+        [imageColIndex]: { cellWidth: 30 },
+        ...(violationsColIndex > 0 ? { [violationsColIndex]: { cellWidth: 65, overflow: 'linebreak' } } : {}),
+      },
       didParseCell: (data) => {
         const statusColumnIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
         if (config.showDoorFields && statusColumnIndex > 0 && data.section === 'body' && data.column.index === statusColumnIndex) {
@@ -375,7 +379,7 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     if (config.showLightingFields || config.showHygieneFields) {
-      details.push(['Zone Name', 'zone'], ['Selected Categories', 'selectedCategories'], ['Issues Detected', 'violationCount'], ['Violations', 'violations']);
+      details.push(['Issues Detected', 'violationCount'], ['Zone Name', 'zone'], ['Violations and Description', 'violations']);
     }
     if (config.showIndustrialFields) {
       details.push(['Objects Detected', 'count']);
@@ -393,7 +397,7 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], [config.showDoorFields ? 'Time of Incident' : 'Time', 'createdAt']);
-    const cardHeight = imageHeight + bodyTopGap + rowGap * (details.length + (config.showLightingFields || config.showHygieneFields ? 1 : 0)) + 4;
+    const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + (config.showLightingFields || config.showHygieneFields ? 17 : 4);
     const firstPageStartY = 42;
     const nextPageStartY = 12;
     let x = margin;
@@ -460,8 +464,8 @@ const exportToGridPDF = async (config, params) => {
         doc.setFont('helvetica', isDoorStatus ? 'bold' : 'normal');
         doc.setTextColor(isDoorStatus ? (resolved ? 124 : isOpen ? 220 : 22) : 26, isDoorStatus ? (resolved ? 58 : isOpen ? 38 : 163) : 42, isDoorStatus ? (resolved ? 237 : isOpen ? 38 : 74) : 103);
         doc.setFontSize(6.3);
-        if (key === 'selectedCategories') {
-          const lines = doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 7).slice(0, 2);
+        if (key === 'violations') {
+          const lines = doc.splitTextToSize(String(row[key] ?? '--'), cardWidth - 7).slice(0, 5);
           doc.text(lines, labelX, textY + 3.2);
           textY += rowGap + lines.length * 2.5;
           return;
@@ -516,10 +520,16 @@ const exportToExcel = async (config, params) => {
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = [{ wch: 6 }, ...cols.map((column) => ({ wch: column.key === 'violations' ? 70 : column.key === 'nvrName' ? 34 : column.key === 'createdAt' ? 23 : 20 })), { wch: 16 }];
     const imageColIndex = cols.length + 1; // after '#' + all cols
     const statusColIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
+    const violationsColIndex = cols.findIndex((column) => column.key === 'violations') + 1;
 
     allLogs.forEach((row, i) => {
+      if (violationsColIndex > 0) {
+        const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: violationsColIndex });
+        if (worksheet[cellRef]) worksheet[cellRef].s = { alignment: { wrapText: true, vertical: 'top' } };
+      }
       if (config.showDoorFields && statusColIndex > 0) {
         const statusCellRef = XLSX.utils.encode_cell({ r: i + 1, c: statusColIndex });
         const statusCell = worksheet[statusCellRef];
@@ -535,7 +545,12 @@ const exportToExcel = async (config, params) => {
       }
       if (row.incidentImageUrl) {
         const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: imageColIndex });
-        worksheet[cellRef] = { t: 'f', f: `HYPERLINK("${row.incidentImageUrl}", "View Image")` };
+        worksheet[cellRef] = {
+          t: 's',
+          v: 'View Image',
+          l: { Target: row.incidentImageUrl, Tooltip: 'Open incident image' },
+          s: { font: { color: { rgb: '0563C1' }, underline: true } },
+        };
       }
     });
 

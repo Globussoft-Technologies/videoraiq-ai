@@ -8,6 +8,7 @@ import { detectionLabel, mediaUrl } from '../../../lib/format';
 import { formatUtcInConfiguredTimezone } from '../../../utils/timezone';
 import { incidentPackingExportFields, PACKING_INCIDENT_EXPORT_COLUMNS } from '../../../helpers/incidentPackingExport.js';
 import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident.js';
+import { drawReportHeader } from '../../../pages/IncidentLogs/pdfReportTemplate.js';
 
 const EXPORT_BATCH_SIZE = 500;
 const MAX_EXPORT_ROWS = 10000;
@@ -85,12 +86,21 @@ const fetchAllFilteredIncidents = async (filter) => {
 
 const mapRow = (item, index) => {
   const isDoorDetection = item?.incidentType === 'doorDetection';
+  const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item?.incidentType);
+  const violations = Array.isArray(item?.violations) ? item.violations.filter(Boolean) : [];
   return {
     'Sl No': index + 1,
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
+    ...(isConditionIncident ? {
+      'Issues Detected': Number.isInteger(item.violationCount) && item.violationCount >= 0 ? item.violationCount : violations.length,
+      Violations: violations.length
+        ? violations.map((violation) => [violation.categoryName || violation.category || 'Issue', violation.description].filter(Boolean).join('\n')).join('\n\n')
+        : [Array.isArray(item.selectedCategories) ? item.selectedCategories.join(', ') : '', item.description].filter(Boolean).join('\n') || '--',
+      'Zone Name': text(item.zoneName || item.zone),
+    } : {}),
     ...(isDoorDetection ? {
       'Door Name': text(item?.zoneName || item?.zone),
       'Door Status': doorStatusLabel(item),
@@ -107,18 +117,23 @@ const mapRow = (item, index) => {
 
 const fileStamp = () => moment().format('YYYY-MM-DD_HH-mm');
 
-const exportExcel = (rows, showVehicleNumber) => {
+const exportExcel = (rows, showVehicleNumber, violationLabel) => {
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))].filter((key) => showVehicleNumber || key !== 'Vehicle Number');
-  const exportRows = rows.map((row) => Object.fromEntries(columns.map((key) => [key, row[key] ?? '--'])));
+  const exportRows = rows.map((row) => Object.fromEntries(columns.map((key) => [key === 'Violations' ? violationLabel : key, row[key] ?? '--'])));
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
   worksheet['!cols'] = Object.keys(exportRows[0]).map((key) => ({
     wch: key === 'Image'
       ? 20
       : Math.min(42, Math.max(key.length + 2, ...exportRows.map((row) => String(row[key] ?? '').length + 2))),
   }));
+  const violationsColumn = columns.indexOf('Violations');
 
   const imageColumn = Object.keys(exportRows[0]).indexOf('Image');
   exportRows.forEach((row, index) => {
+    if (violationsColumn >= 0) {
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: violationsColumn });
+      if (worksheet[address]) worksheet[address].s = { alignment: { wrapText: true, vertical: 'top' } };
+    }
     const url = row.Image;
     if (url && url !== '--') {
       const address = XLSX.utils.encode_cell({ r: index + 1, c: imageColumn });
@@ -172,17 +187,13 @@ const exportExcel = (rows, showVehicleNumber) => {
   XLSX.writeFile(workbook, `incident-center_${fileStamp()}.xlsx`);
 };
 
-const exportListPdf = (rows, showVehicleNumber) => {
+const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('Incident Center Report', 14, 13);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}`, 14, 19);
+  await drawReportHeader(doc, { title: 'Incident Center Report', subtitle: `Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}` });
 
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
+    ...(rows.some((row) => Object.hasOwn(row, 'Issues Detected')) ? ['Issues Detected', violationLabel, 'Zone Name'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
     'Severity', 'Status', 'Time of Incident',
@@ -195,6 +206,9 @@ const exportListPdf = (rows, showVehicleNumber) => {
     Incident: showVehicleNumber ? 48 : 60,
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
+    'Issues Detected': 18,
+    [violationLabel]: 62,
+    'Zone Name': 25,
     'Door Name': 24,
     'Door Status': 24,
     'Door Duration': 38,
@@ -214,8 +228,8 @@ const exportListPdf = (rows, showVehicleNumber) => {
   const widthScale = Math.min(1, (doc.internal.pageSize.getWidth() - 20) / totalWidth);
   autoTable(doc, {
     head: [columns],
-    body: rows.map((row) => columns.map((column) => column === 'Image' ? (row.Image === '--' ? '--' : 'View image') : row[column] ?? '--')),
-    startY: 24,
+    body: rows.map((row) => columns.map((column) => column === 'Image' ? (row.Image === '--' ? '--' : 'View image') : row[column === violationLabel ? 'Violations' : column] ?? '--')),
+    startY: 44,
     margin: { left: 10, right: 10 },
     theme: 'grid',
     styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak', valign: 'middle' },
@@ -309,7 +323,7 @@ const imageFormat = (dataUrl) => {
   return type === 'JPG' ? 'JPEG' : type || 'JPEG';
 };
 
-const exportGridPdf = async (rows, showVehicleNumber) => {
+const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
   const imageData = await mapWithConcurrency(rows, 20, async (row) => {
     if (!row.Image || row.Image === '--') return null;
     try {
@@ -329,6 +343,11 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
   const imageHeight = cardWidth * 0.52;
   const detailsFor = (row) => [
     ['Incident', 'Incident'],
+    ...(Object.hasOwn(row, 'Issues Detected') ? [
+      ['Issues Detected', 'Issues Detected'],
+      ['Zone Name', 'Zone Name'],
+      [violationLabel, 'Violations'],
+    ] : []),
     ['NVR', 'NVR'],
     ['Camera', 'Camera'],
     ...(Object.hasOwn(row, 'Door Name') ? [
@@ -343,28 +362,21 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
     ...(showVehicleNumber ? [['Vehicle Number', 'Vehicle Number']] : []),
   ];
   const detailGap = rows.some((row) => Object.hasOwn(row, 'Box ID')) ? 3.7 : 4.3;
-  const cardHeight = imageHeight + 6 + Math.max(...rows.map((row) => detailsFor(row).length)) * detailGap + 4;
-  const firstPageY = 25;
+  const cardHeight = imageHeight + 6 + Math.max(...rows.map((row) => detailsFor(row).length)) * detailGap
+    + (rows.some((row) => Object.hasOwn(row, 'Violations')) ? 20 : 4);
+  const firstPageY = 44;
   const nextPageY = 10;
   let x = margin;
   let y = firstPageY;
   let column = 0;
 
-  const drawPageBackground = (showHeader = false) => {
+  const drawPageBackground = () => {
     doc.setFillColor(245, 247, 251);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    if (!showHeader) return;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(20, 24, 40);
-    doc.text('Incident Center Report - Grid View', margin, 13);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(90, 100, 120);
-    doc.text(`Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}`, margin, 19);
   };
 
-  drawPageBackground(true);
+  drawPageBackground();
+  await drawReportHeader(doc, { title: 'Incident Center Report - Grid View', subtitle: `Generated: ${moment().format('DD/MM/YYYY hh:mm A')}  |  Records: ${rows.length}` });
 
   rows.forEach((row, index) => {
     if (column === 0 && y + cardHeight > pageHeight - 8) {
@@ -397,6 +409,16 @@ const exportGridPdf = async (rows, showVehicleNumber) => {
       doc.setFontSize(5.4);
       doc.setTextColor(5, 24, 55);
       doc.text(label.toUpperCase(), x + 3.5, textY);
+
+      if (key === 'Violations') {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.3);
+        doc.setTextColor(26, 42, 103);
+        const lines = doc.splitTextToSize(text(row[key]), cardWidth - 7).slice(0, 6);
+        doc.text(lines, x + 3.5, textY + 3);
+        textY += detailGap + lines.length * 2.6 + 2;
+        return;
+      }
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.3);
@@ -439,9 +461,11 @@ export async function exportIncidentCenter(format, filter = {}, options = {}) {
 
   const rows = incidents.map(mapRow);
   const showVehicleNumber = incidents.some(vehicleNumberRequired);
-  if (format === 'excel') exportExcel(rows, showVehicleNumber);
-  else if (format === 'pdf' && options.viewMode === 'grid') await exportGridPdf(rows, showVehicleNumber);
-  else if (format === 'pdf') exportListPdf(rows, showVehicleNumber);
+  const conditionTypes = new Set(incidents.map((item) => item.incidentType).filter((type) => ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(type)));
+  const violationLabel = conditionTypes.size > 1 ? 'Hygiene Violations / Lighting Violations' : conditionTypes.has('lightingVisibilitySiteConditionsDetection') ? 'Lighting Violations' : 'Hygiene Violations';
+  if (format === 'excel') exportExcel(rows, showVehicleNumber, violationLabel);
+  else if (format === 'pdf' && options.viewMode === 'grid') await exportGridPdf(rows, showVehicleNumber, violationLabel);
+  else if (format === 'pdf') await exportListPdf(rows, showVehicleNumber, violationLabel);
   else throw new Error(`Unsupported export format: ${format}`);
 
   toast.success(`${format === 'excel' ? 'Excel' : 'PDF'} downloaded (${rows.length} incidents)`);

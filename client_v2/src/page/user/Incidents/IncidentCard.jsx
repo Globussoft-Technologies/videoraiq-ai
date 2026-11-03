@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
-import { PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { Activity, PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import IncidentZoneDetails from './IncidentZoneDetails';
+import IncidentHygieneDetails from './IncidentHygieneDetails';
 import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const SEV_COLOR = {
@@ -340,6 +341,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   }, [item._id, item.id, item.resolved]);
 
   const det      = detectionLabel(item.incidentType || item.displayName);
+  const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const st       = statusOf({ ...item, resolved: localResolved });
   const cam      = item.channelData?.customName || item.channelData?.name || item.cameraName || '';
 
@@ -542,16 +544,23 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
 
           {/* Top-right: severity chip (moved aside in delete mode so it never
               collides with the selection checkbox in the same corner). */}
-          <div style={{ position: 'absolute', top: 9, right: deleteMode ? 44 : 9, background: 'rgba(0,0,0,.55)', color: sevColor, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', border: `1px solid ${sevColor}` }}>
+          {!isConditionIncident && <div style={{ position: 'absolute', top: 9, right: deleteMode ? 44 : 9, background: 'rgba(0,0,0,.55)', color: sevColor, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', border: `1px solid ${sevColor}` }}>
             {sevLabel}
-          </div>
+          </div>}
+
+          {isConditionIncident && <span style={{ position: 'absolute', top: 9, right: deleteMode ? 44 : 9, padding: '3px 8px', borderRadius: 5, background: 'rgba(0,0,0,.72)', color: sevColor, border: `1px solid ${sevColor}`, fontSize: 10, fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,.3)' }}>
+            {sevLabel}
+          </span>}
+          {isConditionIncident && <span style={{ position: 'absolute', top: 37, right: deleteMode ? 44 : 9, padding: '4px 8px', borderRadius: 5, background: 'rgba(0,0,0,.72)', color: '#fff', fontSize: 10, fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,.3)' }}>
+            Issues detected: {Number.isInteger(item.violationCount) && item.violationCount >= 0 ? item.violationCount : Array.isArray(item.violations) ? item.violations.length : 0}
+          </span>}
 
           {/* Bottom-left: detection type badge + timestamp */}
-          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(60% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
             {/* Detection type badge (moved here to avoid the baked-in count/ID labels up top) */}
-            <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap', boxShadow: '0 1px 6px rgba(0,0,0,.55)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {!isConditionIncident && <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap', boxShadow: '0 1px 6px rgba(0,0,0,.55)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {det}
-            </div>
+            </div>}
             <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
               {shortDateTime(item.timeOfIncident)}
             </span>
@@ -586,7 +595,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
         </div>
 
         {/* Info row */}
-        <div style={{ padding: item.incidentType === 'boxPackingDetection' ? '12px 14px' : '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: item.incidentType === 'boxPackingDetection' ? 8 : 5, minWidth: 0 }}>
+        <div style={{ padding: item.incidentType === 'boxPackingDetection' ? '12px 14px' : '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: isConditionIncident ? 10 : item.incidentType === 'boxPackingDetection' ? 8 : 5, minWidth: 0, flex: 1 }}>
           {isCarModel ? (
             <>
               {/* Title + Tag User on one row */}
@@ -636,7 +645,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               {/* Plate + tagged user, for Vehicle Detection and friends. */}
               <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-                <span style={{ fontSize: item.incidentType === 'boxPackingDetection' ? 14 : 13, fontWeight: item.incidentType === 'boxPackingDetection' ? 700 : 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                <span style={{ fontSize: item.incidentType === 'boxPackingDetection' ? 14 : 13, fontWeight: item.incidentType === 'boxPackingDetection' || isConditionIncident ? 700 : 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: isConditionIncident ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: isConditionIncident ? 'clip' : 'ellipsis', overflowWrap: 'anywhere', minWidth: 0 }}>
                   {item.incidentName || det}
                 </span>
                 {isGuardSleeping && (
@@ -706,8 +715,12 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                </div>
              </div>
            )}
-           <IncidentZoneDetails item={item} compact={['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType)} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(item.incidentType === 'boxPackingDetection' ? { paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
+           {isConditionIncident ? <div style={{ padding: '12px 13px', border: '1px solid rgba(45,212,191,.55)', borderRadius: 9, background: 'rgba(20,184,166,.06)', minWidth: 0 }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0f766e', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}><Activity size={13} aria-hidden="true" />{item.incidentType === 'lightingVisibilitySiteConditionsDetection' ? 'Lighting / site condition violations' : 'Hygiene violations'}</div>
+             <IncidentHygieneDetails item={item} showIssueCount={false} showZone={false} showViolationNumber={false} showViolationSeverity={false} showViolationSeparator={false} showViolationMarker showConfidence={false} />
+           </div> : <IncidentZoneDetails item={item} />}
+          {isConditionIncident && <div style={{ display: 'flex', gap: 6, minWidth: 0, fontSize: 11, color: 'var(--tx2)' }}><span style={{ fontWeight: 700, flexShrink: 0 }}>Zone Name:</span><span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{item.zoneName || item.zone || '--'}</span></div>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(isConditionIncident || item.incidentType === 'boxPackingDetection' ? { marginTop: isConditionIncident ? 'auto' : 0, paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>
                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>Camera</span>
@@ -717,7 +730,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               <span style={{ flex: '1 1 auto', minWidth: 0 }} />
             ) : (
               <span style={{ fontSize: 11, color: item.incidentType === 'boxPackingDetection' ? 'var(--tx2)' : 'var(--tx3)', fontWeight: item.incidentType === 'boxPackingDetection' ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
-                {cam}
+                {isConditionIncident ? `Camera: ${cam || '--'}` : cam}
               </span>
             )}
             {/* Opens Playback on this camera at the second the incident was

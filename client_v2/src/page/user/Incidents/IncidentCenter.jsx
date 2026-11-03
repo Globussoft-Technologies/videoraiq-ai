@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { nowInConfiguredTimezone } from '../../../utils/timezone';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import DraggableZoomControls from '../../../components/DraggableZoomControls';
@@ -66,8 +66,16 @@ const INCIDENT_LIST_DETAILS = {
     { field: 'endTime', label: 'End time', width: 105 },
     { field: 'packingTime', label: 'Time to complete', width: 120 },
   ],
-  hygieneSanitationFoodSafetyDetection: [{ field: 'zone', label: 'Zone', width: 140 }],
-  lightingVisibilitySiteConditionsDetection: [{ field: 'zone', label: 'Zone', width: 140 }],
+  hygieneSanitationFoodSafetyDetection: [
+    { field: 'issueCount', label: 'Issues Detected', width: 120 },
+    { field: 'violation', label: 'Hygiene Violations', width: 310 },
+    { field: 'zone', label: 'Zone Name', width: 140 },
+  ],
+  lightingVisibilitySiteConditionsDetection: [
+    { field: 'issueCount', label: 'Issues Detected', width: 120 },
+    { field: 'violation', label: 'Lighting Violations', width: 310 },
+    { field: 'zone', label: 'Zone Name', width: 140 },
+  ],
 };
 const incidentListDetailsFor = (types) => {
   const columns = new Map();
@@ -86,7 +94,7 @@ const incidentListDetailsFor = (types) => {
   });
   return [...columns.values()].map(({ field, labels, width }) => ({
     field,
-    label: labels.join(' / '),
+    label: field === 'violation' && labels.length > 1 ? 'Hygiene Violations / Lighting Violations' : labels.join(' / '),
     width: labels.length > 1 ? Math.max(width, 190) : width,
   }));
 };
@@ -1408,6 +1416,7 @@ function IncidentListRow({
   const status = item.resolved ? 'Resolved' : item.report?.status === true ? 'Reported' : 'New';
   const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
   const isDoorDetection = item.incidentType === 'doorDetection';
+  const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
   const applicableDetailFields = new Set(incidentListDetailsFor([item.incidentType]).map(({ field }) => field));
@@ -1476,10 +1485,9 @@ function IncidentListRow({
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
-          <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>
+          {!isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>}
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
-          {['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && <IncidentZoneDetails item={item} compact showZone={false} />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1499,7 +1507,18 @@ function IncidentListRow({
               </span>
             ) : field === 'vehicleNumber' ? (
               <span>{item.vehicleNumber || '—'}</span>
-            ) : ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType) && field === 'zone' ? (
+            ) : isConditionIncident && field === 'issueCount' ? (
+              <span>{Number.isInteger(item.violationCount) && item.violationCount >= 0 ? item.violationCount : Array.isArray(item.violations) ? item.violations.length : 0}</span>
+            ) : isConditionIncident && field === 'violation' ? (
+              <div style={{ display: 'grid', gap: 7, minWidth: 0 }}>
+                {Array.isArray(item.violations) && item.violations.some(Boolean) ? item.violations.filter(Boolean).map((violation, index) => (
+                  <div key={`${violation.category || 'issue'}-${index}`} style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{violation.categoryName || violation.category || 'Issue'}</div>
+                    {violation.description && <div style={{ marginTop: 3, color: 'var(--tx3)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>{violation.description}</div>}
+                  </div>
+                )) : <div><div style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{Array.isArray(item.selectedCategories) && item.selectedCategories.length ? item.selectedCategories.join(', ') : 'Issue'}</div>{item.description && <div style={{ marginTop: 3, color: 'var(--tx3)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>{item.description}</div>}</div>}
+              </div>
+            ) : isConditionIncident && field === 'zone' ? (
               <span>{item.zoneName || item.zone || '—'}</span>
             ) : zoneRows.length ? zoneRows.map((zone, index) => (
               <span key={index} title={String(zone[field] ?? '—')} style={{ lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1598,6 +1617,7 @@ export default function IncidentCenter() {
   const [page,       setPage]       = useState(0);
   const [pageSize,   setPageSize]   = useState(12);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('incident_center_view') === 'list' ? 'list' : 'grid');
+  const [listSort, setListSort] = useState({ field: '', direction: 'asc' });
   const [exportingFormat, setExportingFormat] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [lightboxIncident, setLightboxIncident] = useState(null);
@@ -1748,6 +1768,33 @@ export default function IncidentCenter() {
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
+  const sortedListItems = useMemo(() => {
+    if (!listSort.field) return items;
+    const valueFor = (item) => {
+      switch (listSort.field) {
+        case 'incident': return item.incidentName || detectionLabel(item.incidentType || item.displayName);
+        case 'camera': return item.channelData?.customName || item.channelData?.name || '';
+        case 'issueCount': return Number.isInteger(item.violationCount) ? item.violationCount : item.violations?.length || 0;
+        case 'violation': return item.violations?.[0]?.categoryName || item.violations?.[0]?.category || '';
+        case 'zone': return item.zoneName || item.zone || '';
+        case 'severity': return ({ low: 1, moderate: 2, medium: 2, high: 3, critical: 4 })[String(item.severity || '').toLowerCase()] || 0;
+        case 'status': return item.resolved ? 'Resolved' : item.report?.status ? 'Reported' : 'New';
+        case 'time': return new Date(item.timeOfIncident || item.createdAt || 0).getTime() || 0;
+        default: return item[listSort.field] ?? '';
+      }
+    };
+    return [...items].sort((a, b) => {
+      const left = valueFor(a), right = valueFor(b);
+      const comparison = typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
+      return listSort.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [items, listSort]);
+  const toggleListSort = (field) => setListSort((current) => ({ field, direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const sortHeader = (label, field) => {
+    const active = listSort.field === field;
+    const SortIcon = active ? (listSort.direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return <span role="columnheader"><button type="button" onClick={() => toggleListSort(field)} title={`Sort visible page by ${label}`} aria-label={`Sort by ${label}${active ? `, ${listSort.direction}ending` : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'none', color: active ? 'var(--blue)' : 'var(--tx)', font: 'inherit', fontWeight: 900, letterSpacing: 'inherit', textTransform: 'inherit', cursor: 'pointer', textAlign: 'left' }}>{label}<SortIcon size={12} strokeWidth={1.9} style={{ opacity: active ? 1 : 0.6, flexShrink: 0 }} /></button></span>;
+  };
   const visibleTypes = detTypes.size ? [...detTypes] : [...new Set(items.map((item) => item.incidentType))];
   const detailColumns = incidentListDetailsFor(visibleTypes);
   const listColumns = incidentListColumns(detailColumns);
@@ -2762,25 +2809,25 @@ export default function IncidentCenter() {
             <div data-tour="incidents-list" role="table" aria-label="Incidents" style={{ overflowX: 'auto', border: '1px solid var(--bd)', borderRadius: 12, background: 'var(--bg1solid)', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
               <div
                 role="row"
-                style={{ display: 'grid', gridTemplateColumns: listColumns, gap: 12, alignItems: 'center', minWidth: listMinWidth, padding: '9px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}
+                style={{ display: 'grid', gridTemplateColumns: listColumns, gap: 12, alignItems: 'center', minWidth: listMinWidth, padding: '12px', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', color: 'var(--tx)', fontFamily: 'var(--mono, monospace)', fontSize: 10.5, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase' }}
               >
-                <span role="columnheader">Select</span>
-                <span role="columnheader">Evidence</span>
-                <span role="columnheader">Incident</span>
-                <span role="columnheader">Camera / NVR</span>
-                {detailColumns.map(({ field, label }) => <span key={field} role="columnheader">{label}</span>)}
-                <span role="columnheader">Severity</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader">Time of Incident</span>
+                <span role="columnheader" aria-label="Select incident" />
+                <span role="columnheader">Image</span>
+                {sortHeader('Incident', 'incident')}
+                {sortHeader('Camera / NVR', 'camera')}
+                {detailColumns.map(({ field, label }) => <Fragment key={field}>{sortHeader(label, field)}</Fragment>)}
+                {sortHeader('Severity', 'severity')}
+                {sortHeader('Status', 'status')}
+                {sortHeader('Time of Incident', 'time')}
                 <span role="columnheader" style={{ textAlign: 'right' }}>Actions</span>
               </div>
-              {items.map((item, i) => (
+              {sortedListItems.map((item) => (
                 <IncidentListRow
                   key={item._id || item.id}
                   item={item}
                   onRefresh={refreshIncidentData}
                   onResolvedChange={handleResolvedChange}
-                  onOpenLightbox={() => selectLightboxIncident(i)}
+                  onOpenLightbox={() => selectLightboxIncident(items.findIndex((entry) => (entry._id || entry.id) === (item._id || item.id)))}
                   onTagUser={setTagIncident}
                   onUntagUser={setUntagIncident}
                   onViewUser={setViewUser}
