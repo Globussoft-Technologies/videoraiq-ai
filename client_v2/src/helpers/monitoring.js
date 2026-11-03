@@ -32,6 +32,18 @@ export const getLocations = async (skip = 0, limit = 100, search = '') => {
   return data?.locations ?? [];
 };
 
+// Live Wall uses camera-access locations rather than the organization location list.
+export const getLiveWallLocations = async () => {
+  const token = getAccessToken();
+  const res = await axios.post(
+    `${Api_url}/authorizedChannels/locations`,
+    {},
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  const data = res?.data?.body?.data;
+  return Array.isArray(data) ? data : [];
+};
+
 /* accept a string or an array of ids/values and return a comma-joined string */
 const csv = (v) => (Array.isArray(v) ? v.filter(Boolean).join(',') : v ?? '');
 

@@ -17,7 +17,7 @@ const { WhatsAppSettings, WhatsAppDelivery } = await import('../../core/v2/whats
 const { sendIncidentWhatsApp } = await import('../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js');
 const { FireSmokeDetectionSetting } = await import('../../core/v2/detectionSettings/detectionSettings.model.js');
 const { supportedTemplate, sendTemplateAlert } = await import('../../core/v2/whatsapp/whatsapp.service.js');
-const { FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
+const { LEGACY_TEMPLATE_NAME, LEGACY_TEMPLATE_BODY, FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
 const { prepareIncidentImage } = await import('../../core/v2/whatsapp/whatsapp.incidentMedia.js');
 const { default: SharedSender } = await import('../../core/v2/whatsapp/whatsapp.sharedSender.model.js');
 const { encryptData } = await import('../../utils/cryptoUtils.js');
@@ -100,7 +100,7 @@ describe('WhatsApp alert configuration', () => {
     await request(app).post('/whatsapp/templates').send({});
     expect(axios.mock.calls.filter(([options]) => options.method === 'post' && options.url.endsWith('/message_templates'))).toHaveLength(2);
     const textPayload = axios.mock.calls.find(([options]) => options.method === 'post' && options.data?.name === FALLBACK_TEMPLATE_NAME)[0].data;
-    expect(textPayload.components).toEqual([{ type: 'BODY', text: FALLBACK_TEMPLATE_BODY, example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE.filter((_, index) => index !== 8)] } }]);
+    expect(textPayload.components).toEqual([{ type: 'BODY', text: FALLBACK_TEMPLATE_BODY, example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE] } }]);
     expect(response.body.defaultTemplate.fallback.status).toBe('PENDING');
     axios.mockResolvedValue({ data: { data: [template] } });
     const synced = await request(app).post('/whatsapp/templates/sync').send({});
@@ -136,7 +136,7 @@ describe('WhatsApp alert configuration', () => {
     const call = axios.mock.calls.find(([options]) => options.url.endsWith('/messages'))[0];
     expect(call.data).toMatchObject({ to: '919999999999', type: 'template', template: { name: template.name, language: { code: 'en_US' } } });
     expect(call.data.template.components[0].parameters[0].image).toEqual({ id: 'media-test' });
-    expect(call.data.template.components[1].parameters).toHaveLength(10);
+    expect(call.data.template.components[1].parameters).toHaveLength(9);
     expect(await WhatsAppDelivery.countDocuments()).toBe(0);
     await request(app).put('/whatsapp/enabled').send({ enabled: false });
     expect(await sendTemplateAlert(admin._id, {}, ['+919999999999'])).toEqual([]);
@@ -207,7 +207,7 @@ describe('WhatsApp alert configuration', () => {
     expect(prepareIncidentImage).toHaveBeenCalledWith(incident._id, admin._id);
     expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/media'))).toHaveLength(1);
     const values = payload.template.components[1].parameters.map(item => item.text);
-    expect(values).toEqual([expect.stringContaining('DESK'), 'DMA-CABIN DESK ABSENCE', 'TUESDAY', '9/22/2026, 8:00:30 PM', 'MODERATE', 'DMA-CABIN (CAM -02)', 'NVR12', 'DA', 'https://media.example.com/signed-incident.jpg', '2 PERSONS MISSING FROM DA']);
+    expect(values).toEqual([expect.stringContaining('DESK'), 'DMA-CABIN DESK ABSENCE', 'TUESDAY', '9/22/2026, 8:00:30 PM', 'MODERATE', 'DMA-CABIN (CAM -02)', 'NVR12', 'DA', '2 PERSONS MISSING FROM DA']);
     expect(values.every(value => !/[\r\n\t]/.test(value))).toBe(true);
     const missing = await sendTemplateAlert(admin._id, {}, ['+919999999999']);
     expect(missing[0]).toMatchObject({ status: 'failed', error: expect.stringContaining('Incident image is missing') });
@@ -285,6 +285,55 @@ describe('WhatsApp alert configuration', () => {
     expect(synced.body).toMatchObject({ enabled: true, selectedTemplate: { name: FALLBACK_TEMPLATE_NAME } });
     expect((await sendTemplateAlert(admin._id, { description: 'No snapshot' }, ['+919999999999']))[0].status).toBe('accepted');
     expect(prepareIncidentImage).not.toHaveBeenCalled();
+  });
+  it('keeps v2 image alerts during v3 review and switches to nine link-free parameters only after approval', async () => {
+    await configure();
+    const legacy = { ...template, name: LEGACY_TEMPLATE_NAME, components: [{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: LEGACY_TEMPLATE_BODY }] };
+    let reviewed = false;
+    axios.mockImplementation(async options => {
+      if (options.url.endsWith('/message_templates')) return { data: { data: [legacy, { ...template, status: reviewed ? 'APPROVED' : 'PENDING' }, textTemplate] } };
+      if (options.url.endsWith('/media')) return { data: { id: 'snapshot-id' } };
+      return { data: { messages: [{ id: 'wamid.versioned' }] } };
+    });
+    const incident = { Image: '/photo.jpg', description: 'Snapshot is attached' };
+    const before = await request(app).post('/whatsapp/templates/sync').send({});
+    expect(before.body.selectedTemplate.name).toBe(LEGACY_TEMPLATE_NAME);
+    expect(before.body.enabled).toBe(true);
+    await sendTemplateAlert(admin._id, incident, ['+919999999999']);
+    const oldPayload = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).at(-1)[0].data.template;
+    expect(oldPayload.name).toBe(LEGACY_TEMPLATE_NAME);
+    expect(oldPayload.components[1].parameters).toHaveLength(10);
+    reviewed = true;
+    const after = await request(app).post('/whatsapp/templates/sync').send({});
+    expect(after.body.selectedTemplate.name).toBe(DEFAULT_TEMPLATE_NAME);
+    await sendTemplateAlert(admin._id, incident, ['+919999999999']);
+    const newPayload = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).at(-1)[0].data.template;
+    expect(newPayload.name).toBe(DEFAULT_TEMPLATE_NAME);
+    expect(newPayload.components[0].parameters[0].image).toEqual({ id: 'snapshot-id' });
+    expect(newPayload.components[1].parameters).toHaveLength(9);
+    expect(newPayload.components[1].parameters[8].text).toBe('SNAPSHOT IS ATTACHED');
+    expect(JSON.stringify(newPayload)).not.toContain('https://');
+    expect(DEFAULT_TEMPLATE_BODY).not.toContain('Image Link');
+    expect(FALLBACK_TEMPLATE_BODY).toContain('Snapshot unavailable');
+  });
+  it('prefers approved v3 for shared accounts even when the legacy template is returned first', async () => {
+    await configure();
+    const legacy = { ...template, name: LEGACY_TEMPLATE_NAME, components: [{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: LEGACY_TEMPLATE_BODY }] };
+    await SharedSender.create({ _id: 'default', verifiedAt: new Date(), phoneNumberId: settings.phoneNumberId,
+      businessAccountId: settings.businessAccountId, apiVersion: 'v24.0',
+      templates: [legacy, { ...template, status: 'PENDING' }],
+      credentials: encryptData({ accessToken: 'central-token', appSecret: 'central-secret' }) });
+    await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'env', alertsPaused: false } });
+    expect((await request(app).get('/whatsapp/settings')).body.selectedTemplate.name).toBe(LEGACY_TEMPLATE_NAME);
+    // Simulate Super Admin syncing approval, leaving the v2 entry first in the cache.
+    await SharedSender.updateOne({ _id: 'default' }, { $set: { templates: [legacy, template] } });
+    expect((await request(app).get('/whatsapp/settings')).body.selectedTemplate.name).toBe(DEFAULT_TEMPLATE_NAME);
+    await sendTemplateAlert(admin._id, { Image: '/photo.jpg', description: 'Actual image' }, ['+919999999999']);
+    const sent = axios.mock.calls.filter(([options]) => options.url.endsWith('/messages')).at(-1)[0].data.template;
+    expect(sent.name).toBe(DEFAULT_TEMPLATE_NAME);
+    expect(sent.components[0].parameters[0].image).toHaveProperty('id');
+    expect(sent.components[1].parameters).toHaveLength(9);
+    expect(JSON.stringify(sent)).not.toContain('https://');
   });
   it('creates owner-named shared-key requests and rejects duplicates or member requests', async () => {
     const requested = await request(app).post('/whatsapp/shared-key-request').send({ type: 'enable' });

@@ -2,7 +2,7 @@ import config from 'config';
 import { encryptData, decryptData } from '../../../utils/cryptoUtils.js';
 import { WhatsAppSettings } from './whatsapp.model.js';
 import SharedSender from './whatsapp.sharedSender.model.js';
-import { DEFAULT_TEMPLATE_NAME, FALLBACK_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, supportedDefaultTemplate, supportedFallbackTemplate } from './whatsapp.templateDefinitions.js';
+import { LEGACY_TEMPLATE_NAME, preferredImageTemplate, DEFAULT_TEMPLATE_NAME, FALLBACK_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, supportedDefaultTemplate, supportedFallbackTemplate } from './whatsapp.templateDefinitions.js';
 
 function envValue(name, key) {
   return process.env[name] || (config.has(`WhatsApp.${key}`) ? config.get(`WhatsApp.${key}`) : '');
@@ -34,9 +34,9 @@ export async function resolveSender(settings) {
       if (!secrets.accessToken || !secrets.appSecret) throw new Error('Shared sender credentials are incomplete');
       value.phoneNumberId = shared.phoneNumberId; value.businessAccountId = shared.businessAccountId;
       value.apiVersion = shared.apiVersion; value.credentials = shared.credentials;
-      value.templates = shared.templates.filter(item => [DEFAULT_TEMPLATE_NAME, FALLBACK_TEMPLATE_NAME].includes(item.name)
+      value.templates = shared.templates.filter(item => [DEFAULT_TEMPLATE_NAME, LEGACY_TEMPLATE_NAME, FALLBACK_TEMPLATE_NAME].includes(item.name)
         && item.language === DEFAULT_TEMPLATE_LANGUAGE);
-      const approved = shared.templates.find(supportedDefaultTemplate) || shared.templates.find(supportedFallbackTemplate);
+      const approved = preferredImageTemplate(shared.templates) || shared.templates.find(supportedFallbackTemplate);
       const fallback = shared.templates.find(supportedFallbackTemplate);
       value.selectedTemplate = approved ? { name: approved.name, language: approved.language } : null;
       value.fallbackTemplate = fallback ? { name: fallback.name, language: fallback.language } : null;

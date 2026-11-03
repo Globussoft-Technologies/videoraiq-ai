@@ -426,7 +426,8 @@ function UserFormModal({ mode, user, roles, rolesLoading, requireUserEmailVerifi
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
-  const gridCols = isMobile ? '1fr' : '1fr 1fr';
+  // Let long selections shrink inside their column so badges and controls stay visible.
+  const gridCols = isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))';
 
   useMetadataEffect(() => {
     let cancelled = false;

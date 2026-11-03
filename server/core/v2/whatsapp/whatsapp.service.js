@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { readFile } from 'node:fs/promises';
-import { FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, supportedFallbackTemplate, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, isDefaultTemplate, supportedDefaultTemplate, buildDefaultTemplateValues } from './whatsapp.defaultTemplate.js';
+import { LEGACY_TEMPLATE_NAME, preferredImageTemplate, FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, supportedFallbackTemplate, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, isDefaultTemplate, supportedDefaultTemplate, buildDefaultTemplateValues } from './whatsapp.defaultTemplate.js';
 import config from 'config';
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { encryptData, decryptData } from '../../../utils/cryptoUtils.js';
@@ -23,7 +23,7 @@ const defaultTemplateInfo = templates => {
   const fallback = templates.find(item => item.name === FALLBACK_TEMPLATE_NAME && item.language === DEFAULT_TEMPLATE_LANGUAGE);
   return { fallback: { name: FALLBACK_TEMPLATE_NAME, status: fallback?.status || 'NOT_SUBMITTED', approved: Boolean(fallback && supportedFallbackTemplate(fallback)) },
     submissionComplete: Boolean(template && fallback && [template, fallback].every(item => supportedTemplate(item) || ['PENDING', 'IN_APPEAL'].includes(item.status))), name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, body: DEFAULT_TEMPLATE_BODY,
-    status: template?.status || 'NOT_SUBMITTED', approved: Boolean((template && supportedTemplate(template)) || (fallback && supportedFallbackTemplate(fallback))) };
+    status: template?.status || 'NOT_SUBMITTED', activeImageTemplate: preferredImageTemplate(templates)?.name, approved: Boolean(preferredImageTemplate(templates) || (fallback && supportedFallbackTemplate(fallback))) };
 };
 export async function publicSettings(adminId) {
   const stored = await WhatsAppSettings.findOne({ adminId }).select('+credentials');
@@ -80,7 +80,7 @@ export async function syncTemplates(adminId) {
     after = response.paging.cursors?.after;
     if (!after || page === 19) throw new Error('Template list is too large to sync completely');
   }
-  const approved = templates.find(supportedDefaultTemplate) || templates.find(supportedFallbackTemplate);
+  const approved = preferredImageTemplate(templates) || templates.find(supportedFallbackTemplate);
   const fallback = templates.find(supportedFallbackTemplate);
   await WhatsAppSettings.updateOne({ adminId }, { $set: { templates, lastSyncAt: new Date(),
     senderIdentity: `${settings.phoneNumberId}:${settings.businessAccountId}`,
@@ -104,7 +104,7 @@ export async function requestTemplate(adminId) {
       const components = [
         ...(image ? [{ type: 'HEADER', format: 'IMAGE', example: { header_handle: [sample.handle] } }] : []),
         { type: 'BODY', text: image ? DEFAULT_TEMPLATE_BODY : FALLBACK_TEMPLATE_BODY,
-          example: { body_text: [image ? DEFAULT_TEMPLATE_EXAMPLE : DEFAULT_TEMPLATE_EXAMPLE.filter((_, index) => index !== 8)] } },
+          example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE] } },
       ];
       await graph(settings, 'post', existing?.id || `${settings.businessAccountId}/message_templates`, {
         ...(existing?.id ? {} : { name, language: DEFAULT_TEMPLATE_LANGUAGE, parameter_format: 'POSITIONAL' }), category: 'UTILITY', components,
@@ -122,7 +122,7 @@ export async function selectTemplate(adminId) {
   const settings = await senderSettings(adminId);
   if (!settings?.credentials) throw new Error('Verify your own sender keys before enabling alerts');
   if (!settings.templates.some(supportedTemplate)) throw new Error('The default incident template must be approved. Submit it for approval, then sync.');
-  await WhatsAppSettings.updateOne({ adminId }, { $set: { selectedTemplate: { name: (settings.templates.find(supportedDefaultTemplate) || settings.templates.find(supportedFallbackTemplate)).name, language: DEFAULT_TEMPLATE_LANGUAGE }, alertsPaused: false, enabled: true } });
+  await WhatsAppSettings.updateOne({ adminId }, { $set: { selectedTemplate: { name: (preferredImageTemplate(settings.templates) || settings.templates.find(supportedFallbackTemplate)).name, language: DEFAULT_TEMPLATE_LANGUAGE }, alertsPaused: false, enabled: true } });
   return publicSettings(adminId);
 }
 export async function sendTemplateAlert(adminId, incident, recipients, nvr = {}, channel = {}, timezone, testImageId) {
@@ -132,7 +132,7 @@ export async function sendTemplateAlert(adminId, incident, recipients, nvr = {},
     logger.info('[WHATSAPP_SKIP] Alerts paused or sender unconfigured', { adminId: String(adminId), incidentId: String(incident?._id || '') });
     return [];
   }
-  let selected = settings.templates.find(supportedDefaultTemplate) || settings.templates.find(supportedFallbackTemplate);
+  let selected = preferredImageTemplate(settings.templates) || settings.templates.find(supportedFallbackTemplate);
   const fallback = settings.templates.find(supportedFallbackTemplate);
   if (!selected || !supportedTemplate(selected)) throw new Error('WhatsApp alert template is not approved or supported');
   const phones = [...new Set(recipients)];
@@ -170,7 +170,7 @@ export async function sendTemplateAlert(adminId, incident, recipients, nvr = {},
         messaging_product: 'whatsapp', to: recipient.replace(/^\+/, ''), type: 'template',
         template: { name: current.name, language: { code: current.language }, components: [
           ...(isImageTemplate(current) ? [{ type: 'header', parameters: [{ type: 'image', image: { id: imageId } }] }] : []),
-          { type: 'body', parameters: (isImageTemplate(current) ? values : fallbackValues).map(text => ({ type: 'text', text })) },
+          { type: 'body', parameters: (current.name === LEGACY_TEMPLATE_NAME ? values : fallbackValues).map(text => ({ type: 'text', text })) },
         ] },
       });
       let sentTemplate = selected;

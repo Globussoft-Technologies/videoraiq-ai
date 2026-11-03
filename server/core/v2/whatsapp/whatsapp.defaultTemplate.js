@@ -1,6 +1,6 @@
 import { friendlyType, formatIncidentTime, formatIncidentDay, buildIncidentImageUrl } from '../../../messagingService/message.helper.js';
 
-import { DEFAULT_TEMPLATE_BODY } from './whatsapp.templateDefinitions.js';
+import { LEGACY_TEMPLATE_BODY } from './whatsapp.templateDefinitions.js';
 export * from './whatsapp.templateDefinitions.js';
 
 const clean = (value, uppercase = true) => {
@@ -16,7 +16,7 @@ export function buildDefaultTemplateValues(incident = {}, nvr = {}, camera = {},
     clean(incident.zone || incident.zoneName), clean(buildIncidentImageUrl(incident) || 'Unavailable', false), clean(incident.description),
   ];
   // Bound the rendered media-template body, keeping the snapshot URL intact.
-  const renderedLength = () => DEFAULT_TEMPLATE_BODY.replace(/\{\{(\d+)\}\}/g, (_, index) => values[Number(index) - 1]).length;
+  const renderedLength = () => LEGACY_TEMPLATE_BODY.replace(/\{\{(\d+)\}\}/g, (_, index) => values[Number(index) - 1]).length;
   for (const index of [9, 1, 0, 5, 6, 7]) {
     const excess = renderedLength() - 1024;
     if (excess <= 0) break;

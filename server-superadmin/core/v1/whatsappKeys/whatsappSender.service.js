@@ -2,7 +2,7 @@ import axios from 'axios';
 import { readFile } from 'node:fs/promises';
 import { encryptData, decryptData } from '../../../utils/cryptoUtils.js';
 import Sender from './whatsapp.sharedSender.model.js';
-import { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE,
+import { preferredImageTemplate, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE,
   FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, supportedDefaultTemplate, supportedFallbackTemplate } from './whatsapp.templateDefinitions.js';
 
 const supported = template => supportedDefaultTemplate(template) || supportedFallbackTemplate(template);
@@ -25,7 +25,7 @@ export async function publicSender() {
     return { name, language: DEFAULT_TEMPLATE_LANGUAGE, status: template?.status || 'NOT_SUBMITTED',
       approved: Boolean(template && supported(template)), body: name === DEFAULT_TEMPLATE_NAME ? DEFAULT_TEMPLATE_BODY : FALLBACK_TEMPLATE_BODY };
   });
-  return { configured: Boolean(sender?.verifiedAt), phoneNumberId: sender?.phoneNumberId || '', businessAccountId: sender?.businessAccountId || '',
+  return { activeImageTemplate: preferredImageTemplate(sender?.templates || [])?.name, configured: Boolean(sender?.verifiedAt), phoneNumberId: sender?.phoneNumberId || '', businessAccountId: sender?.businessAccountId || '',
     apiVersion: sender?.apiVersion || 'v24.0', verifiedAt: sender?.verifiedAt, lastSyncAt: sender?.lastSyncAt, templates,
     submissionComplete: templates.every(item => item.approved || ['PENDING', 'IN_APPEAL'].includes(item.status)) };
 }
@@ -95,7 +95,7 @@ export async function submitSenderTemplates() {
       const components = [
         ...(image ? [{ type: 'HEADER', format: 'IMAGE', example: { header_handle: [await sampleHandle(sender)] } }] : []),
         { type: 'BODY', text: image ? DEFAULT_TEMPLATE_BODY : FALLBACK_TEMPLATE_BODY,
-          example: { body_text: [image ? DEFAULT_TEMPLATE_EXAMPLE : DEFAULT_TEMPLATE_EXAMPLE.filter((_, index) => index !== 8)] } },
+          example: { body_text: [DEFAULT_TEMPLATE_EXAMPLE] } },
       ];
       if (!await Sender.exists({ _id: 'default', revision: sender.revision })) throw conflict();
       await graph(sender, 'post', existing?.id || `${sender.businessAccountId}/message_templates`, {

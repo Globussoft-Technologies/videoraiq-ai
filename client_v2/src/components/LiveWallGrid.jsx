@@ -10,7 +10,7 @@ import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
-import { getEveryChannel, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { getEveryChannel, getLiveWallLocations, getNVRs, getDepartments } from '../helpers/monitoring';
 import { isCameraLive, isCameraRtspOnline, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
@@ -286,7 +286,7 @@ export default function LiveWallGrid() {
     [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
   );
 
-  const locsApi  = useApi(() => getLocations(0, 100), []);
+  const locsApi  = useApi(() => getLiveWallLocations(), []);
   const nvrsApi  = useApi(() => getNVRs(), []);
   const deptApi  = useApi(() => getDepartments({ limit: 200 }), []);
   const locations = Array.isArray(locsApi.data) ? locsApi.data : [];
