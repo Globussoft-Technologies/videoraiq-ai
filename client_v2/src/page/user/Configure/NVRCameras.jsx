@@ -546,10 +546,11 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
           <div title={recorderName} style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {recorderName}
           </div>
-          <div style={{ marginTop: 2, fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {[brand, address].filter(Boolean).join(' · ') || 'Recorder details unavailable'}
-          </div>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 8, fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+        {[brand, address].filter(Boolean).join(' · ') || 'Recorder details unavailable'}
       </div>
 
       <div title={[nvr.model, location].filter(Boolean).join(' · ')} style={{
@@ -658,9 +659,46 @@ function SiteFilterSelect({ options, value, onChange }) {
 const CAM_COL = '90px minmax(150px, 1.6fr) minmax(130px, 1.4fr) minmax(130px, 1.2fr) minmax(0, 1.4fr) 80px';
 const NVR_GRID_STYLE = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 420px))',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
   gap: 14,
 };
+
+function NvrGrid({ children }) {
+  const gridRef = useRef(null);
+  const [maxHeight, setMaxHeight] = useState(undefined);
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const measure = () => {
+      const cards = Array.from(grid.children);
+      const rows = [...new Set(cards.map(card => card.offsetTop))].sort((a, b) => a - b);
+      if (rows.length <= 2) {
+        setMaxHeight(undefined);
+        return;
+      }
+      const visibleCards = cards.filter(card => card.offsetTop <= rows[1]);
+      setMaxHeight(Math.max(...visibleCards.map(card => card.offsetTop + card.offsetHeight)));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(grid);
+    Array.from(grid.children).forEach(card => observer.observe(card));
+    measure();
+    return () => observer.disconnect();
+  }, [children]);
+
+  return (
+    <div style={{
+      minWidth: 0, padding: 12, border: '1px solid var(--bd2)', borderRadius: 14,
+      background: 'var(--bg2)', boxShadow: '0 2px 8px rgba(0,0,0,.04)',
+    }}>
+      <div ref={gridRef} className="vq-nvr-grid" tabIndex={0} role="region" aria-label="Network recorders"
+        style={{ ...NVR_GRID_STYLE, position: 'relative', minWidth: 0, maxHeight, overflowY: 'auto', scrollbarGutter: 'stable' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function CamRow({ c, site, onView }) {
   const sc = '#22c55e';
@@ -2019,6 +2057,11 @@ export default function NVRCameras() {
   const [manageCamerasNvr, setManageCamerasNvr] = useState(null);
   const [nvrPickerOpen, setNvrPickerOpen] = useState(false);
   const [camSearch, setCamSearch] = useState('');
+  const [backendSearch, setBackendSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setBackendSearch(camSearch.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [camSearch]);
   const [camSearchWarning, setCamSearchWarning] = useState('');
   const [showCamSuggestions, setShowCamSuggestions] = useState(false);
   const [cameraIdMatch, setCameraIdMatch] = useState(null);
@@ -2033,6 +2076,10 @@ export default function NVRCameras() {
     [canViewChannels]
   );
   const refetchNvrs = nvrsApi.refetch;
+  const searchApi = useApi(
+    async () => ({ query: backendSearch, channels: canViewChannels && backendSearch ? await getEveryChannel({ search: backendSearch }) : [] }),
+    [canViewChannels, backendSearch]
+  );
   const refetchChannels = channelsApi.refetch;
 
   useEffect(() => {
@@ -2112,13 +2159,18 @@ export default function NVRCameras() {
     return '';
   };
 
-  const inventoryCameras = cameraIdMatch && !channels.some((camera) => String(camera._id) === String(cameraIdMatch._id))
-    ? [...channels, cameraIdMatch] : channels;
+  const searchMatches = searchApi.data?.query === camSearch.trim() ? searchApi.data.channels : [];
+  const matchedSearchIds = new Set(searchMatches.map(camera => String(camera._id)));
+  const inventoryCameras = [...new Map(
+    [...channels, ...searchMatches, ...(cameraIdMatch ? [cameraIdMatch] : [])]
+      .map(camera => [String(camera._id || camera.id || camera.channelId), camera])
+  ).values()];
   const camFiltered = inventoryCameras.filter(c => {
     const searchableName = `${c.name || c.channelName || ''} ${c.customName || ''}`;
     const searchableId = `${c._id || ''} ${c.id || ''} ${c.channelId || ''}`;
     const query = camSearch.trim().toLowerCase();
-    const nameMatch = !query || `${searchableName} ${searchableId}`.toLowerCase().includes(query);
+    const backendMatch = matchedSearchIds.has(String(c._id));
+    const nameMatch = !query || `${searchableName} ${searchableId} ${siteOf(c)}`.toLowerCase().includes(query) || backendMatch;
     const siteMatch = !siteFilter || siteOf(c).trim().toLowerCase() === siteFilter.trim().toLowerCase();
     return nameMatch && siteMatch;
   });
@@ -2205,9 +2257,9 @@ export default function NVRCameras() {
       {/* ── NVR cards ─────────────────────────────────────────────────────── */}
       {nvrsApi.loading ? (
         showNvrSkeleton ? (
-          <div style={NVR_GRID_STYLE} className="vq-nvr-grid">
+          <NvrGrid>
             {Array.from({ length: 2 }, (_, i) => <NvrCardSkeleton key={i} />)}
-          </div>
+          </NvrGrid>
         ) : (
           <div style={{ minHeight: 140 }} />
         )
@@ -2221,7 +2273,7 @@ export default function NVRCameras() {
           emptyLabel="No NVRs found"
         >
           {() => (
-            <div style={NVR_GRID_STYLE} className="vq-nvr-grid">
+            <NvrGrid>
               {nvrs.map(n => (
                 <NvrCard
                   key={n._id || n.id}
@@ -2231,7 +2283,7 @@ export default function NVRCameras() {
                   onDelete={setDeleteTarget}
                 />
               ))}
-            </div>
+            </NvrGrid>
           )}
         </AsyncBoundary>
       )}
@@ -2312,8 +2364,8 @@ export default function NVRCameras() {
                   if (e.key === 'ArrowDown' && camFiltered.length) { e.preventDefault(); firstSuggestionRef.current?.focus(); }
                   if (e.key === 'Escape') setShowCamSuggestions(false);
                 }}
-                placeholder="Search camera or ID"
-                aria-label="Search camera inventory by name, alias, or ID"
+                placeholder="Search camera, ID or site"
+                aria-label="Search camera inventory by name, alias, ID, or site"
                 style={{ background: 'transparent', border: 0, outline: 'none', fontSize: 12, width: 140, color: 'var(--tx)' }}
               />
               {showCamSuggestions && camSearch.trim() && camFiltered.length > 0 && (

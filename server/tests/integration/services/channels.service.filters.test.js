@@ -209,6 +209,17 @@ describe("ChannelsService.getFilterAllChannels — filter branches", () => {
     expect(payload(res).data.total).toBe(1);
   });
 
+  it.each(["getAllChannels", "getFilterAllChannels"])("%s searches site names case-insensitively without including other sites", async (method) => {
+    const admin = await Admin.create({ user_id: "1", login: "a", email: "a@test.com" });
+    const matchingNvr = await makeNvr({ userId: "1", location: "Nagpur Soya" });
+    const otherNvr = await makeNvr({ userId: "1", location: "Vayalur Plant" });
+    const camera = await makeChannel({ userId: "1", nvrId: matchingNvr._id, name: "Entrance" });
+    await makeChannel({ userId: "1", nvrId: otherNvr._id, localChannelId: "2", name: "Exit" });
+    const { req, res, next } = serviceCtx({ adminId: admin._id, query: { search: "nAgPuR" } });
+    await ChannelsService[method](req, res, next);
+    expect(payload(res).data.channels.map(channel => String(channel._id))).toEqual([String(camera._id)]);
+  });
+
   it("search: finds channels via matching NVR name", async () => {
     const admin = await Admin.create({
       user_id: "1",

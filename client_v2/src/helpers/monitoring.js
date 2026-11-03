@@ -55,6 +55,7 @@ export const getChannels = async ({
   department = '',
   camType = '',
   camera = '',
+  search = '',
 } = {}) => {
   const token = getAccessToken();
   const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
@@ -68,6 +69,7 @@ export const getChannels = async ({
   if (dept) params.append('department', dept);
   if (type) params.append('camType', type);
   if (cam) params.append('_id', cam);
+  if (search.trim()) params.append('search', search.trim());
   const res = await axios.get(`${Api_url}/channel/?${params.toString()}`, {
     headers: { 'x-access-token': token },
   });
