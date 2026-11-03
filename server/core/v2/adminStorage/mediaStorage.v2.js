@@ -86,6 +86,13 @@ function legacyPath(value) {
   return !parseV2StoragePath(value);
 }
 
+function resolveLegacyMediaPath(value) {
+  const mediaPath = String(value || "").replace(/\\/g, "/");
+  if (!/^\/?uploads\//i.test(mediaPath)) return value;
+  const basePath = String(config.get("SFTP.Path") || "").replace(/\/+$/, "");
+  return basePath ? `${basePath}/${mediaPath.replace(/^\/+/, "")}` : value;
+}
+
 async function putWithContext({ context, adminId, buffer, mediaType, folderName, originalName, objectId }) {
   const key = mediaKey({ ...context, adminId }, mediaType, folderName, originalName, objectId);
   if (context.provider === "nas") {
@@ -137,7 +144,7 @@ export async function putMediaV2({ adminId, buffer, mediaType, folderName, origi
 
 export async function streamMediaV2(mediaPath, res, { signal } = {}) {
   signal?.throwIfAborted();
-  if (legacyPath(mediaPath)) return streamLegacyMedia(mediaPath, res, { signal });
+  if (legacyPath(mediaPath)) return streamLegacyMedia(resolveLegacyMediaPath(mediaPath), res, { signal });
   const context = await resolveStorageConfig({ storagePath: mediaPath });
   signal?.throwIfAborted();
   if (context.provider === "nas") {
@@ -185,7 +192,7 @@ export async function readMediaV2(mediaPath) {
 }
 
 export async function mediaExistsV2(mediaPath) {
-  if (legacyPath(mediaPath)) return legacyMediaExists(mediaPath);
+  if (legacyPath(mediaPath)) return legacyMediaExists(resolveLegacyMediaPath(mediaPath));
   const context = await resolveStorageConfig({ storagePath: mediaPath });
   if (context.provider === "nas") {
     const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${context.parsed.relativeKey}`;
@@ -204,7 +211,7 @@ export async function mediaExistsV2(mediaPath) {
 }
 
 export async function deleteMediaV2(mediaPath) {
-  if (legacyPath(mediaPath)) return deleteLegacyMedia(mediaPath);
+  if (legacyPath(mediaPath)) return deleteLegacyMedia(resolveLegacyMediaPath(mediaPath));
   const context = await resolveStorageConfig({ storagePath: mediaPath });
   if (context.provider === "nas") {
     const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${context.parsed.relativeKey}`;

@@ -1,4 +1,5 @@
 import path from "path";
+import config from "config";
 import { ZipArchive } from "archiver";
 import { PassThrough } from "stream";
 import Response from "../../../utils/response.js";
@@ -19,6 +20,14 @@ if (!fs.existsSync(cacheDir)) {
         recursive: true
     });
 }
+
+function publicMediaPath(mediaPath) {
+    const basePath = String(config.get("SFTP.Path") || "").replace(/\/+$/, "");
+    return basePath && mediaPath.startsWith(`${basePath}/`)
+        ? mediaPath.slice(basePath.length)
+        : mediaPath;
+}
+
 class UploadService {
     async downloadZip(req, res) {
         try {
@@ -122,7 +131,7 @@ class UploadService {
                 message: `${mediaType} uploaded successfully.`,
                 data: {
                     originalName: file.originalname,
-                    remotePath: result.includes("/mnt/nfs/videoraiq-media-NAS") ? result.replace("/mnt/nfs/videoraiq-media-NAS", "") : result,
+                    remotePath: publicMediaPath(result),
                 },
             });
 
