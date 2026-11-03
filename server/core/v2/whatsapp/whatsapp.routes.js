@@ -7,8 +7,11 @@ import verifyToken from '../../../middlewares/verifyToken.js';
 import { WhatsAppSettings } from './whatsapp.model.js';
 import { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE } from './whatsapp.defaultTemplate.js';
 import * as service from './whatsapp.service.js';
+import { serveIncidentImage } from './whatsapp.incidentMedia.js';
 
 const router = Router();
+// A signed capability for one incident image, not an account login token.
+router.get('/incident-image/:incidentId', rateLimit({ windowMs: 60000, max: 60 }), serveIncidentImage);
 // Public Meta callbacks. Signature verification uses the exact JSON bytes.
 router.get('/webhook/:adminId', async (req, res) => {
   try {

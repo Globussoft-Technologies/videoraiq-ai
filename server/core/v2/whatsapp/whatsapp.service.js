@@ -5,7 +5,8 @@ import config from 'config';
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { encryptData, decryptData } from '../../../utils/cryptoUtils.js';
 import { WhatsAppSettings } from './whatsapp.model.js';
-import { buildIncidentImageUrl } from '../../../messagingService/message.helper.js';
+import { prepareIncidentImage } from './whatsapp.incidentMedia.js';
+import logger from '../../../utils/logger.js';
 
 const defaultVersion = () => config.has('WhatsApp.apiVersion') ? config.get('WhatsApp.apiVersion') : 'v24.0';
 const graph = async (settings, method, path, data, params) => {
@@ -98,30 +99,56 @@ export async function selectTemplate(adminId) {
 export async function sendTemplateAlert(adminId, incident, recipients, nvr = {}, channel = {}, timezone, testImageId) {
   const settings = await WhatsAppSettings.findOne({ adminId }).select('+credentials');
   if (!settings) return null; // Preserve legacy sending for accounts without new configuration.
-  if (!settings.enabled || !settings.credentials) return [];
+  if (!settings.enabled || !settings.credentials) {
+    logger.info('[WHATSAPP_SKIP] Alerts paused or sender unconfigured', { adminId: String(adminId), incidentId: String(incident?._id || '') });
+    return [];
+  }
   const selected = settings.templates.find(supportedTemplate);
   if (!selected || !supportedTemplate(selected)) throw new Error('WhatsApp alert template is not approved or supported');
-  let imageUrl = buildIncidentImageUrl(incident);
-  try { const url = new URL(imageUrl); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) imageUrl = ''; } catch { imageUrl = ''; }
-  const values = buildDefaultTemplateValues(incident, nvr, channel, timezone);
   const phones = [...new Set(recipients)];
+  if (!phones.length) {
+    logger.info('[WHATSAPP_SKIP] No selected opted-in recipients', { adminId: String(adminId), incidentId: String(incident?._id || '') });
+    return [];
+  }
   const results = [];
+  let imageId = testImageId;
+  let messageIncident = incident;
+  try {
+    if (!imageId) {
+      if (!incident.Image) throw new Error('Incident image is missing; the default image template requires an incident snapshot');
+      const media = await prepareIncidentImage(incident._id, adminId);
+      const form = new FormData();
+      form.append('messaging_product', 'whatsapp');
+      form.append('type', media.mimetype);
+      form.append('file', new Blob([media.buffer], { type: media.mimetype }), media.mimetype === 'image/png' ? 'incident.png' : 'incident.jpg');
+      const uploaded = await graph(settings, 'post', `${settings.phoneNumberId}/media`, form);
+      if (!uploaded.id) throw new Error('Meta did not return an incident image ID');
+      imageId = uploaded.id;
+      messageIncident = { ...incident, Image: media.url };
+    }
+  } catch (error) {
+    const message = error.response?.data?.error?.message || error.message;
+    logger.error('[WHATSAPP_IMAGE_ERROR] Could not prepare incident snapshot', { incidentId: String(incident?._id || ''), metaCode: error.response?.data?.error?.code, errorMessage: String(message).replace(/https?:\/\/\S+/g, '[url]') });
+    return phones.map(recipient => ({ recipient, status: 'failed', error: message }));
+  }
+  const values = buildDefaultTemplateValues(messageIncident, nvr, channel, timezone);
   for (const recipient of phones) {
     try {
-      if (!imageUrl && !testImageId) throw new Error('Incident image is missing; the default image template requires an incident snapshot');
       const send = current => graph(settings, 'post', `${settings.phoneNumberId}/messages`, {
         messaging_product: 'whatsapp', to: recipient.replace(/^\+/, ''), type: 'template',
         template: { name: current.name, language: { code: current.language }, components: [
-          ...(isImageTemplate(current) ? [{ type: 'header', parameters: [{ type: 'image', image: testImageId ? { id: testImageId } : { link: imageUrl } }] }] : []),
+          ...(isImageTemplate(current) ? [{ type: 'header', parameters: [{ type: 'image', image: { id: imageId } }] }] : []),
           { type: 'body', parameters: values.map(text => ({ type: 'text', text })) },
         ] },
       });
       const response = await send(selected);
       const messageId = response.messages?.[0]?.id;
       if (!messageId) throw new Error('Meta did not return a message ID');
+      logger.info('[WHATSAPP_ACCEPTED] Meta accepted incident alert', { incidentId: String(incident?._id || ''), template: selected.name });
       results.push({ recipient, messageId, status: 'accepted' });
     } catch (error) {
       const message = error.response?.data?.error?.message || error.message;
+      logger.error('[WHATSAPP_SEND_ERROR] Meta rejected incident alert', { incidentId: String(incident?._id || ''), metaCode: error.response?.data?.error?.code, errorMessage: String(message).replace(/https?:\/\/\S+/g, '[url]') });
       results.push({ recipient, status: 'failed', error: message });
     }
   }

@@ -2,6 +2,7 @@ import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from 'vites
 import request from 'supertest';
 import { createHmac } from 'node:crypto';
 import { connectMongo, disconnectMongo, clearCollections } from '../integration/dbSetup.js';
+vi.mock('../../core/v2/whatsapp/whatsapp.incidentMedia.js', () => ({ prepareIncidentImage: vi.fn(), serveIncidentImage: (req, res) => res.sendStatus(404) }));
 vi.mock('axios', () => ({ default: vi.fn() }));
 // Isolate contract cases from the shared IP counter; production limiting stays enabled.
 vi.mock('express-rate-limit', () => ({ default: () => (req, res, next) => next() }));
@@ -17,6 +18,7 @@ const { sendIncidentWhatsApp } = await import('../../messagingService/IncidentsW
 const { FireSmokeDetectionSetting } = await import('../../core/v2/detectionSettings/detectionSettings.model.js');
 const { supportedTemplate, sendTemplateAlert } = await import('../../core/v2/whatsapp/whatsapp.service.js');
 const { DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
+const { prepareIncidentImage } = await import('../../core/v2/whatsapp/whatsapp.incidentMedia.js');
 let app, admin;
 const template = { id: 'template1', name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, status: 'APPROVED', components: [{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: DEFAULT_TEMPLATE_BODY }] };
 const settings = { phoneNumberId: '1234567', businessAccountId: '7654321', apiVersion: 'v24.0', accessToken: 'secret-test-access-token', appSecret: 'secret-test-app-secret' };
@@ -24,6 +26,7 @@ beforeAll(connectMongo);
 afterAll(disconnectMongo);
 beforeEach(async () => {
   await clearCollections(); vi.resetAllMocks();
+  prepareIncidentImage.mockResolvedValue({ buffer: Buffer.from([255,216,255,217]), mimetype: 'image/jpeg', url: 'https://media.example.com/signed-incident.jpg' });
   admin = await Admin.create({ user_id: 'wa-test', login: 'wa-test', email: 'wa@test.com' });
   globalThis.__WA_ADMIN_ID__ = String(admin._id);
   app = express(); app.use(express.json({ verify: (req, res, buffer) => { req.rawBody = Buffer.from(buffer); } })); app.use('/whatsapp', routes);
@@ -194,16 +197,18 @@ describe('WhatsApp alert configuration', () => {
     expect(result[0].status).toBe('accepted');
     const payload = axios.mock.calls.find(([options]) => options.url.endsWith('/messages'))[0].data;
     expect(payload.template.name).toBe(DEFAULT_TEMPLATE_NAME);
-    expect(payload.template.components[0].parameters[0].image).toEqual({ link: incident.Image });
+    expect(payload.template.components[0].parameters[0].image).toEqual({ id: 'media-test' });
+    expect(prepareIncidentImage).toHaveBeenCalledWith(incident._id, admin._id);
+    expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/media'))).toHaveLength(1);
     const values = payload.template.components[1].parameters.map(item => item.text);
-    expect(values).toEqual([expect.stringContaining('DESK'), 'DMA-CABIN DESK ABSENCE', 'TUESDAY', '9/22/2026, 8:00:30 PM', 'MODERATE', 'DMA-CABIN (CAM -02)', 'NVR12', 'DA', incident.Image, '2 PERSONS MISSING FROM DA']);
+    expect(values).toEqual([expect.stringContaining('DESK'), 'DMA-CABIN DESK ABSENCE', 'TUESDAY', '9/22/2026, 8:00:30 PM', 'MODERATE', 'DMA-CABIN (CAM -02)', 'NVR12', 'DA', 'https://media.example.com/signed-incident.jpg', '2 PERSONS MISSING FROM DA']);
     expect(values.every(value => !/[\r\n\t]/.test(value))).toBe(true);
     const missing = await sendTemplateAlert(admin._id, {}, ['+919999999999']);
     expect(missing[0]).toMatchObject({ status: 'failed', error: expect.stringContaining('Incident image is missing') });
     expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/messages'))).toHaveLength(1);
     axios.mockRejectedValueOnce({ code: 'ETIMEDOUT', message: 'Unknown delivery outcome' });
     expect((await sendTemplateAlert(admin._id, incident, ['+919999999999']))[0].status).toBe('failed');
-    expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/messages'))).toHaveLength(2);
+    expect(axios.mock.calls.filter(([options]) => options.url.endsWith('/messages'))).toHaveLength(1);
     expect(await WhatsAppDelivery.countDocuments()).toBe(0);
   });
   it('bounds long dynamic fields without truncating the image URL', () => {
@@ -226,7 +231,11 @@ describe('WhatsApp alert configuration', () => {
     expect((await request(app).put('/whatsapp/template').send({ name: 'hello_world', language: 'en_US' })).status).toBe(400);
   });
   it('returns the Meta send error without storing delivery records', async () => {
-    await enable(); axios.mockRejectedValue({ response: { data: { error: { message: 'Recipient is not in allowed list' } } } });
+    await enable();
+    axios.mockImplementation(async options => {
+      if (options.url.endsWith('/media')) return { data: { id: 'incident-media-id' } };
+      throw { response: { data: { error: { code: 131030, message: 'Recipient is not in allowed list' } } } };
+    });
     const result = await sendTemplateAlert(admin._id, { Image: 'https://media.example.com/incident.jpg' }, ['+919999999999']);
     expect(result[0]).toMatchObject({ status: 'failed', error: 'Recipient is not in allowed list' });
     expect(await WhatsAppDelivery.countDocuments()).toBe(0);
