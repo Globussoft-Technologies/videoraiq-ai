@@ -27,7 +27,7 @@ router.post('/webhook/:adminId', async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.adminId)) return res.sendStatus(404);
     const settings = await WhatsAppSettings.findOne({ adminId: req.params.adminId }).select('+credentials');
-    const sender = resolveSender(settings);
+    const sender = await resolveSender(settings);
     if (!sender?.credentials || !await service.webhook(sender, req.rawBody, req.get('x-hub-signature-256'), req.body)) return res.sendStatus(403);
     return res.sendStatus(200);
   } catch { return res.sendStatus(500); }

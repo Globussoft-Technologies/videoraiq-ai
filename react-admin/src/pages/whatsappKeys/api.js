@@ -10,3 +10,11 @@ async function request(method, path, data, signal) {
 export const getKeyRequests = (status = 'pending', page = 1, signal) => request('get', `?status=${status}&page=${page}`, undefined, signal)
 export const getPendingKeyCount = signal => request('get', '?countOnly=true', undefined, signal)
 export const reviewKeyRequest = (adminId, requestId, decision) => request('post', `/${adminId}/${requestId}/decision`, { decision })
+
+export async function sharedSenderRequest(method = 'get', suffix = '', data) {
+  const token = await waitForToken()
+  const response = await axios({ method, data, timeout: 120000,
+    url: `${import.meta.env.VITE_BACKEND}/api/v1/whatsapp-sender${suffix}`,
+    headers: { 'x-access-token': token } })
+  return response.data
+}

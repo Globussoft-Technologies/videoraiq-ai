@@ -8,6 +8,7 @@ import { connectMongo, disconnectMongo, clearCollections } from '../integration/
 import routes from '../../core/v1/whatsappKeys/whatsappKeys.routes.js';
 import Admin from '../../core/v1/admin/admin.model.js';
 import SuperAdmin from '../../core/v1/superAdmin/superAdmin.model.js';
+import Sender from '../../core/v1/whatsappKeys/whatsapp.sharedSender.model.js';
 import Keys from '../../core/v1/whatsappKeys/whatsappKeys.model.js';
 
 let app, admin, reviewer, token, requestId;
@@ -18,6 +19,7 @@ beforeEach(async () => {
   admin = await Admin.create({ user_id: 'wa-client', login: 'wa-client', name_f: 'WhatsApp', name_l: 'Client', email: 'client@test.com' });
   reviewer = await SuperAdmin.create({ name: 'Reviewer', email: 'review@test.com', password: 'test-only-hash' });
   token = jwt.sign({ id: String(reviewer._id), role: 'superAdmin' }, config.get('jwt.secretKey'));
+  await Sender.create({ _id: 'default', verifiedAt: new Date(), phoneNumberId: '1111111', businessAccountId: '2222222', apiVersion: 'v24.0', credentials: 'existing-encrypted-shared-credentials' });
   requestId = new mongoose.Types.ObjectId();
   await Keys.collection.insertOne({ adminId: admin._id, credentialSource: 'own', credentials: 'private-ciphertext',
     recipients: [{ name: 'Security', phone: '+919999999999' }],
@@ -58,5 +60,10 @@ describe('Super Admin WhatsApp key approvals', () => {
   it('allows only one reviewer to resolve a pending request', async () => {
     const results = await Promise.all(['approve', 'reject'].map(decision => request(app).post(decisionPath()).set('x-access-token', token).send({ decision })));
     expect(results.map(result => result.status).sort()).toEqual([200, 409]);
+  });
+  it('requires a centrally configured sender before granting new shared access', async () => {
+    await Sender.deleteMany({});
+    expect((await request(app).post(decisionPath()).set('x-access-token', token).send({ decision: 'approve' })).status).toBe(409);
+    expect((await Keys.collection.findOne({ adminId: admin._id })).sharedKeyRequest.status).toBe('pending');
   });
 });

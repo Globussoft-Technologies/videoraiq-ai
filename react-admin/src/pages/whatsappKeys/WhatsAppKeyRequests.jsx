@@ -42,7 +42,7 @@ export default function WhatsAppKeyRequests() {
         <table className="w-full text-left text-sm"><thead className="bg-gray-100 text-xs dark:bg-white/5"><tr>{['Account', 'Request', 'Requested', 'Status', 'Action'].map(label => <th key={label} className="p-4">{label}</th>)}</tr></thead>
           <tbody>{data.requests.map(row => <tr key={row.sharedKeyRequest.requestId} className="border-t border-gray-200 dark:border-white/10">
             <td className="p-4"><strong>{row.sharedKeyRequest.adminName || row.account?.login || 'Deleted account'}</strong><div className="text-xs text-gray-500">{row.account?.email}</div></td>
-            <td className="p-4">{row.sharedKeyRequest.type === 'cancel' ? 'Cancel shared keys; return to own keys' : 'Use Admin ENV keys'}</td>
+            <td className="p-4">{row.sharedKeyRequest.type === 'cancel' ? 'Cancel shared keys; return to own keys' : 'Use shared Admin sender'}</td>
             <td className="p-4 text-xs">{new Date(row.sharedKeyRequest.requestedAt).toLocaleString()}</td>
             <td className="p-4">{row.sharedKeyRequest.status}</td>
             <td className="p-4">{row.sharedKeyRequest.status === 'pending' && row.account && <div className="flex gap-2">

@@ -19,6 +19,8 @@ const { FireSmokeDetectionSetting } = await import('../../core/v2/detectionSetti
 const { supportedTemplate, sendTemplateAlert } = await import('../../core/v2/whatsapp/whatsapp.service.js');
 const { FALLBACK_TEMPLATE_NAME, FALLBACK_TEMPLATE_BODY, DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_LANGUAGE, DEFAULT_TEMPLATE_BODY, DEFAULT_TEMPLATE_EXAMPLE, buildDefaultTemplateValues } = await import('../../core/v2/whatsapp/whatsapp.defaultTemplate.js');
 const { prepareIncidentImage } = await import('../../core/v2/whatsapp/whatsapp.incidentMedia.js');
+const { default: SharedSender } = await import('../../core/v2/whatsapp/whatsapp.sharedSender.model.js');
+const { encryptData } = await import('../../utils/cryptoUtils.js');
 let app, admin;
 const template = { id: 'template1', name: DEFAULT_TEMPLATE_NAME, language: DEFAULT_TEMPLATE_LANGUAGE, status: 'APPROVED', components: [{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: DEFAULT_TEMPLATE_BODY }] };
 const textTemplate = { ...template, id: 'text-template', name: FALLBACK_TEMPLATE_NAME, components: [{ type: 'BODY', text: FALLBACK_TEMPLATE_BODY }] };
@@ -292,30 +294,38 @@ describe('WhatsApp alert configuration', () => {
     expect((await request(app).post('/whatsapp/shared-key-request').set('x-test-member', 'member').send({ type: 'enable' })).status).toBe(403);
     expect((await request(app).post('/whatsapp/shared-key-request').send({ type: 'cancel' })).status).toBe(409);
   });
-  it('uses approved ENV sender keys at runtime without persisting or exposing them', async () => {
+  it('uses the centrally managed sender and templates without exposing or copying keys into tenant settings', async () => {
     vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', '1111111'); vi.stubEnv('WHATSAPP_BUSINESS_ACCOUNT_ID', '2222222');
     vi.stubEnv('WHATSAPP_ACCESS_TOKEN', 'shared-env-token'); vi.stubEnv('WHATSAPP_APP_SECRET', 'shared-env-secret');
     try {
       await configure();
+      await SharedSender.create({ _id: 'default', verifiedAt: new Date(), phoneNumberId: '1111111', businessAccountId: '2222222', apiVersion: 'v24.0', templates: [template], credentials: encryptData({ accessToken: 'shared-db-token', appSecret: 'shared-db-secret' }) });
       const own = (await WhatsAppSettings.findOne({ adminId: admin._id }).select('+credentials')).credentials;
       await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'env', templates: [], enabled: false } });
       const read = await request(app).get('/whatsapp/settings');
       expect(read.body).toMatchObject({ credentialSource: 'env', configured: true });
       expect(read.body).not.toHaveProperty('phoneNumberId');
-      expect(JSON.stringify(read.body)).not.toMatch(/shared-env-token|shared-env-secret/);
+      expect(JSON.stringify(read.body)).not.toMatch(/shared-env-token|shared-env-secret|shared-db-token|shared-db-secret/);
       expect((await request(app).put('/whatsapp/settings').send(settings)).status).toBe(409);
       const synced = await request(app).post('/whatsapp/templates/sync').send({});
       expect(synced.body.enabled).toBe(true);
-      const call = axios.mock.calls.find(([options]) => options.url.endsWith('/2222222/message_templates'))[0];
-      expect(call.headers.Authorization).toBe('Bearer shared-env-token');
+      expect(axios.mock.calls.some(([options]) => options.url.endsWith('/2222222/message_templates'))).toBe(false);
+      expect((await request(app).post('/whatsapp/templates').send({})).status).toBe(403);
+      const added = await request(app).post('/whatsapp/recipients').send({ name: 'Security', phone: '+919999999999', optedIn: true });
+      expect((await request(app).post('/whatsapp/test').send({ recipientId: added.body.recipients[0]._id })).status).toBe(200);
+      const call = axios.mock.calls.find(([options]) => options.url.endsWith('/1111111/media'))[0];
+      expect(call.headers.Authorization).toBe('Bearer shared-db-token');
       const stored = await WhatsAppSettings.findOne({ adminId: admin._id }).select('+credentials');
       expect(stored.credentials).toBe(own);
-      expect(JSON.stringify(stored)).not.toMatch(/shared-env-token|shared-env-secret/);
-      vi.stubEnv('WHATSAPP_PHONE_NUMBER_ID', '3333333');
+      expect(JSON.stringify(stored)).not.toMatch(/shared-env-token|shared-env-secret|shared-db-token|shared-db-secret/);
+      await SharedSender.updateOne({ _id: 'default' }, { $set: { phoneNumberId: '3333333', templates: [] } });
       const changedSender = (await request(app).get('/whatsapp/settings')).body;
       expect(changedSender.enabled).toBe(false);
       expect(changedSender.templates).toEqual([]);
-      expect((await request(app).post('/whatsapp/templates/sync').send({})).body.enabled).toBe(true);
+      await SharedSender.updateOne({ _id: 'default' }, { $set: { templates: [template] } });
+      expect((await request(app).get('/whatsapp/settings')).body.enabled).toBe(true);
+      await request(app).put('/whatsapp/enabled').send({ enabled: false });
+      expect((await request(app).get('/whatsapp/settings')).body.enabled).toBe(false);
       expect((await request(app).post('/whatsapp/shared-key-request').send({ type: 'cancel' })).body).toMatchObject({ credentialSource: 'env', sharedKeyRequest: { type: 'cancel', status: 'pending' } });
       // Approved cancellation must force a fresh own-sender verification.
       await WhatsAppSettings.updateOne({ adminId: admin._id }, { $set: { credentialSource: 'own', ownReverificationRequired: true, enabled: false, templates: [], 'sharedKeyRequest.status': 'approved' } });

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import verifySuperAdmin from '../../../middlewares/verifySuperAdmin.js';
 import Admin from '../admin/admin.model.js';
 import WhatsAppKeyAccess from './whatsappKeys.model.js';
+import Sender from './whatsapp.sharedSender.model.js';
 
 const router = Router();
 router.use(verifySuperAdmin);
@@ -39,6 +40,10 @@ router.post('/:adminId/:requestId/decision', async (req, res, next) => {
     if ((cancellation && row.credentialSource !== 'env') || (!cancellation && row.credentialSource === 'env')) return res.status(409).json({ message: 'Account key mode changed. Refresh the list.' });
     filter.credentialSource = cancellation ? 'env' : { $ne: 'env' };
     const approve = req.body.decision === 'approve';
+    if (approve && !cancellation && !await Sender.exists({ _id: 'default', verifiedAt: { $ne: null },
+      credentials: { $type: 'string', $ne: '' }, phoneNumberId: { $type: 'string', $ne: '' }, businessAccountId: { $type: 'string', $ne: '' } })) {
+      return res.status(409).json({ message: 'Verify and save the shared WhatsApp sender before approving access.' });
+    }
     const changes = { 'sharedKeyRequest.status': approve ? 'approved' : 'rejected',
       'sharedKeyRequest.reviewedAt': new Date(), 'sharedKeyRequest.reviewedBy': req.superAdmin._id };
     if (approve) Object.assign(changes, { credentialSource: cancellation ? 'own' : 'env', enabled: false,

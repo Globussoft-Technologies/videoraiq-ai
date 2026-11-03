@@ -38,7 +38,7 @@ export default function WhatsAppAlerts() {
     finally { setBusy(''); }
   };
   useEffect(() => {
-    if (!owner || settings?.sharedKeyRequest?.status !== 'pending') return;
+    if (!owner || (settings?.sharedKeyRequest?.status !== 'pending' && settings?.credentialSource !== 'env')) return;
     let cancelled = false;
     const timer = setInterval(() => {
       whatsappRequest('settings').then(value => { if (!cancelled) {
@@ -47,7 +47,7 @@ export default function WhatsAppAlerts() {
       } }).catch(() => {});
     }, 15000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [owner, settings?.sharedKeyRequest?.status]);
+  }, [owner, settings?.sharedKeyRequest?.status, settings?.credentialSource]);
   if (!owner) return <div className={panelClass}>Only the account owner can configure WhatsApp alerts.</div>;
   if (!settings) return <div className={panelClass}>{error || 'Loading WhatsApp settings?'}</div>;
 
@@ -72,8 +72,10 @@ export default function WhatsAppAlerts() {
     {settings.senderError && <p role="alert" className="text-sm text-red-500">{settings.senderError}</p>}
     {shared && <section className={panelClass}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">Using Admin keys</h2><span className="text-xs text-[var(--tx2)]">{settings.enabled ? 'Alerts enabled' : 'Alerts paused'}</span></div>
-      <p className="text-xs text-[var(--tx3)]">Your WhatsApp sender is managed by the Super Admin. Your recipients and zone selections remain available.</p>
+      <p className="text-xs text-[var(--tx3)]">Your sender and image/text templates are managed by the Super Admin. Your recipients and zone selections remain available.</p>
       {settings.enabled && <button disabled={!!busy} className={buttonClass} onClick={() => action('pause', async () => apply(await whatsappRequest('enabled', 'put', { enabled: false })))}>Pause WhatsApp alerts</button>}
+      {!settings.enabled && settings.defaultTemplate?.approved && <button disabled={!!busy} className={buttonClass} onClick={() => action('resume', async () => apply(await whatsappRequest('enabled', 'put', { enabled: true })))}>Resume WhatsApp alerts</button>}
+      <p className="text-xs text-[var(--tx3)]">Image template: {defaultTemplate?.status || 'NOT_SUBMITTED'} | Text fallback: {defaultTemplate?.fallback?.status || 'NOT_SUBMITTED'}</p>
     </section>}
     {!shared && <section className={panelClass}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">WhatsApp configuration</h2><span className="text-xs text-[var(--tx2)]">{settings.enabled ? 'Alerts enabled' : 'Alerts paused'}</span></div>
@@ -93,7 +95,7 @@ export default function WhatsAppAlerts() {
     </section>}
 
     {settings.configured && <>
-      <section className={panelClass}>
+      {!shared && <section className={panelClass}>
         <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold text-[var(--tx)]">Default incident template</h2>
           <button disabled={!!busy} className={buttonClass} onClick={() => action('sync', async () => { apply(await whatsappRequest('templates/sync', 'post', {})); toast.success('Default template status synced'); })}>{busy === 'sync' ? 'Syncing...' : 'Sync approval status'}</button>
         </div>
@@ -107,7 +109,7 @@ export default function WhatsAppAlerts() {
           {defaultTemplate?.approved && !settings.enabled && <button disabled={!!busy} className={buttonClass} onClick={() => action('resume', async () => apply(await whatsappRequest('enabled', 'put', { enabled: true })))}>Resume WhatsApp alerts</button>}
         </div>
         {settings.lastSyncAt && <p className="text-xs text-[var(--tx3)]">Last synced: {new Date(settings.lastSyncAt).toLocaleString()}</p>}
-      </section>
+      </section>}
 
       <section className={panelClass}>
         <h2 className="font-semibold text-[var(--tx)]">WhatsApp recipients</h2>
@@ -117,7 +119,7 @@ export default function WhatsAppAlerts() {
           <label className="flex gap-2 text-sm text-[var(--tx2)]"><input type="checkbox" required checked={recipient.optedIn} onChange={event => setRecipient({ ...recipient, optedIn: event.target.checked })} />This person has consented to receive WhatsApp incident alerts.</label>
           <button disabled={!!busy} className={buttonClass}>Add recipient</button>
         </form>
-        <div className="space-y-2">{settings.recipients.map(item => <div key={item._id} className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bd)] pt-3"><div className="text-sm text-[var(--tx)]">{item.name}<span className="ml-2 text-[var(--tx3)]">{item.phone}</span></div><div className="flex gap-2"><button disabled={!!busy || !settings.enabled} className={buttonClass} onClick={() => action('test', async () => { const result = await whatsappRequest('test', 'post', { recipientId: item._id }); const failed = result.results?.find(value => value.status === 'failed'); if (failed) throw new Error(failed.error); toast.success('Test message accepted by Meta.'); })}>Send test alert</button><button disabled={!!busy} className={buttonClass} onClick={() => action('sample', async () => { await whatsappRequest('test-sample', 'post', { recipientId: item._id }); toast.success('Meta sample accepted. This does not enable live alerts.'); })}>Send sample test message</button><button disabled={!!busy} className={buttonClass} onClick={() => action('remove', async () => apply(await whatsappRequest(`recipients/${item._id}`, 'delete')))}>Remove</button></div></div>)}</div>
+        <div className="space-y-2">{settings.recipients.map(item => <div key={item._id} className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bd)] pt-3"><div className="text-sm text-[var(--tx)]">{item.name}<span className="ml-2 text-[var(--tx3)]">{item.phone}</span></div><div className="flex gap-2"><button disabled={!!busy || !settings.enabled} className={buttonClass} onClick={() => action('test', async () => { const result = await whatsappRequest('test', 'post', { recipientId: item._id }); const failed = result.results?.find(value => value.status === 'failed'); if (failed) throw new Error(failed.error); toast.success('Test message accepted by Meta.'); })}>Send test alert</button>{!shared && <button disabled={!!busy} className={buttonClass} onClick={() => action('sample', async () => { await whatsappRequest('test-sample', 'post', { recipientId: item._id }); toast.success('Meta sample accepted. This does not enable live alerts.'); })}>Send sample test message</button>}<button disabled={!!busy} className={buttonClass} onClick={() => action('remove', async () => apply(await whatsappRequest(`recipients/${item._id}`, 'delete')))}>Remove</button></div></div>)}</div>
       </section>
 
     </>}

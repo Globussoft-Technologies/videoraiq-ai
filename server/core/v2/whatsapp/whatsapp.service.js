@@ -30,7 +30,7 @@ export async function publicSettings(adminId) {
   if (!stored) return { enabled: false, configured: false, credentialSource: 'own', templates: [], recipients: [], defaultTemplate: defaultTemplateInfo([]), apiVersion: defaultVersion() };
   let settings = stored.toObject();
   let senderError;
-  try { settings = resolveSender(stored); } catch (error) { senderError = error.message; }
+  try { settings = await resolveSender(stored); } catch (error) { senderError = 'Shared sender is unavailable. Contact the Super Admin.'; }
   const shared = stored.credentialSource === 'env';
   const configured = !senderError && Boolean(settings.credentials && settings.phoneNumberId && settings.businessAccountId);
   return { enabled: configured && settings.enabled, configured, credentialSource: shared ? 'env' : 'own',
@@ -69,6 +69,7 @@ export async function saveSettings(adminId, input) {
 }
 export async function syncTemplates(adminId) {
   const settings = await senderSettings(adminId);
+  if (settings?.credentialSource === 'env') return publicSettings(adminId);
   if (!settings?.credentials) throw new Error('Configure WhatsApp first');
   const templates = []; let after;
   for (let page = 0; page < 20; page++) {
@@ -89,6 +90,8 @@ export async function syncTemplates(adminId) {
 }
 const approvalImage = () => readFile(new URL('./assets/default-approval.png', import.meta.url));
 export async function requestTemplate(adminId) {
+  const current = await WhatsAppSettings.findOne({ adminId }).select('credentialSource').lean();
+  if (current?.credentialSource === 'env') { const error = new Error('Shared sender templates are managed by the Super Admin.'); error.statusCode = 403; throw error; }
   await syncTemplates(adminId);
   const settings = await senderSettings(adminId);
   const errors = [];
@@ -217,6 +220,8 @@ export async function uploadTemplateSample(adminId, file) {
 
 // Meta's sample is available only through an explicit test action, never alert selection.
 export async function sendSampleMessage(adminId, recipientId) {
+  const current = await WhatsAppSettings.findOne({ adminId }).select('credentialSource').lean();
+  if (current?.credentialSource === 'env') { const error = new Error('Use the default test alert for the shared sender.'); error.statusCode = 403; throw error; }
   await syncTemplates(adminId);
   const settings = await senderSettings(adminId);
   const recipient = settings?.recipients.find(item => String(item._id) === recipientId && item.optedInAt);

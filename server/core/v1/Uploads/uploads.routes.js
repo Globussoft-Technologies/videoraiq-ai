@@ -20,7 +20,7 @@ router.get('/debug/pool-stats', (_, res) => {
   }
 });
 
-router.post('/media', upload.single('file'), uploadsController.uploadMedia);
+// router.post('/media', upload.single('file'), uploadsController.uploadMedia);
 router.get('/:mediaPath(*)', uploadsController.fetchMedia);
 router.delete('/deleteMedia', upload.single('file'), uploadsController.deleteMedia);
 router.delete('/deleteUserMedia', upload.single('file'), uploadsController.deleteUserMedia);
