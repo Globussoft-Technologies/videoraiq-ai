@@ -233,6 +233,10 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
     },
   );
 
+  if (config.showEmotionFields) {
+    cols.push({ accessorKey: 'emotion', header: sortHeader('Emotion', 'emotion'), cell: ({ row }) => <span className={styles.text}>{row.original.emotion || '--'}</span> });
+  }
+
   if (config.showSeverity !== false) {
     cols.push({
       accessorKey: 'severity',
@@ -454,6 +458,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
     });
   }
 
+  if (config.showEmotionFields) return ['snap', 'nvrName', 'channelName', 'incidentName', 'emotion', 'createdAt'].map(key => cols.find(column => column.accessorKey === key));
   return cols;
 };
 
@@ -661,6 +666,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <div className="text-xs leading-relaxed text-[var(--tx2)]"><span className="text-[var(--tx3)]">Confirmation: </span>{row.confirmationReason ?? '--'}</div>
           </>
         )}
+        {config.showEmotionFields && <IncidentCardRow icon={Activity} label="Emotion" value={row.emotion || '--'} />}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
         <IncidentCardRow icon={Clock} label={config.timeLabel || (config.showDoorFields ? 'Time of Incident' : 'Time')} value={formatTime(row.createdAt)} />

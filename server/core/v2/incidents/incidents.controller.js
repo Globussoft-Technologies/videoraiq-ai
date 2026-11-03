@@ -1,5 +1,9 @@
 import incidentsService from "./incidents.service.js";
 class IncidentsController {
+  async getEmotionDetectionLogs(req, res, next) {
+    return incidentsService.getEmotionDetectionLogs(req, res, next);
+  }
+
   async createIncidents(req, res, next) {
     /* 
     #swagger.tags = ['Incidents']

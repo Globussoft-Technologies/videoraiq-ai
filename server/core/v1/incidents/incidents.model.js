@@ -80,6 +80,24 @@ incidentSchema.post('save', async function populateAgentProjections(doc) {
 
 const Incident = model('Incident', incidentSchema);
 
+const EmotionDetectionIncident = Incident.discriminator('emotionDetection', new Schema({
+  timeOfIncident: { type: Date, required: true },
+  incidentName: { type: String, required: true, trim: true },
+  Image: { type: String, required: true, trim: true },
+  emotionGroup: String,
+  emotion: { type: String, required: true },
+  confidence: { type: Number, min: 0, max: 1 },
+  durationSec: { type: Number, min: 0 },
+  trackId: String,
+  identity: String,
+  employeeId: String,
+  model: String,
+  zoneName: String,
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: Number,
+  triggerNotification: { type: Boolean, default: true },
+}));
+
 // Cashier Theft Detection
 const CountPersonDetectionSchema = new Schema({
   count: {type:Number},
@@ -915,6 +933,7 @@ const VehicleCheckInOutIncident = Incident.discriminator('vehicleCheckInOut', ve
 
 
 export  {
+  EmotionDetectionIncident,
   Incident,
   CountPersonIncident,
   CountVehiclesIncident,

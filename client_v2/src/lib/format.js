@@ -83,6 +83,7 @@ const CUSTOM_DETECTION_LABELS = {
   loadingUnloadingStockCountingDetection: 'Loading/Unloading Stock Counting Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetection: 'Camera Tampering Detection',
+  emotionDetection: 'Emotion Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
   boxPackingDetection: 'Box Packing Detection',

@@ -128,6 +128,8 @@ const IncidentLogsPage = ({ config }) => {
     const parsed = parseInt(localStorage.getItem(INTERVAL_KEY), 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
+  const [emotions, setEmotions] = useState([]);
+  const [emotionOptions, setEmotionOptions] = useState([]);
   const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
   const fetchRequestId = useRef(0);
@@ -244,7 +246,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
+  }, [emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -265,6 +267,7 @@ const IncidentLogsPage = ({ config }) => {
         sortOrder,
         nvrIds,
         channelIds,
+        emotions: config.showEmotionFields ? emotions : undefined,
         hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -283,6 +286,7 @@ const IncidentLogsPage = ({ config }) => {
       let list = filteredDoorRows ? filteredDoorRows.slice(skip, skip + limit) : data?.data || [];
       let total = filteredDoorRows ? filteredDoorRows.length : data?.totalCount || 0;
       if (requestId !== fetchRequestId.current) return;
+      if (config.showEmotionFields) setEmotionOptions(data?.emotionOptions || []);
 
       // Box Packing is currently being validated with local sample records.
       // Keep the shared production table and controls, but populate it when
@@ -360,7 +364,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -625,6 +629,7 @@ const IncidentLogsPage = ({ config }) => {
       sortOrder,
       nvrIds,
       channelIds,
+      emotions: config.showEmotionFields ? emotions : undefined,
       hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -635,7 +640,7 @@ const IncidentLogsPage = ({ config }) => {
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -795,6 +800,10 @@ const IncidentLogsPage = ({ config }) => {
         )}
 
         <IncidentFilterPopover
+          showEmotion={config.showEmotionFields}
+          emotions={emotions}
+          setEmotions={setEmotions}
+          emotionOptions={[...new Set([...emotionOptions, ...emotions])].map(value => ({ id: value, label: value }))}
           showHygieneCategory={config.showHygieneFields}
           showLightingCategory={config.showLightingFields}
           hygieneCategory={hygieneCategory}

@@ -1271,8 +1271,15 @@ const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: DeskSolarShoulderDetectionSchema }),
 );
 
-// Box packing: named zones only (packing desk + seats), so the generic
-// industrial settings shape fits as-is.
+// Use a distinct model name because the incident discriminator also stores
+// emotionDetection. The persisted settingType remains emotionDetection.
+const EmotionDetectionSetting = DetectionSetting.discriminator(
+  "EmotionDetectionSetting",
+  new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema.clone() }),
+  "emotionDetection",
+);
+
+// Box packing uses the generic named-zone settings shape.
 const BoxPackingDetectionSetting = DetectionSetting.discriminator(
   "boxPackingDetectionSettings",
   new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema.clone() }),
@@ -1735,6 +1742,7 @@ export {
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
+  EmotionDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
   LightingVisibilitySiteConditionsDetectionSetting,
   UniformDetectionSetting,

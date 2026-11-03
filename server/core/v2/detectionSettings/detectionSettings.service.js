@@ -47,6 +47,7 @@ import {
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
   boxPackingDetectionSettings,
+  emotionDetection,
   hygieneSanitationFoodSafetyDetectionSettings,
   lightingVisibilitySiteConditionsDetectionSettings,
 } from "../../../constants/detectionTypes.js";
@@ -104,6 +105,7 @@ import {
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
+  EmotionDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
   LightingVisibilitySiteConditionsDetectionSetting,
 } from "./detectionSettings.model.js";
@@ -170,6 +172,7 @@ const modelMap = {
   blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
+  emotionDetection: EmotionDetectionSetting,
   hygieneSanitationFoodSafetyDetectionSettings: HygieneSanitationFoodSafetyDetectionSetting,
   lightingVisibilitySiteConditionsDetectionSettings: LightingVisibilitySiteConditionsDetectionSetting,
 };
@@ -1900,6 +1903,7 @@ class DetectionSettingService {
         blurredCameraDetectionSettings,
         deskSolarShoulderDetectionSettings,
         boxPackingDetectionSettings,
+        emotionDetection,
         hygieneSanitationFoodSafetyDetectionSettings,
         lightingVisibilitySiteConditionsDetectionSettings,
       };

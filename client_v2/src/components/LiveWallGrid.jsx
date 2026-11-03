@@ -68,6 +68,7 @@ export const ENGINE_LABEL_MAP = {
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
+  emotionDetection: 'Emotion Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
 };

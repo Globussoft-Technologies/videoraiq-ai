@@ -369,3 +369,23 @@ export const UNIFORM_CONFIG = {
   sortable: true, gridVariant: 'details', enableViewExports: true, datePickerVariant: 'preset',
   timeLabel: 'Time of Incident',
 };
+
+export const EMOTION_CONFIG = {
+  endpoint: '/incidents/logs/emotion-detection',
+  title: 'Emotion Detection Logs',
+  fileName: 'emotion_detection_logs',
+  sheetName: 'Emotion Logs',
+  storagePrefix: 'emotion',
+  permissionKey: 'emotionLogs',
+  accessDenied: "You don't have permission to view Emotion Logs.",
+  showEmotionFields: true,
+  enableViewExports: true,
+  showStatus: false,
+  showSeverity: false,
+  showSeverityFilter: false,
+  showStats: false,
+  sortable: true,
+  gridVariant: 'details',
+  timeLabel: 'Time of Incident',
+  datePickerVariant: 'preset',
+};

@@ -8,6 +8,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
+  emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   faceAuthenticationSettings: "Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -80,6 +81,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "hygieneSanitationFoodSafetyDetectionSettings",
   "lightingVisibilitySiteConditionsDetectionSettings",
   "uniformDetectionSettings",
+  "emotionDetection",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -97,6 +99,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "hygieneSanitationFoodSafetyDetection",
   "lightingVisibilitySiteConditionsDetection",
   "uniformDetection",
+  "emotionDetection",
 ]);
 
 /**
@@ -111,6 +114,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
+  emotionDetection: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
   uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
   countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
   countVehiclesSettings: { permissionKey: "vehicleCountLogs", logsConfigKey: "vehicleCountLogs" },
@@ -163,6 +167,7 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
 export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles"];
 
 export const TYPE_MAP = {
+  emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
@@ -222,6 +227,7 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 });
 
 export const DETECTION_MODES_MAP = {
+  emotionDetection: ["emotionDetection"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
@@ -288,6 +294,7 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
+  emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
@@ -378,6 +385,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  * lives.
  */
 export const DS_LOGIC_BY_MODE = {
+  emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
@@ -476,6 +484,7 @@ export const toPopulateDetections = [
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
   { path: "detections.boxPackingDetectionSettings.id" },
+  { path: "detections.emotionDetection.id" },
   { path: "detections.hygieneSanitationFoodSafetyDetectionSettings.id" },
   { path: "detections.lightingVisibilitySiteConditionsDetectionSettings.id" },
 ];
@@ -1704,6 +1713,8 @@ export const deskSolarShoulderDetectionSettings = {
     ],
   },
 };
+export const emotionDetection = industrialDetectionExample("emotionDetection", "Emotion Detection");
+
 export const boxPackingDetectionSettings = industrialDetectionExample(
   "boxPackingDetectionSettings",
   "Box Packing Detection",

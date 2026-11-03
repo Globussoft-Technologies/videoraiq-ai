@@ -45,6 +45,7 @@ const fetchAllForExport = async (config, params) => {
     vehicleNumber,
     hygieneCategory: params.hygieneCategory,
     lightingCategory: params.lightingCategory,
+    emotions: params.emotions,
   };
 
   const list = config.showDoorFields && doorStatus
@@ -67,6 +68,7 @@ const fetchAllForExport = async (config, params) => {
           violation.description,
         ].filter(Boolean).join(' - ')).join('\n') || item.description || '--',
       } : {}),
+      emotion: item.emotion || '--',
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -117,6 +119,7 @@ const buildExportColumns = (config) => {
     { key: 'nvrName', label: 'NVR Name' },
     { key: 'channelName', label: 'Camera Name' }
   );
+  if (config.showEmotionFields) cols.push({ key: 'emotion', label: 'Emotion' });
   if (config.showSeverity !== false) cols.push({ key: 'severity', label: 'Severity' });
 
   if (config.showDoorFields) {
@@ -180,6 +183,7 @@ const buildExportColumns = (config) => {
   }
 
   cols.push({ key: 'createdAt', label: 'Time of Incident' });
+  if (config.showEmotionFields) return ['nvrName', 'channelName', 'incidentName', 'emotion', 'createdAt'].map(key => cols.find(column => column.key === key));
   return cols;
 };
 
@@ -352,6 +356,7 @@ const exportToGridPDF = async (config, params) => {
     const bodyTopGap = 5.4;
     const details = [];
     if (config.showIncidentName !== false && !config.showDoorFields) details.push(['Incident', 'incidentName']);
+    if (config.showEmotionFields) details.push(['Emotion', 'emotion']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);
     if (config.showSeverity !== false && !config.showDoorFields) details.push(['Severity', 'severity']);
     if (config.showFireSmokeFields) {
@@ -396,7 +401,7 @@ const exportToGridPDF = async (config, params) => {
         ['Events', 'eventCount']
       );
     }
-    details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], [config.showDoorFields ? 'Time of Incident' : 'Time', 'createdAt']);
+    details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], [config.timeLabel || (config.showDoorFields ? 'Time of Incident' : 'Time'), 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + (config.showLightingFields || config.showHygieneFields ? 17 : 4);
     const firstPageStartY = 42;
     const nextPageStartY = 12;

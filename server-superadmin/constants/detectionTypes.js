@@ -7,6 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
+  emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
@@ -50,6 +51,7 @@ export const DETECTION_TYPES = {
   boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
+  emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",

@@ -71,6 +71,7 @@ const ProductivityLog = lazy(() => import('./pages/ProductivityLog/ProductivityL
 const TrackLog = lazy(() => import('./pages/TrackLog/TrackLog'));
 const VisibilityLog = lazy(() => import('./pages/VisibilityLog/VisibilityLog'));
 const GuardLog = lazy(() => import('./pages/GuardLog/GuardLog'));
+const EmotionLogs = lazy(() => import('./pages/EmotionLogs/EmotionLogs'));
 const SleepActivityLogs = lazy(() => import('./pages/SleepActivityLogs/SleepActivityLogs'));
 const MeasurementLogs = lazy(() => import('./pages/MeasurementLogs/MeasurementLogs'));
 const EmailMonitoringDashboard = lazy(() => import('./page/user/EmailMonitoring/EmailMonitoringDashboard'));
@@ -162,6 +163,7 @@ export const v2Routes = (
     <Route path="logs/track" element={guard('logs', 'trackLogs', <TrackLog />)} />
     <Route path="logs/visibility" element={guard('logs', 'visibilityLogs', <VisibilityLog />)} />
     <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
+    <Route path="logs/emotion-detection" element={guard('logs', 'emotionLogs', <EmotionLogs />)} />
     <Route path="logs/sleep-activity" element={guard('logs', 'sleepActivityLogs', <SleepActivityLogs />)} />
     {/* Dimensional QC — Mattress Measurement Logs. */}
     <Route path="logs/measurement" element={<RequirePermission permissionKey="logs" permissionSubKey="measurementLogs" modulePageKey="measurementLogs"><MeasurementLogs /></RequirePermission>} />

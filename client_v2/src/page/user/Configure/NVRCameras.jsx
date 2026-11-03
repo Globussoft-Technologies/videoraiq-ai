@@ -169,6 +169,7 @@ const ENGINE_NAMES = {
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
+  emotionDetection: 'Emotion Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',
   boxPackingDetectionSettings: 'Box Packing Detection',
   hygieneSanitationFoodSafetyDetectionSettings: 'Hygiene, Sanitation & Food Safety Detection',

@@ -83,6 +83,7 @@ import {
   BoxPackingDetectionIncident,
   HygieneSanitationFoodSafetyDetectionIncident,
   LightingVisibilitySiteConditionsDetectionIncident,
+  EmotionDetectionIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
 import { findDoorRetry, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
@@ -134,6 +135,7 @@ const modelMap = {
   boxPackingDetection: BoxPackingDetectionIncident,
   hygieneSanitationFoodSafetyDetection: HygieneSanitationFoodSafetyDetectionIncident,
   lightingVisibilitySiteConditionsDetection: LightingVisibilitySiteConditionsDetectionIncident,
+  emotionDetection: EmotionDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -337,6 +339,7 @@ const firstFilled = (...values) => {
 // arbitrary path into $sort, and so UI column ids (modelName, nvrName) map
 // onto the fields those columns actually render.
 const LOG_SORT_FIELDS = {
+  emotion: "emotion",
   timeOfIncident: "timeOfIncident",
   severity: "_severitySortRank",
   incidentName: "incidentName",
@@ -397,6 +400,10 @@ class IncidentsService {
       // A type DS renamed is stored under our existing one (e.g. camera tampering).
       const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
       if (aliasedType) req.body.incidentType = aliasedType;
+      const emotionValidation = incidentsValidate.validateEmotionIncident(req.body);
+      if (emotionValidation.error) {
+        return res.status(400).json(Response.validationFailResp(emotionValidation.error.message, "Validation Failed!"));
+      }
       const hygieneValidation = incidentsValidate.validateHygieneIncident(req.body);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.validationFailResp(hygieneValidation.error.message, "Validation Failed!"));
@@ -872,7 +879,9 @@ class IncidentsService {
           newIncident.zone = firstFilled(req.body.zone, req.body.zoneName, req.body.zone_name);
         }
       } else if (industrialIncidentTypes.has(incidentType)) {
-        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
+        newIncident.timeOfIncident = incidentType === "emotionDetection"
+          ? req.body.timeOfIncident
+          : req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;
         newIncident.count = req?.body?.count;
         newIncident.alertThreshold = req?.body?.alertThreshold;
@@ -3593,6 +3602,19 @@ console.log(result,'result');
       };
     }
 
+    // Options use the tenant/date/camera scope before applying the selected
+    // emotions, so selecting one option does not hide the other choices.
+    let emotionOptions;
+    if (incidentType === 'emotionDetection') {
+      if (req.query.emotions !== undefined && typeof req.query.emotions !== 'string') {
+        return res.status(400).json({ error: 'emotions must be a comma-separated string.' });
+      }
+      emotionOptions = (await Incident.distinct('emotion', matchStage))
+        .filter(value => typeof value === 'string' && value.trim()).sort();
+      const emotions = toArray(req.query.emotions);
+      if (emotions.length) matchStage.emotion = { $in: emotions };
+    }
+
     if (severity) matchStage.severity = severity;
     if (resolved !== undefined) matchStage.resolved = resolved === "true";
     if (reportStatus !== undefined) {
@@ -3874,6 +3896,7 @@ console.log(result,'result');
           low: countResult[0]?.low || 0,
         },
         ...(boxStatusCounts && { boxStatusCounts }),
+        ...(emotionOptions && { emotionOptions }),
         data: logs,
       }),
     );
@@ -5918,6 +5941,23 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch stock analytics", 500));
+    }
+  }
+
+  async getEmotionDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('emotionDetection')) return res.status(403).json(Response.accessDeniedResp('Emotion Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        const canView = logs?.emotionLogs?.view ?? logs?.global?.view ?? logs?.view ?? false;
+        if (!canView) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Emotion Logs'));
+      }
+      return await this._fetchIncidentLogs({ req, res, incidentType: 'emotionDetection', searchFields: ['incidentName', 'emotion'], postLookupSearch: true });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError('Failed to fetch emotion logs', 500));
     }
   }
 

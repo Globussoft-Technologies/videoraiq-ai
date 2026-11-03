@@ -2,6 +2,15 @@ import Joi from "joi";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validateEmotionIncident(body) {
+    if (body?.incidentType !== "emotionDetection") return { error: null };
+    return Joi.object({
+      timeOfIncident: Joi.string().isoDate().required(),
+      incidentName: Joi.string().trim().required(),
+      Image: Joi.string().trim().required(),
+    }).unknown(true).validate(body, { convert: false });
+  }
+
   validateHygieneIncident(body) {
     if (body?.incidentType !== "hygieneSanitationFoodSafetyDetection") return { error: null };
     return Joi.object({

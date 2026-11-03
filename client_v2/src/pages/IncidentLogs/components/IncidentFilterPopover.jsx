@@ -24,6 +24,10 @@ const STATUS_OPTIONS = [
  * optional Status select (conveyor). Matches the ANPR popover styling.
  */
 const IncidentFilterPopover = ({
+  showEmotion = false,
+  emotions = [],
+  setEmotions,
+  emotionOptions = [],
   showHygieneCategory = false,
   showLightingCategory = false,
   hygieneCategory = [],
@@ -58,6 +62,7 @@ const IncidentFilterPopover = ({
     () =>
       [
         (showHygieneCategory || showLightingCategory) && hygieneCategory.length > 0,
+        showEmotion && emotions.length > 0,
         nvrIds.length > 0,
         channelIds.length > 0,
         showSeverity && (Array.isArray(severity) ? severity.length > 0 : !!severity),
@@ -66,10 +71,11 @@ const IncidentFilterPopover = ({
         showBoxType && !!boxType,
       ].filter(Boolean)
         .length,
-    [showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
+    [showEmotion, emotions, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
 
   const resetFilters = () => {
+    if (showEmotion) setEmotions([]);
     if (showHygieneCategory || showLightingCategory) setHygieneCategory([]);
     setNvrIds([]);
     setChannelIds([]);
@@ -132,6 +138,7 @@ const IncidentFilterPopover = ({
               maxHeight="max-h-40"
               msg="No Camera Found"
             />
+            {showEmotion && <MultiSelect options={emotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" msg="No emotions found" />}
             {showVehicleNumber && (
               <div>
                 <VehicleNumberSelect

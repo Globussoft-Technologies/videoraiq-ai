@@ -62,6 +62,7 @@ const SHORT_LABELS = {
   spillsDirtyMessyAreasDetectionSettings: 'Messy Area',
   loadingUnloadingStockCountingSettings: 'Stock Counting',
   blurredCameraDetectionSettings: 'Camera Tampering',
+  emotionDetection: 'Emotion Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder',
   boxPackingDetectionSettings: 'Box Packing',
   lightingVisibilitySiteConditionsDetectionSettings: 'Lighting / Visibility / Site Conditions Detection',

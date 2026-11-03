@@ -34,6 +34,14 @@ const { industrialDetectionTemplate } = await import(
 
 const CASES = [
   {
+    settingType: "emotionDetection",
+    incidentType: "emotionDetection",
+    SettingModel: settingsModels.EmotionDetectionSetting,
+    IncidentModel: incidentModels.EmotionDetectionIncident,
+    logMethod: "getEmotionDetectionLogs",
+    incidentFields: { emotionGroup: "negative", emotion: "Sadness", confidence: 0.908, durationSec: 5, trackId: "track-1", identity: "Asha Rao", employeeId: "EMP-1023", model: "emotion_b0", zoneName: "Lobby" },
+  },
+  {
     settingType: "workingAtHeightDetectionSettings",
     incidentType: "workingAtHeightDetection",
     SettingModel: settingsModels.WorkingAtHeightDetectionSetting,
@@ -400,6 +408,13 @@ describe("v2 industrial detection incidents and logs", () => {
           settings: {
             levelOfImportance: "high",
             metricType: "gauge",
+            ...(settingType === "emotionDetection" ? {
+              referencePoints: { [channel._id.toString()]: [
+                [[0, 0], [100, 0], [100, 100], [0, 100]],
+                [[200, 0], [300, 0], [300, 100], [200, 100]],
+              ] },
+              zone_configs: [{ name: "Lobby" }, { name: "Reception" }],
+            } : {}),
             ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
           },
         },
@@ -411,6 +426,13 @@ describe("v2 industrial detection incidents and logs", () => {
       );
       expect(settingsContext.res.statusCode).toBe(201);
       expect(await SettingModel.countDocuments({ settingType })).toBe(1);
+      if (settingType === "emotionDetection") {
+        const setting = await SettingModel.findOne({ settingType });
+        expect(setting.settings.zone_configs.map(zone => zone.name)).toEqual(["Lobby", "Reception"]);
+        expect(setting.settings.referencePoints[channel._id.toString()]).toHaveLength(2);
+        const populated = await Channel.findById(channel._id).populate('detections.emotionDetection.id');
+        expect(populated.detections.emotionDetection.id.settingType).toBe('emotionDetection');
+      }
 
       const incidentTime = "2026-09-21T12:30:45Z";
       const createContext = serviceCtx({
@@ -447,6 +469,7 @@ describe("v2 industrial detection incidents and logs", () => {
       const saved = await IncidentModel.findOne({ incidentType });
       expect(saved.timeOfIncident.toISOString()).toBe("2026-09-21T12:30:45.000Z");
       expect(saved.alertThreshold).toBe(400);
+      if (incidentType === "emotionDetection") expect(saved.toObject()).toMatchObject(incidentFields);
       if (incidentType === "boxPackingDetection") {
         const box = saved.toObject();
         expect(box).toMatchObject({
@@ -499,6 +522,55 @@ describe("v2 industrial detection incidents and logs", () => {
       expect(logsContext.res.statusCode).toBe(200);
       expect(payload(logsContext.res).data.totalCount).toBe(1);
       expect(payload(logsContext.res).data.data[0].incidentType).toBe(incidentType);
+      if (incidentType === "emotionDetection") {
+        for (const field of ['timeOfIncident', 'incidentName', 'Image']) {
+          const body = { ...createContext.req.body };
+          delete body[field];
+          const invalid = serviceCtx({ body });
+          await IncidentsService.createIncidents(invalid.req, invalid.res, invalid.next);
+          expect(invalid.res.statusCode).toBe(400);
+        }
+        expect(await IncidentModel.countDocuments({ incidentType })).toBe(1);
+        expect(payload(logsContext.res).data.data[0]).toMatchObject({
+          ...incidentFields, nvrData: { nvrName: "Industrial NVR" }, channelData: { name: "Industrial Camera" },
+        });
+        const search = serviceCtx({ user_id: admin.user_id, adminId: admin._id, query: { search: "Sadness" } });
+        await IncidentsService.getEmotionDetectionLogs(search.req, search.res, search.next);
+        expect(payload(search.res).data.totalCount).toBe(1);
+        const missing = serviceCtx({ user_id: admin.user_id, adminId: admin._id, query: { search: "Happiness" } });
+        await IncidentsService.getEmotionDetectionLogs(missing.req, missing.res, missing.next);
+        expect(payload(missing.res).data.totalCount).toBe(0);
+        const denied = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id, memberId: "member",
+          permissionConfig: [{ permissionConfig: { logs: { emotionLogs: { view: false }, global: { view: true } } } }],
+        });
+        await IncidentsService.getEmotionDetectionLogs(denied.req, denied.res, denied.next);
+        expect(denied.res.statusCode).toBe(403);
+
+        await IncidentModel.create([
+          { ...createContext.req.body, userId: admin.user_id, emotion: 'Happiness' },
+          { ...createContext.req.body, userId: admin.user_id, emotion: 'Anger' },
+          { ...createContext.req.body, userId: 'another-tenant', emotion: 'Disgust' },
+        ]);
+        const selected = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id,
+          query: { emotions: 'Sadness,Happiness', nvrIds: String(nvr._id), channelIds: String(channel._id), limit: '1' },
+        });
+        await IncidentsService.getEmotionDetectionLogs(selected.req, selected.res, selected.next);
+        expect(payload(selected.res).data.totalCount).toBe(2);
+        expect(payload(selected.res).data.data).toHaveLength(1);
+        expect(payload(selected.res).data.emotionOptions).toEqual(['Anger', 'Happiness', 'Sadness']);
+        // Export requests use the same filters with a larger page size.
+        selected.req.query.limit = '10000';
+        await IncidentsService.getEmotionDetectionLogs(selected.req, selected.res, selected.next);
+        expect(payload(selected.res).data.data.map(row => row.emotion).sort()).toEqual(['Happiness', 'Sadness']);
+        const noCameraAccess = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id, authorizedChannel: { channels: [] }, query: {},
+        });
+        await IncidentsService.getEmotionDetectionLogs(noCameraAccess.req, noCameraAccess.res, noCameraAccess.next);
+        expect(payload(noCameraAccess.res).data.emotionOptions).toEqual([]);
+        expect(payload(noCameraAccess.res).data.totalCount).toBe(0);
+      }
     },
   );
 });

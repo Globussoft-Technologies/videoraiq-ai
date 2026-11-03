@@ -97,7 +97,7 @@ const appendIndustrialDetectors = (
         });
         continue;
       }
-      if (name === "boxPackingDetectionSettings") {
+      if (name === "boxPackingDetectionSettings" || name === "emotionDetection") {
         // DS takes only the zone names; stored Telegram/window fields and
         // severity stay on our side.
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
