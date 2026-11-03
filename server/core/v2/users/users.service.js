@@ -316,9 +316,8 @@ class UsersService {
             `An authorized user with the userName ${userName} already exists.`
             ));
         }
-        // The address must have been verified from the link mailed to it
-        // (Add User form → /users/email-verification/send).
-        if (!(await isEmailVerified(isAdminExist._id, email))) {
+        // Verification is required unless this admin disabled the policy in Settings.
+        if (isAdminExist.requireUserEmailVerification !== false && !(await isEmailVerified(isAdminExist._id, email))) {
             const failure = Response.userFailResp("Verify this email address before adding the user.", "Validation Failed!");
             failure.body.errorCode = "EMAIL_NOT_VERIFIED";
             return res.status(400).json(failure);
@@ -570,8 +569,8 @@ class UsersService {
                 "Another authorized user with email already exists"
               ));
             }
-            // A changed address must be verified too, same as on create.
-            if (!(await isEmailVerified(existingUser.adminId, email))) {
+            // A changed address follows the same admin verification policy as create.
+            if (isAdminExist.requireUserEmailVerification !== false && !(await isEmailVerified(existingUser.adminId, email))) {
               return res.send(Response.userFailResp("Verify the new email address before saving.", "Validation Failed!"));
             }
           }
@@ -809,52 +808,38 @@ class UsersService {
         }
   
         // Delete authorized user from DB
-        const deletedUser = await authorizedUsersModel.findByIdAndDelete(userId);
+        const deletedUser = await authorizedUsersModel.findOneAndDelete({
+          _id: userId,
+          adminId: data?.adminId,
+        });
   
         if (!deletedUser) {
           return res.status(404).json(Response.userFailResp("Authorized user not found"));
         }
         await removeUserRecipients(deletedUser._id);
 
-
-
-  
-        // Define media path
-        const mediaPath = decodeURIComponent(
-          `/emp-cctv-dev-media/uploads/images/${deletedUser?.firstName}`
-        );
-        const fileName = path.basename(mediaPath);
-        const cachedFilePath = path.join(cacheDir, fileName);
-  
-        // 🧹 Delete from local cache (if exists)
-        if (fs.existsSync(cachedFilePath)) {
-          const stats = fs.lstatSync(cachedFilePath);
-          if (stats.isDirectory()) {
-            fs.rmSync(cachedFilePath, { recursive: true, force: true });
-            console.log(`Deleted local folder: ${cachedFilePath}`);
-          } else {
-            fs.unlinkSync(cachedFilePath);
-            console.log(`Deleted local file: ${cachedFilePath}`);
+        // The database delete is the primary operation. Storage cleanup is
+        // best-effort so an unavailable cache/SFTP server cannot turn a
+        // completed delete into a misleading API failure.
+        const mediaPath = `/emp-cctv-dev-media/uploads/images/${deletedUser.firstName}`;
+        const cachedFilePath = path.join(cacheDir, path.basename(mediaPath));
+        try {
+          if (fs.existsSync(cachedFilePath)) {
+            const stats = fs.lstatSync(cachedFilePath);
+            if (stats.isDirectory()) fs.rmSync(cachedFilePath, { recursive: true, force: true });
+            else fs.unlinkSync(cachedFilePath);
           }
+        } catch (error) {
+          logger.error(`[USER_DELETE] local media cleanup failed for ${deletedUser._id}: ${error.message}`);
         }
-  
-        // 🌐 Connect to SFTP
-        const sftp = await checkSftpConnection();
-  
-        // Check if remote path exists
-        const exists = await sftp.exists(mediaPath);
-       
-  
-        if (exists) {
-          if (exists === 'd') {
-            // Directory — delete recursively
-            await sftp.rmdir(mediaPath, true);
-            console.log(`Deleted folder from SFTP: ${mediaPath}`);
-          } else if (exists === '-') {
-            // File — delete directly
-            await sftp.delete(mediaPath);
-            console.log(`Deleted file from SFTP: ${mediaPath}`);
-          }
+
+        try {
+          const sftp = await checkSftpConnection();
+          const exists = await sftp.exists(mediaPath);
+          if (exists === 'd') await sftp.rmdir(mediaPath, true);
+          else if (exists === '-') await sftp.delete(mediaPath);
+        } catch (error) {
+          logger.error(`[USER_DELETE] SFTP cleanup failed for ${deletedUser._id}: ${error.message}`);
         }
 
         //Deleting User data from AI service
@@ -867,9 +852,9 @@ class UsersService {
         
         } catch (err) {
           if (err.response) {
-            console.log(`Delete failed (${err.response.status}): ${JSON.stringify(err.response.data)}`);
+            logger.error(`[USER_DELETE] face-auth cleanup failed for ${deletedUser._id} (${err.response.status})`);
           } else {
-            console.log("Error:", err.message);
+            logger.error(`[USER_DELETE] face-auth cleanup failed for ${deletedUser._id}: ${err.message}`);
           }
         }
         

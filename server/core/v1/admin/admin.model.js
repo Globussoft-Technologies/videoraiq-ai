@@ -39,6 +39,9 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
+  // Email verification is required for new or changed user addresses unless
+  // this admin explicitly opts out.
+  requireUserEmailVerification: { type: Boolean, default: true },
   // Guided-tour state. `false` means the global onboarding tour still runs on
   // login; it flips to true only when the admin finishes the whole flow or
   // uses the global "Skip entire tour" action — skipping a single module

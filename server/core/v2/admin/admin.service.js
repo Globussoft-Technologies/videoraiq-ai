@@ -879,6 +879,30 @@ class AdminService {
     }
   }
 
+  async updateUserEmailVerification(req, res, next) {
+    try {
+      const { adminId, memberId } = req?.verified?.userData || {};
+      const { requireUserEmailVerification } = req.body || {};
+      if (memberId || !adminId) {
+        return res.status(403).send(Response.userFailResp("Only the admin account can change this setting.", "Forbidden"));
+      }
+      if (typeof requireUserEmailVerification !== "boolean") {
+        return res.status(400).send(Response.userFailResp("requireUserEmailVerification must be a boolean.", "Validation Failed!"));
+      }
+      const admin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { requireUserEmailVerification } },
+        { new: true, select: "requireUserEmailVerification" },
+      );
+      if (!admin) return res.status(404).send(Response.userFailResp("Admin not found."));
+      return res.send(Response.userSuccessResp("User email verification setting updated.", {
+        requireUserEmailVerification: admin.requireUserEmailVerification,
+      }));
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   /**
    * The modules this caller may take a guided tour of, optionally filtered by
    * `?search=`.

@@ -43,6 +43,7 @@ import {
   normalizeIncidentPreview,
   INCIDENT_PREVIEW_MAX_SECONDS,
   updateTimezone,
+  updateUserEmailVerification,
 } from '../../../helpers/administer';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 import { usePermissions } from '../../../context/PermissionContext';
@@ -674,6 +675,7 @@ export default function SystemSettings() {
   });
 
   const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [userEmailVerificationSaving, setUserEmailVerificationSaving] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [fullDayHours, setFullDayHours] = useState('');
   const [halfDayHours, setHalfDayHours] = useState('');
@@ -700,6 +702,7 @@ export default function SystemSettings() {
   const orgName = admin.orgName || admin.organizationName || admin.orgId || adminName;
   const email = myAccount.email || selfUser.email || admin.email || '-';
   const savedTimezone = timezoneApi.data || admin.timezone || 'Asia/Kolkata';
+  const requireUserEmailVerification = admin.requireUserEmailVerification !== false;
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
   const timezoneOptions = useMemo(() => {
     const set = new Set([savedTimezone, 'Asia/Kolkata', 'UTC', ...timezones].filter(Boolean));
@@ -946,6 +949,24 @@ export default function SystemSettings() {
     }
   };
 
+  const handleUserEmailVerificationToggle = async (next) => {
+    if (!isAdmin || !canEditSettings) {
+      toast.error("Only an admin with settings permission can change this setting");
+      return;
+    }
+    if (next === requireUserEmailVerification) return;
+    setUserEmailVerificationSaving(true);
+    try {
+      await updateUserEmailVerification(next);
+      await adminApi.refetch({ silent: true });
+      toast.success(next ? 'User email verification is required' : 'User email verification is disabled');
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to update user email verification');
+    } finally {
+      setUserEmailVerificationSaving(false);
+    }
+  };
+
   const notifyRetentionPendingSave = () => {
     toast.warning('Not saved yet. Click Save to apply the data retention change.', {
       id: 'retention-pending-save',
@@ -1080,6 +1101,18 @@ export default function SystemSettings() {
                 <ReadOnlyField value={formatTimezone(savedTimezone)} />
               </div>
             </div>
+            {isAdmin && (
+              <ToggleRow
+                icon={Mail}
+                label="Require email verification for users"
+                desc="Require verification when adding a user or changing their email address."
+                value={requireUserEmailVerification}
+                onChange={handleUserEmailVerificationToggle}
+                disabled={!canEditSettings || userEmailVerificationSaving}
+                loading={userEmailVerificationSaving}
+                last
+              />
+            )}
           </div>
         </Panel>
 

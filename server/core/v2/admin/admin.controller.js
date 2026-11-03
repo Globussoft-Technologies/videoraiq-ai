@@ -328,6 +328,14 @@ class AdminController {
     return await adminService.fetchLogsSound(req, res, next);
   }
 
+  async updateUserEmailVerification(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Set whether newly added users and changed user email addresses must be verified'
+    #swagger.parameters['data'] = { in: 'body', required: true, schema: { requireUserEmailVerification: true } }
+    */
+    return await adminService.updateUserEmailVerification(req, res, next);
+  }
+
   async fetchTourModules(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'List the guided-tour modules the caller may open, filtered by role permissions and the resolved logs configuration. Optional ?search= filters by module name or sidebar group.'

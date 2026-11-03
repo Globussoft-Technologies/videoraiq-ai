@@ -19,6 +19,7 @@ import {
 } from '../../../api/administer';
 import { useSocket } from '../../../context/SocketContext';
 import { getLocations } from '../../../helpers/monitoring';
+import { fetchAdmin } from '../../../helpers/administer';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
@@ -304,7 +305,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
 // ── Add / Edit user modal (shared) ──────────────────────────────────────────
 const ROLE_PANEL_MAX_H = 176;
 
-function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
+function UserFormModal({ mode, user, roles, rolesLoading, requireUserEmailVerification = true, onClose, onSave }) {
   const isEdit = mode === 'edit';
   const initialFirst = isEdit ? (user.firstName || '') : '';
   const initialLast  = isEdit ? (user.lastName || '') : '';
@@ -314,11 +315,11 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [lastName, setLastName]   = useState(initialLast);
   const [email, setEmail]       = useState(isEdit ? (user.email || userEmail(user)) : '');
 
-  // A new (or changed) address must be confirmed from the link mailed to it
-  // before the user can be saved; the server enforces the same rule.
+  // A new (or changed) address must be confirmed when this admin requires it;
+  // the server enforces the same policy.
   const originalEmail = isEdit ? String(user.email || userEmail(user) || '') : '';
   const typedEmail = email.trim().toLowerCase();
-  const needsVerify = typedEmail !== originalEmail.trim().toLowerCase();
+  const needsVerify = requireUserEmailVerification && typedEmail !== originalEmail.trim().toLowerCase();
   const [verify, setVerify] = useState({ email: '', id: null, state: 'idle' }); // idle | sending | pending | verified
   const verifyState = verify.email === typedEmail ? verify.state : 'idle';
   const emailVerified = !needsVerify || verifyState === 'verified';
@@ -1020,6 +1021,7 @@ export default function UsersPage() {
   }, [search]);
 
   const rolesApi     = useApi(() => getRoles({ limit: 100 }), []);
+  const adminApi     = useApi(() => fetchAdmin(), [], { cacheKey: 'users-page-admin-settings' });
   const usersApi     = useApi(
     () => getUsers({ skip: page * LIMIT, limit: LIMIT, searchQuery: debouncedSearch }),
     [page, debouncedSearch],
@@ -1029,6 +1031,7 @@ export default function UsersPage() {
   const users     = usersApi.data?.users ?? [];
   const total     = usersApi.data?.total ?? 0;
   const pages     = Math.max(1, Math.ceil(total / LIMIT));
+  const requireUserEmailVerification = adminApi.data?.requireUserEmailVerification !== false;
 
   const selectableUsers = users.filter(u => String(u._id) !== myUserId);
   const selCount = Object.values(selected).filter(Boolean).length;
@@ -1319,6 +1322,7 @@ export default function UsersPage() {
           mode="add"
           roles={roles}
           rolesLoading={rolesApi.loading}
+          requireUserEmailVerification={requireUserEmailVerification}
           onClose={() => setShowAddModal(false)}
           onSave={handleCreate}
         />
@@ -1330,6 +1334,7 @@ export default function UsersPage() {
           user={editUser}
           roles={roles}
           rolesLoading={rolesApi.loading}
+          requireUserEmailVerification={requireUserEmailVerification}
           onClose={() => setEditUser(null)}
           onSave={handleSaveEdit}
         />

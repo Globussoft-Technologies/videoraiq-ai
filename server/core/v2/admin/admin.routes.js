@@ -22,6 +22,7 @@ router.put("/alert-switches/telegram",verifyToken,adminController.updateTelegram
 router.put("/alert-switches/push",verifyToken,adminController.updatePushAlertsEnabled);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
+router.put("/user-email-verification",verifyToken,adminController.updateUserEmailVerification);
 router.get("/onboarding",verifyToken,adminController.fetchOnboarding);
 router.get("/tour-modules",verifyToken,adminController.fetchTourModules);
 router.put("/onboarding",verifyToken,adminController.updateOnboarding);

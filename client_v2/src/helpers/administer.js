@@ -76,6 +76,16 @@ export const updateLogsSound = async (logsSound) => {
   return unwrap(res);
 };
 
+export const updateUserEmailVerification = async (requireUserEmailVerification) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/user-email-verification`,
+    { requireUserEmailVerification },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
 export const getAlertSwitches = async () => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/admin/alert-switches`, {
