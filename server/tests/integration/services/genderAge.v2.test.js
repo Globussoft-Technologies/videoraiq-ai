@@ -31,6 +31,35 @@ const readLogs = async (options = {}) => {
 };
 
 describe('Gender & Age logs and count snapshots', () => {
+  it('filters gender before pagination and exports while retaining both summary totals', async () => {
+    const common = { userId: admin.user_id, channelId: cameras[0]._id, nvrId: nvr._id, timeOfIncident: '2026-11-04T10:00:00Z', Image: 'https://nas.test/gender.jpg' };
+    await GenderAgeDetectionIncident.create(['Male', 'Male', 'Male', 'Female', 'Female'].map(targetGender => ({
+      ...common, targetGender, incidentName: `${targetGender} Detected`,
+    })));
+    await GenderAgeDetectionIncident.create({ ...common, userId: 'another-client', targetGender: 'Male', incidentName: 'Male Detected' });
+    await GenderAgeCountIncident.create({ ...common, femaleCount: 2, maleCount: 3 });
+    for (const [gender, count] of [['Male', 3], ['Female', 2]]) {
+      const query = { startDate: '2026-11-04', endDate: '2026-11-04', gender, skip: '1', limit: '1' };
+      const page = payload((await readLogs({ query })).res).data;
+      expect(page.totalCount).toBe(count);
+      expect(page.data).toHaveLength(1);
+      expect(page.data[0].targetGender).toBe(gender);
+      expect(page.genderAgeSummary).toMatchObject({ femaleCount: 2, maleCount: 3, totalCount: 5 });
+      const exported = payload((await readLogs({ query: { ...query, skip: '0', limit: '10000' } })).res).data;
+      expect(exported.data).toHaveLength(count);
+      expect(exported.data.every(row => row.targetGender === gender)).toBe(true);
+    }
+    const all = payload((await readLogs({ query: { gender: '', limit: '100' } })).res).data;
+    expect(all.totalCount).toBe(5);
+    const denied = payload((await readLogs({ query: { gender: 'Male' }, authorizedChannel: { channels: [] } })).res).data;
+    expect(denied.totalCount).toBe(0);
+  });
+
+  it.each(['Unknown', ['Male'], { $ne: 'Female' }])('rejects an invalid gender filter: %j', async gender => {
+    const context = await readLogs({ query: { gender } });
+    expect(context.res.statusCode).toBe(400);
+  });
+
   it('accepts the minimal count post using cameraId and never raises an alert', async () => {
     const body = { incidentType: 'genderAgeCount', cameraId: String(cameras[0]._id), nvrId: String(nvr._id), adminId: String(admin._id), femaleCount: 3, maleCount: 1, zones: [{ zone_idx: 0, zone: 'Reception', female_count: 3, male_count: 1 }], triggerNotification: false };
     const context = serviceCtx({ body });

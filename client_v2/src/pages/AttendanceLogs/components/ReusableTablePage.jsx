@@ -251,7 +251,7 @@ const ReusableTablePage = ({
                 </div>
               )
             ) : (
-              <div data-tour="log-table" className={`w-full overflow-x-auto overflow-y-auto max-h-[60vh] rounded-xl border border-[var(--bd)] ${tableContainerClassName}`}>
+              <div data-tour="log-table" className={`w-full shrink-0 overflow-x-auto rounded-xl border border-[var(--bd)] ${tableContainerClassName}`}>
                 <ProfilesTable
                   data={paginated}
                   columns={columns}
@@ -382,7 +382,7 @@ const ReusableTablePage = ({
                 type="button"
                 onClick={handleGoToPage}
                 disabled={String(pageInput).trim() === ''}
-                className="h-9 px-3 rounded-lg text-xs font-medium bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
+                className="h-9 px-3 rounded-lg text-xs font-medium bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
               >
                 Go
               </button>

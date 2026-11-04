@@ -2,6 +2,7 @@ import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import useGenderAgeLiveUpdates from '@/hooks/useGenderAgeLiveUpdates';
 import GenderAgeSummary from './components/GenderAgeSummary';
+import GenderFilter from './components/GenderFilter';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -115,6 +116,7 @@ const IncidentLogsPage = ({ config }) => {
     nvrIds,
     channelIds,
     severity,
+    gender,
     status,
     doorStatus,
     vehicleNumber,
@@ -249,7 +251,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
+  }, [gender, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -271,6 +273,7 @@ const IncidentLogsPage = ({ config }) => {
         nvrIds,
         channelIds,
         emotions: config.showEmotionFields ? emotions : undefined,
+        gender: config.showGenderAgeFields ? gender : undefined,
         hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -368,7 +371,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [gender, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -635,6 +638,7 @@ const IncidentLogsPage = ({ config }) => {
       nvrIds,
       channelIds,
       emotions: config.showEmotionFields ? emotions : undefined,
+      gender: config.showGenderAgeFields ? gender : undefined,
       hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -645,7 +649,7 @@ const IncidentLogsPage = ({ config }) => {
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [gender, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -718,7 +722,9 @@ const IncidentLogsPage = ({ config }) => {
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
-        dateFilterActions={config.showDoorFields ? (
+        dateFilterActions={config.showGenderAgeFields ? (
+          <GenderFilter value={gender} onChange={value => dispatch({ type: 'SET_GENDER', value })} />
+        ) : config.showDoorFields ? (
           <div role="group" aria-label="Door status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
             {[['', 'All'], ['open', 'Open'], ['closed', 'Closed'], ['resolved', 'Resolved']].map(([value, label]) => (
               <button

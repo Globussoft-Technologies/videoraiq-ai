@@ -20,7 +20,7 @@ function GenderCard({ label, count, zones, countKey, color }) {
         </tr>)}</tbody>
       </table>
       {!zones.length && <p className="py-4 text-xs text-[var(--tx3)]">No zone count updates received yet.</p>}
-      {zones.length > 3 && <button type="button" onClick={() => setExpanded(value => !value)} className="mt-2 w-full text-right text-xs font-medium text-[var(--tx2)]">{expanded ? 'Show less' : 'View all'}</button>}
+      {zones.length > 3 && <button type="button" onClick={() => setExpanded(value => !value)} className="mt-2 w-full cursor-pointer text-right text-xs font-medium text-[var(--tx2)]">{expanded ? 'Show less' : 'View all'}</button>}
     </div>
   </div>;
 }

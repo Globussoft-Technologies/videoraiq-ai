@@ -75,6 +75,7 @@ export const fetchIncidentLogs = async ({
   hygieneCategory,
   lightingCategory,
   emotions,
+  gender,
 }) => {
   return axios.request({
     method,
@@ -91,6 +92,7 @@ export const fetchIncidentLogs = async ({
       ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
       ...(channelIds?.length && { channelIds: channelIds.join(',') }),
       ...(emotions?.length && { emotions: emotions.join(',') }),
+      ...(gender && { gender }),
       ...(Array.isArray(lightingCategory) && lightingCategory.length ? { lightingCategory: lightingCategory.join(',') } : {}),
       ...(Array.isArray(hygieneCategory) && hygieneCategory.length ? { hygieneCategory: hygieneCategory.join(',') } : typeof hygieneCategory === 'string' && hygieneCategory ? { hygieneCategory } : {}),
       ...(Array.isArray(severity) ? severity.length ? { severity: severity.join(',') } : {} : severity ? { severity } : {}),

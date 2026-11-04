@@ -3635,7 +3635,14 @@ console.log(result,'result');
       };
     }
 
+    if (incidentType === 'genderAgeDetection' && req.query.gender !== undefined &&
+      !['', 'Male', 'Female'].includes(req.query.gender)) {
+      return res.status(400).json(Response.userFailResp('Gender must be Male or Female.'));
+    }
     const genderAgeSummary = includeGenderAgeSummary ? await getGenderAgeSummary(matchStage) : null;
+    if (incidentType === 'genderAgeDetection' && req.query.gender) {
+      matchStage.targetGender = req.query.gender;
+    }
 
     // Options use the tenant/date/camera scope before applying the selected
     // emotions, so selecting one option does not hide the other choices.

@@ -46,6 +46,7 @@ const fetchAllForExport = async (config, params) => {
     hygieneCategory: params.hygieneCategory,
     lightingCategory: params.lightingCategory,
     emotions: params.emotions,
+    gender: params.gender,
   };
 
   const list = config.showDoorFields && doorStatus
