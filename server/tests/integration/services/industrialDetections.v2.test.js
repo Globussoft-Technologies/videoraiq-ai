@@ -42,7 +42,7 @@ const CASES = [
     ] },
   },
   {
-    settingType: "emotionDetection",
+    settingType: "emotionDetectionSettings",
     incidentType: "emotionDetection",
     SettingModel: settingsModels.EmotionDetectionSetting,
     IncidentModel: incidentModels.EmotionDetectionIncident,
@@ -416,7 +416,7 @@ describe("v2 industrial detection incidents and logs", () => {
           settings: {
             levelOfImportance: "high",
             metricType: "gauge",
-            ...(settingType === "emotionDetection" ? {
+            ...(settingType === "emotionDetectionSettings" ? {
               referencePoints: { [channel._id.toString()]: [
                 [[0, 0], [100, 0], [100, 100], [0, 100]],
                 [[200, 0], [300, 0], [300, 100], [200, 100]],
@@ -428,7 +428,7 @@ describe("v2 industrial detection incidents and logs", () => {
                 [[120, 80], [900, 80], [900, 700], [120, 700]],
                 [[950, 80], [1850, 80], [1850, 700], [950, 700]],
               ] },
-              zone_configs: [{ name: "Reception", target_gender: "Female" }, { name: "Shop Floor", target_gender: "Male" }],
+              zone_configs: [{ name: " Reception ", target_gender: "Female" }, { name: " Shop Floor ", target_gender: "Male" }],
             } : {}),
             ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
           },
@@ -444,9 +444,21 @@ describe("v2 industrial detection incidents and logs", () => {
       if (settingType === "genderAgeDetectionSettings") {
         const setting = await SettingModel.findOne({ settingType }).lean();
         expect(setting.settings.zone_configs.map(zone => zone.target_gender)).toEqual(["Female", "Male"]);
+        expect(setting.settings.zone_configs.map(zone => zone.name)).toEqual(["Reception", "Shop Floor"]);
         expect(setting.settings.gender_confidence_threshold).toBe(0.6);
+        const edit = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id, params: { id: String(setting._id) },
+          body: { settings: { zone_configs: [
+            { name: " Updated Reception ", target_gender: "Female" },
+            { name: " Shop Floor ", target_gender: "Male" },
+          ] } },
+        });
+        await DetectionSettingsService.updateDetectionSettings(edit.req, edit.res, edit.next);
+        expect(payload(edit.res).status).toBe("success");
+        const updated = await SettingModel.findById(setting._id).lean();
+        expect(updated.settings.zone_configs.map(zone => zone.name)).toEqual(["Updated Reception", "Shop Floor"]);
       }
-      if (settingType === "emotionDetection") {
+      if (settingType === "emotionDetectionSettings") {
         const setting = await SettingModel.findOne({ settingType });
         expect(setting.settings.zone_configs.map(zone => zone.name)).toEqual(["Lobby", "Reception"]);
         expect(setting.settings.zone_configs.map(zone => [...zone.emotion_alert_groups])).toEqual([
@@ -466,8 +478,8 @@ describe("v2 industrial detection incidents and logs", () => {
           ["positive", "neutral", "negative", "surprise"], ["surprise"],
         ]);
         expect(setting.settings.referencePoints[channel._id.toString()]).toHaveLength(2);
-        const populated = await Channel.findById(channel._id).populate('detections.emotionDetection.id');
-        expect(populated.detections.emotionDetection.id.settingType).toBe('emotionDetection');
+        const populated = await Channel.findById(channel._id).populate('detections.emotionDetectionSettings.id');
+        expect(populated.detections.emotionDetectionSettings.id.settingType).toBe('emotionDetectionSettings');
       }
 
       const incidentTime = "2026-09-21T12:30:45Z";

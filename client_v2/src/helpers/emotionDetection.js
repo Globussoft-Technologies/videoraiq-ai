@@ -1,4 +1,4 @@
-export const EMOTION_SETTING_TYPE = 'emotionDetection';
+export const EMOTION_SETTING_TYPE = 'emotionDetectionSettings';
 export const EMOTION_ALERT_GROUPS = Object.freeze(['positive', 'neutral', 'negative', 'surprise']);
 
 export function emotionZoneSettings(zone = {}, shared = {}) {

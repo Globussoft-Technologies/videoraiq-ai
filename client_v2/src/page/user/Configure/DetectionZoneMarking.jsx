@@ -661,7 +661,7 @@ export default function DetectionZoneMarking({
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       ...(Array.isArray(z.whatsappRecipientIds) ? { whatsappRecipientIds: z.whatsappRecipientIds } : {}),
-      name: z.name,
+      name: z.name.trim(),
       ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isLighting ? lightingZonePayload(z) : {}),
       ...(isEmotion ? emotionZoneSettings(z) : {}),

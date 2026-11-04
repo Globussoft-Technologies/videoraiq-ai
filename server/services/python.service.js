@@ -122,7 +122,7 @@ const appendIndustrialDetectors = (
         });
         continue;
       }
-      if (name === "boxPackingDetectionSettings" || name === "emotionDetection") {
+      if (name === "boxPackingDetectionSettings" || name === "emotionDetectionSettings") {
         // Send zone names and emotion alert groups; keep routing fields local.
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         detectors.push({
@@ -132,7 +132,7 @@ const appendIndustrialDetectors = (
             const zone = plainZoneConfig(config);
             return {
               name: zone?.name,
-              ...(name === "emotionDetection" ? {
+              ...(name === "emotionDetectionSettings" ? {
                 emotion_alert_groups: [...(zone?.emotion_alert_groups ?? EMOTION_ALERT_GROUPS)],
               } : {}),
             };

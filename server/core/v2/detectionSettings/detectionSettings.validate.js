@@ -133,6 +133,12 @@ const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 class DetectionSettingsValidation {
   validateGenderAgeSettings(settingType, settings = {}) {
     if (settingType !== "genderAgeDetectionSettings") return { error: null };
+    const normalized = Array.isArray(settings?.zone_configs) ? {
+      ...settings,
+      zone_configs: settings.zone_configs.map(zone => typeof zone?.name === "string"
+        ? { ...zone, name: zone.name.trim() }
+        : zone),
+    } : settings;
     return Joi.object({
       target_gender: Joi.string().valid("Male", "Female"),
       gender_confidence_threshold: Joi.number().min(0).max(1),
@@ -143,11 +149,11 @@ class DetectionSettingsValidation {
         name: Joi.string().trim().required(),
         target_gender: Joi.string().valid("Male", "Female"),
       }).unknown(true)),
-    }).unknown(true).validate(settings, { convert: false });
+    }).unknown(true).validate(normalized, { convert: false });
   }
 
   validateEmotionSettings(settingType, settings = {}) {
-    if (settingType !== "emotionDetection") return { error: null };
+    if (settingType !== "emotionDetectionSettings") return { error: null };
     return Joi.object({
       zone_configs: Joi.array().items(Joi.object({
         emotion_alert_groups: Joi.array().items(Joi.string().valid(...EMOTION_ALERT_GROUPS)).min(1).unique(),

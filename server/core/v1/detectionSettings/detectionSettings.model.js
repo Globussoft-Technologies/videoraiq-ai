@@ -1272,8 +1272,8 @@ const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: DeskSolarShoulderDetectionSchema }),
 );
 
-// Use a distinct model name because the incident discriminator also stores
-// emotionDetection. The persisted settingType remains emotionDetection.
+// The setting and DS detector key is emotionDetectionSettings; incoming
+// emotionDetection incidents have their own discriminator.
 const emotionAlertGroupsField = {
   type: [{ type: String, enum: EMOTION_ALERT_GROUPS }],
   default: () => [...EMOTION_ALERT_GROUPS],
@@ -1291,7 +1291,7 @@ EmotionDetectionSchema.add({
 const EmotionDetectionSetting = DetectionSetting.discriminator(
   "EmotionDetectionSetting",
   new mongoose.Schema({ settings: EmotionDetectionSchema }),
-  "emotionDetection",
+  "emotionDetectionSettings",
 );
 
 const GenderAgeDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();

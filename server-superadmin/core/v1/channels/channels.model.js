@@ -21,6 +21,7 @@ const detectionSettingSchema = new mongoose.Schema(
 
 
 const detectionFields = {
+  emotionDetectionSettings: detectionSettingSchema,
   countPersonsSettings: detectionSettingSchema,
   motionDetectionSettings: detectionSettingSchema,
   genericObjectDetectionSettings: detectionSettingSchema,

@@ -125,7 +125,7 @@ const detectionFields = {
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
-  emotionDetection: detectionSettingSchema,
+  emotionDetectionSettings: detectionSettingSchema,
   genderAgeDetectionSettings: detectionSettingSchema,
   hygieneSanitationFoodSafetyDetectionSettings: detectionSettingSchema,
   lightingVisibilitySiteConditionsDetectionSettings: detectionSettingSchema,

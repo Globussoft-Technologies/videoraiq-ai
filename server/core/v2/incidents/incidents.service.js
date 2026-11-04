@@ -6002,7 +6002,7 @@ console.log(result,'result');
     try {
       const user = req.verified?.userData;
       const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
-      if (!allowed.has('emotionDetection')) return res.status(403).json(Response.accessDeniedResp('Emotion Detection is not enabled for your account'));
+      if (!allowed.has('emotionDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Emotion Detection is not enabled for your account'));
       if (user?.memberId) {
         const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
         const canView = logs?.emotionLogs?.view ?? logs?.global?.view ?? logs?.view ?? false;

@@ -69,7 +69,7 @@ export const DETECTION_META = {
     Icon: Users,
     tint: 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-300',
   },
-  emotionDetection: {
+  emotionDetectionSettings: {
     Icon: Smile,
     tint: 'bg-pink-50 text-pink-500 dark:bg-pink-500/10 dark:text-pink-300',
   },

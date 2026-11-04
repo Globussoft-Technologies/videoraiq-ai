@@ -17,7 +17,7 @@ const zones = [
 const payload = {
   camera_id: 'cam', nvr_id: 'nvr', admin_id: 'admin',
   stream_url: 'http://stream.test/live.m3u8',
-  detection_modes: ['emotionDetection'], zones,
+  detection_modes: ['emotionDetectionSettings'], zones,
   zone_configs: [{ name: 'Lobby', telegramChatIds: ['private'] }, { name: 'Reception' }],
   videoResolution: [1000, 1000],
 };
@@ -33,7 +33,7 @@ describe('Emotion Detection requests to DS', () => {
       await python[method](payload);
       expect(axios.post.mock.calls[0][0]).toBe(`http://ds.test${endpoint}`);
       expect(axios.post.mock.calls[0][1].detectors).toEqual([{
-        name: 'emotionDetection',
+        name: 'emotionDetectionSettings',
         zones,
         zone_configs: [
           { name: 'Lobby', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
@@ -56,8 +56,8 @@ describe('Emotion Detection requests to DS', () => {
   });
 
   it('stops only the emotion detector', async () => {
-    await python.stopNewDetection('cam', 'nvr', ['emotionDetection'], 'admin');
+    await python.stopNewDetection('cam', 'nvr', ['emotionDetectionSettings'], 'admin');
     expect(axios.post.mock.calls[0][0]).toBe('http://ds.test/stream/stop');
-    expect(axios.post.mock.calls[0][1]).toEqual({ camera_id: 'cam', nvr_id: 'nvr', detectors: ['emotionDetection'] });
+    expect(axios.post.mock.calls[0][1]).toEqual({ camera_id: 'cam', nvr_id: 'nvr', detectors: ['emotionDetectionSettings'] });
   });
 });

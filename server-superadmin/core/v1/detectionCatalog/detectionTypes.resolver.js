@@ -31,7 +31,8 @@ export const resolveDetectionTypes = async () => {
       .lean();
 
     if (rows.length > 0) {
-      const activeRows = rows.filter((row) => row.active !== false);
+      // The pre-rename key must not reappear as a second catalog entry.
+      const activeRows = rows.filter((row) => row.active !== false && row.settingType !== "emotionDetection");
       const activeTypes = new Set(activeRows.map(row => row.settingType));
       const localDefaults = Object.entries(DETECTION_TYPES)
         .filter(([settingType]) => !activeTypes.has(settingType))

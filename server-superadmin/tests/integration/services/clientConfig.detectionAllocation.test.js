@@ -37,7 +37,7 @@ beforeEach(async () => {
 describe("detection allocation revocation", () => {
   it.each([
     ["gender and age detection", "genderAgeDetectionSettings"],
-    ["emotion detection", "emotionDetection"],
+    ["emotion detection", "emotionDetectionSettings"],
     ["loading/unloading stock counting", STOCK_COUNTING],
     ["blurred camera detection", BLURRED_CAMERA],
   ])("licenses %s with a camera allocation", async (_label, settingType) => {
@@ -67,19 +67,19 @@ describe("detection allocation revocation", () => {
     });
     await DetectionCatalog.create({ settingType: PPE, name: "PPE Detection" });
     await Allocation.create({
-      adminId: admin._id, settingType: "emotionDetection", cameraAllocation: 2, enabled: true,
+      adminId: admin._id, settingType: "emotionDetectionSettings", cameraAllocation: 2, enabled: true,
     });
 
     const config = serviceCtx({ params: { adminId: String(admin._id) } });
     await ClientConfigService.getConfig(config.req, config.res);
     expect(payload(config.res).data.detections).toContainEqual(expect.objectContaining({
-      settingType: "emotionDetection", name: "Emotion Detection", cameraAllocation: 2, enabled: true,
+      settingType: "emotionDetectionSettings", name: "Emotion Detection", cameraAllocation: 2, enabled: true,
     }));
 
     const catalog = serviceCtx();
     await DetectionCatalogService.list(catalog.req, catalog.res);
     expect(payload(catalog.res).data.detections).toContainEqual(expect.objectContaining({
-      settingType: "emotionDetection", name: "Emotion Detection", clientCount: 1,
+      settingType: "emotionDetectionSettings", name: "Emotion Detection", clientCount: 1,
     }));
   });
 

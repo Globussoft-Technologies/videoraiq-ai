@@ -9,7 +9,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 
 export const DETECTION_TYPES = {
   genderAgeDetectionSettings: "Gender & Age Detection",
-  emotionDetection: "Emotion Detection",
+  emotionDetectionSettings: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   faceAuthenticationSettings: "Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -82,7 +82,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "hygieneSanitationFoodSafetyDetectionSettings",
   "lightingVisibilitySiteConditionsDetectionSettings",
   "uniformDetectionSettings",
-  "emotionDetection",
+  "emotionDetectionSettings",
   "genderAgeDetectionSettings",
 ]);
 
@@ -118,7 +118,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
   genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
-  emotionDetection: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
+  emotionDetectionSettings: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
   uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
   countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
   countVehiclesSettings: { permissionKey: "vehicleCountLogs", logsConfigKey: "vehicleCountLogs" },
@@ -172,7 +172,7 @@ export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "count
 
 export const TYPE_MAP = {
   genderAgeDetectionSettings: "genderAgeDetection",
-  emotionDetection: "emotionDetection",
+  emotionDetectionSettings: "emotionDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
@@ -233,7 +233,7 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 
 export const DETECTION_MODES_MAP = {
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
-  emotionDetection: ["emotionDetection"],
+  emotionDetectionSettings: ["emotionDetectionSettings"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
@@ -301,7 +301,7 @@ export const DETECTION_MODES_MAP = {
  */
 export const DS_DETECTOR_BY_MODE = {
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
-  emotionDetection: "emotionDetection",
+  emotionDetectionSettings: "emotionDetectionSettings",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
@@ -393,7 +393,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  */
 export const DS_LOGIC_BY_MODE = {
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
-  emotionDetection: "emotionDetection",
+  emotionDetectionSettings: "emotionDetectionSettings",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
   vest: "personalProtectiveEquipmentSettings",
@@ -493,7 +493,7 @@ export const toPopulateDetections = [
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
   { path: "detections.boxPackingDetectionSettings.id" },
-  { path: "detections.emotionDetection.id" },
+  { path: "detections.emotionDetectionSettings.id" },
   { path: "detections.hygieneSanitationFoodSafetyDetectionSettings.id" },
   { path: "detections.lightingVisibilitySiteConditionsDetectionSettings.id" },
 ];
@@ -1722,7 +1722,7 @@ export const deskSolarShoulderDetectionSettings = {
     ],
   },
 };
-export const emotionDetection = industrialDetectionExample("emotionDetection", "Emotion Detection");
+export const emotionDetectionSettings = industrialDetectionExample("emotionDetectionSettings", "Emotion Detection");
 export const genderAgeDetectionSettings = {
   ...industrialDetectionExample("genderAgeDetectionSettings", "Gender & Age Detection"),
   settings: {

@@ -9,6 +9,15 @@ const alert = { ...ids, incidentType: 'genderAgeDetection', timeOfIncident: '202
 const counts = { ...ids, incidentType: 'genderAgeCount', femaleCount: 3, maleCount: 1, zones: [{ zone_idx: 0, zone: 'Reception', female_count: 2, male_count: 0 }], triggerNotification: false };
 
 describe('Gender & Age contracts', () => {
+  it('normalizes surrounding whitespace in zone names and keeps numeric validation strict', () => {
+    const settings = { zone_configs: [{ name: ' TB-03 (Cam-01) 2nd floor ', target_gender: 'Female', telegramChatIds: [], whatsappRecipientIds: [] }] };
+    const result = settingsValidator.validateGenderAgeSettings('genderAgeDetectionSettings', settings);
+    expect(result.error).toBeUndefined();
+    expect(result.value.zone_configs[0]).toEqual({ ...settings.zone_configs[0], name: 'TB-03 (Cam-01) 2nd floor' });
+    expect(settings.zone_configs[0].name).toBe(' TB-03 (Cam-01) 2nd floor ');
+    expect(settingsValidator.validateGenderAgeSettings('genderAgeDetectionSettings', { ...settings, gender_confidence_threshold: '0.6' }).error).toBeTruthy();
+    expect(settingsValidator.validateGenderAgeSettings('genderAgeDetectionSettings', { zone_configs: [{ name: '   ', target_gender: 'Female' }] }).error).toBeTruthy();
+  });
   it('accepts alerts and count posts without an image, channelId or timestamp', () => {
     expect(incidentsValidator.validateGenderAgeIncident(alert).error).toBeUndefined();
     const { channelId, ...snapshot } = counts;

@@ -47,7 +47,7 @@ import {
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
   boxPackingDetectionSettings,
-  emotionDetection,
+  emotionDetectionSettings,
   genderAgeDetectionSettings,
   hygieneSanitationFoodSafetyDetectionSettings,
   lightingVisibilitySiteConditionsDetectionSettings,
@@ -174,7 +174,7 @@ const modelMap = {
   blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
-  emotionDetection: EmotionDetectionSetting,
+  emotionDetectionSettings: EmotionDetectionSetting,
   genderAgeDetectionSettings: GenderAgeDetectionSetting,
   hygieneSanitationFoodSafetyDetectionSettings: HygieneSanitationFoodSafetyDetectionSetting,
   lightingVisibilitySiteConditionsDetectionSettings: LightingVisibilitySiteConditionsDetectionSetting,
@@ -529,6 +529,7 @@ class DetectionSettingService {
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
       const genderAgeValidation = DetectionSettingsValidation.validateGenderAgeSettings(value.settingType, value.settings);
       if (genderAgeValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", genderAgeValidation.error.message));
+      if (genderAgeValidation.value && value.settings) value.settings = genderAgeValidation.value;
       const emotionValidation = DetectionSettingsValidation.validateEmotionSettings(value.settingType, value.settings);
       if (emotionValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", emotionValidation.error.message));
       if (hygieneValidation.error) {
@@ -971,6 +972,7 @@ class DetectionSettingService {
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
       const genderAgeValidation = DetectionSettingsValidation.validateGenderAgeSettings(settingType, value.settings);
       if (genderAgeValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", genderAgeValidation.error.message));
+      if (genderAgeValidation.value && value.settings) value.settings = genderAgeValidation.value;
       const emotionValidation = DetectionSettingsValidation.validateEmotionSettings(settingType, value.settings);
       if (emotionValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", emotionValidation.error.message));
       if (hygieneValidation.error) {
@@ -1914,7 +1916,7 @@ class DetectionSettingService {
         blurredCameraDetectionSettings,
         deskSolarShoulderDetectionSettings,
         boxPackingDetectionSettings,
-        emotionDetection,
+        emotionDetectionSettings,
         genderAgeDetectionSettings,
         hygieneSanitationFoodSafetyDetectionSettings,
         lightingVisibilitySiteConditionsDetectionSettings,

@@ -19,11 +19,18 @@ afterAll(async () => { await disconnectMongo(); });
 beforeEach(async () => { await clearCollections(); });
 
 describe("resolveDetectionTypes", () => {
+  it("offers only the canonical emotion setting key when an older publisher still lists the legacy key", async () => {
+    await DetectionCatalog.create({ settingType: "emotionDetection", name: "Emotion Detection", active: true });
+    const result = await resolveDetectionTypes();
+    expect(result.detections.filter(row => row.name === "Emotion Detection")).toEqual([
+      expect.objectContaining({ settingType: "emotionDetectionSettings" }),
+    ]);
+  });
   it("uses the published catalog when the client backend has synced", async () => {
     await DetectionCatalog.insertMany([
       { settingType: "crowdDetectionSettings", name: "Crowd Detection" },
       { settingType: "carModelDetectionSettings", name: "Car Model Detection" },
-      { settingType: "emotionDetection", name: "Emotion Detection", dsSupported: true },
+      { settingType: "emotionDetectionSettings", name: "Emotion Detection", dsSupported: true },
     ]);
 
     const result = await resolveDetectionTypes();
@@ -32,7 +39,7 @@ describe("resolveDetectionTypes", () => {
     expect(result.detections.map((d) => d.settingType)).toEqual(expect.arrayContaining([
       "carModelDetectionSettings",
       "crowdDetectionSettings",
-      "emotionDetection",
+      "emotionDetectionSettings",
     ]));
     // The detection this service's own constants never had.
     expect(result.detections.find((d) => d.settingType === "carModelDetectionSettings").name)
@@ -47,7 +54,7 @@ describe("resolveDetectionTypes", () => {
 
     const result = await resolveDetectionTypes();
     expect(result.detections.map((d) => d.settingType)).toEqual(expect.arrayContaining([
-      "crowdDetectionSettings", "emotionDetection",
+      "crowdDetectionSettings", "emotionDetectionSettings",
     ]));
     expect(result.detections.some(d => d.settingType === "retiredSettings")).toBe(false);
   });
@@ -58,23 +65,23 @@ describe("resolveDetectionTypes", () => {
     const result = await resolveDetectionTypes();
 
     expect(result.stale).toBe(true);
-    expect(result.detections.find((d) => d.settingType === "emotionDetection"))
+    expect(result.detections.find((d) => d.settingType === "emotionDetectionSettings"))
       .toMatchObject({ name: "Emotion Detection", dsSupported: null });
-    expect(result.detections.find((d) => d.settingType === "emotionDetection").description)
+    expect(result.detections.find((d) => d.settingType === "emotionDetectionSettings").description)
       .not.toBe("");
   });
 
   it.each([true, false, null])("preserves published emotion metadata and support=%s without duplicates", async (dsSupported) => {
     await DetectionCatalog.create({
-      settingType: "emotionDetection", name: "Published Emotion Detection",
+      settingType: "emotionDetectionSettings", name: "Published Emotion Detection",
       description: "Published description", dsSupported,
     });
 
     const result = await resolveDetectionTypes();
 
     expect(result.stale).toBe(true);
-    expect(result.detections.filter(d => d.settingType === "emotionDetection")).toEqual([{
-      settingType: "emotionDetection", name: "Published Emotion Detection",
+    expect(result.detections.filter(d => d.settingType === "emotionDetectionSettings")).toEqual([{
+      settingType: "emotionDetectionSettings", name: "Published Emotion Detection",
       description: "Published description", dsSupported,
     }]);
   });
@@ -96,7 +103,7 @@ describe("resolveDetectionTypes", () => {
 
     expect(result.stale).toBe(true);
     expect(result.detections).toHaveLength(Object.keys(DETECTION_TYPES2).length);
-    expect(result.detections.some((d) => d.settingType === "emotionDetection")).toBe(true);
+    expect(result.detections.some((d) => d.settingType === "emotionDetectionSettings")).toBe(true);
     // The fallback keeps the screens working — it is just possibly out of date,
     // which is exactly what `stale` reports.
     expect(result.detections.some((d) => d.settingType === "carModelDetectionSettings"))

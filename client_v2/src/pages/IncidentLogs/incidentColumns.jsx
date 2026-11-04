@@ -677,7 +677,8 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {config.showGenderAgeFields && <>
           <IncidentCardRow icon={Users} label="Gender" value={row.targetGender || '--'} />
           <IncidentCardRow icon={MapPin} label="Zone" value={row.zone || '--'} />
-          <div className="text-xs leading-relaxed text-[var(--tx2)]">{row.description || '--'}</div>
+          <IncidentCardRow icon={Activity} label="Description" value={row.description || '--'}
+            valueStyle={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
         </>}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />

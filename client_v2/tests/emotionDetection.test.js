@@ -11,6 +11,9 @@ import { EMOTION_CONFIG, GENDER_AGE_CONFIG } from '../src/pages/IncidentLogs/con
 import * as genderAge from '../src/helpers/genderAgeDetection.js';
 
 const require = createRequire(import.meta.url);
+test('emotion settings use the canonical setting key', () => {
+  assert.equal(emotion.EMOTION_SETTING_TYPE, 'emotionDetectionSettings');
+});
 async function loadJsx(path, mocks) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   const { code } = await transform(source, { loader: 'jsx', format: 'cjs', jsx: 'automatic' });
