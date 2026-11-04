@@ -44,8 +44,8 @@ export function useAgentDashboardMetrics() {
     (status.data?.cameras || []).filter((camera) => camera?.id).map((camera) => [camera.id, camera]),
   ), [status.data]);
   const camerasOnline = status.data ? channels.filter((channel) => isCameraRtspOnline(statusById[cameraStatusId(channel)])).length : null;
-  const cameraBars = status.data ? channels.slice(0, 12).map((channel) =>
-    isCameraRtspOnline(statusById[cameraStatusId(channel)]) ? 100 : 0) : [];
+  const cameraBars = status.data ? Array.from({ length: Math.min(12, channels.length) }, (_, index) =>
+    index < camerasOnline ? 100 : 0) : [];
   // The overview returns a per-engine breakdown for the same day and scope as
   // totalDetections, so the mini chart cannot drift from the number above it.
   const detectionBars = Array.isArray(todayDetections.data?.byType)
@@ -53,6 +53,7 @@ export function useAgentDashboardMetrics() {
     : [];
 
   return {
+    channels,
     cameras: camerasOnline,
     detections: todayDetections.data && Number.isFinite(Number(todayDetections.data.totalDetections))
       ? Number(todayDetections.data.totalDetections) : null,

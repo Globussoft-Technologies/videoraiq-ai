@@ -11,7 +11,9 @@ function normalizeTheme(value, fallback = 'dark') {
 }
 
 function storedTheme(defaultTheme) {
-  const fallback = normalizeTheme(defaultTheme);
+  const fallback = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : normalizeTheme(defaultTheme);
   if (typeof window === 'undefined') return fallback;
   try {
     return normalizeTheme(localStorage.getItem(STORAGE_KEY), fallback);

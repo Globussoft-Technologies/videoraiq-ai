@@ -286,6 +286,7 @@ export const VIEW_META = {
   'tagged-users': { title: 'Tagged Users', sub: 'Manually tagged identity matches' },
   'detected-users': { title: 'Detected Users', sub: 'Review, delete & tag detected face folders' },
   'person-count': { title: 'Person Count Logs', sub: 'Zone occupancy & headcount over time' },
+  'emotion-detection': { title: 'Emotion Detection Logs', sub: 'Review facial emotion events across your sites' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
   'desk-absence': { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
   // productivity: { title: 'Productivity Logs', sub: 'Productive vs. non-productive hours by employee' },
