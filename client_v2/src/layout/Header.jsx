@@ -279,15 +279,13 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
     [canSearchDetections, detectionAssignmentsReady, allowedDetections, license]
   );
 
-  // The header drops widgets progressively as IT gets narrow — measured with a
-  // ResizeObserver on the header itself, not the window, because the sidebar
-  // (collapsed/expanded) changes how much room the header actually has. This
-  // guarantees the core controls (search, site, mute, notifications) never get
-  // clipped off the right edge.
+  // Measure the surrounding content area, not the header: switching between
+  // full and compact controls can change the header's own intrinsic width and
+  // make a ResizeObserver on it oscillate at the breakpoint.
   const headerRef = useRef(null);
   const [headerW, setHeaderW] = useState(9999);
   useEffect(() => {
-    const el = headerRef.current;
+    const el = headerRef.current?.parentElement;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect?.width;

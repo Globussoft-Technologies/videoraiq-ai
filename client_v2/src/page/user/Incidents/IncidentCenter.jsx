@@ -375,7 +375,7 @@ function CompactSelect({ value, options, placeholder, onChange, isDisabled }) {
             );
           })}
         </div>,
-        document.body,
+        document.fullscreenElement || document.body,
       )}
     </div>
   );

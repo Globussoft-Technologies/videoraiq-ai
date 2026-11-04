@@ -52,7 +52,9 @@ const AutoRefreshComponent = ({
           <PopoverContent className="w-48 p-3" align="end">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[var(--tx)]">On</span>
+                <span className={cn('text-sm transition-colors duration-200', isActive ? 'text-[var(--tx)]' : 'text-[var(--tx2)]')}>
+                  {isActive ? 'On' : 'Off'}
+                </span>
                 <Switch
                   checked={isActive}
                   onCheckedChange={onActiveChange}
