@@ -3,6 +3,9 @@ class IncidentsController {
   async getEmotionDetectionLogs(req, res, next) {
     return incidentsService.getEmotionDetectionLogs(req, res, next);
   }
+  async getGenderAgeDetectionLogs(req, res, next) {
+    return incidentsService.getGenderAgeDetectionLogs(req, res, next);
+  }
 
   async createIncidents(req, res, next) {
     /* 

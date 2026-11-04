@@ -37,6 +37,7 @@ import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings } from '../../../helpers/emotionDetection';
+import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,
   deleteZoneDetectionSetting,
@@ -134,6 +135,7 @@ export default function DetectionZoneMarking({
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const isEmotion = activeType?.settingType === EMOTION_SETTING_TYPE;
+  const isGenderAge = activeType?.settingType === GENDER_AGE_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
   // Door zones use the same drawing workflow as other area detectors.
@@ -392,6 +394,7 @@ export default function DetectionZoneMarking({
     ...(isHygiene ? hygieneZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isLighting ? lightingZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isEmotion ? emotionZoneSettings({}, activeType.setting?.settings) : {}),
+    ...(isGenderAge ? genderAgeZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
     threshold: isDoor ? String(DOOR_DEFAULT_THRESHOLD_SEC) : '0',
@@ -662,6 +665,7 @@ export default function DetectionZoneMarking({
       ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isLighting ? lightingZonePayload(z) : {}),
       ...(isEmotion ? emotionZoneSettings(z) : {}),
+      ...(isGenderAge ? genderAgeZoneSettings(z) : {}),
       ...(isFireSmoke ? { fire_outside_zone_enabled: z.fireOutsideZoneEnabled ?? activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
       telegramChatId: isCheckInOut
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
@@ -1652,6 +1656,7 @@ export default function DetectionZoneMarking({
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isEmotion={isEmotion}
+                isGenderAge={isGenderAge}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
                 doorAlertMode={doorAlertModeDraft}
@@ -1792,6 +1797,7 @@ export default function DetectionZoneMarking({
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isEmotion={isEmotion}
+                isGenderAge={isGenderAge}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
                 doorAlertMode={doorAlertModeDraft}
@@ -1822,9 +1828,10 @@ export default function DetectionZoneMarking({
         <SaveDetectionAreaModal
           isLighting={isLighting}
           isEmotion={isEmotion}
+          isGenderAge={isGenderAge}
           initialLightingSettings={activeType.setting?.settings}
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
-          initialPriority={isDoor ? doorSeverityDraft : (activeType.setting?.settings?.levelOfImportance || (isHygiene ? 'high' : 'moderate'))}
+          initialPriority={isDoor ? doorSeverityDraft : (activeType.setting?.settings?.levelOfImportance || (isHygiene || isGenderAge ? 'high' : 'moderate'))}
           initialLaneName={laneNameDraft}
           initialCheckInOutMode={savedDetectionMode}
           initialFireOutsideZoneEnabled={activeType.setting?.settings?.fire_outside_zone_enabled ?? false}

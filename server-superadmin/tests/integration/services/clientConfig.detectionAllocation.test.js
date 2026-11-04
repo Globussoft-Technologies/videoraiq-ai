@@ -36,6 +36,7 @@ beforeEach(async () => {
 
 describe("detection allocation revocation", () => {
   it.each([
+    ["gender and age detection", "genderAgeDetectionSettings"],
     ["emotion detection", "emotionDetection"],
     ["loading/unloading stock counting", STOCK_COUNTING],
     ["blurred camera detection", BLURRED_CAMERA],

@@ -1,4 +1,5 @@
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
+import { getGenderAgeSummary } from "./genderAgeSummary.js";
 import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
@@ -84,6 +85,8 @@ import {
   HygieneSanitationFoodSafetyDetectionIncident,
   LightingVisibilitySiteConditionsDetectionIncident,
   EmotionDetectionIncident,
+  GenderAgeDetectionIncident,
+  GenderAgeCountIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
 import { findDoorRetry, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
@@ -136,6 +139,8 @@ const modelMap = {
   hygieneSanitationFoodSafetyDetection: HygieneSanitationFoodSafetyDetectionIncident,
   lightingVisibilitySiteConditionsDetection: LightingVisibilitySiteConditionsDetectionIncident,
   emotionDetection: EmotionDetectionIncident,
+  genderAgeDetection: GenderAgeDetectionIncident,
+  genderAgeCount: GenderAgeCountIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -339,6 +344,8 @@ const firstFilled = (...values) => {
 // arbitrary path into $sort, and so UI column ids (modelName, nvrName) map
 // onto the fields those columns actually render.
 const LOG_SORT_FIELDS = {
+  targetGender: "targetGender",
+  description: "description",
   emotion: "emotion",
   timeOfIncident: "timeOfIncident",
   severity: "_severitySortRank",
@@ -401,6 +408,12 @@ class IncidentsService {
       const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
       if (aliasedType) req.body.incidentType = aliasedType;
       const emotionValidation = incidentsValidate.validateEmotionIncident(req.body);
+      const genderAgeValidation = incidentsValidate.validateGenderAgeIncident(req.body);
+      if (genderAgeValidation.error) return res.status(400).json(Response.validationFailResp(genderAgeValidation.error.message, "Validation Failed!"));
+      if (["genderAgeDetection", "genderAgeCount"].includes(req.body.incidentType)) {
+        req.body.channelId ??= req.body.cameraId;
+        if (req.body.incidentType === "genderAgeCount") req.body.triggerNotification = false;
+      }
       if (emotionValidation.error) {
         return res.status(400).json(Response.validationFailResp(emotionValidation.error.message, "Validation Failed!"));
       }
@@ -445,6 +458,25 @@ class IncidentsService {
         return res
           .status(400)
           .json({ error: `Unknown incident type: ${incidentType}` });
+      }
+
+      if (["genderAgeDetection", "genderAgeCount"].includes(incidentType) &&
+        (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
+        return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
+      }
+      // Count posts are snapshots, never alerts. They may omit channelId and
+      // timeOfIncident; cameraId identifies the channel and receipt time is used.
+      if (incidentType === "genderAgeCount") {
+        const snapshot = await Model.create({
+          ...req.body, userId, timeOfIncident: req.body.timeOfIncident || new Date(),
+          triggerNotification: false,
+        });
+        // Notify every session to reload through the permission-checked API.
+        // The socket event carries no counts or camera data.
+        void sendPayloadToUser(null, `genderAgeCounts_${adminId}`, {
+          updatedAt: snapshot.createdAt,
+        }).catch(error => logger.error(`Gender count refresh notification failed: ${error.message}`));
+        return res.status(200).json(Response.userSuccessResp("Gender counts recorded", { Incident: snapshot.toObject() }));
       }
 
       // Door open/close: every alert and the resolved post is its own
@@ -3492,6 +3524,7 @@ console.log(result,'result');
     // tagged user's name, not just the plate.
     attachVehicleOwners = false,
     includeBoxStatusCounts = false,
+    includeGenderAgeSummary = false,
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -3601,6 +3634,8 @@ console.log(result,'result');
         $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
       };
     }
+
+    const genderAgeSummary = includeGenderAgeSummary ? await getGenderAgeSummary(matchStage) : null;
 
     // Options use the tenant/date/camera scope before applying the selected
     // emotions, so selecting one option does not hide the other choices.
@@ -3897,6 +3932,7 @@ console.log(result,'result');
         },
         ...(boxStatusCounts && { boxStatusCounts }),
         ...(emotionOptions && { emotionOptions }),
+        ...(genderAgeSummary && { genderAgeSummary }),
         data: logs,
       }),
     );
@@ -5942,6 +5978,24 @@ console.log(result,'result');
       logger.error(error);
       next(new AppError("Failed to fetch stock analytics", 500));
     }
+  }
+
+  async getGenderAgeDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('genderAgeDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Gender & Age Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.genderAgeLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) {
+          return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Gender & Age Logs'));
+        }
+      }
+      return await this._fetchIncidentLogs({
+        req, res, incidentType: 'genderAgeDetection', includeGenderAgeSummary: true,
+        searchFields: ['incidentName', 'description', 'targetGender', 'zone'], postLookupSearch: true,
+      });
+    } catch (error) { next(new AppError('Failed to fetch gender and age logs', 500)); }
   }
 
   async getEmotionDetectionLogs(req, res, next) {

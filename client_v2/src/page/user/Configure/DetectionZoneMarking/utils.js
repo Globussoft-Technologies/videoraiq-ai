@@ -8,6 +8,7 @@ import { scheduleFromConfig } from '../ZoneScheduleFields';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings } from '../../../../helpers/hygieneDetection';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings } from '../../../../helpers/lightingDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings } from '../../../../helpers/emotionDetection';
+import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../../helpers/genderAgeDetection';
 
 export function extraFieldsFor(settingType) {
   return ZONE_EXTRA_FIELDS[settingType] || [];
@@ -44,6 +45,7 @@ export function zonesFor(setting, cameraId, settingType) {
     ...(settingType === HYGIENE_SETTING_TYPE ? hygieneZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === LIGHTING_SETTING_TYPE ? lightingZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === EMOTION_SETTING_TYPE ? emotionZoneSettings(configs[i], setting?.settings) : {}),
+    ...(settingType === GENDER_AGE_SETTING_TYPE ? genderAgeZoneSettings(configs[i], setting?.settings) : {}),
     name: configs[i]?.name || `${settingType === 'doorDetectionSettings' ? 'Door' : 'Zone'} ${i + 1}`,
     fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
     capacity: configs[i]?.capacity ?? '',

@@ -2,6 +2,38 @@ import Joi from "joi";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validateGenderAgeIncident(body) {
+    if (!["genderAgeDetection", "genderAgeCount"].includes(body?.incidentType)) return { error: null };
+    const count = Joi.number().integer().min(0);
+    const fields = body.incidentType === "genderAgeCount" ? {
+      femaleCount: count.required(), maleCount: count.required(),
+      timeOfIncident: Joi.string().isoDate(),
+      triggerNotification: Joi.boolean().valid(false),
+      zones: Joi.array().items(Joi.object({
+        zone_idx: count.required(), zone: Joi.string().trim().required(),
+        female_count: count.required(), male_count: count.required(),
+      })).unique("zone_idx"),
+    } : {
+      timeOfIncident: Joi.string().isoDate().required(),
+      incidentName: Joi.string().trim().required(),
+      description: Joi.string().allow(""),
+      Image: Joi.string().trim().required(),
+      targetGender: Joi.string().valid("Male", "Female").required(),
+      zoneIdx: count, violatorCount: count,
+      violatingTrackIds: Joi.array().items(count),
+      details: Joi.array().items(Joi.object({
+        track_id: count, bbox: Joi.array().items(Joi.number()).length(4),
+        gender: Joi.string().valid("Male", "Female"),
+        confidence: Joi.number().min(0).max(1), age: Joi.number().min(0),
+      })),
+    };
+    const objectId = Joi.string().hex().length(24);
+    return Joi.object({
+      ...fields, adminId: objectId.required(), nvrId: objectId.required(),
+      cameraId: objectId, channelId: objectId,
+    }).or("cameraId", "channelId").unknown(true).validate(body, { convert: false });
+  }
+
   validateEmotionIncident(body) {
     if (body?.incidentType !== "emotionDetection") return { error: null };
     return Joi.object({

@@ -1294,6 +1294,23 @@ const EmotionDetectionSetting = DetectionSetting.discriminator(
   "emotionDetection",
 );
 
+const GenderAgeDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+GenderAgeDetectionSchema.remove("zone_configs");
+GenderAgeDetectionSchema.add({
+  zone_configs: [{
+    ...zoneConfigsField.zone_configs[0],
+    target_gender: { type: String, enum: ["Male", "Female"] },
+  }],
+  target_gender: { type: String, enum: ["Male", "Female"], default: "Female" },
+  gender_confidence_threshold: { type: Number, min: 0, max: 1, default: 0.6 },
+  gender_age_min_confirmation_frames: { type: Number, min: 1, default: 2, validate: Number.isInteger },
+  face_crop_padding: { type: Number, min: 0, max: 1, default: 0.15 },
+  trigger_notification: { type: Boolean, default: true },
+});
+const GenderAgeDetectionSetting = DetectionSetting.discriminator(
+  "genderAgeDetectionSettings", new mongoose.Schema({ settings: GenderAgeDetectionSchema }),
+);
+
 // Box packing uses the generic named-zone settings shape.
 const BoxPackingDetectionSetting = DetectionSetting.discriminator(
   "boxPackingDetectionSettings",
@@ -1710,6 +1727,7 @@ const attendanceDetectionSetting = DetectionSetting.discriminator(
 );  
 
 export {
+  GenderAgeDetectionSetting,
   DetectionSetting,
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,

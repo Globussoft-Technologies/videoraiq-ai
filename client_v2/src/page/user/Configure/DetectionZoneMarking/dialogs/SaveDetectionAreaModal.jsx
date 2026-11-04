@@ -13,6 +13,7 @@ import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import EmotionAlertGroups from '../components/EmotionAlertGroups';
+import TargetGenderSelect from '../components/TargetGenderSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
 function normalizeTelegramChannels(channels = []) {
@@ -46,6 +47,7 @@ export default function SaveDetectionAreaModal({
   isHygiene = false,
   isLighting = false,
   isEmotion = false,
+  isGenderAge = false,
   initialLightingSettings,
   saving,
   onCancel,
@@ -321,6 +323,8 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isGenderAge && <TargetGenderSelect id={`save-zone-target-gender-${i}`} value={z.target_gender}
+                disabled={saving} onChange={value => updateZoneField(i, 'target_gender', value)} />}
               {isEmotion && <EmotionAlertGroups id={`save-zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
                 disabled={saving} onChange={value => updateZoneField(i, 'emotion_alert_groups', value)} />}
               {isLighting && <LightingFields value={z} showZoneName={false} disabled={saving}

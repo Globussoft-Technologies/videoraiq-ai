@@ -14,6 +14,7 @@ import {
   SandDustWasteScrapDisposalDetectionSetting,
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
+  GenderAgeDetectionSetting,
 } from "../../../core/v1/detectionSettings/detectionSettings.model.js";
 
 const MODELS = [
@@ -23,6 +24,12 @@ const MODELS = [
   SandDustWasteScrapDisposalDetectionSetting,
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
+  GenderAgeDetectionSetting,
+];
+const SETTING_TYPES = [
+  "workingAtHeightDetectionSettings", "oilLeakageDetectionSettings",
+  "gunnyBagsMaterialsWrongLocationDetectionSettings", "sandDustWasteScrapDisposalDetectionSettings",
+  "unauthorizedAnimalEntryDetectionSettings", "spillsDirtyMessyAreasDetectionSettings", "genderAgeDetectionSettings",
 ];
 
 describe("industrial detection registry", () => {
@@ -35,22 +42,22 @@ describe("industrial detection registry", () => {
     });
   });
 
-  it("uses six separate setting discriminators with the expected defaults", () => {
+  it("uses separate setting discriminators with the expected defaults", () => {
     MODELS.forEach((Model, index) => {
       const setting = new Model({
-        settingType: INDUSTRIAL_SETTING_TYPES[index],
+        settingType: SETTING_TYPES[index],
         name: "Industrial detector",
         userId: "u1",
         settings: {},
       });
 
-      expect(setting.settingType).toBe(INDUSTRIAL_SETTING_TYPES[index]);
+      expect(setting.settingType).toBe(SETTING_TYPES[index]);
       expect(setting.settings.imageRequired).toBe(true);
       expect(setting.settings.alertThreshold).toBe(1);
       expect(setting.settings.detectionTimeGap).toBe(30);
       expect(setting.settings.metricType).toBe("gauge");
     });
 
-    expect(new Set(MODELS.map((Model) => Model.modelName)).size).toBe(6);
+    expect(new Set(MODELS.map((Model) => Model.modelName)).size).toBe(MODELS.length);
   });
 });

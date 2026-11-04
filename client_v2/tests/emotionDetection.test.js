@@ -7,7 +7,8 @@ import { transform } from 'esbuild';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as emotion from '../src/helpers/emotionDetection.js';
-import { EMOTION_CONFIG } from '../src/pages/IncidentLogs/configs.js';
+import { EMOTION_CONFIG, GENDER_AGE_CONFIG } from '../src/pages/IncidentLogs/configs.js';
+import * as genderAge from '../src/helpers/genderAgeDetection.js';
 
 const require = createRequire(import.meta.url);
 async function loadJsx(path, mocks) {
@@ -64,4 +65,44 @@ test('emotion logs show the received emotion in list and grid views', () => {
   const grid = renderToStaticMarkup(renderIncidentCard(incident, EMOTION_CONFIG, { onPreview() {} }));
   assert.ok(grid.includes('Sadness'));
   assert.ok(grid.includes('Negative Expression Detected'));
+});
+
+const TargetGenderSelect = (await loadJsx(
+  '../src/page/user/Configure/DetectionZoneMarking/components/TargetGenderSelect.jsx',
+  { '../../../../../helpers/genderAgeDetection': genderAge },
+)).default;
+const GenderAgeSummary = (await loadJsx('../src/pages/IncidentLogs/components/GenderAgeSummary.jsx', {})).default;
+
+test('gender targets remain independent per zone and the dropdown sends Male or Female', () => {
+  assert.deepEqual(genderAge.genderAgeZoneSettings(), { target_gender: 'Female' });
+  assert.deepEqual(genderAge.genderAgeZoneSettings({}, { target_gender: 'Male' }), { target_gender: 'Male' });
+  assert.deepEqual(genderAge.genderAgeZoneSettings({ target_gender: 'Female' }, { target_gender: 'Male' }), { target_gender: 'Female' });
+  const changes = [];
+  const control = TargetGenderSelect({ value: 'Male', onChange: value => changes.push(value), id: 'gender' });
+  const select = React.Children.toArray(control.props.children).find(child => child.type === 'select');
+  assert.equal(select.props.value, 'Male');
+  select.props.onChange({ target: { value: 'Female' } });
+  assert.deepEqual(changes, ['Female']);
+});
+
+test('gender logs render the image, incident, description, gender, zone and time', () => {
+  const row = { ...incident, incidentImageUrl: 'https://nas.test/gender.jpg', incidentName: 'Female Detected', description: 'Female detected in Reception', targetGender: 'Female', zone: 'Reception' };
+  const columns = buildColumns(GENDER_AGE_CONFIG, { onSort() {}, onPreview() {} });
+  const html = columns.map(column => renderToStaticMarkup(React.createElement(column.cell, { row: { original: row } }))).join('');
+  for (const value of ['https://nas.test/gender.jpg', 'Female Detected', 'Female detected in Reception', 'Female', 'Reception', '04/11/2026']) assert.ok(html.includes(value), value);
+  const grid = renderToStaticMarkup(renderIncidentCard(row, GENDER_AGE_CONFIG, { onPreview() {} }));
+  assert.ok(grid.includes('Female detected in Reception'));
+  assert.ok(grid.includes('Female'));
+});
+
+test('gender summary shows male/female totals and counts by camera and zone, including zero', () => {
+  const html = renderToStaticMarkup(React.createElement(GenderAgeSummary, { summary: {
+    femaleCount: 3, maleCount: 1, totalCount: 4, zones: [
+      { cameraId: 'cam', cameraName: 'Office', zoneIdx: 0, zone: 'Reception', femaleCount: 2, maleCount: 0 },
+      { cameraId: 'cam', cameraName: 'Office', zoneIdx: 1, zone: 'Shop Floor', femaleCount: 1, maleCount: 1 },
+    ],
+  } }));
+  for (const value of ['Female', 'Male', 'Reception', 'Shop Floor', 'Office', 'Total in selected range:', '>4<', '>0<']) assert.ok(html.includes(value), value);
+  assert.ok(html.includes('Total in selected date range'));
+  assert.ok(html.includes('Live count'));
 });

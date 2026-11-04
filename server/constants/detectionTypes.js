@@ -8,6 +8,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
+  genderAgeDetectionSettings: "Gender & Age Detection",
   emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   faceAuthenticationSettings: "Attendance Settings",
@@ -82,6 +83,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "lightingVisibilitySiteConditionsDetectionSettings",
   "uniformDetectionSettings",
   "emotionDetection",
+  "genderAgeDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -100,6 +102,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "lightingVisibilitySiteConditionsDetection",
   "uniformDetection",
   "emotionDetection",
+  "genderAgeDetection",
 ]);
 
 /**
@@ -114,6 +117,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
+  genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
   emotionDetection: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
   uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
   countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
@@ -164,9 +168,10 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
  * Each has its own log page instead (Person Count / Vehicle Count / Line
  * Crossing Logs).
  */
-export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles"];
+export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles", "genderAgeCount"];
 
 export const TYPE_MAP = {
+  genderAgeDetectionSettings: "genderAgeDetection",
   emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
@@ -227,6 +232,7 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 });
 
 export const DETECTION_MODES_MAP = {
+  genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
   emotionDetection: ["emotionDetection"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
@@ -294,6 +300,7 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
+  genderAgeDetectionSettings: "genderAgeDetectionSettings",
   emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
@@ -385,6 +392,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  * lives.
  */
 export const DS_LOGIC_BY_MODE = {
+  genderAgeDetectionSettings: "genderAgeDetectionSettings",
   emotionDetection: "emotionDetection",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
@@ -437,6 +445,7 @@ export const dsLogicNamesFor = (settingType) => {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.genderAgeDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },
@@ -1714,6 +1723,17 @@ export const deskSolarShoulderDetectionSettings = {
   },
 };
 export const emotionDetection = industrialDetectionExample("emotionDetection", "Emotion Detection");
+export const genderAgeDetectionSettings = {
+  ...industrialDetectionExample("genderAgeDetectionSettings", "Gender & Age Detection"),
+  settings: {
+    ...industrialDetectionExample("genderAgeDetectionSettings", "Gender & Age Detection").settings,
+    gender_confidence_threshold: 0.6,
+    gender_age_min_confirmation_frames: 2,
+    face_crop_padding: 0.15,
+    trigger_notification: true,
+    zone_configs: [{ name: "Reception", target_gender: "Female" }],
+  },
+};
 
 export const boxPackingDetectionSettings = industrialDetectionExample(
   "boxPackingDetectionSettings",

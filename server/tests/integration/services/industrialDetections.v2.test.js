@@ -34,6 +34,14 @@ const { industrialDetectionTemplate } = await import(
 
 const CASES = [
   {
+    settingType: "genderAgeDetectionSettings", incidentType: "genderAgeDetection",
+    SettingModel: settingsModels.GenderAgeDetectionSetting, IncidentModel: incidentModels.GenderAgeDetectionIncident,
+    logMethod: "getGenderAgeDetectionLogs",
+    incidentFields: { targetGender: "Female", zoneIdx: 0, violatorCount: 1, violatingTrackIds: [101], details: [
+      { track_id: 101, bbox: [120, 80, 260, 420], gender: "Female", confidence: 0.884, age: 27 },
+    ] },
+  },
+  {
     settingType: "emotionDetection",
     incidentType: "emotionDetection",
     SettingModel: settingsModels.EmotionDetectionSetting,
@@ -415,6 +423,13 @@ describe("v2 industrial detection incidents and logs", () => {
               ] },
               zone_configs: [{ name: "Lobby", emotion_alert_groups: ["negative"] }, { name: "Reception" }],
             } : {}),
+            ...(settingType === "genderAgeDetectionSettings" ? {
+              referencePoints: { [channel._id.toString()]: [
+                [[120, 80], [900, 80], [900, 700], [120, 700]],
+                [[950, 80], [1850, 80], [1850, 700], [950, 700]],
+              ] },
+              zone_configs: [{ name: "Reception", target_gender: "Female" }, { name: "Shop Floor", target_gender: "Male" }],
+            } : {}),
             ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
           },
         },
@@ -426,6 +441,11 @@ describe("v2 industrial detection incidents and logs", () => {
       );
       expect(settingsContext.res.statusCode).toBe(201);
       expect(await SettingModel.countDocuments({ settingType })).toBe(1);
+      if (settingType === "genderAgeDetectionSettings") {
+        const setting = await SettingModel.findOne({ settingType }).lean();
+        expect(setting.settings.zone_configs.map(zone => zone.target_gender)).toEqual(["Female", "Male"]);
+        expect(setting.settings.gender_confidence_threshold).toBe(0.6);
+      }
       if (settingType === "emotionDetection") {
         const setting = await SettingModel.findOne({ settingType });
         expect(setting.settings.zone_configs.map(zone => zone.name)).toEqual(["Lobby", "Reception"]);
@@ -484,8 +504,8 @@ describe("v2 industrial detection incidents and logs", () => {
       expect(payload(createContext.res).status).toBe("success");
       const saved = await IncidentModel.findOne({ incidentType });
       expect(saved.timeOfIncident.toISOString()).toBe("2026-09-21T12:30:45.000Z");
-      expect(saved.alertThreshold).toBe(400);
-      if (incidentType === "emotionDetection") expect(saved.toObject()).toMatchObject(incidentFields);
+      if (incidentType !== "genderAgeDetection") expect(saved.alertThreshold).toBe(400);
+      if (["emotionDetection", "genderAgeDetection"].includes(incidentType)) expect(saved.toObject()).toMatchObject(incidentFields);
       if (incidentType === "boxPackingDetection") {
         const box = saved.toObject();
         expect(box).toMatchObject({

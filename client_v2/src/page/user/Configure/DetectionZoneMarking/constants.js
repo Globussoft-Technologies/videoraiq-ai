@@ -1,4 +1,5 @@
 export const DETECTION_FIELD_KEYS = [
+  'genderAgeDetectionSettings',
   'emotionDetection',
   'uniformDetectionSettings',
   'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',

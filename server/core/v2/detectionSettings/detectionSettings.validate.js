@@ -131,6 +131,21 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateGenderAgeSettings(settingType, settings = {}) {
+    if (settingType !== "genderAgeDetectionSettings") return { error: null };
+    return Joi.object({
+      target_gender: Joi.string().valid("Male", "Female"),
+      gender_confidence_threshold: Joi.number().min(0).max(1),
+      gender_age_min_confirmation_frames: Joi.number().integer().min(1),
+      face_crop_padding: Joi.number().min(0).max(1),
+      trigger_notification: Joi.boolean(),
+      zone_configs: Joi.array().items(Joi.object({
+        name: Joi.string().trim().required(),
+        target_gender: Joi.string().valid("Male", "Female"),
+      }).unknown(true)),
+    }).unknown(true).validate(settings, { convert: false });
+  }
+
   validateEmotionSettings(settingType, settings = {}) {
     if (settingType !== "emotionDetection") return { error: null };
     return Joi.object({

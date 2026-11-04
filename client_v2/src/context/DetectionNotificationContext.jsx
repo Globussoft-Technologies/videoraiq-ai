@@ -95,6 +95,7 @@ const DETECTION_LABELS = {
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
   blurredCameraDetection: 'Camera Tampering Detection',
   emotionDetection: 'Emotion Detection',
+  genderAgeDetection: 'Gender & Age Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
   boxPackingDetection: 'Box Packing Detection',

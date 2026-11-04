@@ -50,6 +50,7 @@ const detectionFields = {
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
   uniformDetectionSettings: detectionSettingSchema,
+  genderAgeDetectionSettings: detectionSettingSchema,
   equipmentOilLeakageDetectionSettings: detectionSettingSchema,
   vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,

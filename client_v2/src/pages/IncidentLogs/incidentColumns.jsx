@@ -236,6 +236,13 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
   if (config.showEmotionFields) {
     cols.push({ accessorKey: 'emotion', header: sortHeader('Emotion', 'emotion'), cell: ({ row }) => <span className={styles.text}>{row.original.emotion || '--'}</span> });
   }
+  if (config.showGenderAgeFields) {
+    cols.push(
+      { accessorKey: 'description', header: sortHeader('Description', 'description'), cell: ({ row }) => <span className="block max-w-sm whitespace-normal text-xs text-[var(--tx2)]">{row.original.description || '--'}</span> },
+      { accessorKey: 'targetGender', header: sortHeader('Gender', 'targetGender'), cell: ({ row }) => <span className={styles.text}>{row.original.targetGender || '--'}</span> },
+      { accessorKey: 'zone', header: sortHeader('Zone', 'zone'), cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> },
+    );
+  }
 
   if (config.showSeverity !== false) {
     cols.push({
@@ -667,6 +674,11 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
           </>
         )}
         {config.showEmotionFields && <IncidentCardRow icon={Activity} label="Emotion" value={row.emotion || '--'} />}
+        {config.showGenderAgeFields && <>
+          <IncidentCardRow icon={Users} label="Gender" value={row.targetGender || '--'} />
+          <IncidentCardRow icon={MapPin} label="Zone" value={row.zone || '--'} />
+          <div className="text-xs leading-relaxed text-[var(--tx2)]">{row.description || '--'}</div>
+        </>}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
         <IncidentCardRow icon={Clock} label={config.timeLabel || (config.showDoorFields ? 'Time of Incident' : 'Time')} value={formatTime(row.createdAt)} />

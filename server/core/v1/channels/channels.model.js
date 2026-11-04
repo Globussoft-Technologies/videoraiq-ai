@@ -126,6 +126,7 @@ const detectionFields = {
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
   emotionDetection: detectionSettingSchema,
+  genderAgeDetectionSettings: detectionSettingSchema,
   hygieneSanitationFoodSafetyDetectionSettings: detectionSettingSchema,
   lightingVisibilitySiteConditionsDetectionSettings: detectionSettingSchema,
 };

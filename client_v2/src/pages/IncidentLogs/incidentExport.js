@@ -69,6 +69,7 @@ const fetchAllForExport = async (config, params) => {
         ].filter(Boolean).join(' - ')).join('\n') || item.description || '--',
       } : {}),
       emotion: item.emotion || '--',
+      ...(config.showGenderAgeFields ? { targetGender: item.targetGender || '--', zone: item.zone || '--' } : {}),
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -120,6 +121,9 @@ const buildExportColumns = (config) => {
     { key: 'channelName', label: 'Camera Name' }
   );
   if (config.showEmotionFields) cols.push({ key: 'emotion', label: 'Emotion' });
+  if (config.showGenderAgeFields) cols.push(
+    { key: 'description', label: 'Description' }, { key: 'targetGender', label: 'Gender' }, { key: 'zone', label: 'Zone' },
+  );
   if (config.showSeverity !== false) cols.push({ key: 'severity', label: 'Severity' });
 
   if (config.showDoorFields) {
@@ -357,6 +361,7 @@ const exportToGridPDF = async (config, params) => {
     const details = [];
     if (config.showIncidentName !== false && !config.showDoorFields) details.push(['Incident', 'incidentName']);
     if (config.showEmotionFields) details.push(['Emotion', 'emotion']);
+    if (config.showGenderAgeFields) details.push(['Gender', 'targetGender'], ['Zone', 'zone'], ['Description', 'description']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);
     if (config.showSeverity !== false && !config.showDoorFields) details.push(['Severity', 'severity']);
     if (config.showFireSmokeFields) {

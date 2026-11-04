@@ -370,6 +370,16 @@ export const UNIFORM_CONFIG = {
   timeLabel: 'Time of Incident',
 };
 
+export const GENDER_AGE_CONFIG = {
+  endpoint: '/incidents/logs/gender-age-detection',
+  title: 'Gender & Age Logs',
+  fileName: 'gender_age_logs', sheetName: 'Gender & Age Logs', storagePrefix: 'gender_age',
+  permissionKey: 'genderAgeLogs', accessDenied: "You don't have permission to view Gender & Age Logs.",
+  showGenderAgeFields: true, showStatus: false, showSeverity: false, showSeverityFilter: false,
+  showStats: false, sortable: true, gridVariant: 'details', enableViewExports: true,
+  timeLabel: 'Time of Incident', datePickerVariant: 'preset',
+};
+
 export const EMOTION_CONFIG = {
   endpoint: '/incidents/logs/emotion-detection',
   title: 'Emotion Detection Logs',

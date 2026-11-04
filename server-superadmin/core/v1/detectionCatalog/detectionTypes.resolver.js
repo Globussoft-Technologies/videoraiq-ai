@@ -1,5 +1,6 @@
 import catalogModel from "./detectionCatalog.model.js";
 import {
+  DETECTION_TYPES,
   DETECTION_TYPES2,
   DETECTION_DESCRIPTIONS,
 } from "../../../constants/detectionTypes.js";
@@ -14,8 +15,8 @@ import logger from "../../../utils/logger.js";
  * owns the list — a detection only works once it is implemented there — so
  * reading it is what stops the two hand-maintained constants files drifting.
  *
- * Emotion detection is also offered before an older published catalog has
- * picked it up. An explicitly retired row still takes precedence.
+ * Locally supported detections remain available when an older publisher has
+ * omitted or deactivated them. Per-client allocations control entitlement.
  * Falls back to this service's local DETECTION_TYPES2 when the collection is
  * empty, which is the case until the client backend has booted once with the
  * publishing code. The fallback keeps the screens working; it is just possibly
@@ -30,21 +31,18 @@ export const resolveDetectionTypes = async () => {
       .lean();
 
     if (rows.length > 0) {
-      const missingEmotion = !rows.some((row) => row.settingType === "emotionDetection");
       const activeRows = rows.filter((row) => row.active !== false);
-      if (missingEmotion) {
-        activeRows.push({
-          settingType: "emotionDetection",
-          name: DETECTION_TYPES2.emotionDetection,
-        });
-      }
+      const activeTypes = new Set(activeRows.map(row => row.settingType));
+      const localDefaults = Object.entries(DETECTION_TYPES)
+        .filter(([settingType]) => !activeTypes.has(settingType))
+        .map(([settingType, name]) => ({ settingType, name }));
       return {
-        stale: missingEmotion,
+        stale: localDefaults.length > 0,
         syncedAt: rows.reduce(
           (latest, row) => (row.syncedAt > latest ? row.syncedAt : latest),
           rows[0].syncedAt || null,
         ),
-        detections: activeRows.map((row) => ({
+        detections: [...activeRows, ...localDefaults].map((row) => ({
           settingType: row.settingType,
           name: row.name,
           // false = DS answered and does not implement this detection, so it can

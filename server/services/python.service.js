@@ -44,6 +44,30 @@ const appendIndustrialDetectors = (
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === "genderAgeDetectionSettings") {
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];
+        const defaults = {
+          name,
+          target_gender: stockSettings.target_gender ?? "Female",
+          gender_confidence_threshold: stockSettings.gender_confidence_threshold ?? 0.6,
+          gender_age_min_confirmation_frames: stockSettings.gender_age_min_confirmation_frames ?? 2,
+          face_crop_padding: stockSettings.face_crop_padding ?? 0.15,
+          severity: severity ?? "high",
+          trigger_notification: stockSettings.trigger_notification ?? true,
+        };
+        detectors.push({
+          ...defaults,
+          ...(polygons.length ? {
+            zones: polygons,
+            zone_configs: polygons.map((_, index) => {
+              const zone = plainZoneConfig(configs[index]) || {};
+              return { name: zone.name || `Zone ${index + 1}`, target_gender: zone.target_gender ?? defaults.target_gender };
+            }),
+          } : {}),
+        });
+        continue;
+      }
       if (name === "hygieneSanitationFoodSafetyDetectionSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0])

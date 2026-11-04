@@ -1,5 +1,7 @@
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
+import useGenderAgeLiveUpdates from '@/hooks/useGenderAgeLiveUpdates';
+import GenderAgeSummary from './components/GenderAgeSummary';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -130,6 +132,7 @@ const IncidentLogsPage = ({ config }) => {
   });
   const [emotions, setEmotions] = useState([]);
   const [emotionOptions, setEmotionOptions] = useState([]);
+  const [genderAgeSummary, setGenderAgeSummary] = useState(null);
   const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
   const fetchRequestId = useRef(0);
@@ -287,6 +290,7 @@ const IncidentLogsPage = ({ config }) => {
       let total = filteredDoorRows ? filteredDoorRows.length : data?.totalCount || 0;
       if (requestId !== fetchRequestId.current) return;
       if (config.showEmotionFields) setEmotionOptions(data?.emotionOptions || []);
+      if (config.showGenderAgeFields) setGenderAgeSummary(data?.genderAgeSummary || null);
 
       // Box Packing is currently being validated with local sample records.
       // Keep the shared production table and controls, but populate it when
@@ -359,7 +363,7 @@ const IncidentLogsPage = ({ config }) => {
       console.log(`Error fetching ${config.title}:`, err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      if (requestId === fetchRequestId.current && !background) {
+      if (requestId === fetchRequestId.current) {
         dispatch({ type: 'SET_LOADING', value: false });
       }
     }
@@ -371,6 +375,7 @@ const IncidentLogsPage = ({ config }) => {
   }, [fetchLogs, manualTrigger]);
 
   useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
+  useGenderAgeLiveUpdates(fetchLogs, config.showGenderAgeFields && canView);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(
@@ -690,6 +695,7 @@ const IncidentLogsPage = ({ config }) => {
         onClose={closePreview}
       />
 
+      {config.showGenderAgeFields && <GenderAgeSummary summary={genderAgeSummary} loading={loading} />}
       <ReusableTablePage
         stats={stats}
         loading={loading}

@@ -7,6 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
+  genderAgeDetectionSettings: "Gender & Age Detection",
   emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -51,6 +52,7 @@ export const DETECTION_TYPES = {
   boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
+  genderAgeDetectionSettings: "Gender & Age Detection",
   emotionDetection: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -97,6 +99,7 @@ export const DETECTION_TYPES2 = {
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
+  genderAgeDetectionSettings: "Gender alerts and male/female counts by camera and zone",
   emotionDetection: "Facial emotion recognition and expression monitoring",
   uniformDetectionSettings: "Uniform compliance monitoring across named zones",
   personalProtectiveEquipmentSettings: "Helmet, vest & mask compliance monitoring",
@@ -136,6 +139,7 @@ export const DETECTION_DESCRIPTIONS = {
 };
 
 export const TYPE_MAP = {
+  genderAgeDetectionSettings: "genderAgeDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
@@ -174,6 +178,7 @@ export const TYPE_MAP = {
 };
 
 export const DETECTION_MODES_MAP = {
+  genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
@@ -213,6 +218,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.genderAgeDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },

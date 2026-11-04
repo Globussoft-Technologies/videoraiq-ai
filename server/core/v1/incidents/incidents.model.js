@@ -80,6 +80,36 @@ incidentSchema.post('save', async function populateAgentProjections(doc) {
 
 const Incident = model('Incident', incidentSchema);
 
+const GenderAgeDetectionIncident = Incident.discriminator('genderAgeDetection', new Schema({
+  incidentName: { type: String, required: true },
+  Image: { type: String, required: true },
+  zoneIdx: { type: Number, min: 0 },
+  targetGender: { type: String, enum: ['Male', 'Female'], required: true },
+  violatorCount: { type: Number, min: 0, default: 0 },
+  violatingTrackIds: [Number],
+  triggerNotification: { type: Boolean, default: true },
+  details: [{
+    _id: false,
+    track_id: Number,
+    bbox: [Number],
+    gender: { type: String, enum: ['Male', 'Female'] },
+    confidence: { type: Number, min: 0, max: 1 },
+    age: { type: Number, min: 0 },
+  }],
+}));
+const GenderAgeCountIncident = Incident.discriminator('genderAgeCount', new Schema({
+  femaleCount: { type: Number, min: 0, required: true },
+  maleCount: { type: Number, min: 0, required: true },
+  triggerNotification: { type: Boolean, default: false, immutable: true },
+  zones: [{
+    _id: false,
+    zone_idx: { type: Number, min: 0, required: true },
+    zone: { type: String, required: true },
+    female_count: { type: Number, min: 0, required: true },
+    male_count: { type: Number, min: 0, required: true },
+  }],
+}));
+
 const EmotionDetectionIncident = Incident.discriminator('emotionDetection', new Schema({
   timeOfIncident: { type: Date, required: true },
   incidentName: { type: String, required: true, trim: true },
@@ -933,6 +963,8 @@ const VehicleCheckInOutIncident = Incident.discriminator('vehicleCheckInOut', ve
 
 
 export  {
+  GenderAgeDetectionIncident,
+  GenderAgeCountIncident,
   EmotionDetectionIncident,
   Incident,
   CountPersonIncident,

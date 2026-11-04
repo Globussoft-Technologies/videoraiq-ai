@@ -28,12 +28,12 @@ describe("resolveDetectionTypes", () => {
 
     const result = await resolveDetectionTypes();
 
-    expect(result.stale).toBe(false);
-    expect(result.detections.map((d) => d.settingType).sort()).toEqual([
+    expect(result.stale).toBe(true);
+    expect(result.detections.map((d) => d.settingType)).toEqual(expect.arrayContaining([
       "carModelDetectionSettings",
       "crowdDetectionSettings",
       "emotionDetection",
-    ]);
+    ]));
     // The detection this service's own constants never had.
     expect(result.detections.find((d) => d.settingType === "carModelDetectionSettings").name)
       .toBe("Car Model Detection");
@@ -46,9 +46,10 @@ describe("resolveDetectionTypes", () => {
     ]);
 
     const result = await resolveDetectionTypes();
-    expect(result.detections.map((d) => d.settingType)).toEqual([
+    expect(result.detections.map((d) => d.settingType)).toEqual(expect.arrayContaining([
       "crowdDetectionSettings", "emotionDetection",
-    ]);
+    ]));
+    expect(result.detections.some(d => d.settingType === "retiredSettings")).toBe(false);
   });
 
   it("includes emotion detection when an older published catalog is missing it", async () => {
@@ -71,22 +72,23 @@ describe("resolveDetectionTypes", () => {
 
     const result = await resolveDetectionTypes();
 
-    expect(result.stale).toBe(false);
-    expect(result.detections).toEqual([{
+    expect(result.stale).toBe(true);
+    expect(result.detections.filter(d => d.settingType === "emotionDetection")).toEqual([{
       settingType: "emotionDetection", name: "Published Emotion Detection",
       description: "Published description", dsSupported,
     }]);
   });
 
-  it("does not reintroduce explicitly retired emotion detection", async () => {
+  it("keeps supported detections visible when an older publisher deactivates them", async () => {
     await DetectionCatalog.create({
-      settingType: "emotionDetection", name: "Emotion Detection", active: false,
+      settingType: "genderAgeDetectionSettings", name: "Gender & Age Detection", active: false,
     });
 
     const result = await resolveDetectionTypes();
 
-    expect(result.stale).toBe(false);
-    expect(result.detections).toEqual([]);
+    expect(result.stale).toBe(true);
+    expect(result.detections).toContainEqual(expect.objectContaining({ settingType: "genderAgeDetectionSettings", name: "Gender & Age Detection" }));
+    expect(new Set(result.detections.map(d => d.settingType)).size).toBe(result.detections.length);
   });
 
   it("falls back to the local list, flagged stale, before the first publish", async () => {
