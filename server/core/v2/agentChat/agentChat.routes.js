@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 const router = Router();
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_MESSAGE_LENGTH = 16_000;
+const AGENT_PROXY_HEADER = 'X-Agent-Backend-Key';
 const sessionCache = new Map();
 const pendingSignIns = new Map();
 
@@ -36,6 +37,11 @@ function agentBaseUrl() {
   } catch { return null; }
 }
 
+function gatewayHeaders() {
+  const key = String(configured('VIDEORAI_AGENT_PROXY_KEY', '') || '').trim();
+  return key ? { [AGENT_PROXY_HEADER]: key } : {};
+}
+
 async function agentSession(token, baseUrl, refresh = false) {
   if (sessionCache.size > 1000) {
     for (const [cachedKey, value] of sessionCache) if (value.expiresAt <= Date.now()) sessionCache.delete(cachedKey);
@@ -46,13 +52,17 @@ async function agentSession(token, baseUrl, refresh = false) {
   if (pendingSignIns.has(key)) return pendingSignIns.get(key);
   const signIn = (async () => {
     const response = await fetch(`${baseUrl}/agent/sign-in`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { ...gatewayHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ access_token: token }),
       signal: AbortSignal.timeout(timeout('DETECTION_AGENT_TIMEOUT_MS', 25_000)),
     });
     if (!response.ok) {
       sessionCache.delete(key);
-      const error = new Error('Agent sign-in failed'); error.status = response.status; throw error;
+      const body = await response.json().catch(() => null);
+      const error = new Error('Agent sign-in failed');
+      error.status = response.status;
+      error.proxyKeyRequired = body?.errorCode === 'UNAUTHENTICATED' && body?.message === 'Backend proxy key required';
+      throw error;
     }
     const data = await response.json();
     const expiresAt = Date.parse(data.expires_at);
@@ -78,6 +88,11 @@ async function access(req, res, next) {
     res.locals.agentChat = { baseUrl, session, token };
     return next();
   } catch (cause) {
+    if (cause.proxyKeyRequired) {
+      const keyConfigured = Boolean(configured('VIDEORAI_AGENT_PROXY_KEY', ''));
+      return error(res, 502, keyConfigured ? 'AGENT_PROXY_KEY_REJECTED' : 'AGENT_PROXY_KEY_REQUIRED',
+        keyConfigured ? 'Agent service gateway rejected the proxy key.' : 'Agent service gateway key is missing.');
+    }
     const unauthorized = cause.status === 401 || cause.status === 403;
     return error(res, unauthorized ? 401 : 502, unauthorized ? 'UNAUTHENTICATED' : 'AGENT_UNAVAILABLE', 'Could not start an agent session.');
   }
@@ -103,6 +118,7 @@ async function forward(req, res, method, path, body) {
     const send = () => fetch(`${res.locals.agentChat.baseUrl}${path}`, {
       method,
       headers: {
+        ...gatewayHeaders(),
         Authorization: `Bearer ${res.locals.agentChat.session}`,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
@@ -153,7 +169,7 @@ router.get('/capabilities', (req, res) => forward(req, res, 'GET', '/agent/capab
 router.get('/actions/:aid/preview', checkIds, async (req, res) => {
   try {
     const send = () => fetch(`${res.locals.agentChat.baseUrl}/agent/actions/${req.params.aid}/preview`, {
-      headers: { Authorization: `Bearer ${res.locals.agentChat.session}` },
+      headers: { ...gatewayHeaders(), Authorization: `Bearer ${res.locals.agentChat.session}` },
       signal: AbortSignal.timeout(timeout('DETECTION_AGENT_TIMEOUT_MS', 25_000)),
     });
     let upstream = await send();
@@ -168,7 +184,7 @@ router.get('/actions/:aid/preview', checkIds, async (req, res) => {
 });
 router.post('/sign-out', async (req, res) => {
   const { token, baseUrl, session } = res.locals.agentChat;
-  try { await fetch(`${baseUrl}/agent/sign-out`, { method: 'POST', headers: { Authorization: `Bearer ${session}` }, signal: AbortSignal.timeout(5000) }); }
+  try { await fetch(`${baseUrl}/agent/sign-out`, { method: 'POST', headers: { ...gatewayHeaders(), Authorization: `Bearer ${session}` }, signal: AbortSignal.timeout(5000) }); }
   catch { /* Clear the local session even if the agent is unavailable. */ }
   sessionCache.delete(createHash('sha256').update(token).digest('hex'));
   return res.json({ signed_out: true });
@@ -184,7 +200,7 @@ router.get("/runs/:rid/events", checkIds, async (req, res) => {
   res.once("close", () => controller.abort());
   try {
     const send = () => fetch(`${res.locals.agentChat.baseUrl}/agent/runs/${req.params.rid}/events?after=${rawAfter}`, {
-      headers: { Authorization: `Bearer ${res.locals.agentChat.session}`, Accept: "text/event-stream" },
+      headers: { ...gatewayHeaders(), Authorization: `Bearer ${res.locals.agentChat.session}`, Accept: "text/event-stream" },
       signal: controller.signal,
     });
     let upstream = await send();
