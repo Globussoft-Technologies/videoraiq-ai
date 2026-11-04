@@ -90,6 +90,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState('');
+  const [playbackError, setPlaybackError] = useState('');
   const [state, setState] = useState('loading'); // loading | ready | none
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [window_, setWindow] = useState(INCIDENT_PREVIEW_DEFAULTS);
@@ -123,6 +124,8 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
 
     let cancelled = false;
     setState('loading');
+    setPlaybackError('');
+    setUrl('');
 
     (async () => {
       try {
@@ -153,15 +156,22 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
           return;
         }
         setUrl(resolved);
-      } catch {
-        if (!cancelled) setState('none');
+      } catch (error) {
+        if (!cancelled) {
+          const message = error?.response?.data?.body?.message || '';
+          const busy = error?.response?.status === 409 || /one recording at a time|playback_mutex/i.test(message);
+          setPlaybackError(busy
+            ? 'This recorder is already playing another recording. Please wait a moment and try again.'
+            : message || 'Unable to connect to the recorder. Please try again.');
+          setState('none');
+        }
       }
     })();
 
     return () => { cancelled = true; };
   }, [channelId, incidentAt, channel]);
 
-  /* Attach hls.js to whatever URL came back. */
+  /* Honeywell uses DASH; other recorder URLs keep the existing HLS path. */
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) return undefined;
@@ -170,6 +180,57 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
     if (/^rtsp:\/\//i.test(url)) {
       setState('none');
       return undefined;
+    }
+
+    if (/\.mpd(?:[?#]|$)/i.test(url)) {
+      let cancelled = false;
+      let player;
+      fragmentsRef.current = [];
+      setFinished(false);
+      setClipEnd(0);
+      setBuffering(false);
+      const onWaiting = () => { if (!cancelled) setBuffering(true); };
+      const onPlaying = () => { if (!cancelled) setBuffering(false); };
+      const onEnded = () => {
+        if (cancelled) return;
+        setBuffering(false);
+        setClipEnd(measureClipEnd(video));
+        setFinished(true);
+      };
+      video.addEventListener('waiting', onWaiting);
+      video.addEventListener('playing', onPlaying);
+      video.addEventListener('pause', onPlaying);
+      video.addEventListener('ended', onEnded);
+      const fail = () => {
+        if (cancelled) return;
+        setPlaybackError('Unable to play this Honeywell recording. The recorder may be busy or the connection was interrupted. Please try again.');
+        setBuffering(false);
+        setState('none');
+        try { player?.destroy(); } catch { /* noop */ }
+        player = null;
+      };
+      import('dashjs').then(({ default: dashjs }) => {
+        if (cancelled) return;
+        player = dashjs.MediaPlayer().create();
+        player.on(dashjs.MediaPlayer.events.ERROR, fail);
+        player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+          if (cancelled) return;
+          setState('ready');
+          video.play().catch(() => { /* autoplay may require the play button */ });
+        });
+        player.initialize(video, url, false);
+      }).catch(fail);
+      return () => {
+        cancelled = true;
+        video.removeEventListener('waiting', onWaiting);
+        video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('pause', onPlaying);
+        video.removeEventListener('ended', onEnded);
+        try { player?.destroy(); } catch { /* noop */ }
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      };
     }
 
     let hls;
@@ -784,7 +845,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
               ) : (
                 <>
                   <VideoOff size={26} />
-                  <span style={{ fontSize: 12.5 }}>No recording available for this moment</span>
+                  <span style={{ fontSize: 12.5 }}>{playbackError || 'No recording available for this moment'}</span>
                 </>
               )}
             </div>

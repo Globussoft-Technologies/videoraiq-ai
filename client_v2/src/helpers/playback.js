@@ -33,6 +33,16 @@ const unwrap = (res) => {
  */
 function resolveStreamUrl(playbackUrl) {
   if (!playbackUrl) return '';
+  // Keep Honeywell media on the same API proxy as the playback request in local
+  // development. Absolute URLs returned by production bypass that proxy's CORS.
+  if (Api_url?.startsWith('/') && /^https?:\/\//i.test(playbackUrl)) {
+    const parsed = new URL(playbackUrl);
+    const honeywellPath = '/channel/honeywell-playback/';
+    const offset = parsed.pathname.indexOf(honeywellPath);
+    if (offset !== -1) {
+      return `${Api_url.replace(/\/$/, '')}${parsed.pathname.slice(offset)}${parsed.search}`;
+    }
+  }
   if (/^(https?:|rtsp:)\/\//i.test(playbackUrl)) return playbackUrl;
   return `${getStreamHost()}${playbackUrl}`;
 }

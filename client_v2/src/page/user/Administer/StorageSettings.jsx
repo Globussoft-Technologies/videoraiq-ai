@@ -51,7 +51,7 @@ export default function StorageSettings() {
       const next = await getAdminStorage();
       setStatus(next);
       setTested(false);
-      const effective = next?.effective || {};
+      const effective = next?.configured ? next.effective || {} : {};
       const loadedForm = {
         ...EMPTY,
         ...effective,
@@ -162,8 +162,8 @@ export default function StorageSettings() {
       <section className="storage-card storage-status">
         <div className="storage-status-icon"><ShieldCheck size={22} /></div>
         <div>
-          <strong>{status?.configured ? 'Organisation override active' : 'Deployment storage active'}</strong>
-          <small>{status?.effective?.provider?.toUpperCase()} · source: {status?.effective?.source}</small>
+          <strong>{status?.configured ? 'Organisation storage active' : 'Default storage active'}</strong>
+          <small>{status?.configured ? PROVIDERS.find(provider => provider.value === status.effective?.provider)?.label : 'Add a configuration below to use your own storage.'}</small>
         </div>
       </section>
 
