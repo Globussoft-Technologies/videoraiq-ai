@@ -4,9 +4,58 @@ import verifySuperAdmin from '../../../middlewares/verifySuperAdmin.js';
 import Admin from '../admin/admin.model.js';
 import WhatsAppKeyAccess from './whatsappKeys.model.js';
 import Sender from './whatsapp.sharedSender.model.js';
+import { preferredImageTemplate, supportedFallbackTemplate } from './whatsapp.templateDefinitions.js';
 
 const router = Router();
 router.use(verifySuperAdmin);
+// Direct access management is independent of an account submitting a request.
+router.get('/:adminId/access', async (req, res, next) => {
+  try {
+    const { adminId } = req.params;
+    if (!mongoose.isValidObjectId(adminId)) return res.status(400).json({ message: 'Invalid account' });
+    if (!await Admin.exists({ _id: adminId })) return res.status(404).json({ message: 'Account no longer exists' });
+    const row = await WhatsAppKeyAccess.findOne({ adminId }).select('credentialSource credentials phoneNumberId businessAccountId ownReverificationRequired templates recipients alertsPaused enabled').lean();
+    const shared = row?.credentialSource === 'env';
+    const central = shared ? await Sender.findById('default').select('+credentials').lean() : null;
+    const sender = shared ? central : row;
+    const senderReady = Boolean(sender?.credentials && sender.phoneNumberId && sender.businessAccountId
+      && (shared ? sender.verifiedAt : !row?.ownReverificationRequired));
+    const templates = sender?.templates || [];
+    const imageApproved = Boolean(preferredImageTemplate(templates));
+    const textApproved = templates.some(supportedFallbackTemplate);
+    const recipientCount = (row?.recipients || []).filter(item => item.optedInAt).length;
+    const alertsEnabled = senderReady && (shared ? (imageApproved || textApproved) && !row?.alertsPaused : Boolean(row?.enabled));
+    res.set('Cache-Control', 'no-store');
+    return res.json({ shared, readiness: { senderReady, imageApproved, textApproved, recipientCount,
+      alertsEnabled, alertsPaused: Boolean(row?.alertsPaused),
+      ready: Boolean(alertsEnabled && (imageApproved || textApproved) && recipientCount > 0) } });
+  } catch (error) { next(error); }
+});
+router.put('/:adminId/access', async (req, res, next) => {
+  try {
+    const { adminId } = req.params;
+    const shared = req.body?.shared;
+    if (!mongoose.isValidObjectId(adminId) || typeof shared !== 'boolean') return res.status(400).json({ message: 'Invalid account or shared access setting' });
+    const admin = await Admin.findById(adminId).select('login name_f name_l').lean();
+    if (!admin) return res.status(404).json({ message: 'Account no longer exists' });
+    if (shared && !await Sender.exists({ _id: 'default', verifiedAt: { $ne: null },
+      credentials: { $type: 'string', $ne: '' }, phoneNumberId: { $type: 'string', $ne: '' }, businessAccountId: { $type: 'string', $ne: '' } })) {
+      return res.status(409).json({ message: 'Verify and save the shared WhatsApp sender before granting access.' });
+    }
+    // Create once using the same unique tenant index as the main server.
+    try { await WhatsAppKeyAccess.updateOne({ adminId }, { $setOnInsert: { adminId, credentialSource: 'own', recipients: [] } }, { upsert: true }); }
+    catch (error) { if (error.code !== 11000) throw error; }
+    const result = await WhatsAppKeyAccess.updateOne({ adminId, credentialSource: shared ? { $ne: 'env' } : 'env' }, { $set: {
+      credentialSource: shared ? 'env' : 'own', enabled: false, alertsPaused: !shared, ownReverificationRequired: !shared,
+      templates: [], selectedTemplate: null, fallbackTemplate: null, lastSyncAt: null, senderIdentity: null,
+      sharedKeyRequest: { requestId: new mongoose.Types.ObjectId(), type: shared ? 'enable' : 'cancel', status: 'approved',
+        adminName: [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login,
+        requestedAt: new Date(), reviewedAt: new Date(), reviewedBy: req.superAdmin._id },
+    } });
+    if (result.modifiedCount) res.set('Cache-Control', 'no-store');
+    return res.json({ shared });
+  } catch (error) { next(error); }
+});
 router.get('/', async (req, res, next) => {
   try {
     if (req.query.countOnly === 'true') {

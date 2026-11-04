@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import Topbar from '../../layout/Topbar'
 import CameraLicenseCard from './components/config/CameraLicenseCard'
+import WhatsAppAccessCard from './components/config/WhatsAppAccessCard'
 import SubscriptionCard from './components/config/SubscriptionCard'
 import DetectionRow from './components/config/DetectionRow'
 import CamerasPanel from './components/config/CamerasPanel'
@@ -651,6 +652,8 @@ const ClientConfig = () => {
               />
               <SubscriptionCard stats={stats} totalDetections={detections.length} />
             </div>
+
+            <WhatsAppAccessCard key={adminId} adminId={adminId} />
 
             {/* Detection configuration table */}
             <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">

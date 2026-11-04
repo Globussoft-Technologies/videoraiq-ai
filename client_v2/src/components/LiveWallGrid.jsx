@@ -10,7 +10,7 @@ import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
-import { getEveryChannel, getLiveWallLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { getEveryChannel, getLiveWallLocations, getNVRs } from '../helpers/monitoring';
 import { isCameraLive, isCameraRtspOnline, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
@@ -279,17 +279,23 @@ export default function LiveWallGrid() {
 
   const size     = SIZES[sizeIdx] || SIZES[2];
 
-  /* Location/NVR/Department/CamType are applied server-side; camera is
-     applied client-side so its own selection never shrinks the options. */
+  /* Fetch the complete authorized location/NVR scope. Derive departments and
+     camera types from that inventory without shrinking their own options. */
   const effLoc = ctxLoc ? [ctxLoc] : selLoc;
-  const channels = useApi(
-    () => getEveryChannel({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType }),
-    [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
+  const scopedChannels = useApi(
+    () => getEveryChannel({ location: effLoc, nvrId: selNvr }),
+    [ctxLoc, selLoc.join(','), selNvr.join(',')]
   );
+  const scopeInventory = scopedChannels.loading || scopedChannels.error ? [] : scopedChannels.data || [];
+  const filteredChannels = useMemo(() => scopeInventory.filter(camera => {
+    const departments = (camera.department || []).map(department => String(department._id || department));
+    return (!selDept.length || selDept.some(id => departments.includes(String(id))))
+      && (!selType.length || selType.includes(camera.checkType));
+  }), [scopeInventory, selDept, selType]);
+  const channels = { ...scopedChannels, data: filteredChannels };
 
   const locsApi  = useApi(() => getLiveWallLocations(), []);
-  const nvrsApi  = useApi(() => getNVRs(), []);
-  const deptApi  = useApi(() => getDepartments({ limit: 200 }), []);
+  const nvrsApi  = useApi(() => getNVRs({ selectedLocations: effLoc }), [ctxLoc, selLoc.join(',')]);
   const locations = Array.isArray(locsApi.data) ? locsApi.data : [];
 
   /* Filter option lists in MultiSelect's { id, label } shape */
@@ -298,13 +304,18 @@ export default function LiveWallGrid() {
     [locations]
   );
   const nvrOptions = useMemo(
-    () => (Array.isArray(nvrsApi.data) ? nvrsApi.data : []).map((n) => ({ id: n._id, label: n.nvrName })),
-    [nvrsApi.data]
+    () => (!nvrsApi.loading && !nvrsApi.error && Array.isArray(nvrsApi.data) ? nvrsApi.data : []).map((n) => ({ id: n._id, label: n.nvrName })),
+    [nvrsApi.data, nvrsApi.loading, nvrsApi.error]
   );
   const deptOptions = useMemo(
-    () => (Array.isArray(deptApi.data) ? deptApi.data : []).map((d) => ({ id: d._id, label: d.departmentName })),
-    [deptApi.data]
+    () => [...new Map(scopeInventory.flatMap(camera => camera.department || [])
+      .filter(department => department?._id && department.departmentName)
+      .map(department => [String(department._id), { id: String(department._id), label: department.departmentName }])).values()],
+    [scopeInventory]
   );
+  const cameraTypeOptions = useMemo(() => CAM_TYPE_OPTIONS.filter(option => scopeInventory
+    .some(camera => camera.checkType === option.id && (!selDept.length || (camera.department || [])
+      .some(department => selDept.includes(String(department._id || department)))))), [scopeInventory, selDept]);
   const cameraOptions = useMemo(
     () => (Array.isArray(channels.data) ? channels.data : []).map((c) => ({
       id: c._id || c.channelId,
@@ -314,7 +325,16 @@ export default function LiveWallGrid() {
   );
 
   /* wrap setters so any filter change resets pagination to the first page */
-  const onFilter = (setter) => (v) => { setter(v); setPage(0); };
+  const onFilter = (setter) => (v) => {
+    setter(v); setPage(0);
+    if (setter === setSelLoc) setSelNvr([]);
+    if (setter === setSelLoc || setter === setSelNvr) setSelDept([]);
+    if (setter === setSelLoc || setter === setSelNvr || setter === setSelDept) setSelType([]);
+    if (setter !== setSelCam) setSelCam([]);
+  };
+  useEffect(() => {
+    setSelNvr([]); setSelDept([]); setSelType([]); setSelCam([]); setPage(0);
+  }, [ctxLoc]);
 
   /* Clear-all: reset every filter (and search) in one click */
   const hasActiveFilters =
@@ -627,7 +647,7 @@ export default function LiveWallGrid() {
           msg="No Department Found"
         />
         <MultiSelect
-          options={CAM_TYPE_OPTIONS}
+          options={cameraTypeOptions}
           value={selType}
           onChange={onFilter(setSelType)}
           placeholder="Select Camera Type"

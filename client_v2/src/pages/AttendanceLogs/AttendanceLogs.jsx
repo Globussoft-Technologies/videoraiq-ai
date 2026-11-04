@@ -5,6 +5,8 @@ import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } 
 import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { Check } from 'lucide-react';
+import { toast } from 'sonner';
+import { fetchShifts } from '@/page/user/Shifts/Api';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import { useTimezone } from '@/context/TimezoneContext';
@@ -446,6 +448,37 @@ const AttendanceLogs = () => {
   // active one clears it back to all statuses for the date range).
   const toggleStatusFilter = (value) =>
     dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === value ? '' : value });
+
+  const shiftCheckRequest = useRef(0);
+  useEffect(() => {
+    const request = ++shiftCheckRequest.current;
+    if (!['late_arrival', 'early_departure'].includes(statusFilter)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let totalShifts = 0;
+        let hasActiveShift = false;
+        let hasAssignment = false;
+        for (let skip = 0; ; skip += 100) {
+          const response = await fetchShifts(skip, 100);
+          if (cancelled || request !== shiftCheckRequest.current) return;
+          const body = response?.data?.body;
+          if (body?.status !== 'success' || !Array.isArray(body.data?.shifts)) throw new Error('Shift check failed');
+          const { shifts, total } = body.data;
+          totalShifts += shifts.length;
+          hasActiveShift ||= shifts.some(shift => shift.isActive !== false);
+          hasAssignment ||= shifts.some(shift => shift.isActive !== false && Number(shift.assignedEmployees) > 0);
+          if (hasAssignment || shifts.length < 100 || totalShifts >= total) break;
+        }
+        if (!totalShifts) toast.info('No shifts have been created. Create and assign a shift to assess late arrivals and early leave.');
+        else if (!hasActiveShift) toast.info('No active shifts are available. Activate and assign a shift to assess late arrivals and early leave.');
+        else if (!hasAssignment) toast.info('No active shift is currently assigned to any employee. Assign a shift to assess late arrivals and early leave.');
+      } catch {
+        if (!cancelled && request === shiftCheckRequest.current) toast.error('Unable to check shift assignments. Please try again.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [statusFilter]);
 
   const toggleAbsentFlow = () => {
     if (absentFlowActive && absentTab === ABSENT_TABS.EARLY_LEAVE) {

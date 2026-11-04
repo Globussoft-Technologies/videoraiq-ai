@@ -117,11 +117,11 @@ export const getAllChannels = async ({
 };
 
 /** Authorized NVRs for the filter dropdowns → [{ _id, nvrName }]. */
-export const getNVRs = async () => {
+export const getNVRs = async ({ selectedLocations = [] } = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
     `${Api_url}/authorizedChannels/getNVRS`,
-    {},
+    { selectedLocations },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   const data = res?.data?.body?.data;

@@ -38,12 +38,12 @@ export default function WhatsAppAlerts() {
     finally { setBusy(''); }
   };
   useEffect(() => {
-    if (!owner || (settings?.sharedKeyRequest?.status !== 'pending' && settings?.credentialSource !== 'env')) return;
+    if (!owner) return;
     let cancelled = false;
     const timer = setInterval(() => {
       whatsappRequest('settings').then(value => { if (!cancelled) {
-        if (value.sharedKeyRequest?.status === 'pending') setSettings(value);
-        else apply(value);
+        if (value.credentialSource !== settings?.credentialSource) apply(value);
+        else setSettings(value);
       } }).catch(() => {});
     }, 15000);
     return () => { cancelled = true; clearInterval(timer); };

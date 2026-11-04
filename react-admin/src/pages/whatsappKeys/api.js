@@ -10,6 +10,8 @@ async function request(method, path, data, signal) {
 export const getKeyRequests = (status = 'pending', page = 1, signal) => request('get', `?status=${status}&page=${page}`, undefined, signal)
 export const getPendingKeyCount = signal => request('get', '?countOnly=true', undefined, signal)
 export const reviewKeyRequest = (adminId, requestId, decision) => request('post', `/${adminId}/${requestId}/decision`, { decision })
+export const getSharedKeyAccess = adminId => request('get', `/${adminId}/access`)
+export const setSharedKeyAccess = (adminId, shared) => request('put', `/${adminId}/access`, { shared })
 
 export async function sharedSenderRequest(method = 'get', suffix = '', data) {
   const token = await waitForToken()
