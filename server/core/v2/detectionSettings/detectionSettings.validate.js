@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { EMOTION_ALERT_GROUPS } from "../../../constants/emotionDetection.js";
 import { validateUniformSettings } from "../../../services/uniformDetection.js";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 import {
@@ -130,6 +131,15 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateEmotionSettings(settingType, settings = {}) {
+    if (settingType !== "emotionDetection") return { error: null };
+    return Joi.object({
+      zone_configs: Joi.array().items(Joi.object({
+        emotion_alert_groups: Joi.array().items(Joi.string().valid(...EMOTION_ALERT_GROUPS)).min(1).unique(),
+      }).unknown(true)),
+    }).unknown(true).validate(settings, { convert: false });
+  }
+
   validateUniformSettings(settingType, settings, requireZones = false) {
     return validateUniformSettings(settingType, settings, requireZones);
   }

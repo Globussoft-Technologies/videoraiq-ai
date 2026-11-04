@@ -9,6 +9,7 @@ import DoorAlertRules from './DoorAlertRules';
 import { CAR_COMPANIES } from '../constants';
 import HygieneZoneFields from './HygieneZoneFields';
 import LightingFields from './LightingFields';
+import EmotionAlertGroups from './EmotionAlertGroups';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -32,6 +33,7 @@ export default function ZoneSettingsPanel({
   isFireSmoke = false,
   isHygiene = false,
   isLighting = false,
+  isEmotion = false,
   isDoor = false,
   doorAlertMode = 'open',
   onDoorAlertModeChange,
@@ -202,6 +204,8 @@ export default function ZoneSettingsPanel({
                       </select>
                     </div>
                   )}
+                  {isEmotion && <EmotionAlertGroups id={`zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
+                    disabled={savingIndex === i} onChange={value => onUpdateField(i, 'emotion_alert_groups', value)} />}
                   {isLighting && <LightingFields value={z} showZoneName={false} disabled={savingIndex === i}
                     onChange={(field, value) => onUpdateField(i, field, value)}
                     errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))} />}

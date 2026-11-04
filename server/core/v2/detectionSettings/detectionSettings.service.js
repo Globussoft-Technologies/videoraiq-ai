@@ -524,6 +524,8 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
+      const emotionValidation = DetectionSettingsValidation.validateEmotionSettings(value.settingType, value.settings);
+      if (emotionValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", emotionValidation.error.message));
       if (hygieneValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
       }
@@ -962,6 +964,8 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
+      const emotionValidation = DetectionSettingsValidation.validateEmotionSettings(settingType, value.settings);
+      if (emotionValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", emotionValidation.error.message));
       if (hygieneValidation.error) {
         return res.status(400).json(Response.userFailResp("Validation Failed", hygieneValidation.error.message));
       }

@@ -8,6 +8,14 @@ const payload = {
   incidentName: 'Negative Expression Detected',
   Image: 'https://nas.example.com/emotion.jpg',
   emotion: 'Sadness',
+  emotionGroup: 'negative',
+  confidence: 0.908,
+  durationSec: 5,
+  trackId: 'f0f947a7-track',
+  model: 'emotion_b0',
+  description: 'A person showed a negative expression (Sadness) for 5 s.',
+  zone: 'Reception',
+  zoneName: 'Reception',
   userId: 'emotion-user',
   nvrId: '69ce7069d5b1b9d2ca500457',
   channelId: '69ce7069d5b1b9d2ca500459',
@@ -17,6 +25,10 @@ describe('required DS emotion incident fields', () => {
   it('accepts a complete payload', () => {
     expect(validator.validateEmotionIncident(payload).error).toBeUndefined();
     expect(new EmotionDetectionIncident(payload).validateSync()).toBeUndefined();
+    expect(new EmotionDetectionIncident(payload).toObject()).toMatchObject({
+      emotion: 'Sadness', emotionGroup: 'negative', confidence: 0.908,
+      durationSec: 5, trackId: 'f0f947a7-track', model: 'emotion_b0', zoneName: 'Reception',
+    });
   });
 
   for (const field of ['timeOfIncident', 'incidentName', 'Image']) {

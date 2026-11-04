@@ -413,7 +413,7 @@ describe("v2 industrial detection incidents and logs", () => {
                 [[0, 0], [100, 0], [100, 100], [0, 100]],
                 [[200, 0], [300, 0], [300, 100], [200, 100]],
               ] },
-              zone_configs: [{ name: "Lobby" }, { name: "Reception" }],
+              zone_configs: [{ name: "Lobby", emotion_alert_groups: ["negative"] }, { name: "Reception" }],
             } : {}),
             ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
           },
@@ -429,6 +429,22 @@ describe("v2 industrial detection incidents and logs", () => {
       if (settingType === "emotionDetection") {
         const setting = await SettingModel.findOne({ settingType });
         expect(setting.settings.zone_configs.map(zone => zone.name)).toEqual(["Lobby", "Reception"]);
+        expect(setting.settings.zone_configs.map(zone => [...zone.emotion_alert_groups])).toEqual([
+          ["negative"], ["positive", "neutral", "negative", "surprise"],
+        ]);
+        const edit = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id, params: { id: String(setting._id) },
+          body: { settings: { zone_configs: [
+            { name: "Lobby", emotion_alert_groups: ["positive", "neutral", "negative", "surprise"] },
+            { name: "Reception", emotion_alert_groups: ["surprise"] },
+          ] } },
+        });
+        await DetectionSettingsService.updateDetectionSettings(edit.req, edit.res, edit.next);
+        expect(payload(edit.res).status).toBe("success");
+        const updated = await SettingModel.findById(setting._id).lean();
+        expect(updated.settings.zone_configs.map(zone => zone.emotion_alert_groups)).toEqual([
+          ["positive", "neutral", "negative", "surprise"], ["surprise"],
+        ]);
         expect(setting.settings.referencePoints[channel._id.toString()]).toHaveLength(2);
         const populated = await Channel.findById(channel._id).populate('detections.emotionDetection.id');
         expect(populated.detections.emotionDetection.id.settingType).toBe('emotionDetection');

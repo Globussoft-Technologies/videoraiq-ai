@@ -8,6 +8,8 @@ vi.mock('../../../utils/adminEndpoints.js', () => ({
 
 const axios = (await import('axios')).default;
 const python = (await import('../../../services/python.service.js')).default;
+const { EMOTION_ALERT_GROUPS } = await import('../../../constants/emotionDetection.js');
+const { EmotionDetectionSetting } = await import('../../../core/v1/detectionSettings/detectionSettings.model.js');
 const zones = [
   [[100, 100], [500, 100], [500, 500], [100, 500]],
   [[600, 100], [900, 100], [900, 500], [600, 500]],
@@ -33,10 +35,25 @@ describe('Emotion Detection requests to DS', () => {
       expect(axios.post.mock.calls[0][1].detectors).toEqual([{
         name: 'emotionDetection',
         zones,
-        zone_configs: [{ name: 'Lobby' }, { name: 'Reception' }],
+        zone_configs: [
+          { name: 'Lobby', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
+          { name: 'Reception', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
+        ],
       }]);
     },
   );
+
+  it.each(['startNewDetection', 'updateNewDetection'])('%s preserves each zone selection from stored subdocuments', async method => {
+    const setting = new EmotionDetectionSetting({ settings: { zone_configs: [
+      { name: 'Lobby', emotion_alert_groups: ['negative'], telegramChatIds: ['private'] },
+      { name: 'Reception', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
+    ] } });
+    await python[method]({ ...payload, zone_configs: setting.settings.zone_configs });
+    expect(axios.post.mock.calls[0][1].detectors[0].zone_configs).toEqual([
+      { name: 'Lobby', emotion_alert_groups: ['negative'] },
+      { name: 'Reception', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
+    ]);
+  });
 
   it('stops only the emotion detector', async () => {
     await python.stopNewDetection('cam', 'nvr', ['emotionDetection'], 'admin');

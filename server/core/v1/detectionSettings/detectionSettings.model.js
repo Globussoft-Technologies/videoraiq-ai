@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { EMOTION_ALERT_GROUPS } from "../../../constants/emotionDetection.js";
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
@@ -1273,9 +1274,23 @@ const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
 
 // Use a distinct model name because the incident discriminator also stores
 // emotionDetection. The persisted settingType remains emotionDetection.
+const emotionAlertGroupsField = {
+  type: [{ type: String, enum: EMOTION_ALERT_GROUPS }],
+  default: () => [...EMOTION_ALERT_GROUPS],
+  validate: {
+    validator: value => Array.isArray(value) && value.length > 0 && new Set(value).size === value.length,
+    message: "emotion_alert_groups must contain at least one unique emotion group",
+  },
+};
+const EmotionDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+// Replace the array path so the shared zone sub-schema stays unchanged.
+EmotionDetectionSchema.remove("zone_configs");
+EmotionDetectionSchema.add({
+  zone_configs: [{ ...zoneConfigsField.zone_configs[0], emotion_alert_groups: emotionAlertGroupsField }],
+});
 const EmotionDetectionSetting = DetectionSetting.discriminator(
   "EmotionDetectionSetting",
-  new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema.clone() }),
+  new mongoose.Schema({ settings: EmotionDetectionSchema }),
   "emotionDetection",
 );
 

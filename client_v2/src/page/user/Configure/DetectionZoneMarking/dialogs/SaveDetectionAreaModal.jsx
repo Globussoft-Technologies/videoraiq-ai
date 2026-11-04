@@ -12,6 +12,7 @@ import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC } from '../cons
 import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
+import EmotionAlertGroups from '../components/EmotionAlertGroups';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
 function normalizeTelegramChannels(channels = []) {
@@ -44,6 +45,7 @@ export default function SaveDetectionAreaModal({
   initialDoorNotification = true,
   isHygiene = false,
   isLighting = false,
+  isEmotion = false,
   initialLightingSettings,
   saving,
   onCancel,
@@ -319,6 +321,8 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {isEmotion && <EmotionAlertGroups id={`save-zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
+                disabled={saving} onChange={value => updateZoneField(i, 'emotion_alert_groups', value)} />}
               {isLighting && <LightingFields value={z} showZoneName={false} disabled={saving}
                 onChange={(field, value) => updateZoneField(i, field, value)}
                 errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))} />}

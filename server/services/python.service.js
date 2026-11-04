@@ -1,4 +1,5 @@
 import { buildUniformDetector } from "./uniformDetection.js";
+import { EMOTION_ALERT_GROUPS } from "../constants/emotionDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
 import { assertDetectionServiceSuccess } from './detectionServiceResult.js';
 import logger from "../utils/logger.js";
@@ -98,13 +99,20 @@ const appendIndustrialDetectors = (
         continue;
       }
       if (name === "boxPackingDetectionSettings" || name === "emotionDetection") {
-        // DS takes only the zone names; stored Telegram/window fields and
-        // severity stay on our side.
+        // Send zone names and emotion alert groups; keep routing fields local.
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         detectors.push({
           name,
           zones: Array.isArray(zones) ? zones : [],
-          zone_configs: configs.map((config) => ({ name: plainZoneConfig(config)?.name })),
+          zone_configs: configs.map((config) => {
+            const zone = plainZoneConfig(config);
+            return {
+              name: zone?.name,
+              ...(name === "emotionDetection" ? {
+                emotion_alert_groups: [...(zone?.emotion_alert_groups ?? EMOTION_ALERT_GROUPS)],
+              } : {}),
+            };
+          }),
         });
         continue;
       }
