@@ -69,7 +69,7 @@ export function installAxiosSession(instance) {
       if (
         !sessionRedirectStarted &&
         !error?.config?.skipSessionRedirect &&
-        ['SESSION_BLOCKED', 'SESSION_LOGGED_OUT', 'SESSION_INVALID', 'DEVICE_BLOCKED'].includes(body?.code)
+        ['SUBSCRIPTION_EXPIRED', 'SESSION_BLOCKED', 'SESSION_LOGGED_OUT', 'SESSION_INVALID', 'DEVICE_BLOCKED'].includes(body?.code)
       ) {
         sessionRedirectStarted = true;
         if (isMobileEmbedded()) {

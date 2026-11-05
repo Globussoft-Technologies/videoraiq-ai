@@ -4,6 +4,7 @@ import Admin from '../admin/admin.model.js';
 import ApiKey from './apiKey.model.js';
 import { KEY_PATTERN, hashKey, keyAllows, activeSubscriptions } from './apiKey.policy.js';
 import Response from '../../../utils/response.js';
+import { expireSubscription } from '../../../services/subscriptionExpiry.js';
 import { DEFAULT_ADMIN_TIMEZONE, validTimezone } from '../../../utils/timezone.js';
 
 const byIp = rateLimit({ windowMs: 60000, limit: 1000, standardHeaders: 'draft-7', legacyHeaders: false });
@@ -20,7 +21,10 @@ async function authenticate(req, res, next, secret) {
     if (!keyAllows(key, req.method, req.originalUrl)) return fail(res, 403, 'This API key does not allow this operation');
     const admin = await Admin.findById(key.adminId).select('_id user_id login email name_f name_l orgId timezone subscriptionSnapshot').lean();
     if (!admin) return fail(res, 401, 'Admin account no longer exists');
-    if (!activeSubscriptions(admin.subscriptionSnapshot?.subscriptions)) return res.status(403).json(Response.planExpiredResp('Your subscription plan has expired', 'API-key validity does not extend the account subscription'));
+    if (!activeSubscriptions(admin.subscriptionSnapshot?.subscriptions)) {
+      await expireSubscription(admin._id);
+      return res.status(403).json(Response.planExpiredResp('Your subscription plan has expired', 'API-key validity does not extend the account subscription'));
+    }
     try { await checkKeyOwnership(req, admin); }
     catch { return fail(res, 403, 'Resource access is not allowed for this admin'); }
     req.verified = { state: true, apiKey: { id: key._id, access: key.access, scopes: key.scopes }, permissionConfig: null, authorizedChannel: null,

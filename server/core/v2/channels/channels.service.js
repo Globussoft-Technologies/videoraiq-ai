@@ -158,6 +158,7 @@ class ChannelService {
       const cameraId = req.params.id;
       const updates = { ...req.body };
       delete updates.detectionBulkPaused;
+      delete updates.subscriptionPaused;
       delete updates.detectionResumeTypes;
 
       let existingChannel = await Channel.findById(cameraId);

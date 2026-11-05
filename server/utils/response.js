@@ -94,6 +94,7 @@ class Response {
     return {
       statusCode: 812,
       body: {
+        code: "SUBSCRIPTION_EXPIRED",
         status: "failed",
         message: message,
         error: error,

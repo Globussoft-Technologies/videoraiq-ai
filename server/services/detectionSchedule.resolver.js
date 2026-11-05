@@ -391,6 +391,9 @@ export const resolveDesiredDetectionState = async (
   settingType,
   { index } = {},
 ) => {
+  if (channel?.subscriptionPaused) {
+    return { active: false, source: 'subscription-expired', schedule: channel?.detections?.[settingType]?.schedule };
+  }
   if (channel?.detectionBulkPaused && settingType !== 'faceAuthenticationSettings') {
     return { active: false, source: 'bulk-pause', schedule: channel?.detections?.[settingType]?.schedule };
   }

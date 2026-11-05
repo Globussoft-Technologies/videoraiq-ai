@@ -554,6 +554,9 @@ class PythonService {
       'detectionControlLock.token': { $ne: detectionControlToken } })) {
       throw new Error('Another detection action is running. Please retry after it finishes.');
     }
+    if (enable && channel?.subscriptionPaused) {
+      throw new Error('Detection is paused due to subscription expiry');
+    }
     if (enable && channel?.detectionBulkPaused && type !== 'faceAuthenticationSettings') {
       throw new Error('Resume all detections before starting a detector on a paused camera');
     }

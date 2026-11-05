@@ -1,3 +1,5 @@
+import Admin from '../core/v1/admin/admin.model.js';
+import Channel from '../core/v1/channels/channels.model.js';
 import axios from "axios";
 import { aiAuthHeaders } from "./aiAuthHeaders.js";
 import logger from "./logger.js";
@@ -24,8 +26,6 @@ const postToStreamServices = (
           Promise.resolve().then(async () => {
             let detectionBody = body;
             if (detectionPath === '/stream/resume-all') {
-              const { default: Admin } = await import('../core/v1/admin/admin.model.js');
-              const { default: Channel } = await import('../core/v1/channels/channels.model.js');
               const owner = await Admin.findById(adminId).select('user_id').lean();
               if (!owner) return;
               const cameras = await Channel.find({ userId: owner.user_id })
@@ -47,8 +47,13 @@ const postToStreamServices = (
         }
         // Face-auth / attendance service (attendanceUrl already ends in /face-auth)
         if (attendanceUrl) {
-          axios
-            .post(`${attendanceUrl}${attendancePath}`, body, opts)
+          Promise.resolve().then(async () => {
+            if (attendancePath === '/api/v1/cameras/resume-all') {
+              const owner = await Admin.findById(adminId).select('user_id').lean();
+              if (!owner || await Channel.exists({ userId: String(owner.user_id), subscriptionPaused: true }).setOptions({ includeInactive: true })) return;
+            }
+            return axios.post(`${attendanceUrl}${attendancePath}`, body, opts);
+          })
             .catch((err) =>
               logger.error(
                 `[${tag}] face-auth failed for admin ${adminId}:`,

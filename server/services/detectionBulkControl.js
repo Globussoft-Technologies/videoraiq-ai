@@ -147,6 +147,7 @@ async function runBulkJob(owner, job, lease) {
               if (!currentOwner || currentOwner.streamsStopped) throw new Error('An active subscription is required to resume');
               const view = camera.toObject();
               view.detectionBulkPaused = false;
+              view.subscriptionPaused = false;
               view.nvrId = { _id: camera.nvrId };
               for (const [type, link] of Object.entries(camera.detections || {})) {
                 if (type === 'faceAuthenticationSettings' || !link?.id) continue;
@@ -180,6 +181,7 @@ async function runBulkJob(owner, job, lease) {
                 if (enable) item.completedTypes = [...(item.completedTypes || []), type];
               }
               camera.detectionBulkPaused = false;
+              camera.subscriptionPaused = false;
               camera.detectionResumeTypes = [];
             }
             await lease.assertOwned();
