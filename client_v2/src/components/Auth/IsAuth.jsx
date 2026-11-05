@@ -1,3 +1,4 @@
+import { authFetch, saveAccessToken } from '@/utils/refreshAuth';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Cookies from 'js-cookie';
@@ -14,12 +15,6 @@ import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobi
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
 
-const accessCookieName = () => {
-  const env = envValue('VITE_ENV');
-  if (env === 'dev') return 'dev-access-token';
-  if (env === 'prod') return 'prod-access-token';
-  return 'access-token';
-};
 
 const loginRedirectUrl = () => {
   const frontendUrl = envValue('VITE_FRONTEND').replace(/\/+$/, '');
@@ -150,9 +145,8 @@ export default function IsAuth({ children }) {
   // (not inside the auth effect below) so both that effect's by-login-token
   // check AND the socket 'session-revoked' listener effect can call it.
   const endLocalSession = () => {
-    logout({ clearSession: true, syncServer: false });
+    logout({ clearSession: true, syncServer: false }).then(toLogin);
     setIsLoading(false);
-    toLogin();
   };
 
   useEffect(() => {
@@ -199,7 +193,6 @@ export default function IsAuth({ children }) {
 
     const amemberLogin = Cookies.get('amember_login');
     const amemberPass = Cookies.get('amember_pass');
-    const token = getAccessToken();
     const searchParams = new URLSearchParams(window.location.search);
     const impersonationToken = searchParams.get('amember_impersonation') || '';
     const amemberSsoToken = searchParams.get('amember_sso') || '';
@@ -210,12 +203,6 @@ export default function IsAuth({ children }) {
       searchParams.delete('amember_sso');
       const cleanQuery = searchParams.toString();
       window.history.replaceState({}, document.title, `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}${window.location.hash}`);
-    }
-
-    if (!token && !(amemberLogin && amemberPass) && !impersonationToken && !amemberSsoToken) {
-      setIsLoading(false);
-      toLogin();
-      return undefined;
     }
 
     async function checkAccess({ initial = false } = {}) {
@@ -230,23 +217,19 @@ export default function IsAuth({ children }) {
         if (initial && impersonationToken) {
           const response = await fetch(`${HOST}/auth/by-impersonation-token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'x-auth-refresh': '1', ...(await sessionHeaders()) },
             body: JSON.stringify({ token: impersonationToken }),
           });
           const result = await response.json();
           if (!response.ok || !result?.ok || !result?.token) {
-            logout();
+            await logout();
             setIsLoading(false);
             toLogin();
             return false;
           }
-          Cookies.set(accessCookieName(), result.token, {
-            expires: 1,
-            secure: window.location.protocol === 'https:',
-            path: '/',
-          });
+          saveAccessToken(result.token, result.sessionId);
           localSetupRef.current = isLocalSetup();
-          setSessionId(result.sessionId);
           setUser(result.user);
           setIsLoading(false);
           return true;
@@ -255,12 +238,13 @@ export default function IsAuth({ children }) {
         if (initial && amemberSsoToken) {
           const response = await fetch(`${HOST}/auth/by-amember-sso-token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'x-auth-refresh': '1', ...(await sessionHeaders()) },
             body: JSON.stringify({ token: amemberSsoToken }),
           });
           const result = await response.json().catch(() => ({}));
           if (!response.ok || !result?.ok || !result?.token) {
-            logout();
+            await logout();
             setUser(null);
 
             const hasInactiveAccess =
@@ -277,13 +261,8 @@ export default function IsAuth({ children }) {
             setIsLoading(false);
             return false;
           }
-          Cookies.set(accessCookieName(), result.token, {
-            expires: 1,
-            secure: window.location.protocol === 'https:',
-            path: '/',
-          });
+          saveAccessToken(result.token, result.sessionId);
           localSetupRef.current = isLocalSetup();
-          setSessionId(result.sessionId);
           setUser(result.user);
           setIsLoading(false);
           return true;
@@ -292,13 +271,14 @@ export default function IsAuth({ children }) {
         if (initial && amemberLogin && amemberPass) {
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(await sessionHeaders()) },
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-auth-refresh': '1', ...(await sessionHeaders()) },
             body: new URLSearchParams({ login: amemberLogin, pass: amemberPass }),
           });
           const result = await response.json().catch(() => ({}));
 
           if (!result?.ok || !result?.token) {
-            logout();
+            await logout();
             // The plugin creates parent-domain cookies. Removing only a host
             // cookie leaves them intact and causes an endless exchange loop.
             deleteCookie('amember_login');
@@ -330,14 +310,8 @@ export default function IsAuth({ children }) {
             setIsLoading(false);
             return false;
           }
-
-          Cookies.set(accessCookieName(), result.token, {
-            expires: 1,
-            secure: window.location.protocol === 'https:',
-            path: '/',
-          });
+          saveAccessToken(result.token, result.sessionId);
           localSetupRef.current = isLocalSetup();
-          setSessionId(result.sessionId);
           deleteCookie('amember_login');
           deleteCookie('amember_pass');
           setUser(result.user);
@@ -351,9 +325,9 @@ export default function IsAuth({ children }) {
         // read before any cookie existed) and would send a stale/empty token
         // here instead of the one the exchange just set.
         const currentToken = getAccessToken();
-        const response = await fetch(`${HOST}/auth/by-login-token`, {
+        const response = await authFetch(`${HOST}/auth/by-login-token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
+          headers: { 'Content-Type': 'application/json', 'x-auth-refresh': '1', ...(await sessionHeaders()) },
           body: JSON.stringify({ token: currentToken }),
         });
         const result = await response.json();
@@ -367,7 +341,7 @@ export default function IsAuth({ children }) {
         }
 
         if (!result?.success) {
-          logout();
+          await logout();
           setIsLoading(false);
           toLogin();
           return false;
@@ -377,16 +351,22 @@ export default function IsAuth({ children }) {
         // (validated) — re-persist it so a long-lived tab's cookie never
         // silently expires out from under the socket/presence tracking.
         if (result.sessionId) setSessionId(result.sessionId);
+        localSetupRef.current = isLocalSetup();
         setUser(result.data);
         if (initial) setIsLoading(false);
         return true;
-      } catch {
+      } catch (error) {
         if (isCancelled()) return false;
         if (!initial) return false;
+        if (error.status === 401 || error.status === 403) {
+          await logout();
+          setIsLoading(false);
+          toLogin();
+          return false;
+        }
 
         // Only the initial check surfaces a hard failure UI — a transient
         // network error on a background poll shouldn't kick the user out.
-        logout();
         deleteCookie('amember_login');
         deleteCookie('amember_pass');
         setUser(null);

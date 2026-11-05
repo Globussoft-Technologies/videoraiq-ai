@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
-import getAccessToken from "@/utils/getAccessToken";
+import { ensureAccessToken } from "@/utils/refreshAuth";
 
 /**
  * HLS player hook — ported from the V1 app (client/src/hooks/useHlsPlayer.js).
@@ -52,11 +52,24 @@ export default function useHlsPlayer(
 
     // Safari native HLS
     if (!Hls.isSupported()) {
+      let renewalTimer;
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = url;
-        if (autoPlay) video.play().catch(() => {});
+        let lastToken;
+        const updateNativeSource = async () => {
+          try {
+            const token = await ensureAccessToken();
+            if (disposed || token === lastToken) return;
+            lastToken = token;
+            const source = new URL(url, window.location.href);
+            if (token) source.searchParams.set('token', token);
+            video.src = source.toString();
+            if (autoPlay) video.play().catch(() => {});
+          } catch { onErrorRef.current?.('Unable to renew stream access'); }
+        };
+        updateNativeSource();
+        renewalTimer = setInterval(updateNativeSource, 30000);
       }
-      return dispose;
+      return () => { clearInterval(renewalTimer); dispose(); };
     }
 
     const startPlayer = () => {
@@ -64,7 +77,6 @@ export default function useHlsPlayer(
       // Preserve the displayed frame before destroying MSE clears the video.
       if (hlsRef.current) onBeforeReconnectRef.current?.();
       cleanup();
-      const token = getAccessToken();
 
       const hls = new Hls({
         lowLatencyMode: true,
@@ -82,10 +94,17 @@ export default function useHlsPlayer(
         fragLoadingRetryDelayMax: 3000,
         loader: class CustomLoader extends Hls.DefaultConfig.loader {
           load(context, config, callbacks) {
-            if (token && !context.url.includes("token=")) {
-              context.url += context.url.includes("?") ? `&token=${encodeURIComponent(token)}` : `?token=${encodeURIComponent(token)}`;
-            }
-            super.load(context, config, callbacks);
+            // A live player may outlast many JWTs. Resolve the token per
+            // fragment rather than retaining the one from player startup.
+            ensureAccessToken().then(token => {
+              if (disposed || hlsRef.current !== hls) return;
+              const source = new URL(context.url, window.location.href);
+              if (token) source.searchParams.set('token', token);
+              context.url = source.toString();
+              super.load(context, config, callbacks);
+            }).catch(() => {
+              if (!disposed) callbacks.onError({ code: 401, text: 'Unable to renew stream access' }, context, null);
+            });
           }
         },
       });

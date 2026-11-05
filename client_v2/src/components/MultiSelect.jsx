@@ -57,6 +57,7 @@ const MultiSelect = ({
   loadingMore = false,
   inlinePanel = false,
   closeOnSelectAll = false,
+  wrapSelection = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -188,7 +189,7 @@ const MultiSelect = ({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border text-[var(--tx)] text-sm cursor-pointer transition-colors ${
+        className={`flex items-center justify-between gap-2 w-full ${wrapSelection ? 'min-h-10 py-2 text-left' : 'h-10'} px-3 rounded-lg border text-[var(--tx)] text-sm cursor-pointer transition-colors ${
           tint && hasSelection ? '' : 'border-[var(--bd)] bg-[var(--bg2)] hover:border-[var(--brand)]'
         }`}
         style={tint && hasSelection ? {
@@ -201,8 +202,8 @@ const MultiSelect = ({
         {selectedLabels.length === 0 ? (
           <span className="truncate text-[var(--ph)] font-medium">{placeholder}</span>
         ) : (
-          <span className="flex items-center gap-1.5 min-w-0" title={selectedLabels.join(', ')}>
-            <span className="truncate text-[var(--tx)]">{selectedLabels[0]}</span>
+          <span className={`flex items-center gap-1.5 min-w-0 ${wrapSelection ? 'flex-1 flex-wrap' : ''}`} title={selectedLabels.join(', ')}>
+            <span className={`${wrapSelection ? 'min-w-0 whitespace-normal [overflow-wrap:anywhere]' : 'truncate'} text-[var(--tx)]`}>{selectedLabels[0]}</span>
             {selectedLabels.length > 1 && (
               <span
                 className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-normal text-white"

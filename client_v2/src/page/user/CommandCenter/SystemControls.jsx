@@ -60,10 +60,10 @@ function SingleSelect({ options, value, onChange, placeholder = 'Select...', max
         type="button"
         onClick={() => setOpen((v) => !v)}
         style={{
-          width: '100%', height: 40, padding: '0 28px 0 12px', borderRadius: 8,
+          width: '100%', minHeight: 40, padding: '8px 28px 8px 12px', borderRadius: 8,
           background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 14, fontWeight: 400,
           outline: 'none', cursor: 'pointer', color: 'var(--tx)', boxSizing: 'border-box',
-          textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          textAlign: 'left', whiteSpace: 'normal', overflowWrap: 'anywhere',
         }}
       >
         {selected ? selected.label : placeholder}
@@ -296,12 +296,13 @@ export default function SystemControls() {
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx)', marginBottom: 7 }}>
         Cameras &amp; Detection
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 8, marginBottom: 10, minWidth: 0 }}>
         <MultiSelect
           options={nvrOptions}
           value={nvrFilter}
           onChange={setNvrFilter}
           placeholder="Select NVR"
+          wrapSelection
           searchPlaceholder="Search NVRs..."
           className="flex-1 min-w-0"
         />

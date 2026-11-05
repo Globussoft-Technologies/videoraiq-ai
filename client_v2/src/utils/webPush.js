@@ -86,7 +86,7 @@ export async function unregisterWebPush(accessToken) {
     await axios.post(
       `${apiUrl}/push-tokens/unregister`,
       { token },
-      { headers: { 'x-access-token': accessToken }, skipSessionRedirect: true },
+      { headers: { 'x-access-token': accessToken }, skipSessionRedirect: true, skipAuthRefresh: true },
     );
   } catch {
     // The deleteToken below still stops delivery even if this call failed.

@@ -1,3 +1,4 @@
+import { saveAccessToken } from '@/utils/refreshAuth';
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -9,16 +10,11 @@ import heroShot from "@/assets/21.jpg";
 import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
 import AuthLoader from "@/page/user/Users/AuthLoader";
-import { setSessionId } from "@/utils/sessionIdentity";
 import { isLocalSetup } from "@/utils/jwt";
 import "./portal.css";
 
-const url = import.meta.env.VITE_ENV;
 const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
-/* cookie name matches getAccessToken() / the V1 login flow */
-const accessCookieName = () =>
-  url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
 const envValue = (key) => String(import.meta.env[key] || "").trim();
 
@@ -119,7 +115,8 @@ export default function EmployeeLogin() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed?.rememberMe === true) {
-          setForm({ login: parsed.usernameOrEmail || "", password: parsed.password || "" });
+          setForm({ login: parsed.usernameOrEmail || "", password: "" });
+          Cookies.set(REMEMBER_COOKIE, JSON.stringify({ usernameOrEmail: parsed.usernameOrEmail || '', rememberMe: true }), { expires: 30, secure: window.location.protocol === 'https:', path: '/' });
           setRememberMe(true);
         } else {
           Cookies.remove(REMEMBER_COOKIE);
@@ -144,20 +141,16 @@ export default function EmployeeLogin() {
       const response = await userLogin({
         usernameOrEmail: form.login,
         password: form.password,
+        rememberMe,
       });
       if (response?.data?.body?.status === "success") {
         const token = response?.data?.body?.data?.token;
-        setSessionId(response?.data?.body?.data?.sessionId);
-        Cookies.set(accessCookieName(), token, {
-          expires: 1,
-          secure: window.location.protocol === "https:",
-          path: "/",
-        });
+        saveAccessToken(token, response.data?.body?.data?.sessionId);
 
         if (rememberMe) {
           Cookies.set(
             REMEMBER_COOKIE,
-            JSON.stringify({ usernameOrEmail: form.login, password: form.password, rememberMe: true }),
+            JSON.stringify({ usernameOrEmail: form.login, rememberMe: true }),
             {
               expires: 30,
               secure: window.location.protocol === "https:",

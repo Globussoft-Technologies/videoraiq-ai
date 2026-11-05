@@ -1,3 +1,4 @@
+import { endRefreshSession } from '@/utils/refreshAuth';
 import Cookies from 'js-cookie';
 import axios from 'axios';
 import { dropdownCache } from '@/utils/dropdownCache';
@@ -66,6 +67,7 @@ export async function logout({ clearSession = true, syncServer = true } = {}) {
     clearMobileEmbed();
     return;
   }
+  await endRefreshSession();
   const name = cookieName();
   const token = Cookies.get(name);
   const sessionId = getSessionId();
@@ -78,6 +80,7 @@ export async function logout({ clearSession = true, syncServer = true } = {}) {
           'x-session-id': sessionId,
         },
         skipSessionRedirect: true,
+        skipAuthRefresh: true,
       });
     } catch {
       // Logout must continue locally even if the server session update fails.

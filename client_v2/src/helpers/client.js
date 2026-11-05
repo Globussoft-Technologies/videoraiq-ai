@@ -1,6 +1,5 @@
+import { installAxiosSession } from '@/utils/setupAxiosSession';
 import axios from 'axios';
-import { waitForToken } from '@/utils/waitForToken';
-import { sessionHeaders } from '@/utils/sessionIdentity';
 
 /**
  * Shared axios instance for the V2 UI. Mirrors the auth scheme used by the
@@ -11,16 +10,11 @@ const apiUrl = import.meta.env.VITE_BACKEND;
 
 export const api = axios.create({
   baseURL: `${apiUrl}`,
+  requiresAuth: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach the freshest token to every request.
-api.interceptors.request.use(async (config) => {
-  const token = await waitForToken();
-  if (token) config.headers['x-access-token'] = token;
-  Object.assign(config.headers, await sessionHeaders());
-  return config;
-});
+installAxiosSession(api);
 
 /**
  * Unwraps the standard backend envelope. The API returns either

@@ -1,3 +1,4 @@
+import { ensureAccessToken, refreshAccessToken, tokenClaims } from '@/utils/refreshAuth';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import getAccessToken from '@/utils/getAccessToken';
@@ -74,7 +75,10 @@ export function SocketProvider({ children }) {
       path: SOCKET_PATH,
       // sessionId lets the server track presence per session (this tab/device),
       // so the admin session list can show whether each session is online now.
-      auth: { token, sessionId: getSessionId() || undefined },
+      auth: async (callback) => {
+        try { callback({ token: await ensureAccessToken(), sessionId: getSessionId() || undefined }); }
+        catch { callback({ token: '', sessionId: getSessionId() || undefined }); }
+      },
       reconnection: true,
       // Unbounded: this page can sit open for a long time waiting on a
       // scheduled boundary, and a capped attempt count (previously 5) meant a
@@ -100,7 +104,7 @@ export function SocketProvider({ children }) {
       // A fresh sessionId (e.g. after a re-login on this tab) needs to reach the
       // server on reconnect too — auth is reused from connect time otherwise.
       const sessionId = getSessionId();
-      if (sessionId) socket.auth = { ...socket.auth, sessionId };
+      // auth callback reads the current session on each connection.
       sendSessionHeartbeat();
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       heartbeatTimer = setInterval(sendSessionHeartbeat, SESSION_HEARTBEAT_MS);
@@ -115,11 +119,9 @@ export function SocketProvider({ children }) {
     // A fresh auth token on reconnect, in case the old one expired while the
     // socket was down — socket.io reuses the `auth` object from connect time
     // otherwise, so a long-lived page could reconnect with a stale token.
-    socket.io.on('reconnect_attempt', () => {
-      const freshToken = getAccessToken();
-      if (freshToken) {
-        socket.auth = { token: freshToken, sessionId: getSessionId() || undefined };
-      }
+    socket.on('connect_error', async (error) => {
+      if (!/expired token/i.test(error.message) || tokenClaims()?.tokenType !== 'browser-access') return;
+      try { await refreshAccessToken(); socket.connect(); } catch { /* HTTP auth handles final rejection */ }
     });
 
     return () => {

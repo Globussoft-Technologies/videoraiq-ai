@@ -1,3 +1,4 @@
+import { saveAccessToken } from '@/utils/refreshAuth';
 import { useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -13,15 +14,10 @@ import AuthLoader from "./AuthLoader";
 import AuthHero from "./AuthHero";
 import RegisterForm from "./RegisterForm";
 import { Txt, labelStyle, fieldWrap, errStyle, EyeToggle, CtaButton } from "./AuthFields";
-import { setSessionId } from "@/utils/sessionIdentity";
 import "./login.css";
 
-const url = import.meta.env.VITE_ENV;
 const isKhanbas = import.meta.env.VITE_KHANBAS === "true";
 
-/* cookie name matches getAccessToken() / the V1 login flow */
-const accessCookieName = () =>
-  url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
 const REMEMBER_COOKIE = "admin_remember_me";
 
@@ -62,8 +58,10 @@ const LoginForm = () => {
         if (parsed?.rememberMe === true) {
           setSavedCredentials({
             usernameOrEmail: parsed.usernameOrEmail || "",
-            password: parsed.password || "",
+            password: "",
           });
+          // Replace old password-bearing cookies with a username preference.
+          Cookies.set(REMEMBER_COOKIE, JSON.stringify({ usernameOrEmail: parsed.usernameOrEmail || '', rememberMe: true }), { expires: 30, secure: window.location.protocol === 'https:', path: '/' });
           setRememberMe(true);
         } else {
           Cookies.remove(REMEMBER_COOKIE);
@@ -88,25 +86,18 @@ const LoginForm = () => {
         const response = await userLoginByPass({
           login: values.usernameOrEmail,
           pass: values.password,
+          rememberMe,
         });
         const result = response?.data;
 
         if (result?.ok && result?.token) {
-          setSessionId(result.sessionId);
-          // V1 hardcodes secure:true; we only require it over HTTPS so the
-          // standalone app also works on http://localhost during dev.
-          Cookies.set(accessCookieName(), result.token, {
-            expires: 1,
-            secure: window.location.protocol === "https:",
-            path: "/",
-          });
+          saveAccessToken(result.token, result.sessionId);
 
           if (rememberMe) {
             Cookies.set(
               REMEMBER_COOKIE,
               JSON.stringify({
                 usernameOrEmail: values.usernameOrEmail,
-                password: values.password,
                 rememberMe: true,
               }),
               {

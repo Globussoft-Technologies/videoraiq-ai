@@ -14,10 +14,10 @@ export const userLogin = async function (data) {
   });
 };
 
-export const userLoginByPass = async function ({ login, pass }) {
+export const userLoginByPass = async function ({ login, pass, rememberMe = false }) {
   return await axios.post(
     `${HOST}/auth/by-login-pass`,
-    new URLSearchParams({ login, pass }),
+    new URLSearchParams({ login, pass, rememberMe: String(rememberMe) }),
     { skipSessionRedirect: true, headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(await sessionHeaders()) } }
   );
 };
