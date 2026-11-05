@@ -4,6 +4,7 @@ import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import config from "config";
 import jwt from "jsonwebtoken";
 import axios from "axios";
+import { aiAuthHeaders } from "../../../utils/aiAuthHeaders.js";
 import Admin from "../admin/admin.model.js";
 import dashboardSidebarModel from "../dashboard/dashboardSidebar.model.js";
 import { Incident } from "../incidents/incidents.model.js";
@@ -182,6 +183,7 @@ class AUTHService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...aiAuthHeaders({ admin: true }),
           Accept: "application/json",
         },
         body: JSON.stringify(payload),
@@ -202,7 +204,7 @@ class AUTHService {
     }
   }
 
-  // Upsert the admin's license on the detection service (two endpoints).
+  // Upsert the admin's license on both AI services.
   // Fire-and-forget: this must never throw or block the auth flow.
   async registerAdminLicense(adminData, userData) {
     try {
@@ -217,10 +219,10 @@ class AUTHService {
         expiry: latest.expiry,
       };
 
-      const { detectionUrl } = await resolveAdminEndpoints(adminId);
+      const { detectionUrl, attendanceUrl } = await resolveAdminEndpoints(adminId);
       const endpoints = [
-        `${detectionUrl}/admins/register`,
-        `${detectionUrl}/face-auth/api/v1/admins/register`,
+        `${detectionUrl.replace(/\/+$/, "")}/admins/register`,
+        `${attendanceUrl.replace(/\/+$/, "")}/api/v1/admins/register`,
       ];
 
       // Both run independently; one failing never affects the other.
@@ -245,6 +247,7 @@ class AUTHService {
       const response = await axios.post(`${detectionHost}/revoke`, payload, {
         headers: {
           "Content-Type": "application/json",
+          ...aiAuthHeaders(),
         },
         timeout: 5000, // optional: short timeout since service will die
       });
@@ -271,6 +274,7 @@ class AUTHService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
             "X-Revoke-Secret": secretKey,
           },
           timeout: 5000, // service will shut down quickly

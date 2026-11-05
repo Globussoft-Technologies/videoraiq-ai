@@ -278,6 +278,8 @@ const handleDetectionStartStopWithRetry = async (args) => {
     try {
       return await pythonService.handleDetectionStartStop(...args);
     } catch (error) {
+      // Invalid AI credentials need a configuration fix, not a retry.
+      if (error?.response?.status === 401) throw error;
       lastError = error;
       if (attempt < SCHEDULE_TOGGLE_RETRY_ATTEMPTS) {
         await sleep(SCHEDULE_TOGGLE_RETRY_DELAY_MS * attempt);

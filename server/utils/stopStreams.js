@@ -1,4 +1,5 @@
 import axios from "axios";
+import { aiAuthHeaders } from "./aiAuthHeaders.js";
 import logger from "./logger.js";
 import { resolveAdminEndpoints } from "./adminEndpoints.js";
 
@@ -14,7 +15,7 @@ const postToStreamServices = (
   try {
     if (!adminId) return;
     const body = { admin_id: String(adminId) };
-    const opts = { headers: { "Content-Type": "application/json" }, timeout: 5000 };
+    const opts = { headers: { "Content-Type": "application/json", ...aiAuthHeaders() }, timeout: 5000 };
 
     Promise.resolve(resolvedEndpoints || resolveAdminEndpoints(adminId))
       .then(({ detectionUrl, attendanceUrl }) => {

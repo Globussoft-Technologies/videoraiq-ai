@@ -11,6 +11,7 @@ import getStreamingUrl, {
 import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
+import { aiAuthHeaders } from "../utils/aiAuthHeaders.js";
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../constants/hygieneDetection.js";
 import {
   DETECTION_MODES_MAP,
@@ -377,7 +378,7 @@ class PythonService {
     const payload = { admin_id: String(admin_id) };
     if (cameraIds.length) payload.camera_id = cameraIds.length === 1 ? String(cameraIds[0]) : cameraIds.map(String);
     const response = await axios.post(url, payload, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...aiAuthHeaders() },
       timeout: 45000,
     });
     return assertDetectionServiceSuccess(response.data);
@@ -419,12 +420,14 @@ class PythonService {
           timeout: 45000,
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         }),
         axios.post(attendanceEndpoint, payload, {
           timeout: 45000,
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         }),
       ]);
@@ -527,7 +530,7 @@ class PythonService {
         return response;
       }
     } catch (error) {
-      logger.error("Error registering Python channel:", error);
+      logger.error("Error registering Python channel:", error.message);
       throw error;
     }
   }
@@ -946,6 +949,7 @@ class PythonService {
         timeout: 45000,
         headers: {
           "Content-Type": "application/json",
+          ...aiAuthHeaders(),
         },
       });
 
@@ -1240,6 +1244,7 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -1268,6 +1273,7 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -1359,7 +1365,7 @@ class PythonService {
       const { detectionUrl } = await resolveAdminEndpoints(admin_id);
       const response = await axios.get(
         `${detectionUrl}/stream/${camera_id}/status`,
-        { timeout: 8000 },
+        { timeout: 8000, headers: aiAuthHeaders() },
       );
       const logics = response?.data?.active_logics;
       return Array.isArray(logics) ? logics : [];
@@ -1396,7 +1402,7 @@ class PythonService {
 
     // 1. A dedicated catalog endpoint, if DS ever grows one.
     try {
-      const { data } = await axios.get(`${detectionUrl}${catalogPath}`, { timeout: 8000 });
+      const { data } = await axios.get(`${detectionUrl}${catalogPath}`, { timeout: 8000, headers: aiAuthHeaders() });
       const list = Array.isArray(data) ? data : data?.detectors;
       if (Array.isArray(list) && list.length) {
         return {
@@ -1410,7 +1416,7 @@ class PythonService {
 
     // 2. OpenAPI. The enum lives at components.schemas.DetectionLogic.enum.
     try {
-      const { data } = await axios.get(`${detectionUrl}/openapi.json`, { timeout: 8000 });
+      const { data } = await axios.get(`${detectionUrl}/openapi.json`, { timeout: 8000, headers: aiAuthHeaders() });
       const names = data?.components?.schemas?.DetectionLogic?.enum;
       if (Array.isArray(names) && names.length) {
         return { source: "/openapi.json", names };
@@ -1532,6 +1538,7 @@ class PythonService {
           timeout: 45000,
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -1577,12 +1584,13 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
       return response.data;
     } catch (error) {
-      logger.error("Error starting Python detection:", error);
+      logger.error("Error starting Python detection:", error.message);
       throw error;
     }
   }
@@ -1599,13 +1607,14 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
 
       return response.data;
     } catch (error) {
-      logger.error("Error stopping Python detection:", error);
+      logger.error("Error stopping Python detection:", error.message);
       throw error;
     }
   }

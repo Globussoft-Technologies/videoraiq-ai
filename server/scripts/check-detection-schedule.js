@@ -27,6 +27,7 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import axios from "axios";
+import { aiAuthHeaders } from "../utils/aiAuthHeaders.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,7 +74,7 @@ const isDetectorApplied = (channel, settingType) => {
 /** DS object-detection truth for one camera. null = could not determine. */
 const fetchDsState = async (detectionUrl, cameraId) => {
   try {
-    const res = await axios.get(`${detectionUrl}/stream/${cameraId}/status`, { timeout: 8000 });
+    const res = await axios.get(`${detectionUrl}/stream/${cameraId}/status`, { timeout: 8000, headers: aiAuthHeaders() });
     const data = res.data || {};
     const running = data.running ?? data.is_running ?? data.active ?? data.status;
     if (typeof running === "boolean") return { running, raw: data };

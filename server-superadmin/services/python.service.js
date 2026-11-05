@@ -7,6 +7,7 @@ import getStreamingUrl, {
 import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
+import { aiAuthHeaders } from "../utils/aiAuthHeaders.js";
 import { DETECTION_MODES_MAP } from "../constants/detectionTypes.js";
 import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
@@ -48,7 +49,7 @@ class PythonService {
         return response;
       }
     } catch (error) {
-      logger.error("Error registering Python channel:", error);
+      logger.error("Error registering Python channel:", error.message);
       throw error;
     }
   }
@@ -312,6 +313,7 @@ class PythonService {
       const response = await axios.post(`${detectionUrl}/stream`, newPayload, {
         headers: {
           "Content-Type": "application/json",
+          ...aiAuthHeaders(),
         },
       });
 
@@ -497,6 +499,7 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -531,6 +534,7 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -674,6 +678,7 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
@@ -697,12 +702,13 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
       return response.data;
     } catch (error) {
-      logger.error("Error starting Python detection:", error);
+      logger.error("Error starting Python detection:", error.message);
       throw error;
     }
   }
@@ -719,13 +725,14 @@ class PythonService {
         {
           headers: {
             "Content-Type": "application/json",
+            ...aiAuthHeaders(),
           },
         },
       );
 
       return response.data;
     } catch (error) {
-      logger.error("Error stopping Python detection:", error);
+      logger.error("Error stopping Python detection:", error.message);
       throw error;
     }
   }

@@ -260,6 +260,35 @@ storage.{s3,googleDrive,sftp}, telegram.botToken
 
 ---
 
+## AI service authentication
+
+Set these runtime environment variables on the backend and any workers that call
+the object-detection or face-auth APIs:
+
+```dotenv
+API_AUTH_BEARER=<value supplied by the AI team>
+ADMIN_API_SECRET=<separate provisioning secret supplied by the AI team>
+```
+
+`API_AUTH_BEARER` is sent as `Authorization: Bearer ...` on AI control requests.
+License provisioning also sends `X-Admin-Secret`. Face-auth license registration
+uses `PythonService.attendanceUrl` (including its `/face-auth` suffix); object
+registration uses `PythonService.detectionUrl`. Per-admin URL overrides apply.
+
+Production bootstrap loads the service's `.env`; containers can receive the
+variables through `environment` or `env_file`. Keep actual values out of source
+control and frontend configuration. Restart/recreate backend and worker processes
+after setting them. Configure both `server` and `server-superadmin` deployments.
+
+Unset values omit the corresponding headers for compatibility with AI servers
+in off/observe mode. The bearer token must be configured before enforce mode;
+the admin secret is required now wherever provisioning is already enforced.
+A successful response in off mode does not validate the bearer token: have the
+AI team verify it in observe mode before enforcement. A 401 indicates invalid or
+missing credentials; a provisioning 503 indicates missing AI-server configuration.
+
+---
+
 ## Logging
 
 Winston with `winston-daily-rotate-file` ([`utils/logger.js`](utils/logger.js)). Logs land under `logs/` (gitignored). Levels:
