@@ -1,6 +1,7 @@
 // Coalesce count-event bursts without overlapping authorized API reads.
-export function subscribeGenderAgeCounts(socket, adminId, refresh, delayMs = 150) {
+export function subscribeGenderAgeCounts(socket, adminId, refresh, delayMs = 150, fallbackMs = 0) {
   const channel = `genderAgeCounts_${adminId}`;
+  const alertChannel = `cameradetection_${adminId}`;
   let active = true;
   let pending = false;
   let dirty = false;
@@ -22,12 +23,21 @@ export function subscribeGenderAgeCounts(socket, adminId, refresh, delayMs = 150
       }
     }, delayMs);
   };
-  socket.on(channel, schedule);
-  socket.on('connect', schedule);
+  socket?.on(channel, schedule);
+  const onAlert = incident => {
+    if (incident?.incidentType === 'genderAgeDetection') schedule();
+  };
+  socket?.on(alertChannel, onAlert);
+  socket?.on('connect', schedule);
+  // The server can address an alert to one socket, leaving other open tabs
+  // without an event. Reconcile from the API while automatic polling is off.
+  const fallbackTimer = fallbackMs > 0 ? setInterval(schedule, fallbackMs) : null;
   return () => {
     active = false;
+    if (fallbackTimer !== null) clearInterval(fallbackTimer);
     if (timer !== null) clearTimeout(timer);
-    socket.off(channel, schedule);
-    socket.off('connect', schedule);
+    socket?.off(channel, schedule);
+    socket?.off(alertChannel, onAlert);
+    socket?.off('connect', schedule);
   };
 }

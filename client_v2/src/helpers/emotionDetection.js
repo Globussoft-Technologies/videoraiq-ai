@@ -1,5 +1,17 @@
 export const EMOTION_SETTING_TYPE = 'emotionDetectionSettings';
 export const EMOTION_ALERT_GROUPS = Object.freeze(['positive', 'neutral', 'negative', 'surprise']);
+export const EMOTION_LOG_GROUPS = Object.freeze([
+  { id: 'positive', label: 'Positive', emotions: ['Happiness'] },
+  { id: 'negative', label: 'Negative', emotions: ['Anger', 'Contempt', 'Disgust', 'Fear', 'Sadness'] },
+  { id: 'surprise', label: 'Surprise', emotions: ['Surprise'] },
+  { id: 'neutral', label: 'Neutral', emotions: ['Neutral'] },
+]);
+
+export function selectedEmotionGroup(emotions = []) {
+  if (!emotions.length) return '';
+  const selected = new Set(emotions);
+  return EMOTION_LOG_GROUPS.find(group => group.emotions.length === selected.size && group.emotions.every(emotion => selected.has(emotion)))?.id || '';
+}
 
 export function emotionZoneSettings(zone = {}, shared = {}) {
   return {

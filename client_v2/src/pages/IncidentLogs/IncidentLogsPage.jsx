@@ -2,6 +2,7 @@ import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import useGenderAgeLiveUpdates from '@/hooks/useGenderAgeLiveUpdates';
 import GenderAgeSummary from './components/GenderAgeSummary';
+import EmotionGroupSummary from './components/EmotionGroupSummary';
 import GenderFilter from './components/GenderFilter';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -134,6 +135,7 @@ const IncidentLogsPage = ({ config }) => {
   });
   const [emotions, setEmotions] = useState([]);
   const [emotionOptions, setEmotionOptions] = useState([]);
+  const [emotionCounts, setEmotionCounts] = useState([]);
   const [genderAgeSummary, setGenderAgeSummary] = useState(null);
   const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
@@ -292,7 +294,10 @@ const IncidentLogsPage = ({ config }) => {
       let list = filteredDoorRows ? filteredDoorRows.slice(skip, skip + limit) : data?.data || [];
       let total = filteredDoorRows ? filteredDoorRows.length : data?.totalCount || 0;
       if (requestId !== fetchRequestId.current) return;
-      if (config.showEmotionFields) setEmotionOptions(data?.emotionOptions || []);
+      if (config.showEmotionFields) {
+        setEmotionOptions(data?.emotionOptions || []);
+        setEmotionCounts(data?.emotionCounts || []);
+      }
       if (config.showGenderAgeFields) setGenderAgeSummary(data?.genderAgeSummary || null);
 
       // Box Packing is currently being validated with local sample records.
@@ -378,7 +383,7 @@ const IncidentLogsPage = ({ config }) => {
   }, [fetchLogs, manualTrigger]);
 
   useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
-  useGenderAgeLiveUpdates(fetchLogs, config.showGenderAgeFields && canView);
+  useGenderAgeLiveUpdates(fetchLogs, config.showGenderAgeFields && canView, autoRefresh);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(
@@ -700,6 +705,7 @@ const IncidentLogsPage = ({ config }) => {
       />
 
       {config.showGenderAgeFields && <GenderAgeSummary summary={genderAgeSummary} loading={loading} />}
+      {config.showEmotionFields && <EmotionGroupSummary counts={emotionCounts} emotions={emotions} onChange={setEmotions} loading={loading} />}
       <ReusableTablePage
         stats={stats}
         loading={loading}

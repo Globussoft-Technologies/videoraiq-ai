@@ -6,6 +6,7 @@ import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect
 import { LIGHTING_CATEGORY_OPTIONS } from '@/helpers/lightingDetection';
 import { HYGIENE_CATEGORY_OPTIONS } from '@/helpers/hygieneDetection';
 import { Button } from '@/components/ui/button';
+import { EMOTION_LOG_GROUPS, selectedEmotionGroup } from '@/helpers/emotionDetection';
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -138,7 +139,19 @@ const IncidentFilterPopover = ({
               maxHeight="max-h-40"
               msg="No Camera Found"
             />
-            {showEmotion && <MultiSelect options={emotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" msg="No emotions found" />}
+            {showEmotion && <>
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-[var(--tx2)]">Emotion category</span>
+                <InlineSelect
+                  value={selectedEmotionGroup(emotions) || (emotions.length ? '__custom__' : '')}
+                  onChange={value => setEmotions(EMOTION_LOG_GROUPS.find(group => group.id === value)?.emotions || [])}
+                  options={EMOTION_LOG_GROUPS.map(group => ({ value: group.id, label: group.label }))}
+                  placeholder={emotions.length ? 'Custom selection' : 'All categories'}
+                  allLabel="All categories"
+                />
+              </div>
+              <MultiSelect options={emotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" msg="No emotions found" />
+            </>}
             {showVehicleNumber && (
               <div>
                 <VehicleNumberSelect
