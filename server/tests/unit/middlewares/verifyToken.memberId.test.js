@@ -22,6 +22,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import mongoose from "mongoose";
+import { requestAdmin } from '../../../utils/requestAdmin.js';
 import { makeReqRes, signJwt } from "../../helpers/factory.js";
 import { connectMongo, disconnectMongo, clearCollections } from "../../integration/dbSetup.js";
 
@@ -147,6 +148,9 @@ describe("verifyToken — user-token memberId branch (lines 65-98)", () => {
     await runMiddleware(req, res);
     expect(req.verified).toBeDefined();
     expect(req.verified.userData.memberId).toBe(user._id.toString());
+    const reload = vi.fn();
+    expect(String((await requestAdmin(req, reload))._id)).toBe(String(admin._id));
+    expect(reload).not.toHaveBeenCalled();
     // permissionConfig should be the result of the role $lookup aggregate.
     expect(Array.isArray(req.verified.permissionConfig)).toBe(true);
     expect(req.verified.permissionConfig.length).toBe(1);
@@ -167,7 +171,8 @@ describe("verifyToken — user-token memberId branch (lines 65-98)", () => {
     // matches nothing → permissionConfig is []. The middleware still
     // proceeds (the commented-out "User not found" guard is dead code).
     const ghostUserId = new mongoose.Types.ObjectId().toString();
-    const token = signJwt({ memberId: ghostUserId });
+    const admin = await Admin.create({ user_id: 'ghost-role-admin', login: 'ghost-role-admin', email: 'ghost-role@test.com' });
+    const token = signJwt({ memberId: ghostUserId, adminId: String(admin._id) });
     const { req, res } = makeReqRes();
     req.originalUrl = "/api/v1/foo";
     req.path = "/foo";
@@ -238,7 +243,7 @@ describe("verifyToken — orgId assignment from EMP lookup (lines 108-110)", () 
     expect(req.verified).toBeDefined();
     expect(req.verified.userData.orgId).toBe(4242);
     // Confirm the stub received the user_email from the decoded payload.
-    expect(helperFns.getEmpAuthInfo).toHaveBeenCalledWith("orgAdmin@test.com");
+    expect(helperFns.getEmpAuthInfo).toHaveBeenCalledWith("orgAdmin@test.com", { scope: String(admin._id) });
   });
 
   it("leaves decoded.orgId undefined when getEmpAuthInfo returns null", async () => {

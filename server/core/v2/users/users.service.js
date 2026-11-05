@@ -1,3 +1,4 @@
+import { issueBrowserTokens } from '../Auth/refreshToken.service.js';
 import logger from "../../../utils/logger.js";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
 import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
@@ -959,6 +960,7 @@ class UsersService {
           await syncAlertsAnalyticsPermissions(user.adminId?._id);
 
           const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+          jwtToken = await issueBrowserTokens(req, res, tokenPayload, session, jwtToken);
 
           return res.status(200).json(
             Response.userSuccessResp("Login successful", {

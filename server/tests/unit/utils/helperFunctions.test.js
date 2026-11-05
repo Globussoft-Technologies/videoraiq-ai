@@ -127,7 +127,7 @@ describe("getEmpAuthInfo", () => {
     expect(typeof url).toBe("string");
     expect(url.endsWith("/auth/info")).toBe(true);
     expect(body).toEqual({ email: "alice@test.com" });
-    expect(opts).toEqual({ headers: { "Content-Type": "application/json" } });
+    expect(opts).toEqual({ headers: { "Content-Type": "application/json" }, timeout: 5000 });
   });
 
   it("returns null when axios responds with body but no data property", async () => {

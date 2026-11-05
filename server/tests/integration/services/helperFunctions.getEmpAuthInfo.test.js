@@ -20,6 +20,44 @@ beforeEach(() => {
 });
 
 describe("getEmpAuthInfo", () => {
+  it('clears a shared failed lookup so the next request can retry', async () => {
+    let reject;
+    axios.post.mockImplementationOnce(() => new Promise((_done, fail) => { reject = fail; }));
+    const first = getEmpAuthInfo('failed@test.com', { scope: 'a' });
+    const second = getEmpAuthInfo('failed@test.com', { scope: 'a' });
+    const settled = Promise.allSettled([first, second]);
+    reject(new Error('EMP unavailable'));
+    expect((await settled).map(item => item.status)).toEqual(['rejected', 'rejected']);
+    axios.post.mockResolvedValueOnce({ data: { data: [{ id: 99 }] } });
+    await expect(getEmpAuthInfo('failed@test.com', { scope: 'a' })).resolves.toEqual({ data: [{ id: 99 }] });
+    expect(axios.post).toHaveBeenCalledTimes(2);
+  });
+  it('shares concurrent identical lookups but refreshes after completion', async () => {
+    let resolve;
+    axios.post.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const first = getEmpAuthInfo('same@test.com', { scope: 'a' });
+    const second = getEmpAuthInfo('same@test.com', { scope: 'a' });
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    resolve({ data: { data: [{ id: 42 }] } });
+    expect(await Promise.all([first, second])).toEqual([{ data: [{ id: 42 }] }, { data: [{ id: 42 }] }]);
+    axios.post.mockResolvedValueOnce({ data: { data: [{ id: 43 }] } });
+    expect(await getEmpAuthInfo('same@test.com', { scope: 'a' })).toEqual({ data: [{ id: 43 }] });
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(axios.post.mock.calls[0][2].timeout).toBe(5000);
+  });
+
+  it('isolates accounts and emails and retries after a timeout', async () => {
+    axios.post.mockResolvedValue({ data: { data: [{ id: 'org' }] } });
+    await Promise.all([
+      getEmpAuthInfo('same@test.com', { scope: 'a' }),
+      getEmpAuthInfo('same@test.com', { scope: 'b' }),
+      getEmpAuthInfo('other@test.com', { scope: 'a' }),
+    ]);
+    expect(axios.post).toHaveBeenCalledTimes(3);
+    axios.post.mockRejectedValueOnce(Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }));
+    await expect(getEmpAuthInfo('same@test.com', { scope: 'a' })).rejects.toThrow('timeout');
+    await expect(getEmpAuthInfo('same@test.com', { scope: 'a' })).resolves.toEqual({ data: [{ id: 'org' }] });
+  });
   it("returns response.data on a successful call", async () => {
     axios.post.mockResolvedValueOnce({ data: { data: [{ id: "org1" }] } });
     const out = await getEmpAuthInfo("u@test.com");

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import adminModel from "../admin/admin.model.js";
+import { requestAdmin } from "../../../utils/requestAdmin.js";
 import channelsModel from "../channels/channels.model.js";
 import {Incident} from "../incidents/incidents.model.js";
 import alertModel from "../alerts/alerts.model.js";
@@ -38,9 +39,7 @@ class DashboardService {
 
 
       
-          const isAdminExist = await adminModel.findOne({
-            _id:req?.verified?.userData?.adminId
-          });
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
       
           if (!isAdminExist) {
             return res.send(Response.userFailResp("Admin not found!", "Validation Failed!."));
@@ -543,9 +542,7 @@ class DashboardService {
           let authorizedNVRs = req?.verified?.authorizedChannel?.nvrIds || [];
           let {skip=0,limit=10} = req.query;
       
-          const isAdminExist = await adminModel.findOne({
-            _id:req?.verified?.userData?.adminId
-          });
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
       
           if (!isAdminExist) {
             return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
@@ -771,7 +768,7 @@ class DashboardService {
           const data = req?.verified?.userData;
           let authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
           let authorizedNVRs = req?.verified?.authorizedChannel?.nvrIds || [];
-          const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
           if (!isAdminExist) {
             return res.send(Response.validationFailResp("Admin not found!", "Validation Failed!"));
           }
@@ -1032,7 +1029,7 @@ class DashboardService {
 
           const data = req?.verified?.userData;
       
-          const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
           if (!isAdminExist) {
             return res.send(Response.validationFailResp("Admin not found!", "Validation Failed!"));
           }
@@ -1162,7 +1159,7 @@ class DashboardService {
         try{
           const data = req?.verified?.userData;
       
-          const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
           if (!isAdminExist) {
             return res.send(Response.validationFailResp("Admin not found!", "Validation Failed!"));
           }
@@ -1186,7 +1183,7 @@ class DashboardService {
           const updates = req.body?.detectionConfigs; // Expecting an array of { detectionType, isEnabled, allowedDetection }
         
           // Find admin by email
-          const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+          const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
           if (!isAdminExist) {
             return res.send(Response.validationFailResp("Admin not found!", "Validation Failed!"));
           }
@@ -1472,7 +1469,7 @@ async getIncidentsByType(req, res, _next) {
     }
 
     // Step 1: Validate admin
-    const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+    const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
     if (!isAdminExist) {
       return res.send(
         Response.validationFailResp("Admin not found!", "Validation Failed!")
@@ -1593,7 +1590,7 @@ async getDetections(req, res, _next) {
     }
 
     // Validate admin
-    const isAdminExist = await adminModel.findOne({_id:req?.verified?.userData?.adminId});
+    const isAdminExist = await requestAdmin(req, () => adminModel.findOne({_id:req?.verified?.userData?.adminId}));
     if (!isAdminExist) {
       return res.send(
         Response.validationFailResp("Admin not found!", "Validation Failed!")

@@ -266,7 +266,7 @@ class SessionsService {
     const deviceAccess = await this.ensureDeviceCanLogin(req, userData);
     if (deviceAccess.allowed) return deviceAccess;
 
-    const sessionId = req.headers["x-session-id"];
+    const sessionId = userData.sessionId || req.headers["x-session-id"];
     if (sessionId) {
       const now = new Date();
       await sessionModel.updateOne(
@@ -289,7 +289,7 @@ class SessionsService {
     const deviceAccess = await this.enforceRequestDevice(req, userData);
     if (!deviceAccess.allowed) return deviceAccess;
 
-    const sessionId = req.headers["x-session-id"];
+    const sessionId = userData.sessionId || req.headers["x-session-id"];
     if (!sessionId) return { allowed: true };
 
     const session = await sessionModel.findOne({ sessionId }).select("status adminId memberId deviceId").lean();
@@ -309,6 +309,9 @@ class SessionsService {
       return { allowed: false, statusCode: 401, body: { status: "failed", message: "This session is blocked", code: "SESSION_BLOCKED" } };
     }
 
+    if (session.status === "expired") {
+      return { allowed: false, statusCode: 401, body: { status: "failed", message: "Session expired", code: "SESSION_INVALID" } };
+    }
     if (session.status === "logged_out") {
       return { allowed: false, statusCode: 401, body: { status: "failed", message: "This session has been logged out", code: "SESSION_LOGGED_OUT" } };
     }

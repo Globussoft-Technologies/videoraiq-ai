@@ -1,3 +1,4 @@
+import { configuredAuthOrigins } from './utils/authOrigins.js';
 import express from "express";
 import http from "http";
 import morgan from "morgan";
@@ -94,7 +95,10 @@ app.use(mongoSanitize());
 app.use(sanitizeInput);
 app.use(
   cors({
-    origin: "*",
+    origin(origin, callback) {
+      callback(null, origin && configuredAuthOrigins().includes(origin) ? origin : '*');
+    },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     // x-device-id/x-session-id/x-browser/x-operating-system/x-device-name are sent on
     // every request by sessionHeaders() (client_v2/src/utils/sessionIdentity.js) for
@@ -111,6 +115,7 @@ app.use(
       "x-captured-at",
       "x-idempotency-key",
       "x-access-token",
+      "x-auth-refresh",
       "x-api-key",
       "x-device-id",
       "x-session-id",

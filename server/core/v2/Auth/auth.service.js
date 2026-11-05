@@ -1,3 +1,4 @@
+import { issueBrowserTokens, refreshBrowserTokens, logoutBrowserSession } from './refreshToken.service.js';
 import { generateToken } from "../../../middlewares/decodeToken.js";
 import { grantPlanDefaultCameras } from "../clientConfig/detectionLicense.service.js";
 import { encrypt } from "../../../utils/cryptoUtils.js";
@@ -565,8 +566,9 @@ class AUTHService {
         return res.status(sessionAccess.statusCode).json({ ok: false, ...sessionAccess.body });
       }
 
-      const dashboardToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
+      let dashboardToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
       const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+      dashboardToken = await issueBrowserTokens(req, res, tokenPayload, session, dashboardToken);
       return res.status(200).json({
         ok: true,
         msg: "User impersonation verified",
@@ -608,9 +610,7 @@ class AUTHService {
       `${this.baseUrl}/access` +
       `?_key=${this.apiKey}` +
       `&_filter[user_id]=${userId}`;
-    console.log(url);
-
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "GET",
       headers: {
         Accept: "application/json",
@@ -1890,6 +1890,7 @@ return bypassUsers.find(
       }
 
       const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+      jwtToken = await issueBrowserTokens(req, res, tokenPayload, session, jwtToken);
       return res.status(200).json({
         ok: true,
         msg: "User verified",
@@ -1951,15 +1952,49 @@ return bypassUsers.find(
           // enforceRequestSession) so IsAuth.jsx can re-persist the vq_session_id
           // cookie on every reload — without this, a long-lived tab's cookie could
           // silently expire and the socket/presence tracking would lose the session.
-          sessionId: req.headers["x-session-id"] || null,
+          sessionId: decoded.sessionId || req.headers["x-session-id"] || null,
         });
     } catch (error) {
       return res.status(401).json({
         success: false,
         message: "Invalid token",
+        code: error.name === 'TokenExpiredError' ? 'ACCESS_TOKEN_EXPIRED' : 'ACCESS_TOKEN_INVALID',
         error: error.message,
       });
     }
+  }
+
+  async refresh(req, res) {
+    try {
+      return await refreshBrowserTokens(req, res, async (claims, admin, user) => {
+        const bypass = (config.has('bypass_users') ? config.get('bypass_users') : [])
+          .find(item => item.login === admin.login);
+        const subscriptions = bypass
+          ? { bypass: bypass.expire }
+          : this.extractSubscriptions(await this.getAmemberAccessByUserId(Number(admin.user_id)));
+        if (!this.isPlanActive({ subscriptions })) return null;
+        return {
+          ...claims,
+          userSubscriptionType: subscriptions,
+          login: claims.memberId ? user.userName : admin.login,
+          user_email: user.email,
+          user_name: claims.memberId ? user.userName : `${admin.name_f || ''} ${admin.name_l || ''}`.trim(),
+          name_f: claims.memberId ? user.firstName : admin.name_f,
+          name_l: claims.memberId ? user.lastName : admin.name_l,
+          ...(claims.memberId ? { roleId: user.roleIds, profilePics: user.profilePics } : {}),
+          streamHost: `${(admin.streamHost || config.get('RTSPStream.host')).replace(/\/+$/, '')}/`,
+          ...envClaims(admin),
+        };
+      });
+    } catch (error) {
+      logger.error('[AUTH_REFRESH] Unable to renew session', error.message);
+      return res.status(503).json({ success: false, code: 'REFRESH_UNAVAILABLE', message: 'Unable to renew session. Please retry.' });
+    }
+  }
+
+  async logout(req, res, next) {
+    try { return await logoutBrowserSession(req, res); }
+    catch (error) { return next(error); }
   }
 
   async getAmemberUserDetails(req, res) {

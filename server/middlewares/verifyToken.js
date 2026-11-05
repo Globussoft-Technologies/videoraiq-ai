@@ -12,6 +12,7 @@ import { getEmpAuthInfo } from "../utils/helperFunctions.js";
 import sessionsService from "../core/v2/sessions/sessions.service.js";
 import { DEFAULT_ADMIN_TIMEZONE, validTimezone } from "../utils/timezone.js";
 import { checkKeyOwnership } from '../core/v2/apiKeys/apiKey.ownership.js';
+import { rememberRequestAdmin } from '../utils/requestAdmin.js';
 
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
@@ -121,6 +122,7 @@ async function verifyToken(req, res, next) {
               .send(Response.tokenFailResp("Registration link is invalid or has expired"));
           }
           decoded.adminTimezoneConfigured = Boolean(validTimezone(admin.timezone));
+          rememberRequestAdmin(req, admin);
           decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           // Check if the password was changed after the token was issued
           // if (admin.passwordChangedAt && decoded.iat * 1000 < admin.passwordChangedAt.getTime()) {
@@ -136,6 +138,7 @@ async function verifyToken(req, res, next) {
               .send(Response.tokenFailResp("admin not found"));
           }
           decoded.adminTimezoneConfigured = Boolean(validTimezone(admin.timezone));
+          rememberRequestAdmin(req, admin);
           decoded.timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
           const user = await User.findOne({ _id: decoded?.memberId }); // Replace with your ID field
           authorizedChannel = await authorizedChannelsModel.findOne({
@@ -178,7 +181,7 @@ async function verifyToken(req, res, next) {
         // Fetch orgId from EMP auth info if user_email is available
         if (decoded?.user_email) {
           try {
-            const empData = await getEmpAuthInfo(decoded?.user_email);            
+            const empData = await getEmpAuthInfo(decoded?.user_email, { scope: decoded.adminId });
             if (empData?.data?.[0]?.id) {
               decoded.orgId = empData.data[0].id;
             }
@@ -212,9 +215,8 @@ async function verifyToken(req, res, next) {
         checkActivePlan(req, res, next)
         // next();
       } else {
-        return res
-          .status(401)
-          .send(Response.tokenFailResp("Invalid access token"));
+        const code = _error?.name === 'TokenExpiredError' ? 'ACCESS_TOKEN_EXPIRED' : 'ACCESS_TOKEN_INVALID';
+        return res.status(401).send({ ...Response.tokenFailResp("Invalid access token"), code });
       }
     });
   } catch (e) {

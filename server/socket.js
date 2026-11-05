@@ -174,6 +174,11 @@ export const initSocket = (server) => {
         socket.user = claims;
         return next();
       }
+      if (decoded.tokenType === 'browser-access') {
+        const session = await sessionModel.findOne({ sessionId: decoded.sessionId, status: 'active', adminId: decoded.adminId, memberId: decoded.memberId || null }).lean();
+        if (!session) return next(new Error('Session is no longer active'));
+        socket.handshake.auth.sessionId = decoded.sessionId;
+      }
       checkActivePlanSocket(socket, next)
     } catch (err) {
       return next(new Error("Invalid or expired token"));

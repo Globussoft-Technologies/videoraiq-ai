@@ -103,6 +103,16 @@ describe("verifyToken", () => {
       name.toLowerCase() === "x-access-token" ? "not-a-jwt" : undefined;
     await runMiddleware(req, res);
     expect(res.statusCode).toBe(401);
+    expect(res._body.code).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('distinguishes expired JWTs so client_v2 can renew them', async () => {
+    const token = jwt.sign({ adminId: 'ffffffffffffffffffffffff' }, config.get('jwt.secretKey'), { expiresIn: -1 });
+    const { req, res } = makeReqRes();
+    req.header = name => name === 'x-access-token' ? token : undefined;
+    await runMiddleware(req, res);
+    expect(res.statusCode).toBe(401);
+    expect(res._body.code).toBe('ACCESS_TOKEN_EXPIRED');
   });
 
   it("returns 401 when the decoded admin no longer exists", async () => {

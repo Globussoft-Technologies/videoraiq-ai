@@ -14,7 +14,9 @@ import {
   beforeAll,
   afterAll,
   beforeEach,
+  vi,
 } from "vitest";
+import { rememberRequestAdmin } from '../../../utils/requestAdmin.js';
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import express from "express";
@@ -44,6 +46,20 @@ const { default: NVR } = await import(
 );
 
 const USER_ID = "55";
+
+it('preserves v2 header output while avoiding the second admin query', async () => {
+  const first = serviceCtx({ adminId: admin._id, user_id: USER_ID, body: {}, query: {} });
+  await DashboardService.headerStats(first.req, first.res, first.next);
+  expect(payload(first.res).status).toBe('success');
+  const second = serviceCtx({ adminId: admin._id, user_id: USER_ID, body: {}, query: {} });
+  rememberRequestAdmin(second.req, admin);
+  const find = vi.spyOn(Admin, 'findOne');
+  try {
+    await DashboardService.headerStats(second.req, second.res, second.next);
+    expect(find).not.toHaveBeenCalled();
+    expect(payload(second.res)).toEqual(payload(first.res));
+  } finally { find.mockRestore(); }
+});
 
 let admin;
 let mongo;
