@@ -8,12 +8,29 @@ import permissionModel from "../core/v1/permission/permissions.model.js";
 import departmentsModel from "../core/v1/departments/departments.model.js";
 import { DETECTION_LOG_PERMISSION_KEYS } from "../constants/detectionTypes.js";
 
-export async function getEmpAuthInfo(email) {
+// Share only concurrent requests; settled values/errors are never cached.
+const empLookups = new Map();
+const MAX_PENDING_EMP_LOOKUPS = 256;
+export async function getEmpAuthInfo(email, { scope = "" } = {}) {
+  const endpoint = `${config.get("empDomain")}/auth/info`;
+  const key = JSON.stringify([endpoint, String(scope), email]);
+  if (empLookups.has(key)) return empLookups.get(key);
+  const pending = fetchEmpAuthInfo(endpoint, email);
+  const tracked = empLookups.size < MAX_PENDING_EMP_LOOKUPS;
+  if (tracked) empLookups.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (tracked && empLookups.get(key) === pending) empLookups.delete(key);
+  }
+}
+
+async function fetchEmpAuthInfo(endpoint, email) {
   try {
     const response = await axios.post(
-      `${config.get("empDomain")}/auth/info`,
+      endpoint,
       { email },
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { "Content-Type": "application/json" }, timeout: 5000 }
     );
     return response.data || null;
   } catch (error) {
