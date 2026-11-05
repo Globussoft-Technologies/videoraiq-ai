@@ -1,36 +1,50 @@
-import { GenderAgeCountIncident, GenderAgeDetectionIncident } from './incidents.model.js';
+import { GenderAgeDetectionIncident } from './incidents.model.js';
 
-// The headline counts are alert logs; the zone rows are count snapshots.
-// They are separate incident types and must never be added together.
+// The headline totals count detection images. Each camera/zone/gender row
+// indicates whether at least one matching image exists in the selected range.
 export async function getGenderAgeSummary(scope) {
-  const snapshotScope = { ...scope, incidentType: 'genderAgeCount' };
-  const [alertCounts, snapshots] = await Promise.all([
-    GenderAgeDetectionIncident.aggregate([
-      { $match: { ...scope, incidentType: 'genderAgeDetection' } },
-      { $group: { _id: '$targetGender', count: { $sum: 1 } } },
-    ]),
-    GenderAgeCountIncident.aggregate([
-      { $match: snapshotScope },
-      { $sort: { channelId: 1, timeOfIncident: -1, _id: -1 } },
-      { $group: { _id: '$channelId', snapshot: { $first: '$$ROOT' } } },
-      { $replaceRoot: { newRoot: '$snapshot' } },
-      { $lookup: { from: 'channels', localField: 'channelId', foreignField: '_id', as: 'camera' } },
-      { $sort: { channelId: 1 } },
-    ]),
+  const groups = await GenderAgeDetectionIncident.aggregate([
+    { $match: { ...scope, incidentType: 'genderAgeDetection' } },
+    { $sort: { timeOfIncident: -1, _id: -1 } },
+    { $group: {
+      _id: {
+        channelId: '$channelId',
+        zoneKey: { $ifNull: ['$zoneIdx', { $ifNull: ['$zone', 'Full frame'] }] },
+        gender: '$targetGender',
+      },
+      count: { $sum: 1 },
+      zoneIdx: { $first: '$zoneIdx' },
+      zone: { $first: '$zone' },
+    } },
+    { $lookup: { from: 'channels', localField: '_id.channelId', foreignField: '_id', as: 'camera' } },
   ]);
-  const counts = Object.fromEntries(alertCounts.map(({ _id, count }) => [_id, count]));
-  const summary = { femaleCount: counts.Female || 0, maleCount: counts.Male || 0, totalCount: 0, zones: [] };
-  for (const snapshot of snapshots) {
-    const zones = snapshot.zones?.length ? snapshot.zones : [{
-      zone_idx: null, zone: 'Full frame', female_count: snapshot.femaleCount, male_count: snapshot.maleCount,
-    }];
-    for (const zone of zones) summary.zones.push({
-      cameraId: String(snapshot.channelId), cameraName: snapshot.camera?.[0]?.name || 'Camera',
-      zoneIdx: zone.zone_idx, zone: zone.zone,
-      femaleCount: zone.female_count, maleCount: zone.male_count,
-      totalCount: zone.female_count + zone.male_count, timeOfIncident: snapshot.timeOfIncident,
-    });
+
+  const summary = { femaleCount: 0, maleCount: 0, totalCount: 0, zones: [] };
+  const zoneMap = new Map();
+  for (const group of groups) {
+    const { channelId, zoneKey, gender } = group._id;
+    if (gender !== 'Female' && gender !== 'Male') continue;
+    const key = `${channelId}:${zoneKey}`;
+    if (!zoneMap.has(key)) {
+      const zoneIdx = group.zoneIdx ?? null;
+      const zone = {
+        cameraId: String(channelId),
+        cameraName: group.camera?.[0]?.name || 'Camera',
+        zoneIdx,
+        zone: group.zone || (zoneIdx == null ? 'Full frame' : `Zone ${zoneIdx + 1}`),
+        femaleCount: 0, maleCount: 0, totalCount: 0,
+      };
+      zoneMap.set(key, zone);
+      summary.zones.push(zone);
+    }
+    const zone = zoneMap.get(key);
+    zone[gender === 'Female' ? 'femaleCount' : 'maleCount'] = 1;
+    zone.totalCount += 1;
+    summary[gender === 'Female' ? 'femaleCount' : 'maleCount'] += group.count;
+    summary.totalCount += group.count;
   }
-  summary.totalCount = summary.femaleCount + summary.maleCount;
+  summary.zones.sort((a, b) => a.cameraName.localeCompare(b.cameraName) ||
+    (a.zoneIdx ?? Number.MAX_SAFE_INTEGER) - (b.zoneIdx ?? Number.MAX_SAFE_INTEGER) ||
+    a.zone.localeCompare(b.zone));
   return summary;
 }

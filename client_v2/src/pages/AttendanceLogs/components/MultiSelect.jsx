@@ -23,6 +23,7 @@ const MultiSelect = ({
   className = '',
   searchable = true,
   maxHeight = 'max-h-[220px]',
+  inlineDropdown = false,
   msg = 'No options',
 }) => {
   const [open, setOpen] = useState(false);
@@ -90,7 +91,7 @@ const MultiSelect = ({
       </button>
 
       {open && (
-        <div className="absolute z-[95] mt-1 w-full min-w-[220px] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden">
+        <div className={`${inlineDropdown ? 'relative' : 'absolute'} z-[95] mt-1 w-full min-w-[220px] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden`}>
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--bd)]">
             <button
               type="button"

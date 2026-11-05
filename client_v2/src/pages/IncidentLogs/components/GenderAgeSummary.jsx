@@ -4,6 +4,7 @@ import { Users } from 'lucide-react';
 function GenderCard({ label, count, zones, color }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? zones : zones.slice(0, 3);
+  const countKey = label === 'Female' ? 'femaleCount' : 'maleCount';
   return <div className="flex flex-col gap-4 rounded-xl border border-[var(--bd)] bg-[var(--bg1)] p-4 sm:flex-row" style={{ borderLeft: `4px solid ${color}` }}>
     <div className="sm:w-32 sm:shrink-0">
       <div className="flex items-center gap-2 text-sm font-semibold" style={{ color }}><Users size={18} />{label}</div>
@@ -12,10 +13,11 @@ function GenderCard({ label, count, zones, color }) {
     </div>
     <div className="min-w-0 flex-1 overflow-x-auto">
       <table className="w-full text-left text-xs">
-        <thead className="text-[var(--tx3)]"><tr><th className="pb-2 pr-3 font-medium">Camera</th><th className="pb-2 font-medium">Zone</th></tr></thead>
-        <tbody>{visible.map(zone => <tr key={`${zone.cameraId}:${zone.zoneIdx}`} className="border-t border-[var(--bd)]">
+        <thead className="text-[var(--tx3)]"><tr><th className="pb-2 pr-3 font-medium">Camera</th><th className="pb-2 font-medium">Zone</th><th scope="col" className="pb-2 text-right font-medium">Count</th></tr></thead>
+        <tbody>{visible.map(zone => <tr key={`${zone.cameraId}:${zone.zoneIdx ?? zone.zone}`} className="border-t border-[var(--bd)]">
           <td className="py-2 pr-3 text-[var(--tx)]">{zone.cameraName}</td>
           <td className="py-2 text-[var(--tx2)]">{zone.zone}</td>
+          <td className="py-2 text-right font-semibold tabular-nums" style={{ color }}>{zone[countKey] ?? 0}</td>
         </tr>)}</tbody>
       </table>
       {!zones.length && <p className="py-4 text-xs text-[var(--tx3)]">No zone details available yet.</p>}

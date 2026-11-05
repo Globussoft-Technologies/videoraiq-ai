@@ -6,7 +6,7 @@ import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect
 import { LIGHTING_CATEGORY_OPTIONS } from '@/helpers/lightingDetection';
 import { HYGIENE_CATEGORY_OPTIONS } from '@/helpers/hygieneDetection';
 import { Button } from '@/components/ui/button';
-import { EMOTION_LOG_GROUPS, selectedEmotionGroup } from '@/helpers/emotionDetection';
+import { EMOTION_LOG_GROUPS, emotionGroupForFilter } from '@/helpers/emotionDetection';
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -74,6 +74,10 @@ const IncidentFilterPopover = ({
         .length,
     [showEmotion, emotions, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
+  const emotionGroup = emotionGroupForFilter(emotions);
+  const visibleEmotionOptions = emotionGroup
+    ? EMOTION_LOG_GROUPS.find(group => group.id === emotionGroup).emotions.map(emotion => ({ id: emotion, label: emotion }))
+    : emotionOptions;
 
   const resetFilters = () => {
     if (showEmotion) setEmotions([]);
@@ -102,7 +106,7 @@ const IncidentFilterPopover = ({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] rounded-xl p-4" align="end">
+      <PopoverContent className="w-[320px] max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl p-4" align="end">
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
             <h4 className="font-semibold text-base text-[var(--tx)]">Filters</h4>
@@ -127,6 +131,7 @@ const IncidentFilterPopover = ({
               searchable
               className="w-full"
               maxHeight="max-h-40"
+              inlineDropdown
               msg="No NVR Found"
             />
             <MultiSelect
@@ -137,20 +142,21 @@ const IncidentFilterPopover = ({
               searchable
               className="w-full"
               maxHeight="max-h-40"
+              inlineDropdown
               msg="No Camera Found"
             />
             {showEmotion && <>
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-[var(--tx2)]">Emotion category</span>
                 <InlineSelect
-                  value={selectedEmotionGroup(emotions) || (emotions.length ? '__custom__' : '')}
+                  value={emotionGroup || (emotions.length ? '__custom__' : '')}
                   onChange={value => setEmotions(EMOTION_LOG_GROUPS.find(group => group.id === value)?.emotions || [])}
                   options={EMOTION_LOG_GROUPS.map(group => ({ value: group.id, label: group.label }))}
                   placeholder={emotions.length ? 'Custom selection' : 'All categories'}
                   allLabel="All categories"
                 />
               </div>
-              <MultiSelect options={emotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" msg="No emotions found" />
+              <MultiSelect options={visibleEmotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" maxHeight="max-h-36" inlineDropdown msg="No emotions found" />
             </>}
             {showVehicleNumber && (
               <div>

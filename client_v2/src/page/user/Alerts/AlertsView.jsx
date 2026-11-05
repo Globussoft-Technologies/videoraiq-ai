@@ -11,6 +11,7 @@ import MultiSelect from '../../../components/MultiSelect';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
 import { fetchIncidents, fetchIncidentById, fetchDetectionTypes, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import { emotionAlertLabel } from '@/helpers/emotionDetection';
 
 const PAGE_SIZE = 50;
 // Auto-refresh only while the user is looking at just the first page â€” once
@@ -696,7 +697,9 @@ export default function AlertsView() {
   const activeImageUrl = active?.Image ? mediaUrl(active.Image) : '';
   const activeSeverityMeta = active ? alertSeverityMeta(active.severity) : null;
   const activeTypeLabel = active ? shortIncidentName(active) : '';
-  const activeDescription = incidentDescription(active) || active?.incidentName || detectionLabel(active?.incidentType);
+  const activeDescription = active?.incidentType === 'emotionDetection'
+    ? emotionAlertLabel(active) || detectionLabel(active.incidentType)
+    : incidentDescription(active) || active?.incidentName || detectionLabel(active?.incidentType);
   const activeCameraName = cameraNameOf(active) || active?.channelData?.name || '_';
   const activeLocationName = locationNameOf(active);
   const activeCameraLine = [activeCameraName, activeLocationName].filter(Boolean).join(' - ') || '_';
@@ -849,7 +852,7 @@ export default function AlertsView() {
                   const typeNorm = norm(typeLabel) || norm(typeCode);
                   const hideDuplicateTitle = !displayTitle || (typeNorm && (displayNorm === typeNorm || displayNorm.startsWith(typeNorm) || displayNorm.includes(typeNorm)));
                   const typeColor = typeAccentFor(it, sevMeta);
-                  const eventDescription = incidentDescription(it);
+                  const eventDescription = it?.incidentType === 'emotionDetection' ? emotionAlertLabel(it) : incidentDescription(it);
                   const detailParts = alertDetailParts(it);
                   const rowId = incidentIdOf(it);
                   const isSel = !!activeId && activeId === rowId;

@@ -13,6 +13,22 @@ export function selectedEmotionGroup(emotions = []) {
   return EMOTION_LOG_GROUPS.find(group => group.emotions.length === selected.size && group.emotions.every(emotion => selected.has(emotion)))?.id || '';
 }
 
+export function emotionGroupForFilter(emotions = []) {
+  if (!emotions.length) return '';
+  return EMOTION_LOG_GROUPS.find(group => emotions.every(emotion => group.emotions.includes(emotion)))?.id || '';
+}
+
+export function emotionAlertLabel(item) {
+  if (item?.incidentType !== 'emotionDetection') return '';
+  const emotion = String(item.emotion || '').trim();
+  if (!emotion) return '';
+  const group = EMOTION_LOG_GROUPS.find(candidate =>
+    candidate.emotions.some(value => value.toLowerCase() === emotion.toLowerCase()));
+  return group && group.label.toLowerCase() !== emotion.toLowerCase()
+    ? `${group.label} · ${emotion}`
+    : emotion;
+}
+
 export function emotionZoneSettings(zone = {}, shared = {}) {
   return {
     emotion_alert_groups: [...(zone.emotion_alert_groups ?? shared.emotion_alert_groups ?? EMOTION_ALERT_GROUPS)],
