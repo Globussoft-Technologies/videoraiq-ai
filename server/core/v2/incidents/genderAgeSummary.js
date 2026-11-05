@@ -1,18 +1,16 @@
-import { GenderAgeCountIncident } from './incidents.model.js';
+import { GenderAgeCountIncident, GenderAgeDetectionIncident } from './incidents.model.js';
 
-// Header totals sum count posts in the selected range; zone rows show the
-// latest camera snapshots independently of the historical range.
+// The headline counts are alert logs; the zone rows are count snapshots.
+// They are separate incident types and must never be added together.
 export async function getGenderAgeSummary(scope) {
-  const liveScope = { ...scope, incidentType: 'genderAgeCount' };
-  delete liveScope.timeOfIncident;
-  delete liveScope.$expr;
-  const [totals, snapshots] = await Promise.all([
-    GenderAgeCountIncident.aggregate([
-      { $match: { ...scope, incidentType: 'genderAgeCount' } },
-      { $group: { _id: null, femaleCount: { $sum: '$femaleCount' }, maleCount: { $sum: '$maleCount' } } },
+  const snapshotScope = { ...scope, incidentType: 'genderAgeCount' };
+  const [alertCounts, snapshots] = await Promise.all([
+    GenderAgeDetectionIncident.aggregate([
+      { $match: { ...scope, incidentType: 'genderAgeDetection' } },
+      { $group: { _id: '$targetGender', count: { $sum: 1 } } },
     ]),
     GenderAgeCountIncident.aggregate([
-      { $match: liveScope },
+      { $match: snapshotScope },
       { $sort: { channelId: 1, timeOfIncident: -1, _id: -1 } },
       { $group: { _id: '$channelId', snapshot: { $first: '$$ROOT' } } },
       { $replaceRoot: { newRoot: '$snapshot' } },
@@ -20,7 +18,8 @@ export async function getGenderAgeSummary(scope) {
       { $sort: { channelId: 1 } },
     ]),
   ]);
-  const summary = { femaleCount: totals[0]?.femaleCount || 0, maleCount: totals[0]?.maleCount || 0, totalCount: 0, zones: [] };
+  const counts = Object.fromEntries(alertCounts.map(({ _id, count }) => [_id, count]));
+  const summary = { femaleCount: counts.Female || 0, maleCount: counts.Male || 0, totalCount: 0, zones: [] };
   for (const snapshot of snapshots) {
     const zones = snapshot.zones?.length ? snapshot.zones : [{
       zone_idx: null, zone: 'Full frame', female_count: snapshot.femaleCount, male_count: snapshot.maleCount,

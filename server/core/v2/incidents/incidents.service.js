@@ -3647,12 +3647,18 @@ console.log(result,'result');
     // Options use the tenant/date/camera scope before applying the selected
     // emotions, so selecting one option does not hide the other choices.
     let emotionOptions;
+    let emotionCounts;
     if (incidentType === 'emotionDetection') {
       if (req.query.emotions !== undefined && typeof req.query.emotions !== 'string') {
         return res.status(400).json({ error: 'emotions must be a comma-separated string.' });
       }
       emotionOptions = (await Incident.distinct('emotion', matchStage))
         .filter(value => typeof value === 'string' && value.trim()).sort();
+      emotionCounts = (await Incident.aggregate([
+        { $match: matchStage },
+        { $group: { _id: '$emotion', count: { $sum: 1 } } },
+      ])).filter(({ _id }) => typeof _id === 'string' && _id.trim())
+        .map(({ _id, count }) => ({ emotion: _id, count }));
       const emotions = toArray(req.query.emotions);
       if (emotions.length) matchStage.emotion = { $in: emotions };
     }
@@ -3939,6 +3945,7 @@ console.log(result,'result');
         },
         ...(boxStatusCounts && { boxStatusCounts }),
         ...(emotionOptions && { emotionOptions }),
+        ...(emotionCounts && { emotionCounts }),
         ...(genderAgeSummary && { genderAgeSummary }),
         data: logs,
       }),
