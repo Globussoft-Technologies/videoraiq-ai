@@ -165,6 +165,22 @@
         }
       }
     },
+    "/api/v2/whatsapp/shared-key-request": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
     "/api/v2/whatsapp/templates/sync": {
       "post": {
         "description": "",
@@ -1448,6 +1464,35 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/admin/user-email-verification": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Set whether newly added users and changed user email addresses must be verified",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requireUserEmailVerification": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
           }
         }
       }
@@ -4383,6 +4428,26 @@
             "type": "string"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/gender-age-detection": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/emotion-detection": {
+      "get": {
+        "description": "",
         "responses": {
           "200": {
             "description": "OK"

@@ -155,8 +155,10 @@ class DetectionSettingsValidation {
   validateEmotionSettings(settingType, settings = {}) {
     if (settingType !== "emotionDetectionSettings") return { error: null };
     return Joi.object({
+      emotion_confidence_threshold: Joi.number().min(0).max(1),
+      emotion_threshold: Joi.number().min(0).max(1),
       zone_configs: Joi.array().items(Joi.object({
-        emotion_alert_groups: Joi.array().items(Joi.string().valid(...EMOTION_ALERT_GROUPS)).min(1).unique(),
+        emotion_alert_groups: Joi.array().items(Joi.string().valid(...EMOTION_ALERT_GROUPS)).min(1).unique().required(),
       }).unknown(true)),
     }).unknown(true).validate(settings, { convert: false });
   }

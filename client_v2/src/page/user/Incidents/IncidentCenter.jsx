@@ -50,6 +50,10 @@ const lateArrivalDescription = (item) => {
   return description.replace(minuteText[0], `${duration} after the grace deadline.`);
 };
 const INCIDENT_LIST_DETAILS = {
+  emotionDetection: [
+    { field: 'emotionGroup', label: 'Emotion Group', width: 140 },
+    { field: 'emotion', label: 'Emotion', width: 120 },
+  ],
   doorDetection: [
     { field: 'zone', label: 'Door Name', width: 140 },
     { field: 'presenceSec', label: 'Duration', width: 170 },
@@ -1185,9 +1189,9 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                 <h1 style={{ margin: 0, fontSize: carModel ? 22 : compactDetails ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.incidentName || det}
                 </h1>
-                <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
+                {item.incidentType === 'emotionDetection' ? <IncidentZoneDetails item={item} variant="lightbox" /> : <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {lateArrivalDescription(item) || [cam, site].filter(Boolean).join(' · ')}
-                </p>
+                </p>}
                 <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
                   {shortDateTime(item.timeOfIncident)}
                 </span>
@@ -1222,7 +1226,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   </div>
                 )}
                 <CarModelDetails item={item} />
-                <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder || isPacking} />
+                {item.incidentType !== 'emotionDetection' && <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder || isPacking} />}
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
                 <div style={{ marginTop: carModel ? 6 : compactDetails ? 3 : 8 }}>
@@ -1505,6 +1509,8 @@ function IncidentListRow({
                   done: formatDoorStatus(item),
                 }[field]}
               </span>
+            ) : field === 'emotionGroup' || field === 'emotion' ? (
+              <span>{item[field] || '--'}</span>
             ) : field === 'vehicleNumber' ? (
               <span>{item.vehicleNumber || '—'}</span>
             ) : isConditionIncident && field === 'issueCount' ? (

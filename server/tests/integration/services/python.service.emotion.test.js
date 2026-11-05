@@ -34,6 +34,8 @@ describe('Emotion Detection requests to DS', () => {
       expect(axios.post.mock.calls[0][0]).toBe(`http://ds.test${endpoint}`);
       expect(axios.post.mock.calls[0][1].detectors).toEqual([{
         name: 'emotionDetectionSettings',
+        emotion_confidence_threshold: 0.4,
+        emotion_threshold: 0.4,
         zones,
         zone_configs: [
           { name: 'Lobby', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
@@ -52,6 +54,32 @@ describe('Emotion Detection requests to DS', () => {
     expect(axios.post.mock.calls[0][1].detectors[0].zone_configs).toEqual([
       { name: 'Lobby', emotion_alert_groups: ['negative'] },
       { name: 'Reception', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
+    ]);
+  });
+
+  it.each(['startNewDetection', 'updateNewDetection'])('%s forwards every dropdown choice without replacing it with negative', async method => {
+    for (const groups of [...EMOTION_ALERT_GROUPS.map(group => [group]), [...EMOTION_ALERT_GROUPS]]) {
+      const setting = new EmotionDetectionSetting({ settings: { zone_configs: [
+        { name: 'Lobby', emotion_alert_groups: groups },
+        { name: 'Reception', emotion_alert_groups: ['surprise'] },
+      ] } });
+      await python[method]({ ...payload, zone_configs: setting.settings.zone_configs });
+      const sent = axios.post.mock.calls.at(-1)[1].detectors[0];
+      expect(sent).not.toHaveProperty('emotion_alert_groups');
+      expect(sent.emotion_confidence_threshold).toBe(0.4);
+      expect(sent.emotion_threshold).toBe(0.4);
+      expect(sent.zone_configs).toEqual([
+        { name: 'Lobby', emotion_alert_groups: groups },
+        { name: 'Reception', emotion_alert_groups: ['surprise'] },
+      ]);
+    }
+  });
+
+  it.each(['startNewDetection', 'updateNewDetection'])('%s defaults missing zone configs to all four groups', async method => {
+    await python[method]({ ...payload, zone_configs: [{ name: 'Lobby', emotion_alert_groups: ['positive'] }] });
+    expect(axios.post.mock.calls[0][1].detectors[0].zone_configs).toEqual([
+      { name: 'Lobby', emotion_alert_groups: ['positive'] },
+      { name: 'Zone 2', emotion_alert_groups: [...EMOTION_ALERT_GROUPS] },
     ]);
   });
 

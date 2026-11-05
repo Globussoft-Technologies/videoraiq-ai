@@ -209,6 +209,7 @@ export default function ZoneSettingsPanel({
                   {isGenderAge && <TargetGenderSelect id={`zone-target-gender-${i}`} value={z.target_gender}
                     disabled={savingIndex === i} onChange={value => onUpdateField(i, 'target_gender', value)} />}
                   {isEmotion && <EmotionAlertGroups id={`zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
+                    error={errors[`zone-${i}-emotion_alert_groups`]}
                     disabled={savingIndex === i} onChange={value => onUpdateField(i, 'emotion_alert_groups', value)} />}
                   {isLighting && <LightingFields value={z} showZoneName={false} disabled={savingIndex === i}
                     onChange={(field, value) => onUpdateField(i, field, value)}

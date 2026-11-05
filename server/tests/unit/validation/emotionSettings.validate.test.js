@@ -17,7 +17,7 @@ describe('per-zone emotion alert groups', () => {
     expect(validator.validateEmotionSettings('emotionDetectionSettings', { zone_configs: zones }).error).toBeUndefined();
   });
 
-  it.each([[], ['all'], ['negative', 'negative'], ['invalid'], null, 'negative'])(
+  it.each([undefined, [], ['all'], ['negative', 'negative'], ['invalid'], null, 'negative'])(
     'rejects invalid zone selections: %j', groups => {
       const zone = { name: 'Reception', emotion_alert_groups: groups };
       expect(validator.validateEmotionSettings('emotionDetectionSettings', { zone_configs: [zone] }).error).toBeTruthy();
@@ -29,6 +29,19 @@ describe('per-zone emotion alert groups', () => {
       const settings = { zone_configs: [{ name: 'Reception', emotion_alert_groups: groups }] };
       expect(validator.validateEmotionSettings('emotionDetectionSettings', settings).error).toBeUndefined();
       expect(makeSetting(settings.zone_configs).validateSync()).toBeUndefined();
+    }
+  });
+
+  it('defaults both emotion thresholds to 0.4', () => {
+    const setting = makeSetting([{ name: 'Reception' }]);
+    expect(setting.settings.emotion_confidence_threshold).toBe(0.4);
+    expect(setting.settings.emotion_threshold).toBe(0.4);
+  });
+
+  it.each(['emotion_confidence_threshold', 'emotion_threshold'])('validates %s as a confidence value', field => {
+    expect(validator.validateEmotionSettings('emotionDetectionSettings', { [field]: 0.4 }).error).toBeUndefined();
+    for (const value of [-0.1, 1.1, '0.4']) {
+      expect(validator.validateEmotionSettings('emotionDetectionSettings', { [field]: value }).error).toBeTruthy();
     }
   });
 

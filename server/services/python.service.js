@@ -1,5 +1,5 @@
 import { buildUniformDetector } from "./uniformDetection.js";
-import { EMOTION_ALERT_GROUPS } from "../constants/emotionDetection.js";
+import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../constants/emotionDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
 import { assertDetectionServiceSuccess } from './detectionServiceResult.js';
 import logger from "../utils/logger.js";
@@ -122,8 +122,27 @@ const appendIndustrialDetectors = (
         });
         continue;
       }
-      if (name === "boxPackingDetectionSettings" || name === "emotionDetectionSettings") {
-        // Send zone names and emotion alert groups; keep routing fields local.
+      if (name === "emotionDetectionSettings") {
+        const configs = Array.isArray(zone_configs) ? zone_configs : [];
+        const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];
+        detectors.push({
+          name,
+          zones: polygons,
+          emotion_confidence_threshold: stockSettings.emotion_confidence_threshold ?? EMOTION_DEFAULT_THRESHOLD,
+          emotion_threshold: stockSettings.emotion_threshold ?? EMOTION_DEFAULT_THRESHOLD,
+          // Groups belong to each zone; never send a detector-wide selection.
+          zone_configs: (polygons.length ? polygons : configs).map((_, index) => {
+            const zone = plainZoneConfig(configs[index]) || {};
+            return {
+              name: zone.name || `Zone ${index + 1}`,
+              emotion_alert_groups: [...(zone.emotion_alert_groups ?? EMOTION_ALERT_GROUPS)],
+            };
+          }),
+        });
+        continue;
+      }
+      if (name === "boxPackingDetectionSettings") {
+        // Send zone names; keep routing fields local.
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         detectors.push({
           name,
@@ -132,9 +151,6 @@ const appendIndustrialDetectors = (
             const zone = plainZoneConfig(config);
             return {
               name: zone?.name,
-              ...(name === "emotionDetectionSettings" ? {
-                emotion_alert_groups: [...(zone?.emotion_alert_groups ?? EMOTION_ALERT_GROUPS)],
-              } : {}),
             };
           }),
         });

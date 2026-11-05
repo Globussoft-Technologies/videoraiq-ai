@@ -47,6 +47,25 @@ test('zone dropdown sends a singleton for each group and all four for All', () =
   assert.equal(React.Children.toArray(saved.props.children).find(child => child.type === 'select').props.value, 'negative');
 });
 
+test('emotion group is required and shows an accessible validation error', () => {
+  for (const groups of [undefined, null, [], [''], ['invalid']]) {
+    assert.ok(emotion.emotionAlertGroupsError(groups));
+  }
+  for (const groups of [...emotion.EMOTION_ALERT_GROUPS.map(group => [group]), [...emotion.EMOTION_ALERT_GROUPS]]) {
+    assert.equal(emotion.emotionAlertGroupsError(groups), '');
+  }
+  const error = emotion.emotionAlertGroupsError([]);
+  const field = EmotionAlertGroups({ value: [], error, onChange() {}, id: 'required-group' });
+  const select = React.Children.toArray(field.props.children).find(child => child.type === 'select');
+  assert.equal(select.props.required, true);
+  assert.equal(select.props.value, '');
+  assert.equal(select.props['aria-invalid'], true);
+  assert.equal(select.props['aria-describedby'], 'required-group-error');
+  const html = renderToStaticMarkup(React.createElement(EmotionAlertGroups, { value: [], error, id: 'required-group' }));
+  assert.ok(html.includes('Emotion Alert Group *'));
+  assert.ok(html.includes(error));
+});
+
 const { buildColumns, renderIncidentCard } = await loadJsx('../src/pages/IncidentLogs/incidentColumns.jsx', {
   '@/utils/timezone': { getConfiguredTimezone: () => 'Asia/Kolkata' },
   './incidentState': { styles: { text: '' } },
@@ -61,13 +80,39 @@ const incident = {
   createdAt: '2026-11-04T10:15:30Z', nvrName: 'Office NVR', channelName: 'Reception',
 };
 
-test('emotion logs show the received emotion in list and grid views', () => {
+test('emotion logs show both received emotion fields in list and grid views', () => {
   const columns = buildColumns(EMOTION_CONFIG, { onSort() {}, onPreview() {} });
-  const column = columns.find(item => item.accessorKey === 'emotion');
-  assert.ok(renderToStaticMarkup(React.createElement(column.cell, { row: { original: incident } })).includes('Sadness'));
+  for (const field of ['emotionGroup', 'emotion']) {
+    const column = columns.find(item => item.accessorKey === field);
+    assert.ok(column, field);
+    assert.ok(renderToStaticMarkup(React.createElement(column.cell, { row: { original: incident } })).includes(incident[field]));
+  }
   const grid = renderToStaticMarkup(renderIncidentCard(incident, EMOTION_CONFIG, { onPreview() {} }));
+  assert.ok(grid.includes('Emotion Group'));
+  assert.ok(grid.includes('negative'));
   assert.ok(grid.includes('Sadness'));
   assert.ok(grid.includes('Negative Expression Detected'));
+});
+
+const IncidentZoneDetails = (await loadJsx('../src/page/user/Incidents/IncidentZoneDetails.jsx', {
+  '../../../helpers/solderIncidentDetails.js': {},
+  '../../../helpers/packingIncidentDetails.js': {},
+  '../../../helpers/lightingDetection': { LIGHTING_INCIDENT_TYPE: 'lightingVisibilitySiteConditionsDetection' },
+  '../../../helpers/hygieneDetection': { HYGIENE_INCIDENT_TYPE: 'hygieneSanitationFoodSafetyDetection' },
+  './IncidentHygieneDetails': () => null,
+})).default;
+
+test('incident cards and detail views show both emotion fields and handle missing values', () => {
+  for (const variant of ['card', 'lightbox']) {
+    const html = renderToStaticMarkup(React.createElement(IncidentZoneDetails, {
+      item: { ...incident, emotion: 'Anger' }, variant,
+    }));
+    for (const value of ['Emotion Group', 'Emotion', 'negative', 'Anger']) assert.ok(html.includes(value), value);
+    const missing = renderToStaticMarkup(React.createElement(IncidentZoneDetails, {
+      item: { incidentType: 'emotionDetection' }, variant,
+    }));
+    assert.equal((missing.match(/>--</g) || []).length, 2);
+  }
 });
 
 const TargetGenderSelect = (await loadJsx(

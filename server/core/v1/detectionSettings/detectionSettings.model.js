@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { EMOTION_ALERT_GROUPS } from "../../../constants/emotionDetection.js";
+import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../../../constants/emotionDetection.js";
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
@@ -1276,6 +1276,7 @@ const DeskSolarShoulderDetectionSetting = DetectionSetting.discriminator(
 // emotionDetection incidents have their own discriminator.
 const emotionAlertGroupsField = {
   type: [{ type: String, enum: EMOTION_ALERT_GROUPS }],
+  required: true,
   default: () => [...EMOTION_ALERT_GROUPS],
   validate: {
     validator: value => Array.isArray(value) && value.length > 0 && new Set(value).size === value.length,
@@ -1286,6 +1287,8 @@ const EmotionDetectionSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
 // Replace the array path so the shared zone sub-schema stays unchanged.
 EmotionDetectionSchema.remove("zone_configs");
 EmotionDetectionSchema.add({
+  emotion_confidence_threshold: { type: Number, min: 0, max: 1, default: EMOTION_DEFAULT_THRESHOLD },
+  emotion_threshold: { type: Number, min: 0, max: 1, default: EMOTION_DEFAULT_THRESHOLD },
   zone_configs: [{ ...zoneConfigsField.zone_configs[0], emotion_alert_groups: emotionAlertGroupsField }],
 });
 const EmotionDetectionSetting = DetectionSetting.discriminator(

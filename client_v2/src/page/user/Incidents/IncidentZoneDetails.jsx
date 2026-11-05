@@ -5,6 +5,17 @@ import { HYGIENE_INCIDENT_TYPE } from '../../../helpers/hygieneDetection';
 import IncidentHygieneDetails from './IncidentHygieneDetails';
 
 export default function IncidentZoneDetails({ item, variant = 'card', compact = false, showZone = true }) {
+  if (item.incidentType === 'emotionDetection') {
+    const dark = variant === 'lightbox';
+    return <dl aria-label="Emotion details" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '7px 12px', margin: '5px 0', fontSize: dark ? 12 : 11 }}>
+      {[['Emotion Group', item.emotionGroup], ['Emotion', item.emotion]].map(([label, value]) => (
+        <div key={label} style={{ minWidth: 0 }}>
+          <dt style={{ color: dark ? 'rgba(255,255,255,.65)' : 'var(--tx3)', marginBottom: 2 }}>{label}</dt>
+          <dd style={{ margin: 0, color: dark ? '#fff' : 'var(--tx2)', fontWeight: 600, overflowWrap: 'anywhere' }}>{value || '--'}</dd>
+        </div>
+      ))}
+    </dl>;
+  }
   if ([HYGIENE_INCIDENT_TYPE, LIGHTING_INCIDENT_TYPE].includes(item.incidentType)) return <IncidentHygieneDetails item={item} variant={variant} compact={compact} showZone={showZone} />;
   if (item.incidentType === 'boxPackingDetection') {
     const packing = packingIncidentDetails(item), dark = variant === 'lightbox';

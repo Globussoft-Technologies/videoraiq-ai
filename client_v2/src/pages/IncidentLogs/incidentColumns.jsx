@@ -234,6 +234,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
   );
 
   if (config.showEmotionFields) {
+    cols.push({ accessorKey: 'emotionGroup', header: sortHeader('Emotion Group', 'emotionGroup'), cell: ({ row }) => <span className={styles.text}>{row.original.emotionGroup || '--'}</span> });
     cols.push({ accessorKey: 'emotion', header: sortHeader('Emotion', 'emotion'), cell: ({ row }) => <span className={styles.text}>{row.original.emotion || '--'}</span> });
   }
   if (config.showGenderAgeFields) {
@@ -465,7 +466,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
     });
   }
 
-  if (config.showEmotionFields) return ['snap', 'nvrName', 'channelName', 'incidentName', 'emotion', 'createdAt'].map(key => cols.find(column => column.accessorKey === key));
+  if (config.showEmotionFields) return ['snap', 'nvrName', 'channelName', 'incidentName', 'emotionGroup', 'emotion', 'createdAt'].map(key => cols.find(column => column.accessorKey === key));
   return cols;
 };
 
@@ -673,7 +674,10 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             <div className="text-xs leading-relaxed text-[var(--tx2)]"><span className="text-[var(--tx3)]">Confirmation: </span>{row.confirmationReason ?? '--'}</div>
           </>
         )}
-        {config.showEmotionFields && <IncidentCardRow icon={Activity} label="Emotion" value={row.emotion || '--'} />}
+        {config.showEmotionFields && <>
+          <IncidentCardRow icon={Activity} label="Emotion Group" value={row.emotionGroup || '--'} />
+          <IncidentCardRow icon={Activity} label="Emotion" value={row.emotion || '--'} />
+        </>}
         {config.showGenderAgeFields && <>
           <IncidentCardRow icon={Users} label="Gender" value={row.targetGender || '--'} />
           <IncidentCardRow icon={MapPin} label="Zone" value={row.zone || '--'} />

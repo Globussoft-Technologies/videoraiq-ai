@@ -95,14 +95,15 @@ function valueExists(value) {
   return value !== undefined && value !== null && value !== '';
 }
 
-// Car-model incidents have their own dedicated Car Logs view and should not
-// appear in the compact live detection feed. Keep this check tolerant of the
-// different incident/detection field names used by the socket payloads.
-function isCarModelDetection(item) {
-  const type = String(
-    item?.incidentType || item?.detectionType || item?.incidentName || item?.displayName || ''
-  ).toLowerCase().replace(/[^a-z0-9]/g, '');
-  return type === 'carmodeldetection' || type.includes('carmodel');
+// These incidents stay in their dedicated logs and are omitted from fullscreen
+// live detection details. Accept both incident and setting names from sockets.
+function isHiddenLiveDetection(item) {
+  return [item?.incidentType, item?.detectionType, item?.incidentName, item?.displayName]
+    .some(value => {
+      const type = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return type.includes('carmodel') || type.includes('emotion') ||
+        type.includes('genderage') || type.includes('genderandage');
+    });
 }
 
 function detectionDetails(item) {
@@ -337,7 +338,7 @@ export default function LiveCameraLogsOverlay({ channel }) {
   const detectionItems = useMemo(() => (
     (Array.isArray(allDetections) ? allDetections : [])
       .filter((item) => getDetectionCameraId(item) === cameraId)
-      .filter((item) => !isCarModelDetection(item))
+      .filter((item) => !isHiddenLiveDetection(item))
       .map(mapDetection)
       .slice(0, 5)
   ), [allDetections, cameraId]);

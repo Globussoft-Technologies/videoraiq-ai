@@ -22,3 +22,11 @@ export function emotionZoneSettings(zone = {}, shared = {}) {
 export function emotionGroupsForSelection(value) {
   return value === 'all' ? [...EMOTION_ALERT_GROUPS] : [value];
 }
+
+export function emotionAlertGroupsError(groups) {
+  if (!Array.isArray(groups) || !groups.length) return 'Emotion Alert Group is required.';
+  if (groups.some(group => !EMOTION_ALERT_GROUPS.includes(group)) || new Set(groups).size !== groups.length) {
+    return 'Select a valid emotion alert group.';
+  }
+  return '';
+}

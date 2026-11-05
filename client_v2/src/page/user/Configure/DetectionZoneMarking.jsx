@@ -36,7 +36,7 @@ import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
-import { EMOTION_SETTING_TYPE, emotionZoneSettings } from '../../../helpers/emotionDetection';
+import { EMOTION_SETTING_TYPE, emotionZoneSettings, emotionAlertGroupsError } from '../../../helpers/emotionDetection';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,
@@ -590,6 +590,10 @@ export default function DetectionZoneMarking({
 
   const validateZoneRequiredFields = (zone, index) => {
     const nextErrors = {};
+    if (isEmotion) {
+      const error = emotionAlertGroupsError(zone?.emotion_alert_groups);
+      if (error) nextErrors[`zone-${index}-emotion_alert_groups`] = error;
+    }
     const fields = extraFieldsFor(activeType?.settingType);
     if (isHygiene) {
       for (const [field, message] of Object.entries(hygieneZoneErrors(zone))) {

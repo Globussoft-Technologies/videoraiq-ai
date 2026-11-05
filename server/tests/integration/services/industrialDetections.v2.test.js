@@ -421,7 +421,7 @@ describe("v2 industrial detection incidents and logs", () => {
                 [[0, 0], [100, 0], [100, 100], [0, 100]],
                 [[200, 0], [300, 0], [300, 100], [200, 100]],
               ] },
-              zone_configs: [{ name: "Lobby", emotion_alert_groups: ["negative"] }, { name: "Reception" }],
+              zone_configs: [{ name: "Lobby", emotion_alert_groups: ["negative"] }, { name: "Reception", emotion_alert_groups: ["positive", "neutral", "negative", "surprise"] }],
             } : {}),
             ...(settingType === "genderAgeDetectionSettings" ? {
               referencePoints: { [channel._id.toString()]: [

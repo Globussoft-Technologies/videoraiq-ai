@@ -13,6 +13,7 @@ import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import EmotionAlertGroups from '../components/EmotionAlertGroups';
+import { emotionAlertGroupsError } from '../../../../../helpers/emotionDetection';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
@@ -108,6 +109,10 @@ export default function SaveDetectionAreaModal({
     if (!detectionName.trim()) nextErrors.detectionName = true;
     if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
+      if (isEmotion) {
+        const error = emotionAlertGroupsError(z.emotion_alert_groups);
+        if (error) nextErrors[`zone-${i}-emotion_alert_groups`] = error;
+      }
       if (isLighting) {
         for (const [field, message] of Object.entries(lightingZoneErrors(z))) nextErrors[`zone-${i}-${field}`] = message;
       }
@@ -326,6 +331,7 @@ export default function SaveDetectionAreaModal({
               {isGenderAge && <TargetGenderSelect id={`save-zone-target-gender-${i}`} value={z.target_gender}
                 disabled={saving} onChange={value => updateZoneField(i, 'target_gender', value)} />}
               {isEmotion && <EmotionAlertGroups id={`save-zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
+                error={errors[`zone-${i}-emotion_alert_groups`]}
                 disabled={saving} onChange={value => updateZoneField(i, 'emotion_alert_groups', value)} />}
               {isLighting && <LightingFields value={z} showZoneName={false} disabled={saving}
                 onChange={(field, value) => updateZoneField(i, field, value)}
