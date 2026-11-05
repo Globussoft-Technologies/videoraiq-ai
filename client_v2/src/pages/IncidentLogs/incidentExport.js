@@ -25,7 +25,7 @@ const resolveIncidentImageUrl = (value) => {
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
 const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber } = params;
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone } = params;
 
   const query = {
     endpoint: config.endpoint,
@@ -47,6 +47,7 @@ const fetchAllForExport = async (config, params) => {
     lightingCategory: params.lightingCategory,
     emotions: params.emotions,
     gender: params.gender,
+    zone,
   };
 
   const list = config.showDoorFields && doorStatus

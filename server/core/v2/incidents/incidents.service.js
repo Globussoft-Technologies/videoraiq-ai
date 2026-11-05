@@ -3571,6 +3571,21 @@ console.log(result,'result');
       ...extraMatch,
     };
 
+    if (incidentType === 'genderAgeDetection' && typeof req.query.zone === 'string' && req.query.zone.trim()) {
+      const selectedZone = req.query.zone.trim();
+      const indexedZone = /^Zone\s+(\d+)$/i.exec(selectedZone);
+      if (indexedZone) {
+        matchStage.$and = [...(matchStage.$and || []), {
+          $or: [
+            { zone: selectedZone },
+            { zoneIdx: Number(indexedZone[1]) - 1 },
+          ],
+        }];
+      } else {
+        matchStage.zone = selectedZone;
+      }
+    }
+
     if (startDate && endDate) {
       matchStage.timeOfIncident = {
         $gte: momentTZ.tz(startDate, getRequestTimezone(req)).startOf("day").toDate(),
@@ -3638,6 +3653,9 @@ console.log(result,'result');
     if (incidentType === 'genderAgeDetection' && req.query.gender !== undefined &&
       !['', 'Male', 'Female'].includes(req.query.gender)) {
       return res.status(400).json(Response.userFailResp('Gender must be Male or Female.'));
+    }
+    if (incidentType === 'genderAgeDetection' && req.query.zone !== undefined && typeof req.query.zone !== 'string') {
+      return res.status(400).json(Response.userFailResp('Zone must be a string.'));
     }
     const genderAgeSummary = includeGenderAgeSummary ? await getGenderAgeSummary(matchStage) : null;
     if (incidentType === 'genderAgeDetection' && req.query.gender) {

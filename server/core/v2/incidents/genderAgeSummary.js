@@ -1,7 +1,6 @@
 import { GenderAgeDetectionIncident } from './incidents.model.js';
 
-// The headline totals count detection images. Each camera/zone/gender row
-// indicates whether at least one matching image exists in the selected range.
+// Count detection images by camera, zone and gender in the selected range.
 export async function getGenderAgeSummary(scope) {
   const groups = await GenderAgeDetectionIncident.aggregate([
     { $match: { ...scope, incidentType: 'genderAgeDetection' } },
@@ -38,8 +37,8 @@ export async function getGenderAgeSummary(scope) {
       summary.zones.push(zone);
     }
     const zone = zoneMap.get(key);
-    zone[gender === 'Female' ? 'femaleCount' : 'maleCount'] = 1;
-    zone.totalCount += 1;
+    zone[gender === 'Female' ? 'femaleCount' : 'maleCount'] += group.count;
+    zone.totalCount += group.count;
     summary[gender === 'Female' ? 'femaleCount' : 'maleCount'] += group.count;
     summary.totalCount += group.count;
   }

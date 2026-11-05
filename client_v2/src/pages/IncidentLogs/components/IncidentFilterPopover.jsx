@@ -6,7 +6,7 @@ import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect
 import { LIGHTING_CATEGORY_OPTIONS } from '@/helpers/lightingDetection';
 import { HYGIENE_CATEGORY_OPTIONS } from '@/helpers/hygieneDetection';
 import { Button } from '@/components/ui/button';
-import { EMOTION_LOG_GROUPS, emotionGroupForFilter } from '@/helpers/emotionDetection';
+import { EMOTION_LOG_GROUPS, emotionGroupForFilter, emotionOptionsForFilter } from '@/helpers/emotionDetection';
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -26,6 +26,10 @@ const STATUS_OPTIONS = [
  */
 const IncidentFilterPopover = ({
   showEmotion = false,
+  showZoneFilter = false,
+  zone = '',
+  setZone,
+  zoneOptions = [],
   emotions = [],
   setEmotions,
   emotionOptions = [],
@@ -64,6 +68,7 @@ const IncidentFilterPopover = ({
       [
         (showHygieneCategory || showLightingCategory) && hygieneCategory.length > 0,
         showEmotion && emotions.length > 0,
+        showZoneFilter && !!zone,
         nvrIds.length > 0,
         channelIds.length > 0,
         showSeverity && (Array.isArray(severity) ? severity.length > 0 : !!severity),
@@ -72,15 +77,14 @@ const IncidentFilterPopover = ({
         showBoxType && !!boxType,
       ].filter(Boolean)
         .length,
-    [showEmotion, emotions, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
+    [showEmotion, emotions, showZoneFilter, zone, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
   );
   const emotionGroup = emotionGroupForFilter(emotions);
-  const visibleEmotionOptions = emotionGroup
-    ? EMOTION_LOG_GROUPS.find(group => group.id === emotionGroup).emotions.map(emotion => ({ id: emotion, label: emotion }))
-    : emotionOptions;
+  const visibleEmotionOptions = emotionOptionsForFilter(emotionGroup, emotionOptions.map(option => option.label));
 
   const resetFilters = () => {
     if (showEmotion) setEmotions([]);
+    if (showZoneFilter) setZone('');
     if (showHygieneCategory || showLightingCategory) setHygieneCategory([]);
     setNvrIds([]);
     setChannelIds([]);
@@ -145,6 +149,18 @@ const IncidentFilterPopover = ({
               inlineDropdown
               msg="No Camera Found"
             />
+            {showZoneFilter && <MultiSelect
+              aria-label="Filter by zone"
+              options={zoneOptions.map(zoneName => ({ id: zoneName, label: zoneName }))}
+              value={zone ? [zone] : []}
+              onChange={values => setZone(values.at(-1) || '')}
+              placeholder="All zones"
+              searchable={false}
+              className="w-full"
+              maxHeight="max-h-36"
+              inlineDropdown
+              msg="No zones found"
+            />}
             {showEmotion && <>
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-[var(--tx2)]">Emotion category</span>
@@ -154,6 +170,7 @@ const IncidentFilterPopover = ({
                   options={EMOTION_LOG_GROUPS.map(group => ({ value: group.id, label: group.label }))}
                   placeholder={emotions.length ? 'Custom selection' : 'All categories'}
                   allLabel="All categories"
+                  inlineDropdown
                 />
               </div>
               <MultiSelect options={visibleEmotionOptions} value={emotions} onChange={setEmotions} placeholder="All emotions" searchable className="w-full" maxHeight="max-h-36" inlineDropdown msg="No emotions found" />
@@ -217,7 +234,7 @@ const IncidentFilterPopover = ({
  * `mousedown` before the option's `onClick` fired. Keeping it inline keeps it
  * within the filter's contentRef so selecting actually dispatches.
  */
-const InlineSelect = ({ value, onChange, options, placeholder, allLabel }) => {
+const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineDropdown = false }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = options.find((o) => o.value === value);
@@ -251,7 +268,7 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel }) => {
       </button>
 
       {open && (
-        <div className="absolute z-[95] mt-1 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg p-1">
+        <div className={`${inlineDropdown ? 'relative' : 'absolute'} z-[95] mt-1 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg p-1`}>
           <button
             type="button"
             onClick={() => choose('')}

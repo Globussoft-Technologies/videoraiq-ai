@@ -118,6 +118,7 @@ const IncidentLogsPage = ({ config }) => {
     channelIds,
     severity,
     gender,
+    zone,
     status,
     doorStatus,
     vehicleNumber,
@@ -137,6 +138,7 @@ const IncidentLogsPage = ({ config }) => {
   const [emotionOptions, setEmotionOptions] = useState([]);
   const [emotionCounts, setEmotionCounts] = useState([]);
   const [genderAgeSummary, setGenderAgeSummary] = useState(null);
+  const [genderZoneOptions, setGenderZoneOptions] = useState([]);
   const [hygieneCategory, setHygieneCategory] = useState([]);
   const [manualTrigger, setManualTrigger] = useState(0);
   const fetchRequestId = useRef(0);
@@ -253,7 +255,12 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [gender, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
+  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
+
+  useEffect(() => {
+    if (zone) dispatch({ type: 'SET_ZONE', value: '' });
+    setGenderZoneOptions([]);
+  }, [startDate, endDate, nvrIds, channelIds]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -276,6 +283,7 @@ const IncidentLogsPage = ({ config }) => {
         channelIds,
         emotions: config.showEmotionFields ? emotions : undefined,
         gender: config.showGenderAgeFields ? gender : undefined,
+        zone: config.showGenderAgeFields ? zone : undefined,
         hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -298,7 +306,13 @@ const IncidentLogsPage = ({ config }) => {
         setEmotionOptions(data?.emotionOptions || []);
         setEmotionCounts(data?.emotionCounts || []);
       }
-      if (config.showGenderAgeFields) setGenderAgeSummary(data?.genderAgeSummary || null);
+      if (config.showGenderAgeFields) {
+        const nextSummary = data?.genderAgeSummary || null;
+        setGenderAgeSummary(nextSummary);
+        if (!zone && nextSummary?.zones) {
+          setGenderZoneOptions([...new Set(nextSummary.zones.map(item => item.zone).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+        }
+      }
 
       // Box Packing is currently being validated with local sample records.
       // Keep the shared production table and controls, but populate it when
@@ -311,6 +325,7 @@ const IncidentLogsPage = ({ config }) => {
         id: item._id,
         _id: item._id,
         incidentName: item.incidentName || '--',
+        ...(config.showGenderAgeFields ? { zone: item.zone || (item.zoneIdx != null ? `Zone ${Number(item.zoneIdx) + 1}` : '--') } : {}),
         currentStatus: item.currentStatus || '--',
         nvrName: item.nvrData?.nvrName || '--',
         channelName: item.channelData?.name || '--',
@@ -376,14 +391,14 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs, manualTrigger]);
 
   useLogPolling(fetchLogs, autoRefresh, refreshInterval, loading);
-  useGenderAgeLiveUpdates(fetchLogs, config.showGenderAgeFields && canView, autoRefresh);
+  useGenderAgeLiveUpdates(fetchLogs, config.showGenderAgeFields && canView);
 
   /* ─────────────── Derived data ─────────────── */
   const nvrOptions = useMemo(
@@ -644,6 +659,7 @@ const IncidentLogsPage = ({ config }) => {
       channelIds,
       emotions: config.showEmotionFields ? emotions : undefined,
       gender: config.showGenderAgeFields ? gender : undefined,
+      zone: config.showGenderAgeFields ? zone : undefined,
       hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -654,7 +670,7 @@ const IncidentLogsPage = ({ config }) => {
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [gender, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -819,6 +835,10 @@ const IncidentLogsPage = ({ config }) => {
 
         <IncidentFilterPopover
           showEmotion={config.showEmotionFields}
+          showZoneFilter={config.showGenderAgeFields}
+          zone={zone}
+          setZone={value => dispatch({ type: 'SET_ZONE', value })}
+          zoneOptions={genderZoneOptions}
           emotions={emotions}
           setEmotions={setEmotions}
           emotionOptions={[...new Set([...emotionOptions, ...emotions])].map(value => ({ id: value, label: value }))}

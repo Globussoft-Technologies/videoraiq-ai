@@ -18,6 +18,15 @@ export function emotionGroupForFilter(emotions = []) {
   return EMOTION_LOG_GROUPS.find(group => emotions.every(emotion => group.emotions.includes(emotion)))?.id || '';
 }
 
+export function emotionOptionsForFilter(groupId = '', availableEmotions = []) {
+  const group = EMOTION_LOG_GROUPS.find(item => item.id === groupId);
+  const values = group
+    ? group.emotions
+    : [...EMOTION_LOG_GROUPS.flatMap(item => item.emotions), ...availableEmotions];
+  return [...new Set(values.filter(value => typeof value === 'string' && value.trim()))]
+    .map(value => ({ id: value, label: value }));
+}
+
 export function emotionAlertLabel(item) {
   if (item?.incidentType !== 'emotionDetection') return '';
   const emotion = String(item.emotion || '').trim();
