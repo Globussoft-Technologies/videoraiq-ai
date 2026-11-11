@@ -329,6 +329,9 @@ API_AUTH_BEARER=<value supplied by the AI team>
 ADMIN_API_SECRET=<separate provisioning secret supplied by the AI team>
 ```
 
+If an environment value is missing or blank, the backend reads the same top-level
+key from its config. Nonblank environment values take precedence.
+
 `API_AUTH_BEARER` is sent as `Authorization: Bearer ...` on AI control requests.
 License provisioning also sends `X-Admin-Secret`. Face-auth license registration
 uses `PythonService.attendanceUrl` (including its `/face-auth` suffix); object

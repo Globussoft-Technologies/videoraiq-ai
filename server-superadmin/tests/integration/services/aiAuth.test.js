@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("config", async (importOriginal) => {
+  const { default: actual } = await importOriginal();
+  return { default: {
+    ...actual,
+    has: (key) => actual.has(key),
+    get: (key) => actual.get(key),
+  } };
+});
 vi.mock("axios", () => ({ default: { post: vi.fn(), get: vi.fn() } }));
 vi.mock("../../../utils/logger.js", () => ({
   default: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -18,6 +26,7 @@ vi.mock("../../../utils/rtspStream.js", () => ({
 vi.stubEnv("API_AUTH_BEARER", "test-ai-token");
 vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
 const axios = (await import("axios")).default;
+const config = (await import("config")).default;
 const { aiAuthHeaders } = await import("../../../utils/aiAuthHeaders.js");
 const python = (await import("../../../services/python.service.js")).default;
 const authV1 = (await import("../../../core/v1/Auth/auth.service.js")).default;
@@ -32,6 +41,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -40,14 +50,34 @@ describe("AI credentials", () => {
   it("supports unconfigured off/observe installations without sending empty credentials", () => {
     vi.stubEnv("API_AUTH_BEARER", undefined);
     vi.stubEnv("ADMIN_API_SECRET", undefined);
+    vi.spyOn(config, "has").mockReturnValue(false);
     expect(aiAuthHeaders({ admin: true })).toEqual({});
   });
 
   it("reads current credentials and restricts the admin secret to provisioning", () => {
+    vi.spyOn(config, "has").mockReturnValue(true);
+    vi.spyOn(config, "get").mockReturnValue("config-credential");
     expect(aiAuthHeaders()).toEqual({ Authorization: "Bearer test-ai-token" });
     vi.stubEnv("API_AUTH_BEARER", " rotated-token ");
     expect(aiAuthHeaders({ admin: true })).toEqual({
       Authorization: "Bearer rotated-token", "X-Admin-Secret": "test-admin-secret",
+    });
+  });
+
+  it.each([undefined, "", "   "])("uses config when environment credentials are %j", (value) => {
+    vi.stubEnv("API_AUTH_BEARER", value);
+    vi.stubEnv("ADMIN_API_SECRET", value);
+    vi.spyOn(config, "has").mockReturnValue(true);
+    vi.spyOn(config, "get").mockImplementation((key) => ({
+      API_AUTH_BEARER: " config-ai-token ", ADMIN_API_SECRET: " config-admin-secret ",
+    })[key]);
+    expect(aiAuthHeaders()).toEqual({ Authorization: "Bearer config-ai-token" });
+    expect(aiAuthHeaders({ admin: true })).toEqual({
+      Authorization: "Bearer config-ai-token", "X-Admin-Secret": "config-admin-secret",
+    });
+    vi.stubEnv("API_AUTH_BEARER", "env-ai-token");
+    expect(aiAuthHeaders({ admin: true })).toEqual({
+      Authorization: "Bearer env-ai-token", "X-Admin-Secret": "config-admin-secret",
     });
   });
 
