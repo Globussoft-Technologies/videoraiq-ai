@@ -5,6 +5,7 @@ import { connectMongo, disconnectMongo, clearCollections } from '../dbSetup.js';
 import { serviceCtx, payload } from '../../helpers/service.js';
 
 vi.mock('../../../utils/database.js', () => ({ redis: {} }));
+vi.mock('../../../utils/stopStreams.js', () => ({ stopAllStreams: vi.fn() }));
 vi.mock('../../../services/python.service.js', () => ({ default: {
   stopAdminPipelines: vi.fn(), handleDetectionStartStop: vi.fn(),
 } }));
@@ -17,6 +18,7 @@ vi.mock('../../../core/v2/Auth/auth.service.js', () => ({ default: {
 
 const { bulkDetectionControl, consumeResetApproval, verifyResetPassword, getBulkDetectionState } = await import('../../../services/detectionBulkControl.js');
 const { resolveDesiredDetectionState } = await import('../../../services/detectionSchedule.resolver.js');
+const { expireSubscription, activateSubscription } = await import('../../../services/subscriptionExpiry.js');
 const { default: Admin } = await import('../../../core/v1/admin/admin.model.js');
 const { default: Channel } = await import('../../../core/v1/channels/channels.model.js');
 const { MobilePhoneDetectionSetting, DetectionSetting } = await import('../../../core/v2/detectionSettings/detectionSettings.model.js');
@@ -66,6 +68,40 @@ async function control(action) {
 }
 
 describe('bulk detection pause and resume', () => {
+  it('turns toggles off on expiry, keeps saved settings through renewal, and requires manual resume', async () => {
+    const before = await cameras();
+    for (let i = 0; i < before.length; i++) {
+      before[i].checkType = i === 0 ? 'checkin' : 'checkout';
+      await before[i].save();
+    }
+    await Channel.updateOne({ userId: 'other' }, { $set: { checkType: 'checkin' } });
+    const [original] = await cameras();
+    original.detections.mobilePhoneDetectionSettings.schedule = { mode: 'always', timezone: 'Asia/Kolkata' };
+    await original.save();
+    await expireSubscription(owner._id);
+    // Cleanup retries must preserve settings and keep toggles off.
+    await expireSubscription(owner._id);
+    for (const camera of await cameras()) {
+      expect(camera.subscriptionPaused).toBe(true);
+      expect(camera.detectionBulkPaused).toBe(true);
+      expect(camera.checkType).toBe('none');
+      expect(camera.detections.mobilePhoneDetectionSettings.enabled).toBe(false);
+      expect(camera.detections.faceAuthenticationSettings.enabled).toBe(false);
+      expect(String(camera.detections.mobilePhoneDetectionSettings.id)).toBe(String(setting._id));
+    }
+    expect(await DetectionSetting.findById(setting._id)).toBeTruthy();
+    expect((await Channel.findOne({ userId: 'other' })).detections.mobilePhoneDetectionSettings.enabled).toBe(true);
+    expect((await Channel.findOne({ userId: 'other' })).checkType).toBe('checkin');
+    await activateSubscription(await Admin.findById(owner._id), { 3: '2099-01-01' });
+    expect((await cameras()).every(camera => camera.subscriptionPaused && !camera.detections.mobilePhoneDetectionSettings.enabled)).toBe(true);
+    expect((await cameras()).every(camera => camera.checkType === 'none')).toBe(true);
+    expect(python.handleDetectionStartStop).not.toHaveBeenCalled();
+    expect((await Channel.findById(original._id).setOptions({ includeInactive: true })).detections.mobilePhoneDetectionSettings.schedule.toObject())
+      .toEqual(original.detections.mobilePhoneDetectionSettings.schedule.toObject());
+    await control('resume');
+    expect((await cameras()).every(camera => !camera.subscriptionPaused && camera.detections.mobilePhoneDetectionSettings.enabled)).toBe(true);
+    expect((await cameras()).every(camera => camera.checkType === 'none')).toBe(true);
+  });
   it('returns account-wide toggle state, including inactive cameras', async () => {
     const state = async () => {
       const c = ctx({});

@@ -4,7 +4,8 @@ import { grantPlanDefaultCameras } from "../clientConfig/detectionLicense.servic
 import { encrypt } from "../../../utils/cryptoUtils.js";
 import logger from "../../../utils/logger.js";
 import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
-import { stopAllStreams, resumeAllStreams } from "../../../utils/stopStreams.js";
+import { stopAllStreams } from "../../../utils/stopStreams.js";
+import { expireSubscription, activateSubscription } from "../../../services/subscriptionExpiry.js";
 import config from "config";
 import jwt from "jsonwebtoken";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
@@ -1490,10 +1491,8 @@ return bypassUsers.find(
           }
         }
 
-        // Stop this admin's detection + face-auth streams (fire-and-forget, all
-        // envs). Must never block or fail the login flow — errors are swallowed
-        // inside stopAllStreams; the admin lookup/flag write are guarded so they
-        // can't throw. Mark streamsStopped so we know to resume on reactivation.
+        // Persist pause intent before stopping detection and face-auth streams.
+        // Cleanup failures must not prevent the expired-plan response.
         let inactiveAdminId = null;
         try {
           const expiredAdmin = await adminModel
@@ -1502,12 +1501,7 @@ return bypassUsers.find(
             .lean();
           if (expiredAdmin?._id) {
             inactiveAdminId = expiredAdmin._id;
-            stopAllStreams(expiredAdmin._id);
-            adminModel
-              .updateOne({ _id: expiredAdmin._id }, { $set: { streamsStopped: true } })
-              .catch((err) =>
-                logger.error("[PLAN_EXPIRED] failed to set streamsStopped:", err?.message),
-              );
+            await expireSubscription(expiredAdmin._id);
           }
         } catch (e) {
           logger.error("[PLAN_EXPIRED] stop-all admin lookup failed:", e?.message);
@@ -1647,22 +1641,8 @@ return bypassUsers.find(
         }
       }
 
-      // Plan is active here. If this admin's streams were previously stopped due
-      // to expiry, resume them (fire-and-forget) and clear the flag. Only fires on
-      // the expired -> active transition, not on every active login. Guarded so it
-      // can never block or fail the login flow.
-      try {
-        if (adminData?._id && adminData?.streamsStopped) {
-          resumeAllStreams(adminData._id);
-          adminModel
-            .updateOne({ _id: adminData._id }, { $set: { streamsStopped: false } })
-            .catch((err) =>
-              logger.error("[PLAN_RESUMED] failed to clear streamsStopped:", err?.message),
-            );
-        }
-      } catch (e) {
-        logger.error("[PLAN_RESUMED] resume-all failed:", e?.message);
-      }
+      // A renewed subscription unlocks access; detections require manual resume.
+      await activateSubscription(adminData, userData?.subscriptions);
 
       if (adminData?._id) {
         if (bypassUser) {

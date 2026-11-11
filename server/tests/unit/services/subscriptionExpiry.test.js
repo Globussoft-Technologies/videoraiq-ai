@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), stop: vi.fn(), barrier: vi.fn() }));
+const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), stop: vi.fn(), barrier: vi.fn(), owners: vi.fn() }));
 vi.mock('../../../core/v1/admin/admin.model.js', () => ({ default: {
+  find: (...args) => ({ select: () => ({ lean: () => mocks.owners(...args) }) }),
   findById: () => ({ select: () => ({ lean: async () => ({ user_id: '42' }) }) }),
   updateOne: (...args) => mocks.update(...args),
 } }));
@@ -15,12 +16,19 @@ vi.mock('../../../core/v2/measurementAutoEmailReport/measurementAutoEmailReport.
 vi.mock('../../../core/v2/solderAutoEmailReport/solderAutoEmailReport.model.js', () => ({ default: { updateMany: (...args) => mocks.update(...args) } }));
 vi.mock('../../../core/v1/autoEmailReport/autoEmailReport.model.js', () => ({ default: { updateMany: (...args) => mocks.update(...args) } }));
 vi.mock('../../../utils/stopStreams.js', () => ({ stopAllStreams: (...args) => mocks.stop(...args) }));
-import { expireSubscription } from '../../../services/subscriptionExpiry.js';
+import { activateSubscription, expireSubscription, runSubscriptionExpirySweep } from '../../../services/subscriptionExpiry.js';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.owners.mockResolvedValue([]);
+});
 
 describe('subscription expiry', () => {
   it('pauses only the owner cameras, removes owner schedules, and disables reports', async () => {
     await expireSubscription('admin-a');
-    expect(mocks.barrier).toHaveBeenCalledWith({ userId: '42' }, { $set: { subscriptionPaused: true, detectionBulkPaused: true } });
+    expect(mocks.barrier).toHaveBeenCalledWith({ userId: '42' }, [
+      { $set: expect.objectContaining({ subscriptionPaused: true, detectionBulkPaused: true, checkType: 'none', detections: expect.any(Object) }) },
+    ]);
     expect(mocks.remove).toHaveBeenCalledWith({ $or: [{ adminId: 'admin-a' }, { userId: '42' }] });
     expect(mocks.update).toHaveBeenCalledWith({ adminId: 'admin-a' }, { $set: { enabled: false } });
     expect(mocks.stop).toHaveBeenCalledWith('admin-a');
@@ -29,5 +37,35 @@ describe('subscription expiry', () => {
     mocks.remove.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(expireSubscription('admin-b')).rejects.toThrow('database unavailable');
     expect(mocks.stop).toHaveBeenCalledWith('admin-b');
+  });
+  it('keeps camera barriers on renewal while allowing account access again', async () => {
+    await activateSubscription({ _id: 'renewed', streamsStopped: true }, { 3: '2030-01-01' });
+    expect(mocks.barrier).toHaveBeenCalledWith({ userId: '42' }, [
+      { $set: expect.objectContaining({ subscriptionPaused: true, detectionBulkPaused: true }) },
+    ]);
+    expect(mocks.stop).toHaveBeenCalledWith('renewed');
+    expect(mocks.update).toHaveBeenLastCalledWith({ _id: 'renewed' }, { $set: expect.objectContaining({
+      streamsStopped: false,
+      'subscriptionSnapshot.expiresAt': new Date('2030-01-01T23:59:59.999Z'),
+    }) });
+  });
+  it('catches a missed expiry before accepting a renewed subscription', async () => {
+    await activateSubscription({ _id: 'missed', subscriptionSnapshot: { expiresAt: new Date('2020-01-01') } }, { 3: '2030-01-01' });
+    expect(mocks.stop).toHaveBeenCalledWith('missed');
+    expect(mocks.barrier).toHaveBeenCalledTimes(1);
+  });
+  it('does not pause an account whose previous subscription is still active', async () => {
+    await activateSubscription({ _id: 'active', subscriptionSnapshot: { expiresAt: new Date('2099-01-01') } }, { 3: '2099-01-01' });
+    expect(mocks.stop).not.toHaveBeenCalled();
+    expect(mocks.barrier).not.toHaveBeenCalled();
+  });
+  it('stops expired accounts without requiring login and isolates cleanup failures', async () => {
+    const now = new Date('2030-01-02');
+    mocks.owners.mockResolvedValue([{ _id: 'failed' }, { _id: 'expired' }]);
+    mocks.remove.mockRejectedValueOnce(new Error('cleanup failed'));
+    await runSubscriptionExpirySweep(now);
+    expect(mocks.owners).toHaveBeenCalledWith({ 'subscriptionSnapshot.expiresAt': { $ne: null, $lt: now } });
+    expect(mocks.stop).toHaveBeenCalledWith('failed');
+    expect(mocks.stop).toHaveBeenCalledWith('expired');
   });
 });

@@ -1,3 +1,4 @@
+import { scheduleSubscriptionExpirySweep } from "./services/subscriptionExpiry.js";
 import { configuredAuthOrigins } from './utils/authOrigins.js';
 import express from "express";
 import http from "http";
@@ -241,6 +242,7 @@ const startServer = async () => {
     });
 
     // Data-retention sweeper (no-op unless DataRetention.enabled). Never throws.
+    scheduleSubscriptionExpirySweep();
     scheduleRetentionSweep();
     scheduleAssistantConversationCleanup();
     // Suspends VideoRDB users whose EmpMonitor record shows they've exited. Never throws.
