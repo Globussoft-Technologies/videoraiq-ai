@@ -36,6 +36,7 @@ import { findAuthorisedCamera, resolveStreamUrl } from "./xray.camera.js";
 import { assertXrayLicensed } from "./xray.license.js";
 import { resolveSocketId } from "./xray.sockets.js";
 import { holdSession, forgetSession } from "./xray.fanout.js";
+import { registerLocalHls, releaseLocalHls, bindSessionLocalHls, releaseSessionLocalHls } from "./dev/localHlsRelay.js";
 
 /** Live states — anything not yet terminal (contract §7). */
 const LIVE_STATES = ["preparing", "ready", "tracking", "lost"];
@@ -118,6 +119,11 @@ class XrayService {
       userId: actor.userId,
     });
 
+    if (process.env.XRAY_LOCAL_TEST_MODE === "true") {
+      logger.info(`[XRAY TEST] selected camera=${cameraId} nvr=${nvrId} host=${new URL(resolved.url).hostname}`);
+      resolved.url = registerLocalHls(resolved.url, browser.streamToken);
+    }
+
     // --- 4. ask the GPU box ----------------------------------------------
     const created = await client.createSession({
       cameraId: String(cameraId),
@@ -126,10 +132,14 @@ class XrayService {
       userId: String(actor.userId),
       streamUrl: resolved.url,
     });
-    if (!created.ok) return created; // service error codes pass straight through
+    if (!created.ok) {
+      releaseLocalHls(resolved.url);
+      return created; // service error codes pass straight through
+    }
 
     const session = created.data;
     if (!session.sessionId) {
+      releaseLocalHls(resolved.url);
       logger.error("[XRAY] the X-ray service returned 200 with no session_id");
       return xrayFail(502, XRAY_ERRORS.INTERNAL_ERROR, undefined, false);
     }
@@ -141,6 +151,7 @@ class XrayService {
     // instead of being read as "no such session" and answered with a
     // close_session for the session we are still opening. Measured against the
     // real Python service: it ended 12 ms after this line.
+    bindSessionLocalHls(session.sessionId, resolved.url);
     holdSession(session.sessionId, {
       socketId,
       userId: String(actor.userId),
@@ -181,6 +192,7 @@ class XrayService {
           `${error?.message || error}`,
       );
       forgetSession(session.sessionId);
+      releaseSessionLocalHls(session.sessionId);
       await client.closeSession(session.sessionId);
       return xrayFail(500, XRAY_ERRORS.INTERNAL_ERROR, undefined, false);
     }
@@ -268,6 +280,7 @@ class XrayService {
       logger.error(`[XRAY] could not mark ${sessionId} ended: ${error?.message || error}`),
     );
 
+    releaseSessionLocalHls(sessionId);
     logger.info(`[XRAY] session ${sessionId} closed (${reason})`);
     return xrayOk({ isSuccess: true });
   }

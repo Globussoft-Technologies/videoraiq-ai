@@ -884,6 +884,7 @@ class AUTHService {
   // Upsert the admin's license on both AI services.
   // Fire-and-forget: this must never throw or block the auth flow.
   async registerAdminLicense(adminData, userData) {
+    if (process.env.XRAY_LOCAL_TEST_MODE === 'true') return;
     try {
       const adminId = adminData?._id?.toString?.() || adminData?._id;
       if (!adminId) return;
@@ -1319,7 +1320,12 @@ class AUTHService {
       });
 
       const response = await fetchWithTimeout(`${url}?${params}`);
-      return response.json();
+      const result = await response.json();
+      if (process.env.XRAY_LOCAL_TEST_MODE === 'true') {
+        logger.info('[XRAY TEST AUTH] upstream ' + JSON.stringify({host:new URL(this.baseUrl).hostname,
+          status:response.status, ok:result?.ok, code:typeof result?.code==='number' ? result.code : undefined}));
+      }
+      return result;
     };
 
     try {
@@ -1389,6 +1395,7 @@ return bypassUsers.find(
   }
 
   async _createAdminCollectionWithRetries(adminId) {
+    if (process.env.XRAY_LOCAL_TEST_MODE === 'true') return;
     const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
     let maxRetries = 5;
     while (maxRetries > 0) {

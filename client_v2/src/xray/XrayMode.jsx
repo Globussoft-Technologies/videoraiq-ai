@@ -6,8 +6,10 @@ import { STATUS, buttonPhaseFor } from './session';
 import useXraySession from './useXraySession';
 import useFragTracker from './useFragTracker';
 import useMaskStream from './useMaskStream';
+import useObjectNames from './useObjectNames';
 import { normalisedClick } from './framePosition';
 import XrayButton from './XrayButton';
+import XrayResetButton from './XrayResetButton';
 import XrayClickLayer from './XrayClickLayer';
 import XrayEndedCard from './XrayEndedCard';
 import XrayMaskOverlay from './XrayMaskOverlay';
@@ -53,10 +55,11 @@ export default function XrayMode({
   videoWidth = 0,
 }) {
   const xray = useXraySession({ cameraId, nvrId });
-  const { isLive, start, stop, status, objects, session, prompt, failPrompt } = xray;
+  const { isLive, start, stop, resetSelection, status, objects, session, prompt, failPrompt } = xray;
   const resolveFrame = useFragTracker(hlsRef, videoRef);
   const sessionId = session?.sessionId ?? null;
   const { masksRef } = useMaskStream(sessionId);
+  const {labelsRef,identify,announcement}=useObjectNames(isLive ? sessionId : null,videoRef,session?.width,session?.height);
 
   /** Pure view state. None of it touches the session — see the note above. */
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -239,6 +242,8 @@ export default function XrayMode({
 
   return (
     <>
+      <span aria-live="polite" style={{position:'absolute',width:1,height:1,padding:0,margin:-1,
+        overflow:'hidden',clipPath:'inset(50%)',whiteSpace:'nowrap'}}>{announcement}</span>
       {/* The mask overlay sits *under* the click layer and takes no pointer
           events: a mask must never swallow a click meant for the video beneath
           it. Mounted only while a session can produce masks. */}
@@ -250,6 +255,8 @@ export default function XrayMode({
           // drawn over a fresh track.
           key={session.sessionId}
           masksRef={masksRef}
+          labelsRef={labelsRef}
+          onObjectFrame={identify}
           videoRef={videoRef}
           hlsRef={hlsRef}
           width={session.width}
@@ -265,6 +272,8 @@ export default function XrayMode({
 
       <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 6, display: 'flex', gap: 6 }}>
         <XrayButton view={view} onToggle={toggle} />
+        {isLive && <XrayResetButton onReset={resetSelection}
+          disabled={status === STATUS.PREPARING || !session?.sessionId} />}
         {/* A separate button, not part of the toggle: two distinct actions
             deserve two distinct controls, and conflating them would mean the only
             way to open settings was to risk ending the session. */}

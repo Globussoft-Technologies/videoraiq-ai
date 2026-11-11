@@ -73,12 +73,20 @@ export const JWT_SUBJECT = "videoraiq-backend";
  * Mint a short-lived service token.
  *
  * `jwt.sign` adds `iat` itself and derives `exp` from `expiresIn`, so the three
- * claims contract §6 requires are all present.
+ * claims contract §6 requires are all present. The controlled local test can
+ * backdate both timestamps by at most 30 seconds for measured host clock skew;
+ * this shortens remaining validity without extending the token lifetime.
  */
 const mintServiceToken = () => {
   const secret = xrayJwtSecret();
   if (!secret) return null;
-  return jwt.sign({ sub: JWT_SUBJECT }, secret, {
+  const requestedBackdate = Number(process.env.XRAY_LOCAL_JWT_BACKDATE_SEC || 0);
+  const backdate = process.env.XRAY_LOCAL_TEST_MODE === "true" &&
+    Number.isFinite(requestedBackdate)
+    ? Math.min(30, Math.max(0, Math.trunc(requestedBackdate))) : 0;
+  const claims = { sub: JWT_SUBJECT };
+  if (backdate) claims.iat = Math.floor(Date.now() / 1000) - backdate;
+  return jwt.sign(claims, secret, {
     algorithm: "HS256",
     expiresIn: xrayJwtTtlSec(),
   });

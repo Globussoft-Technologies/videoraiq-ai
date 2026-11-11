@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8"><title>X-Ray appearance and classifier probe</title>
+<style>body{margin:0;padding:32px;background:#0a111c;color:#e4f8ff;font:14px system-ui}h1{font-size:22px}p{color:#91a9bd}canvas{width:960px;max-width:100%;border:1px solid #24435a;border-radius:18px;background:#233448}pre{white-space:pre-wrap}</style></head>
+<body><h1>X-Ray · automatic object names</h1><p>Real browser worker · CPU · a public model-card image, no camera connection</p><canvas id="preview" width="960" height="540"></canvas><h2>Actual overlay · resize and high-DPI check</h2><div id="overlay-stage" style="position:relative;width:640px;height:360px;background:linear-gradient(120deg,#314450,#9cabb4);border-radius:12px"></div><div id="hook"></div><pre id="status">Loading object names…</pre>
+<script type="module">
+import React,{useEffect,useRef} from 'react';
+import {createRoot} from 'react-dom/client';
+import useObjectNames from '../../src/xray/useObjectNames.js';
+import XrayMaskOverlay from '../../src/xray/XrayMaskOverlay.jsx';
+import {drawObject,drawObjectName,GLOW,INK} from '../../src/xray/overlayPaint.js';
+const c=document.getElementById('preview'),ctx=c.getContext('2d');
+const ring=[[260,100],[380,70],[480,145],[560,280],[500,450],[340,465],[255,330]];
+const bg=ctx.createLinearGradient(0,0,960,540);bg.addColorStop(0,'#2e4354');bg.addColorStop(1,'#91a4ad');ctx.fillStyle=bg;ctx.fillRect(0,0,960,540);
+for(let x=0;x<960;x+=80){ctx.strokeStyle='#172d3a33';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,540);ctx.stroke();}
+drawObject(ctx,ring,INK[0],GLOW.bold,1,null,1);drawObjectName(ctx,ring,'Person',INK[0],960,540,1);
+const overlayStage=document.getElementById('overlay-stage');
+const overlayRoot=createRoot(overlayStage);
+const masksRef={current:[{seq:1,offset:0.25,objects:[{objId:'preview',ring:ring.map(([x,y])=>[x*2/3,y*2/3])}]}]};
+overlayRoot.render(React.createElement(XrayMaskOverlay,{masksRef,videoRef:{current:{currentTime:0.5}},
+ hlsRef:{current:{currentLevel:0,levels:[{details:{fragments:[{sn:1,start:0,duration:4}]}}]}},
+ labelsRef:{current:new Map([['preview','Notepad / notebook']])},width:640,height:360}));
+window.resizeOverlay=(width)=>{overlayStage.style.width=width+'px';overlayStage.style.height=width*9/16+'px';};
+window.overlayStats=()=>{const canvas=overlayStage.querySelector('canvas');const b=canvas?.getBoundingClientRect();return{backingWidth:canvas?.width,backingHeight:canvas?.height,displayWidth:b?.width,displayHeight:b?.height,dpr:window.devicePixelRatio};};
+const worker=new Worker(new URL('../../src/xray/objectNames.worker.js',import.meta.url),{type:'module'});
+window.probe={events:[],done:false};
+window.hookProbe={done:false,activeWorkers:0,videoReady:false};
+const OriginalWorker=window.Worker;
+window.Worker=class extends OriginalWorker {
+ constructor(...args){super(...args);this.live=true;window.hookProbe.activeWorkers++;}
+ postMessage(message,...args){if(message.type==='classify') window.hookProbe.classifyRequests=(window.hookProbe.classifyRequests||0)+1;return super.postMessage(message,...args);}
+ terminate(){if(this.live){this.live=false;window.hookProbe.activeWorkers--;}return super.terminate();}
+};
+function HookProbe(){
+ const videoRef=useRef(null);
+ const {labelsRef,identify,announcement}=useObjectNames('public-hook-probe',videoRef,256,256);
+ useEffect(()=>{
+  let disposed=false,stream,timer;
+  const image=new Image();image.crossOrigin='anonymous';image.src='https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/astronaut.png';
+  image.decode().then(async()=>{
+   if(disposed)return;
+   const stage=document.createElement('canvas');stage.width=stage.height=256;
+   stage.getContext('2d').drawImage(image,0,0,256,256);stream=stage.captureStream(1);
+   videoRef.current.srcObject=stream;await videoRef.current.play();
+   timer=setInterval(()=>{
+    window.hookProbe.videoReady=videoRef.current.readyState>=2;
+    identify('public-person',[[0,0],[256,0],[256,256],[0,256]]);
+    const label=labelsRef.current.get('public-person');window.hookProbe.label=label;
+    if(label && label!=='Identifying…' && label!=='Checking another frame…'){window.hookProbe.done=true;clearInterval(timer);}
+   },200);
+  }).catch(e=>{window.hookProbe.error=e.message;window.hookProbe.done=true;});
+  return()=>{disposed=true;clearInterval(timer);stream?.getTracks().forEach(t=>t.stop());};
+ },[identify,labelsRef]);
+ return React.createElement('div',null,React.createElement('video',{ref:videoRef,muted:true,playsInline:true,style:{width:100,height:100}}),React.createElement('span',null,announcement));
+}
+const root=createRoot(document.getElementById('hook'));
+root.render(React.createElement(React.StrictMode,null,React.createElement(HookProbe)));
+window.unmountProbe=()=>{root.unmount();overlayRoot.unmount();return window.hookProbe.activeWorkers;};
+worker.onmessage=({data})=>{window.probe.events.push(data);document.getElementById('status').textContent=JSON.stringify(window.probe,null,2);if(data.type==='label'||data.type==='unavailable'){window.probe.done=true;worker.terminate();}};
+worker.onerror=e=>{window.probe.error=e.message;window.probe.done=true;document.getElementById('status').textContent=e.message;};
+worker.postMessage({type:'init'});
+try{
+ const img=new Image();img.crossOrigin='anonymous';img.src='https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/tiger.jpg';await img.decode();
+ const temp=document.createElement('canvas');temp.width=temp.height=256;const p=temp.getContext('2d');p.drawImage(img,0,0,256,256);const pixels=p.getImageData(0,0,256,256).data;
+ worker.postMessage({type:'classify',objId:'public-tiger',pixels:pixels.buffer,width:256,height:256},[pixels.buffer]);
+}catch(e){window.probe.error=e.message;window.probe.done=true;}
+</script></body></html>

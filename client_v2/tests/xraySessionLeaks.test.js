@@ -442,3 +442,114 @@ test('scenario 5: a dead backend leaves no session and no false licence verdict'
   h.unmount();
   assert.equal(wire.listenerCount(), 0);
 });
+
+
+// New selection must release the single GPU slot before reserving another.
+const click = { xNorm: 0.4, yNorm: 0.6, seq: 12345, offset: 1.24 };
+const sessionPosts = stub => stub.calls.filter(c => c.method === 'POST' && /sessions$/.test(c.path));
+
+test('reset clears selection and confirms DELETE before starting a fresh session', async () => {
+  const stub = await startStub({ uniqueSessions: true, deleteDelayMs: 80 });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    await h.result.prompt(click);
+    assert.equal(h.result.objects.length, 1);
+    const pending = h.result.resetSelection();
+    assert.equal(h.result.status, 'preparing');
+    assert.equal(h.result.session, null);
+    assert.deepEqual(h.result.objects, []);
+    assert.equal(await h.result.prompt(click), false);
+    await settle(30);
+    assert.equal(sessionPosts(stub).length, 1, 'replacement started before close confirmation');
+    assert.equal(await pending, true);
+    const ack = stub.events.findIndex(c => c.method === 'ACK_DELETE');
+    const replacement = stub.events.findLastIndex(c => c.method === 'POST' && /sessions$/.test(c.path));
+    assert.ok(ack >= 0 && replacement > ack);
+    assert.equal(h.result.session.sessionId, 'sess-002');
+    assert.equal(await h.result.prompt(click), true);
+    assert.equal(h.result.objects.length, 1);
+    assert.deepEqual(stub.ledger().leaked, ['sess-002']);
+  } finally { h.unmount(); await settle(120); await stub.close(); }
+  assert.deepEqual(stub.ledger().leaked, []);
+});
+
+test('rapid reset clicks reserve exactly one replacement', async () => {
+  const stub = await startStub({ uniqueSessions: true, deleteDelayMs: 60 });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    const reset = h.result.resetSelection;
+    assert.deepEqual(await Promise.all([reset(), reset(), reset()]), [true, false, false]);
+    assert.equal(sessionPosts(stub).length, 2);
+    assert.equal(stub.calls.filter(c => c.method === 'DELETE').length, 1);
+  } finally { h.unmount(); await settle(100); await stub.close(); }
+});
+
+test('failed close shows an error and does not open a replacement', async () => {
+  const stub = await startStub({ uniqueSessions: true, deleteFails: true });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    assert.equal(await h.result.resetSelection(), false);
+    assert.equal(sessionPosts(stub).length, 1);
+    assert.equal(h.result.status, 'idle');
+    assert.equal(h.result.lastError.code, 'service_unavailable');
+  } finally { h.unmount(); await settle(); await stub.close(); }
+});
+
+test('turning off while reset is closing prevents a replacement', async () => {
+  const stub = await startStub({ uniqueSessions: true, deleteDelayMs: 80 });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    const pending = h.result.resetSelection();
+    h.result.stop();
+    assert.equal(await pending, false);
+    assert.equal(h.result.status, 'idle');
+    assert.equal(sessionPosts(stub).length, 1);
+    assert.deepEqual(stub.ledger().leaked, []);
+  } finally { h.unmount(); await settle(100); await stub.close(); }
+});
+
+test('unmount during reset bootstrap closes the late replacement', async () => {
+  const stub = await startStub({ uniqueSessions: true, delayMs: 90 });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    const pending = h.result.resetSelection();
+    await settle(35);
+    assert.equal(sessionPosts(stub).length, 2, 'replacement request must really be in flight');
+    h.unmount();
+    assert.equal(await pending, false);
+    await settle(100);
+    assert.deepEqual(stub.ledger().leaked, []);
+  } finally { h.unmount(); await settle(); await stub.close(); }
+});
+
+test('a late prompt from before reset cannot attach to the new session', async () => {
+  const stub = await startStub({ uniqueSessions: true, promptDelayMs: 100 });
+  installWindow();
+  const { useXraySession } = await loadHook(stub.baseURL);
+  const h = renderHook(useXraySession, { props: CAMERA });
+  try {
+    await h.result.start();
+    const pending = h.result.prompt(click);
+    assert.equal(await h.result.resetSelection(), true);
+    assert.equal(await pending, false);
+    await settle();
+    assert.equal(h.result.session.sessionId, 'sess-002');
+    assert.deepEqual(h.result.objects, []);
+    assert.ok(stub.calls.some(c => c.method === 'DELETE' && c.path === '/api/v2/xray/sessions/sess-001/objects/obj-a1b2c3d4'));
+  } finally { h.unmount(); await settle(); await stub.close(); }
+});

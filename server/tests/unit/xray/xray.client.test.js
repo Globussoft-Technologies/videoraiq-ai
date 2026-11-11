@@ -23,6 +23,8 @@ const ENV_KEYS = [
   "JWT_SECRET_KEY",
   "XRAY_JWT_TTL_SEC",
   "XRAY_SERVICE_TIMEOUT_MS",
+  "XRAY_LOCAL_TEST_MODE",
+  "XRAY_LOCAL_JWT_BACKDATE_SEC",
 ];
 const saved = {};
 for (const key of ENV_KEYS) saved[key] = process.env[key];
@@ -70,6 +72,32 @@ const VALID_SESSION = {
 // ---------------------------------------------------------------------------
 
 describe("credentials", () => {
+  it.each([
+    ["true", "30", 30],
+    ["true", "600", 30],
+    ["true", "-10", 0],
+    ["true", "invalid", 0],
+    ["false", "30", 0],
+  ])("bounds local clock correction: mode=%s seconds=%s", async (mode, seconds, expected) => {
+    process.env.XRAY_LOCAL_TEST_MODE = mode;
+    process.env.XRAY_LOCAL_JWT_BACKDATE_SEC = seconds;
+    process.env.XRAY_JWT_TTL_SEC = "120";
+    resolveWith({session_id:"abc"});
+    const before = Math.floor(Date.now()/1000);
+    await client.createSession(VALID_SESSION);
+    const token = lastRequest().headers.Authorization.slice(7);
+    const claims = jwt.verify(token, SECRET, {algorithms:["HS256"]});
+    expect(claims.iat).toBeGreaterThanOrEqual(before - expected);
+    expect(claims.iat).toBeLessThanOrEqual(Math.floor(Date.now()/1000) - expected);
+    expect(claims.exp - claims.iat).toBe(120);
+    if (expected === 30) {
+      expect(claims.iat).toBeLessThanOrEqual(before - 19);
+      expect(() => jwt.verify(token, SECRET, {clockTimestamp:before - 19})).not.toThrow();
+      expect(() => jwt.verify(token, "wrong-secret")).toThrow();
+      expect(() => jwt.verify(token, SECRET, {clockTimestamp:claims.exp + 1})).toThrow();
+    }
+  });
+
   it("sends X-API-Key and a bearer token on every request", async () => {
     resolveWith({ session_id: "abc" });
     await client.createSession(VALID_SESSION);

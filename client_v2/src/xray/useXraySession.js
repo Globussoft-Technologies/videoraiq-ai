@@ -47,6 +47,7 @@ export default function useXraySession({ cameraId, nvrId }) {
    * watching and nothing would ever close it.
    */
   const startToken = useRef(0);
+  const resetInFlight = useRef(false);
 
   const closeNow = useCallback(() => {
     const id = sessionIdRef.current;
@@ -90,6 +91,41 @@ export default function useXraySession({ cameraId, nvrId }) {
     closeNow();
     dispatch({ type: 'stop' });
   }, [closeNow]);
+
+  /** Start over only after the old GPU session confirms closure. This also
+   * invalidates prompts/starts still in flight and remounts masks and names. */
+  const resetSelection = useCallback(async () => {
+    const id = sessionIdRef.current;
+    if (!id || resetInFlight.current || !isLive(state.status)) return false;
+    resetInFlight.current = true;
+    const token = ++startToken.current;
+    sessionIdRef.current = null;
+    dispatch({ type: 'start' });
+    try {
+      const closed = await deleteSession(id);
+      if (token !== startToken.current) return false;
+      if (!closed) {
+        dispatch({ type: 'start_failed', code: 'service_unavailable',
+          message: 'The previous X-Ray session could not be closed. Try again when the service is available.' });
+        return false;
+      }
+      const session = await createSession({ cameraId, nvrId });
+      if (token !== startToken.current) {
+        if (session?.sessionId) deleteSession(session.sessionId);
+        return false;
+      }
+      sessionIdRef.current = session?.sessionId ?? null;
+      dispatch({ type: 'started', session });
+      return true;
+    } catch (err) {
+      if (token !== startToken.current) return false;
+      const { code, message } = xrayErrorOf(err);
+      dispatch({ type: 'start_failed', code, message });
+      return false;
+    } finally {
+      resetInFlight.current = false;
+    }
+  }, [state.status, cameraId, nvrId]);
 
   /**
    * Send one click. Contract §5: `xNorm`/`yNorm` are `0..1` against the native
@@ -250,6 +286,7 @@ export default function useXraySession({ cameraId, nvrId }) {
     isEnded: state.status === STATUS.ENDED,
     start,
     stop,
+    resetSelection,
     prompt,
     failPrompt,
     dropObject,

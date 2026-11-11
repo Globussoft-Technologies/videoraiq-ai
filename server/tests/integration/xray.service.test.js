@@ -260,12 +260,11 @@ describe("createSession — per-member camera restrictions", () => {
     expect((await create({ actor: { memberId: String(memberId) } })).status).toBe(404);
   });
 
-  // :335 — no document at all means unrestricted, which is how an admin's own
-  // sub-users behave before anyone configures restrictions.
-  it("allows a sub-user with no allow-list document", async () => {
-    expect((await create({ actor: { memberId: String(new mongoose.Types.ObjectId()) } })).ok).toBe(
-      true,
-    );
+  // Current main denies members without a configured camera allow-list.
+  it("refuses a sub-user with no allow-list document", async () => {
+    const result = await create({ actor: { memberId: String(new mongoose.Types.ObjectId()) } });
+    expect(result.status).toBe(404);
+    expect(client.createSession).not.toHaveBeenCalled();
   });
 });
 
@@ -774,5 +773,43 @@ describe("the rest of the lifecycle", () => {
     await service.removeObject(actor(), sessionId, "obj-a1b2c3d4");
 
     expect((await service.removeObject(actor(), sessionId, "obj-a1b2c3d4")).ok).toBe(true);
+  });
+});
+
+
+describe('local relay session lifecycle', () => {
+  const browser = { clientSessionId: 'tab-1', streamToken: 'test-browser-token' };
+  const setup = () => {
+    process.env.XRAY_LOCAL_TEST_MODE = 'true';
+    process.env.XRAY_LOCAL_STREAM_HOSTS = 'dev-stream.test';
+  };
+  const cleanup = async () => {
+    const { releaseLocalHls } = await import('../../core/v2/xray/dev/localHlsRelay.js');
+    for(const [request] of client.createSession.mock.calls) releaseLocalHls(request.streamUrl);
+    delete process.env.XRAY_LOCAL_TEST_MODE;
+    delete process.env.XRAY_LOCAL_STREAM_HOSTS;
+  };
+  it('failed GPU starts reclaim relay references before the next attempt', async () => {
+    setup();
+    client.createSession.mockResolvedValue({ ok: false, status: 503, code: 'stream_not_ready' });
+    try {
+      for(let i=0;i<12;i++) expect((await create({},browser)).code).toBe('stream_not_ready');
+      expect(client.createSession).toHaveBeenCalledTimes(12);
+      expect(await XraySession.countDocuments()).toBe(0);
+    } finally { await cleanup(); }
+  });
+  it('confirmed session closes reclaim relay capacity for repeated selections', async () => {
+    setup();
+    try {
+      for(let i=0;i<12;i++) {
+        const id='local-reset-'+i;
+        client.createSession.mockResolvedValue({ok:true,status:200,data:{...SERVICE_SESSION,sessionId:id}});
+        expect((await create({},browser)).ok).toBe(true);
+        expect((await service.closeSession(actor(),id)).ok).toBe(true);
+      }
+      expect(client.createSession).toHaveBeenCalledTimes(12);
+      expect(client.closeSession).toHaveBeenCalledTimes(12);
+      expect(await XraySession.countDocuments({state:{$ne:'ended'}})).toBe(0);
+    } finally { await cleanup(); }
   });
 });

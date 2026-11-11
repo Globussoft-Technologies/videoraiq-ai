@@ -17,6 +17,9 @@ const isObjectId = (v) => /^[a-f\d]{24}$/i.test(String(v));
 // user_id (e.g. NVR/Channel.userId, token user_id). With no id, returns the
 // global defaults. Single lookup returns all three fields.
 export const resolveAdminEndpoints = async (adminIdOrUserId) => {
+  if (process.env.XRAY_LOCAL_TEST_MODE === 'true') {
+    return {dsAuthUsersAPI:'http://127.0.0.1:9', attendanceUrl:'http://127.0.0.1:9', detectionUrl:'http://127.0.0.1:9'};
+  }
   if (!adminIdOrUserId) return { ...defaults };
   try {
     const query = isObjectId(adminIdOrUserId)

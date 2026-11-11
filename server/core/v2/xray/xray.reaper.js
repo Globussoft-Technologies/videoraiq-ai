@@ -34,6 +34,7 @@ import {
   xrayReapIntervalSec,
 } from "./xray.config.js";
 import client from "./xray.client.js";
+import { releaseSessionLocalHls } from "./dev/localHlsRelay.js";
 import { forgetSession, announceEnded } from "./xray.fanout.js";
 
 /** Contract §7's non-terminal states. */
@@ -86,6 +87,7 @@ const endSession = async (sessionId, reason) => {
     logger.error(`[XRAY] reaper could not mark ${sessionId} ended: ${error?.message || error}`),
   );
 
+  releaseSessionLocalHls(sessionId);
   forgetSession(sessionId);
 };
 

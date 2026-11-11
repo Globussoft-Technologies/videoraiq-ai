@@ -169,3 +169,48 @@ loaded, which is why the logic lives in plain modules.
 `helpers/xrayStubServer.js` plays Node's part over real HTTP (§5's routes, §10's
 error bodies). `helpers/hookHarness.js` is a minimal React-hooks runtime — read
 its header before trusting it; it documents what it does not model.
+
+
+## Automatic object names and appearance
+
+The click tracker remains class agnostic. Automatic display names come from a
+separate, CPU-only browser worker (`objectNames.worker.js`), using pinned
+Transformers.js 3.8.1 and quantized `Xenova/clip-vit-base-patch32` at revision
+`4c1807b705b1d015fb032789cc4d221b23025a6f`. The first use downloads the model;
+subsequent sessions can reuse the browser HTTP/Cache API cache. No camera crop
+is uploaded: a crop of the currently displayed, mask-aligned video frame is
+transferred to the local worker. Uncertain predictions may use up to three
+separate frames, at least 1.5 seconds and 0.5 seconds of media time apart.
+Their candidate scores are averaged; accepted names are not retried. The worker is terminated on session change
+or unmount. Failed downloads/canvas capture show “Name unavailable” without
+ending tracking; weak or ambiguous predictions still show “Unknown object”
+after bounded retries. A paused video is never repeatedly reclassified.
+
+`objectNames.js` owns the editable vocabulary of common objects, vehicles,
+animals, furniture and industrial items. It now includes notepads/notebooks,
+door handles, locks, hinges, switches and common office items. Notebook
+synonyms are grouped before abstention so they do not split the same category
+into two competing guesses. CLIP ranks this vocabulary; this is
+not unrestricted caption generation or a calibrated class-confidence score.
+Names are assigned once per track to prevent flicker and are display-only;
+the frozen REST/WebSocket contract and stored session objects are unchanged.
+Expand/evaluate the vocabulary for a site's specialist equipment before
+depending on those names. Browser internet access is needed on first use,
+and canvas extraction requires a browser-readable video (native cross-origin
+HLS without CORS can prevent extraction).
+
+`overlayPaint.js` draws a stronger cyan bloom and brighter translucent fill
+inside a dark teal boundary. `overlayViewport.js` rasterizes at the actual
+display size and device pixel density while keeping polygon coordinates in
+source pixels. Text and lines keep their CSS size when expanded; text is no
+longer enlarged from the 640-pixel source bitmap. Canvas allocation is capped
+at 8,294,400 pixels and pixel density at 2 for browser resource bounds.
+The name pill follows the same interpolated polygon as the mask and is
+clamped inside the video. Names disappear with missing masks rather than
+labeling an empty location. The old click-point tracking-ID badge is removed.
+
+Validation: `node --experimental-vm-modules --test tests/xray*.test.js`,
+`npm run build`, and the development-only fixture
+`/tests/fixtures/xrayAppearance.html`. The fixture uses public model-card
+images and no auth/camera/GPU endpoints. It exercises the real worker,
+real video-frame crop, StrictMode mounting and worker teardown.

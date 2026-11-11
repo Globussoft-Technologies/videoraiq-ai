@@ -13,6 +13,8 @@ export function normalizeV2Error(payload, httpStatus) {
 }
 
 export default function v2ErrorContract(req, res, next) {
+  if (process.env.XRAY_LOCAL_TEST_MODE === 'true' &&
+      /\/(?:auth|xray)(?:\/|$)/.test((req.originalUrl || '').split('?')[0])) return next();
   const json = res.json.bind(res);
   res.json = (payload) => {
     // The Phase 1 agent proxy mirrors the upstream agent's flat error shape.

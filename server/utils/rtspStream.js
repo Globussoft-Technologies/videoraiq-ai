@@ -301,7 +301,12 @@ export const buildStreamingUrl = async (nvr, channel) => {
   try {
     let streamingUrl = null;
     const uid = `${nvr?._id}-${channel?._id}`;
-    const { appEnv } = await resolveStream(nvr?.userId);
+    const { appEnv, host } = await resolveStream(nvr?.userId);
+    if (process.env.XRAY_LOCAL_TEST_MODE === "true") {
+      const path = channel?.streamingPath || `stream/${uid}/playlist.m3u8`;
+      const origin = (appEnv === "cloud" && !isInstallerManaged(nvr)) ? host : (nvr?.domain || host);
+      return joinStreamUrl(origin, path);
+    }
     if (appEnv === "cloud" && !isInstallerManaged(nvr)) {
       if (nvr?.connectionMode === "direct" && !channel?.manualRtspUrl) {
         const { default: Channel } = await import("../core/v1/channels/channels.model.js");

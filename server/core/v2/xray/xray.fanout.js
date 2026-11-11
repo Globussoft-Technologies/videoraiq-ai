@@ -1,3 +1,4 @@
+import { releaseSessionLocalHls } from "./dev/localHlsRelay.js";
 /**
  * Mask in, browser out. Contract §9.
  *
@@ -202,6 +203,10 @@ export const fanOutMask = async (message, io) => {
   const outcome = await deliver(payload.sessionId, "xray:mask", payload, io);
   if (outcome === "delivered") fanoutStats.masksDelivered += 1;
   else fanoutStats.masksDropped += 1;
+  if (process.env.XRAY_LOCAL_TEST_MODE === "true" &&
+      (fanoutStats.masksDelivered <= 3 || fanoutStats.masksDelivered % 10 === 0 || outcome !== "delivered")) {
+    logger.info(`[XRAY TEST] mask session=${payload.sessionId} seq=${payload.seq} offset=${payload.offset} objects=${payload.objects?.length || 0} outcome=${outcome} total=${fanoutStats.masksDelivered}`);
+  }
   return outcome;
 };
 
@@ -255,6 +260,9 @@ export const fanOutState = async (message, io) => {
     );
   }
 
+  if (process.env.XRAY_LOCAL_TEST_MODE === "true") {
+    logger.info(`[XRAY TEST] state session=${payload.sessionId} state=${payload.state} reason=${payload.reason || "none"}`);
+  }
   let outcome = "no_session";
   if (socket) {
     socket.emit("xray:state", payload);
@@ -264,7 +272,10 @@ export const fanOutState = async (message, io) => {
     outcome = "no_socket";
   }
 
-  if (terminal) forgetSession(payload.sessionId);
+  if (terminal) {
+    releaseSessionLocalHls(payload.sessionId);
+    forgetSession(payload.sessionId);
+  }
   return outcome;
 };
 

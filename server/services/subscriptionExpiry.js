@@ -1,3 +1,4 @@
+import { isLocalXrayTest } from "../core/v2/xray/dev/localTestSafety.js";
 import Admin from '../core/v1/admin/admin.model.js';
 import Channel from '../core/v1/channels/channels.model.js';
 import GlobalSchedule from '../core/v1/globalSchedule/globalSchedule.model.js';
@@ -12,6 +13,7 @@ import logger from '../utils/logger.js';
 // Persist the scheduler barrier before removing schedules or stopping streams.
 // Repeated expired requests retry cleanup; one failed write must not skip others.
 export async function expireSubscription(adminId) {
+  if (isLocalXrayTest()) return;
   if (!adminId) return;
   const owner = await Admin.findById(adminId).select('user_id').lean();
   if (!owner) return;
@@ -49,6 +51,7 @@ export async function expireSubscription(adminId) {
 // Renewal restores account access, never detector execution. Also catch an
 // expiry that occurred while the API was offline and was renewed before login.
 export async function activateSubscription(owner, subscriptions) {
+  if (isLocalXrayTest()) return;
   if (!owner?._id) return;
   const previousExpiry = owner.subscriptionSnapshot?.expiresAt;
   if (owner.streamsStopped || (previousExpiry && new Date(previousExpiry) < new Date())) {
@@ -71,6 +74,7 @@ export async function activateSubscription(owner, subscriptions) {
 }
 
 export async function runSubscriptionExpirySweep(now = new Date()) {
+  if (isLocalXrayTest()) return;
   const owners = await Admin.find({
     'subscriptionSnapshot.expiresAt': { $ne: null, $lt: now },
   }).select('_id').lean();
@@ -85,6 +89,7 @@ export async function runSubscriptionExpirySweep(now = new Date()) {
 }
 
 export function scheduleSubscriptionExpirySweep() {
+  if (isLocalXrayTest()) return;
   let running = false;
   const tick = async () => {
     if (running) return;

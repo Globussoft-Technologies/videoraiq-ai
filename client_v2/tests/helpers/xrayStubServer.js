@@ -51,8 +51,9 @@ export const FAILURES = Object.freeze({
  *   created was also deleted. With one shared id, two creates and one delete
  *   look identical to one create and one delete — the leak is unobservable.
  */
-export async function startStub({ failWith = null, delayMs = 0, uniqueSessions = false } = {}) {
+export async function startStub({ failWith = null, delayMs = 0, uniqueSessions = false, deleteDelayMs = 0, deleteFails = false, promptDelayMs = 0 } = {}) {
   const calls = [];
+  const events = [];
   let issued = 0;
 
   const server = createServer((req, res) => {
@@ -71,6 +72,7 @@ export async function startStub({ failWith = null, delayMs = 0, uniqueSessions =
         body: parsed,
       });
 
+      events.push(calls.at(-1));
       const send = (status, payload) => {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(payload));
@@ -104,6 +106,7 @@ export async function startStub({ failWith = null, delayMs = 0, uniqueSessions =
         return send(200, payload);
       }
       if (req.method === 'POST' && sub === 'prompt') {
+        if (promptDelayMs) await new Promise(r=>setTimeout(r,promptDelayMs));
         return send(200, { objId: 'obj-a1b2c3d4', resolvedSeq: parsed?.seq ?? 0, resolvedOffset: 1.19 });
       }
       if (req.method === 'POST' && sub === 'heartbeat') {
@@ -115,6 +118,9 @@ export async function startStub({ failWith = null, delayMs = 0, uniqueSessions =
         return send(200, { isSuccess: true });
       }
       if (req.method === 'DELETE' && sessionId) {
+        if (deleteDelayMs) await new Promise(r=>setTimeout(r,deleteDelayMs));
+        if (deleteFails) return send(503,err('service_unavailable','Close failed',true));
+        events.push({method:'ACK_DELETE',path,body:null,token:null});
         return send(200, { isSuccess: true });
       }
       if (req.method === 'GET' && sessionId) {
@@ -153,6 +159,7 @@ export async function startStub({ failWith = null, delayMs = 0, uniqueSessions =
   return {
     baseURL: `http://127.0.0.1:${port}/api/v2`,
     calls,
+    events,
     ledger,
     session: SESSION,
     close: () => new Promise((resolve) => server.close(resolve)),

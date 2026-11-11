@@ -19,6 +19,7 @@
  * never statically from routes/v2/v2.js. Contract §3: off is byte-identical.
  */
 import mongoose from "mongoose";
+import { localSessionCollection } from "./dev/localTestSafety.js";
 
 /**
  * Contract §7 — the single shared vocabulary. These five strings appear
@@ -116,4 +117,4 @@ xraySessionSchema.index({ state: 1, lastHeartbeatAt: 1 });
 // The startup sweep and the socket-disconnect reaper both look up by socket.
 xraySessionSchema.index({ socketId: 1, state: 1 });
 
-export default mongoose.model("XRaySession", xraySessionSchema);
+export default mongoose.model("XRaySession", xraySessionSchema, localSessionCollection());

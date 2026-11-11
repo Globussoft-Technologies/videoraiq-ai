@@ -75,7 +75,6 @@ export default function XrayClickLayer({ objects, lastError, onPrompt, onDismiss
   }, [onPrompt]);
 
   const age = pending ? (now - pending.at) / RIPPLE_MS : 1;
-  const marker = objects.length > 0 ? objects[objects.length - 1] : null;
   const errorAt = lastError?.at ?? null;
 
   return (
@@ -134,46 +133,7 @@ export default function XrayClickLayer({ objects, lastError, onPrompt, onDismiss
           </g>
         )}
 
-        {/* An accepted object. Phase 5 replaces this with the mask polygons; until
-            then it marks the point the server actually locked onto. */}
-        {marker && Number.isFinite(marker.xNorm) && (
-          <g>
-            <circle cx={marker.xNorm * 1000} cy={marker.yNorm * 1000} r="9"
-              fill="none" stroke="#22d3ee" strokeWidth="3" />
-            <circle cx={marker.xNorm * 1000} cy={marker.yNorm * 1000} r="3" fill="#22d3ee" />
-          </g>
-        )}
       </svg>
-
-      {/* The steady marker's label, as HTML rather than SVG <text> so it does not
-          get stretched by preserveAspectRatio="none". */}
-      {marker && Number.isFinite(marker.xNorm) && (
-        <span
-          style={{
-            position: 'absolute',
-            left: `${marker.xNorm * 100}%`,
-            top: `${marker.yNorm * 100}%`,
-            transform: 'translate(14px, -50%)',
-            pointerEvents: 'none',
-            fontFamily: 'var(--mono)',
-            fontSize: 10,
-            color: '#22d3ee',
-            background: 'rgba(8,11,17,.72)',
-            border: '1px solid rgba(34,211,238,.3)',
-            borderRadius: 5,
-            padding: '2px 6px',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {marker.objId}
-          {/* The server resolves to the nearest buffered frame and reports which
-              one. Contract §5 says a non-exact match must not be rejected, so the
-              delta is surfaced rather than hidden — and only when it is non-zero,
-              so the common case stays quiet. */}
-          {Number.isFinite(marker.resolvedSeq) && marker.resolvedSeq !== marker.requestedSeq
-            && ` · seq ${marker.resolvedSeq}`}
-        </span>
-      )}
 
       {/* An inline refusal, anchored where the click was. Falls back to centred
           if the error carried no position (a session-level failure). */}

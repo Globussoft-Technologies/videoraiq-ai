@@ -15,6 +15,7 @@ const postToStreamServices = (
   { detectionPath, attendancePath, tag, resolvedEndpoints = null },
 ) => {
   try {
+    if (process.env.XRAY_LOCAL_TEST_MODE === 'true') return;
     if (!adminId) return;
     const body = { admin_id: String(adminId) };
     const opts = { headers: { "Content-Type": "application/json", ...aiAuthHeaders() }, timeout: 5000 };

@@ -44,6 +44,9 @@ if (process.env.T === "D") mustRunInsideContainer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import { isLocalXrayTest, localTestGuard } from "./core/v2/xray/dev/localTestSafety.js";
+import { localHlsRelay } from "./core/v2/xray/dev/localHlsRelay.js";
+
 const isOnPrem = config.has("APP_ENV") && config.get("APP_ENV") === "onprem";
 
 const swaggerFile = JSON.parse(
@@ -155,6 +158,8 @@ app.get("/", (_req, res) => {
 
 app.get("/metrics", metricsHandler);
 
+if (isLocalXrayTest()) app.get('/internal/xray-test/hls/:id/:file', localHlsRelay);
+app.use(localTestGuard);
 app.use("/api", routes);
 
 // Two Swagger docs on one server: swaggerUi.serve is shared/stateful, so the
@@ -196,6 +201,7 @@ const startServer = async () => {
     // so server-superadmin lists exactly what we support instead of its own
     // hand-maintained copy, which drifts. Boot is when the constants can have
     // changed. Fire-and-forget — a catalog failure must not stop the server.
+    if (!isLocalXrayTest()) {
     syncDetectionCatalog().catch((err) =>
       logger.error(`Detection catalog sync failed: ${err.message}`)
     );
@@ -206,6 +212,10 @@ const startServer = async () => {
     pythonService
       .syncDsDetectorNames()
       .catch((err) => logger.error(`DS detector name sync failed: ${err.message}`));
+
+    } else {
+      logger.info("[XRAY TEST] shared dev DB connected; catalogue sync, reconciliation and background runners suppressed");
+    }
 
     const server = http.createServer(app); // 👈 Create HTTP server
     initSocket(server); // 👈 Initialize Socket.IO with HTTP server
@@ -231,17 +241,18 @@ const startServer = async () => {
     // socket (see reconcileAddedCameraLicenses / grantPlanDefaultCameras).
     // Runs after initSocket so the redis subscriber is already listening.
     // Fire-and-forget — a reconciliation failure must not stop the server.
-    reconcileAddedCameraLicenses().catch((err) =>
+    if (!isLocalXrayTest()) reconcileAddedCameraLicenses().catch((err) =>
       logger.error(`Camera licence reconciliation failed: ${err.message}`)
     );
 
-    server.listen(PORT, () => {
+    server.listen(PORT, isLocalXrayTest() ? "127.0.0.1" : undefined, () => {
       logger.info(
         `🚀 Server with Socket.IO running on port ${PORT} in ${process.env.NODE_ENV} mode`
       );
     });
 
     // Data-retention sweeper (no-op unless DataRetention.enabled). Never throws.
+    if (!isLocalXrayTest()) {
     scheduleSubscriptionExpirySweep();
     scheduleRetentionSweep();
     scheduleAssistantConversationCleanup();
@@ -255,6 +266,7 @@ const startServer = async () => {
     startMeasurementMediaRetryWorker();
     const { startCameraSnapshotRunner } = await import("./services/cameraSnapshots.service.js");
     startCameraSnapshotRunner();
+    }
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

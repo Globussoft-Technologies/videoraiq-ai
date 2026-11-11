@@ -39,6 +39,8 @@ const actorFrom = (req) => {
 /** The browser tab, for tab-granular mask delivery (contract §9). */
 const clientFrom = (req) => ({
   clientSessionId: String(req?.headers?.["x-session-id"] || "").trim(),
+  // Used ONLY by the laptop's local HLS relay, never sent to the GPU service.
+  ...(process.env.XRAY_LOCAL_TEST_MODE === "true" ? {streamToken: String(req?.headers?.["x-access-token"] || "")} : {}),
 });
 
 /**
