@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, memo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, memo } from 'react';
 import {
   Search,
   SearchX,
@@ -45,6 +45,9 @@ const ReusableTablePage = ({
   loading,
   from,
   gridCard,
+  recentlyViewedId,
+  recentlyViewedIndex,
+  recentlyViewedPulse = 0,
   viewMode,
   onViewModeChange,
   limit: limitProp,
@@ -65,6 +68,9 @@ const ReusableTablePage = ({
   const [internalViewMode, setInternalViewMode] = useState('table');
   const [internalLimit, setInternalLimit] = useState(DEFAULT_LOG_PAGE_SIZE);
   const [pageInput, setPageInput] = useState('');
+  const [rowsMenuOpen, setRowsMenuOpen] = useState(false);
+  const pendingScrollId = useRef(null);
+  const lastPreviewScroll = useRef(null);
   const [internalDateRange, setInternalDateRange] = useState({ start: null, end: null });
 
   const currentViewMode = typeof viewMode === 'string' ? viewMode : internalViewMode;
@@ -79,8 +85,11 @@ const ReusableTablePage = ({
   const setLimit =
     typeof onLimitChange === 'function'
       ? (v) => {
+          const anchor = Number.isInteger(recentlyViewedIndex) ? recentlyViewedIndex : (currentPage - 1) * limit;
+          const targetPage = Math.min(Math.max(1, Math.ceil((useServerPagination ? attendanceLogsCount : filtered.length) / v)), Math.floor(anchor / v) + 1);
+          pendingScrollId.current = recentlyViewedId == null ? null : { id: recentlyViewedId, page: targetPage, limit: v, oldData: data };
           onLimitChange(v);
-          setCurrentPage(1);
+          setCurrentPage(targetPage);
         }
       : (v) => {
           setInternalLimit(v);
@@ -123,6 +132,36 @@ const ReusableTablePage = ({
     if (useServerPagination) return data || [];
     return paginateRows(filtered || [], currentPage, limit).pageRows;
   }, [filtered, currentPage, limit, data, useServerPagination]);
+
+  useEffect(() => {
+    const pending = pendingScrollId.current;
+    if (loading || !pending || currentPage !== pending.page || limit !== pending.limit || (useServerPagination && data === pending.oldData)) return;
+    const selector = showGrid ? '[data-recent-log-card]' : '[data-recent-log-row]';
+    const target = [...document.querySelectorAll(selector)]
+      .find((node) => (showGrid ? node.dataset.recentLogCard : node.dataset.recentLogRow) === String(pending.id));
+    if (!target) return;
+    pendingScrollId.current = null;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [loading, paginated, currentPage, limit, data, useServerPagination, showGrid]);
+
+  // A page can contain more cards than fit in the viewport (for example, 12
+  // rows with only eight cards visible). When the image viewer closes, bring
+  // the last card the user reached back into view instead of leaving it below
+  // the fold. This is intentionally independent of the selected page size.
+  useEffect(() => {
+    if (recentlyViewedId == null || !recentlyViewedPulse) return;
+    const scrollKey = `${recentlyViewedId}:${recentlyViewedPulse}`;
+    if (lastPreviewScroll.current === scrollKey) return;
+    const frame = requestAnimationFrame(() => {
+      const selector = showGrid ? '[data-recent-log-card]' : '[data-recent-log-row]';
+      const target = [...document.querySelectorAll(selector)]
+        .find((node) => (showGrid ? node.dataset.recentLogCard : node.dataset.recentLogRow) === String(recentlyViewedId));
+      if (!target) return;
+      lastPreviewScroll.current = scrollKey;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showGrid, recentlyViewedId, recentlyViewedPulse, paginated]);
 
   useEffect(() => {
     onPaginatedDataChange?.(paginated);
@@ -244,9 +283,9 @@ const ReusableTablePage = ({
               !isEmpty && (
                 <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5 sm:gap-6">
                   {(paginated || []).map((item, idx) => (
-                    <React.Fragment key={item?.id ?? item?.email ?? idx}>
+                    <div key={`${item?.id ?? item?._id ?? item?.email ?? idx}:${recentlyViewedId === (item?.id ?? item?._id) ? recentlyViewedPulse : 0}`} data-recent-log-card={item?.id ?? item?._id} className={recentlyViewedId != null && recentlyViewedId === (item?.id ?? item?._id) && recentlyViewedPulse ? 'log-card-flash' : 'min-w-0'}>
                       {gridCard(item, idx)}
-                    </React.Fragment>
+                    </div>
                   ))}
                 </div>
               )
@@ -256,6 +295,8 @@ const ReusableTablePage = ({
                   data={paginated}
                   columns={columns}
                   loading={false}
+                  recentlyViewedId={recentlyViewedId}
+                  recentlyViewedPulse={recentlyViewedPulse}
                   renderExpandedRow={renderExpandedRow}
                   headerClassName={tableHeaderClassName}
                 />
@@ -284,7 +325,7 @@ const ReusableTablePage = ({
 
       {/* Footer */}
       {!loading && !isEmpty && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
+        <div className="relative z-10 mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
           <div
             data-tour="log-total"
             className={`text-sm text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1.5 font-normal rounded-[8px] w-fit inline-flex items-center gap-2 ${
@@ -388,19 +429,25 @@ const ReusableTablePage = ({
               </button>
             </div>
 
-            <div data-tour="log-rows" className="flex items-center gap-1.5">
+            <div data-tour="log-rows" className="relative z-20 flex items-center gap-1.5">
               <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Rows:</span>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="h-9 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:border-[var(--brand)]"
+              <button
+                type="button"
+                aria-label="Rows per page"
+                aria-expanded={rowsMenuOpen}
+                onClick={() => setRowsMenuOpen((open) => !open)}
+                className="h-9 min-w-10 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:border-[var(--brand)]"
               >
+                {limit}
+              </button>
+              {rowsMenuOpen && <div role="menu" aria-label="Rows per page" className="absolute bottom-full right-0 z-50 mb-1 min-w-14 overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg">
                 {[...new Set([...PAGE_SIZE_OPTIONS, limit])].sort((a, b) => a - b).map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
+                  <button key={size} type="button" role="menuitemradio" aria-checked={size === limit}
+                    onClick={() => { setRowsMenuOpen(false); if (size !== limit) setLimit(size); }}
+                    className={`block w-full px-3 py-1.5 text-left text-xs cursor-pointer ${size === limit ? 'bg-[var(--blue)] text-white' : 'text-[var(--tx)] hover:bg-[var(--bg2)]'}`}
+                  >{size}</button>
                 ))}
-              </select>
+              </div>}
             </div>
           </div>
         </div>

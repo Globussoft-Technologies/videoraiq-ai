@@ -1,6 +1,6 @@
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment-timezone';
 import {
   ArrowDown,
@@ -187,6 +187,13 @@ const VehicleCheckInOutLogs = () => {
   // vehicleKey -> true for the expanded sub-rows.
   const [expanded, setExpanded] = useState({});
   const [previewIndex, setPreviewIndex] = useState(-1);
+  const [activePreviewImage, setActivePreviewImage] = useState(null);
+  const [recentSlotKey, setRecentSlotKey] = useState(null);
+  const [recentRowIndex, setRecentRowIndex] = useState(null);
+  const [recentPulse, setRecentPulse] = useState(0);
+  const pendingPreviewPage = useRef(null);
+  const pendingScrollKey = useRef(null);
+  const loadRequestId = useRef(0);
   const [exporting, setExporting] = useState(null);
   const [selected, setSelected] = useState([]);
   const [checkoutRows, setCheckoutRows] = useState([]);
@@ -229,6 +236,7 @@ const VehicleCheckInOutLogs = () => {
   }, [search]);
 
   const load = useCallback(async ({ background = false } = {}) => {
+    const requestId = ++loadRequestId.current;
     if (!background) setLoading(true);
     try {
       const res = await fetchVehicleCheckInOutLogs({
@@ -250,6 +258,7 @@ const VehicleCheckInOutLogs = () => {
       });
       const data = res?.data?.body?.data;
       const nextRows = data?.data || [];
+      if (requestId !== loadRequestId.current) return;
       setRows(nextRows);
       if (background) {
         const available = new Set(nextRows.filter((row) => row.custody).map((row) => row.vehicleKey));
@@ -266,12 +275,14 @@ const VehicleCheckInOutLogs = () => {
           .map((row) => [row.vehicleKey, true]),
       ));
     } catch (err) {
+      if (requestId !== loadRequestId.current) return;
+      pendingPreviewPage.current = null;
       console.error(err);
       toast.error(
         err?.response?.data?.body?.message || 'Failed to fetch vehicle check-in/out logs',
       );
     } finally {
-      if (!background) setLoading(false);
+      if (!background && requestId === loadRequestId.current) setLoading(false);
     }
   }, [page, pageSize, startDate, endDate, effectiveCustody, nvrIds, channelIds, vehicleNumber, debouncedSearch, sort, viewMode]);
 
@@ -419,12 +430,12 @@ const VehicleCheckInOutLogs = () => {
   // exact slot rather than the first row with the same URL.
   const previewSlots = useMemo(() => {
     const slots = [];
-    rows.forEach((row) => {
+    rows.forEach((row, rowOffset) => {
       const rowImg = getImageUrl(row);
-      if (rowImg) slots.push({ key: `${row.vehicleKey}:row`, url: rowImg });
+      if (rowImg) slots.push({ key: `${row.vehicleKey}:row`, url: rowImg, rowKey: row.vehicleKey, rowOffset });
       (row.crossings || []).forEach((c) => {
         const url = getImageUrl(c);
-        if (url) slots.push({ key: `${row.vehicleKey}:${c._id}`, url });
+        if (url) slots.push({ key: `${row.vehicleKey}:${c._id}`, url, rowKey: row.vehicleKey, rowOffset });
       });
     });
     return slots;
@@ -432,11 +443,46 @@ const VehicleCheckInOutLogs = () => {
 
   const previewImages = useMemo(() => previewSlots.map((s) => s.url), [previewSlots]);
 
+  const showPreviewAt = (index) => {
+    const slot = previewSlots[index];
+    if (!slot) return;
+    setPreviewIndex(index);
+    setActivePreviewImage(slot.url);
+    setRecentSlotKey(slot.key);
+    setRecentRowIndex((page - 1) * pageSize + slot.rowOffset);
+  };
   const openPreview = (slotKey) => {
     const index = previewSlots.findIndex((s) => s.key === slotKey);
-    setPreviewIndex(index >= 0 ? index : -1);
+    if (index >= 0) showPreviewAt(index);
   };
-  const previewImage = previewIndex >= 0 ? previewImages[previewIndex] : null;
+  const movePreview = (direction) => {
+    if (pendingPreviewPage.current) return;
+    const index = previewIndex + direction;
+    if (index >= 0 && index < previewSlots.length) return showPreviewAt(index);
+    const nextPage = page + direction;
+    if (nextPage < 1 || nextPage > totalPages) return;
+    pendingPreviewPage.current = { page: nextPage, direction, oldRows: rows };
+    setPage(nextPage);
+  };
+  useEffect(() => {
+    const pending = pendingPreviewPage.current;
+    if (!pending || loading || page !== pending.page || rows === pending.oldRows) return;
+    if (previewSlots.length) {
+      pendingPreviewPage.current = null;
+      showPreviewAt(pending.direction > 0 ? 0 : previewSlots.length - 1);
+    } else {
+      const nextPage = page + pending.direction;
+      if (nextPage < 1 || nextPage > totalPages) pendingPreviewPage.current = null;
+      else { pendingPreviewPage.current = { page: nextPage, direction: pending.direction, oldRows: rows }; setPage(nextPage); }
+    }
+  }, [page, rows, loading, previewSlots, totalPages]);
+  useEffect(() => {
+    const pending = pendingScrollKey.current;
+    if (!pending || loading || page !== pending.page || pageSize !== pending.size || rows === pending.oldRows) return;
+    const card = [...document.querySelectorAll('[data-vehicle-log-key]')].find((node) => node.dataset.vehicleLogKey === pending.key);
+    if (card) { pendingScrollKey.current = null; card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }, [rows, loading, page, pageSize]);
+  const previewImage = activePreviewImage;
 
   if (permissionsLoading) return <PageLoader />;
   if (!canView) return <AccessDenied />;
@@ -646,8 +692,9 @@ const VehicleCheckInOutLogs = () => {
                 return (
                   <React.Fragment key={row.vehicleKey}>
                     <tr
+                      data-vehicle-log-key={row.vehicleKey}
                       onClick={() => toggleRow(row)}
-                      className="border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer"
+                      className={`border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer ${!previewImage && recentSlotKey?.startsWith(`${row.vehicleKey}:`) && recentPulse ? 'log-card-flash' : ''}`}
                     >
                       {canEdit && <td className={td} onClick={event => event.stopPropagation()}>
                         <input type="checkbox" aria-label={`Select ${row.vehicleNumber || 'vehicle'}`} disabled={!row.custody || loading || checkingOut}
@@ -887,8 +934,13 @@ const VehicleCheckInOutLogs = () => {
                 <select
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
+                    const size = Number(e.target.value);
+                    const anchor = recentRowIndex ?? (page - 1) * pageSize;
+                    const targetPage = Math.min(Math.max(1, Math.ceil(totalCount / size)), Math.floor(anchor / size) + 1);
+                    const key = previewSlots[previewIndex]?.rowKey || (recentSlotKey ? previewSlots.find((slot) => slot.key === recentSlotKey)?.rowKey : null);
+                    pendingScrollKey.current = key ? { key, page: targetPage, size, oldRows: rows } : null;
+                    setPageSize(size);
+                    setPage(targetPage);
                   }}
                   className="h-9 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:border-[var(--brand)]"
                 >
@@ -909,11 +961,11 @@ const VehicleCheckInOutLogs = () => {
       {previewImage && (
         <ImagePreviewModal
           previewImage={previewImage}
-          hasPrevious={previewIndex > 0}
-          hasNext={previewIndex < previewImages.length - 1}
-          onPrevious={() => setPreviewIndex((i) => Math.max(0, i - 1))}
-          onNext={() => setPreviewIndex((i) => Math.min(previewImages.length - 1, i + 1))}
-          onClose={() => setPreviewIndex(-1)}
+          hasPrevious={previewIndex > 0 || page > 1}
+          hasNext={previewIndex < previewImages.length - 1 || page < totalPages}
+          onPrevious={() => movePreview(-1)}
+          onNext={() => movePreview(1)}
+          onClose={() => { pendingPreviewPage.current = null; setPreviewIndex(-1); setActivePreviewImage(null); setRecentPulse((pulse) => pulse + 1); }}
         />
       )}
     </div>

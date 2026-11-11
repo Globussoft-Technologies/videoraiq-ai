@@ -1,6 +1,7 @@
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
@@ -9,7 +10,7 @@ import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import { Button } from '@/components/ui/button';
 
-import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
+import ReusableTablePage, { DEFAULT_LOG_PAGE_SIZE } from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
@@ -62,6 +63,7 @@ function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
 
 const REFRESH_KEY = 'sleep_activity_auto_refresh_enabled';
 const INTERVAL_KEY = 'sleep_activity_auto_refresh_interval';
+const sleepImage = (row) => row.incidentImageUrl;
 
 // The API's optional isSleeping filter.
 // '' = all, 'true' = only sleeping, 'false' = only awake.
@@ -81,9 +83,10 @@ const SleepActivityLogs = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [statusCounts, setStatusCounts] = useState({ all: null, sleeping: null, awake: null });
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(DEFAULT_LOG_PAGE_SIZE);
   const [searchInput, setSearchInput] = useState('');
   const [viewMode, setViewMode] = useState('grid');
+  const fetchRequestId = useRef(0);
 
   const [startDate, setStartDate] = useState(moment().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
@@ -94,9 +97,9 @@ const SleepActivityLogs = () => {
   const [channelIds, setChannelIds] = useState([]);
   const [sleepingFilter, setSleepingFilter] = useState(''); // '' | 'true' | 'false'
 
-  const [previewImage, setPreviewImage] = useState(null);
-  const [previewIndex, setPreviewIndex] = useState(-1);
-  const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const { previewImage, previewIndex, previewImageLoading, setPreviewImageLoading, previewRows,
+    openPreview, movePreview, closePreview, recentlyViewedId, recentlyViewedIndex, recentlyViewedPulse, pageCount } =
+    usePagedLogImagePreview({ rows, currentPage, limit, totalCount, loading, error, setPage: setCurrentPage, imageOf: sleepImage });
 
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
@@ -160,13 +163,14 @@ const SleepActivityLogs = () => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     setCurrentPage(1);
-  }, [startDate, endDate, nvrIds, channelIds, sleepingFilter, limit, searchInput]);
+  }, [startDate, endDate, nvrIds, channelIds, sleepingFilter, searchInput]);
 
   const skip = (currentPage - 1) * limit;
 
   /* ─────────────── Data fetch ─────────────── */
   const fetchLogs = useCallback(async ({ background = false } = {}) => {
     if (!canView) return;
+    const requestId = ++fetchRequestId.current;
     if (!background) setLoading(true);
     setError(null);
     try {
@@ -184,6 +188,7 @@ const SleepActivityLogs = () => {
       const body = res?.data?.body?.data;
       const list = body?.data || [];
       const total = body?.totalCount || 0;
+      if (requestId !== fetchRequestId.current) return;
 
       const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
       const fmt = (t) =>
@@ -215,10 +220,12 @@ const SleepActivityLogs = () => {
           isSleeping: sleepingFilter === 'true' ? false : true,
         });
         const otherCount = countRes?.data?.body?.data?.totalCount ?? 0;
+        if (requestId !== fetchRequestId.current) return;
         const sleeping = sleepingFilter === 'true' ? total : otherCount;
         const awake = sleepingFilter === 'false' ? total : sleepingFilter === 'true' ? otherCount : Math.max(0, total - sleeping);
         setStatusCounts({ all: sleeping + awake, sleeping, awake });
       } catch (countError) {
+        if (requestId !== fetchRequestId.current) return;
         console.log('Error fetching sleep activity counts:', countError);
         setStatusCounts({
           all: sleepingFilter === '' ? total : null,
@@ -227,10 +234,11 @@ const SleepActivityLogs = () => {
         });
       }
     } catch (err) {
+      if (requestId !== fetchRequestId.current) return;
       console.log('Error fetching sleep activity logs:', err);
       setError(err);
     } finally {
-      if (!background) setLoading(false);
+      if (!background && requestId === fetchRequestId.current) setLoading(false);
     }
   }, [canView, skip, limit, startDate, endDate, nvrIds, channelIds, sleepingFilter]);
 
@@ -293,29 +301,6 @@ const SleepActivityLogs = () => {
     [handleExport]
   );
 
-  const previewRows = useMemo(() => rows.filter((row) => row.incidentImageUrl), [rows]);
-
-  const openPreview = useCallback((url) => {
-    if (!url) return;
-    setPreviewIndex(previewRows.findIndex((row) => row.incidentImageUrl === url));
-    setPreviewImageLoading(true);
-    setPreviewImage(url);
-  }, [previewRows]);
-
-  const showPreviewAt = useCallback((index) => {
-    const row = previewRows[index];
-    if (!row) return;
-    setPreviewIndex(index);
-    setPreviewImageLoading(true);
-    setPreviewImage(row.incidentImageUrl);
-  }, [previewRows]);
-
-  const closePreview = () => {
-    setPreviewImage(null);
-    setPreviewIndex(-1);
-    setPreviewImageLoading(false);
-  };
-
   const columns = useMemo(() => buildColumns({ onPreview: openPreview }), [openPreview]);
   const gridCard = useCallback(
     (item) => renderSleepActivityCard(item, { onPreview: openPreview }),
@@ -348,12 +333,12 @@ const SleepActivityLogs = () => {
         previewImage={previewImage}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
-        hasPrevious={previewIndex > 0}
-        hasNext={previewIndex >= 0 && previewIndex < previewRows.length - 1}
-        onPrevious={() => showPreviewAt(previewIndex - 1)}
-        onNext={() => showPreviewAt(previewIndex + 1)}
-        position={previewIndex >= 0 ? previewIndex + 1 : 0}
-        total={previewRows.length}
+        hasPrevious={previewIndex > 0 || currentPage > 1}
+        hasNext={previewIndex >= 0 && (previewIndex < previewRows.length - 1 || currentPage < pageCount)}
+        onPrevious={() => movePreview(-1)}
+        onNext={() => movePreview(1)}
+        position={previewIndex >= 0 ? recentlyViewedIndex + 1 : 0}
+        total={totalCount}
         onClose={closePreview}
       />
 
@@ -364,6 +349,9 @@ const SleepActivityLogs = () => {
         data={rows}
         columns={columns}
         gridCard={gridCard}
+        recentlyViewedId={previewImage ? null : recentlyViewedId}
+        recentlyViewedIndex={recentlyViewedIndex}
+        recentlyViewedPulse={recentlyViewedPulse}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         attendanceLogsCount={totalCount}

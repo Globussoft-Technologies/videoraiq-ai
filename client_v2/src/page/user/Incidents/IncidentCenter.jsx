@@ -1059,7 +1059,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
             style={{
               position: 'absolute',
               top: 16,
-              right: 16,
+              right: 68,
               zIndex: 35,
               display: 'flex',
               alignItems: 'center',
@@ -1313,12 +1313,15 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
         </div>
 
         <button
+          type="button"
           onClick={onClose}
-          style={{ position: 'absolute', top: imgSrc ? 62 : 16, right: 16, zIndex: 40, width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,.85)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,.95)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,.85)'}
+          aria-label="Close image viewer"
+          title="Close"
+          style={{ position: 'absolute', top: 16, right: 16, zIndex: 40, width: 40, height: 40, borderRadius: 10, background: '#dc2626', border: '1px solid #f87171', boxShadow: '0 10px 30px rgba(0,0,0,.28)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#b91c1c'}
+          onMouseLeave={e => e.currentTarget.style.background = '#dc2626'}
         >
-          <X size={15} />
+          <X size={20} />
         </button>
 
         {hasNext && (
@@ -1407,7 +1410,7 @@ const LIST_SEVERITY_COLORS = {
 function IncidentListRow({
   item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
   hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, detailColumns,
-  listColumns, listMinWidth,
+  listColumns, listMinWidth, recentlyViewed,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1455,8 +1458,9 @@ function IncidentListRow({
       {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
       <div
         role="row"
+        data-incident-card-id={item._id || item.id}
         onClick={handleRowClick}
-        className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}`}
+        className={`vq-inc-list-row${selectionActive ? ' is-selected' : ''}${recentlyViewed ? ' log-row-flash' : ''}`}
         style={{
           display: 'grid', gridTemplateColumns: listColumns,
           gap: 12, alignItems: 'center', minWidth: listMinWidth, padding: packing ? '10px 12px' : '14px 12px',
@@ -1627,6 +1631,11 @@ export default function IncidentCenter() {
   const [exportingFormat, setExportingFormat] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [lightboxIncident, setLightboxIncident] = useState(null);
+  const [lastViewedIncidentId, setLastViewedIncidentId] = useState(null);
+  const [lastViewedGlobalIndex, setLastViewedGlobalIndex] = useState(null);
+  const [lastViewedPulse, setLastViewedPulse] = useState(0);
+  const pendingViewedScroll = useRef(null);
+  const lastPreviewScroll = useRef(null);
   // Incident whose plate the Tag User dialog is currently linking to a user.
   const [tagIncident, setTagIncident] = useState(null);
   // Incident whose existing tag the Untag dialog is about to remove.
@@ -1818,10 +1827,13 @@ export default function IncidentCenter() {
     if (!items[index]) return;
     setLightboxIndex(index);
     setLightboxIncident(items[index]);
+    setLastViewedIncidentId(items[index]._id || items[index].id);
+    setLastViewedGlobalIndex(page * pageSize + index);
   };
   const closeLightbox = () => {
     setLightboxIndex(null);
     setLightboxIncident(null);
+    setLastViewedPulse((pulse) => pulse + 1);
   };
   useEffect(() => {
     if (lightboxIndex == null || lightboxItemIndex < 0) return;
@@ -2159,6 +2171,33 @@ export default function IncidentCenter() {
   const pendingNavRef = useRef(null);
   const loadedPageRef = useRef(page);
   useEffect(() => { if (!grid.loading && !grid.error) loadedPageRef.current = page; }, [grid.data]);
+  useEffect(() => {
+    const pending = pendingViewedScroll.current;
+    if (!pending || grid.loading || page !== pending.page || pageSize !== pending.size) return;
+    const card = [...document.querySelectorAll('[data-incident-card-id]')].find((node) => node.dataset.incidentCardId === String(pending.id));
+    if (card) {
+      pendingViewedScroll.current = null;
+      lastPreviewScroll.current = `${pending.id}:${lastViewedPulse}`;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [grid.data, grid.loading, page, pageSize, viewMode, lastViewedPulse]);
+
+  // Keep the last viewed incident visible after closing the viewer. A larger
+  // page size may put that card below the current viewport, so this runs for
+  // every page size rather than assuming all rows are already visible.
+  useEffect(() => {
+    if (lightboxIndex != null || !lastViewedIncidentId || !lastViewedPulse) return;
+    const scrollKey = `${lastViewedIncidentId}:${lastViewedPulse}`;
+    if (lastPreviewScroll.current === scrollKey) return;
+    const frame = requestAnimationFrame(() => {
+      const card = [...document.querySelectorAll('[data-incident-card-id]')]
+        .find((node) => node.dataset.incidentCardId === String(lastViewedIncidentId));
+      if (!card) return;
+      lastPreviewScroll.current = scrollKey;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [items, lightboxIndex, lastViewedIncidentId, lastViewedPulse, viewMode]);
 
   const handleNavigateGlobal = useCallback((globalIdx) => {
     if (globalIdx < 0 || globalIdx >= totalCount) return;
@@ -2168,6 +2207,8 @@ export default function IncidentCenter() {
       if (items[targetOffset]) {
         setLightboxIndex(targetOffset);
         setLightboxIncident(items[targetOffset]);
+        setLastViewedIncidentId(items[targetOffset]._id || items[targetOffset].id);
+        setLastViewedGlobalIndex(globalIdx);
       }
       return;
     }
@@ -2202,6 +2243,8 @@ export default function IncidentCenter() {
       const nextIndex = Math.min(pending.offset, items.length - 1);
       setLightboxIndex(nextIndex);
       setLightboxIncident(items[nextIndex]);
+      setLastViewedIncidentId(items[nextIndex]._id || items[nextIndex].id);
+      setLastViewedGlobalIndex(pending.page * pageSize + nextIndex);
     } else {
       setNavFailedAt(n => n + 1);
     }
@@ -2792,23 +2835,27 @@ export default function IncidentCenter() {
           ) : viewMode === 'grid' ? (
             <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {items.map((item, i) => (
-                <IncidentCard
-                  key={item._id || item.id}
-                  item={item}
-                  onRefresh={refreshIncidentData}
-                  onResolvedChange={handleResolvedChange}
-                  onOpenLightbox={() => selectLightboxIncident(i)}
-                  onTagUser={setTagIncident}
-                  onUntagUser={setUntagIncident}
-                  onViewUser={setViewUser}
-                  hideResolveControls={isResolvedView}
-                  resolveSelected={resolveMode === 'filtered' || resolveMode === 'page' || selectedForResolve.has(item._id || item.id)}
-                  resolveSelectionActive={!!resolveMode}
-                  onToggleResolve={() => handleToggleResolveSelection(item._id || item.id)}
-                  deleteMode={isDeleteMode}
-                  selectedForDelete={selectedForDelete.includes(item._id || item.id)}
-                  onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
-                />
+                <div
+                  key={`${item._id || item.id}:${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) ? lastViewedPulse : 0}`}
+                  className={`min-w-0${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) && lastViewedPulse ? ' log-card-flash' : ''}`}
+                >
+                  <IncidentCard
+                    item={item}
+                    onRefresh={refreshIncidentData}
+                    onResolvedChange={handleResolvedChange}
+                    onOpenLightbox={() => selectLightboxIncident(i)}
+                    onTagUser={setTagIncident}
+                    onUntagUser={setUntagIncident}
+                    onViewUser={setViewUser}
+                    hideResolveControls={isResolvedView}
+                    resolveSelected={resolveMode === 'filtered' || resolveMode === 'page' || selectedForResolve.has(item._id || item.id)}
+                    resolveSelectionActive={!!resolveMode}
+                    onToggleResolve={() => handleToggleResolveSelection(item._id || item.id)}
+                    deleteMode={isDeleteMode}
+                    selectedForDelete={selectedForDelete.includes(item._id || item.id)}
+                    onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
+                  />
+                </div>
               ))}
             </div>
           ) : (
@@ -2829,8 +2876,9 @@ export default function IncidentCenter() {
               </div>
               {sortedListItems.map((item) => (
                 <IncidentListRow
-                  key={item._id || item.id}
+                  key={`${item._id || item.id}:${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) ? lastViewedPulse : 0}`}
                   item={item}
+                  recentlyViewed={lightboxIndex == null && lastViewedIncidentId === (item._id || item.id)}
                   onRefresh={refreshIncidentData}
                   onResolvedChange={handleResolvedChange}
                   onOpenLightbox={() => selectLightboxIncident(items.findIndex((entry) => (entry._id || entry.id) === (item._id || item.id)))}
@@ -2865,7 +2913,15 @@ export default function IncidentCenter() {
               <select
                 value={pageSize}
                 aria-label="Incidents per page"
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                onChange={(e) => {
+                  const size = Number(e.target.value);
+                  const anchor = lastViewedGlobalIndex ?? page * pageSize;
+                  const targetPage = Math.min(Math.max(0, Math.ceil(totalCount / size) - 1), Math.floor(anchor / size));
+                  pendingViewedScroll.current = lastViewedIncidentId ? { id: lastViewedIncidentId, page: targetPage, size, oldData: grid.data } : null;
+                  if (lastViewedIncidentId) setLastViewedPulse((pulse) => pulse + 1);
+                  setPageSize(size);
+                  setPage(targetPage);
+                }}
                 style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
               >
                 {PAGE_SIZE_OPTIONS.map((n) => (

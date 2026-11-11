@@ -163,7 +163,7 @@ const sortableHeader = (label, field, onSort, sortable, sortField, sortOrder) =>
       }
     : label;
 
-export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }) => {
+export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, recentlyViewedId }) => {
   const sortable = config.sortable !== false;
   const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
   const cols = [
@@ -174,8 +174,8 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder }
         const url = row.original.incidentImageUrl;
         return url ? (
           <button
-            onClick={() => onPreview(url)}
-            className="w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block"
+            onClick={() => onPreview(url, `incident:${row.original._id || row.original.aggregationKey || row.original.id}`)}
+            className={`w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block ${recentlyViewedId != null && recentlyViewedId === (row.original._id || row.original.aggregationKey || row.original.id) ? 'log-card-flash' : ''}`}
             title="View image"
             aria-label="View incident image"
           >
@@ -482,7 +482,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
           alt={row.incidentName}
           className="h-full w-full cursor-pointer"
           imgClassName="w-full h-full object-cover"
-          onClick={() => onPreview(row.incidentImageUrl)}
+          onClick={() => onPreview(row.incidentImageUrl, `incident:${row._id || row.aggregationKey || row.id}`)}
           title="Click to enlarge"
         />
       ) : (

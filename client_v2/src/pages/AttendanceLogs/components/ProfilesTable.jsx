@@ -9,7 +9,7 @@ import 'react-loading-skeleton/dist/skeleton.css';
  * The header row always renders (even with no rows), so switching to
  * table/row view always shows the column headings.
  */
-function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassName = '' }) {
+function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassName = '', recentlyViewedId = null, recentlyViewedPulse = 0 }) {
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const table = useReactTable({
     data,
@@ -92,7 +92,10 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassN
           const expanded = expandedRows.has(key);
           return (
             <Fragment key={key}>
-              <tr className="hover:bg-[var(--bg2)]/60 transition-colors">
+              <tr
+                data-recent-log-row={key}
+                className={`hover:bg-[var(--bg2)]/60 transition-colors ${recentlyViewedPulse && recentlyViewedId != null && String(recentlyViewedId) === String(key) ? 'log-row-flash' : ''}`}
+              >
                 {expandable && (
                   <td className="w-10 px-3 py-3.5 text-[var(--tx3)]">
                     <button

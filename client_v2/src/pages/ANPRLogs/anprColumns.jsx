@@ -230,7 +230,7 @@ export const buildColumns = ({
       const url = row.original.incidentImageUrl;
       return url ? (
         <button
-          onClick={() => onPreview(url)}
+          onClick={() => onPreview(row.original.imageUrl || url, row.original.id || row.original._id)}
           className="w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block"
           title="View image"
           aria-label="View incident image"
@@ -375,7 +375,7 @@ export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser,
           alt={row.vehicleNumber}
           className="absolute inset-0 cursor-pointer"
           imgClassName="w-full h-full object-cover"
-          onClick={() => onPreview(row.incidentImageUrl)}
+          onClick={() => onPreview(row.imageUrl || row.incidentImageUrl, row.id || row._id)}
           title="Click to enlarge"
         />
       ) : (

@@ -146,6 +146,11 @@ const IncidentLogsPage = ({ config }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const [recentlyViewedId, setRecentlyViewedId] = useState(null);
+  const [recentlyViewedIndex, setRecentlyViewedIndex] = useState(null);
+  const [recentlyViewedPulse, setRecentlyViewedPulse] = useState(0);
+  const pendingPreviewPage = useRef(null);
+  const loadedRowsPage = useRef(null);
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [exportingFormat, setExportingFormat] = useState('');
@@ -255,7 +260,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType, limit]);
+  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType]);
 
   useEffect(() => {
     if (zone) dispatch({ type: 'SET_ZONE', value: '' });
@@ -357,6 +362,7 @@ const IncidentLogsPage = ({ config }) => {
         truckPresent: item.truckPresent,
       }));
 
+      loadedRowsPage.current = currentPage;
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
       if (config.showStockCountingFields) {
@@ -418,11 +424,13 @@ const IncidentLogsPage = ({ config }) => {
   const previewRows = useMemo(() => {
     if (!previewNavigationEnabled) return [];
     const items = [];
-    rows.forEach((row) => {
+    rows.forEach((row, rowOffset) => {
       if (row.incidentImageUrl) {
         items.push({
-          previewKey: `incident:${row._id || row.aggregationKey || items.length}`,
+          previewKey: `incident:${row._id || row.aggregationKey || row.id}`,
           incidentImageUrl: row.incidentImageUrl,
+          rowId: row._id || row.aggregationKey || row.id,
+          rowOffset,
         });
       }
       if (config.showStockCountingFields) {
@@ -432,6 +440,8 @@ const IncidentLogsPage = ({ config }) => {
             items.push({
               previewKey: stockEventPreviewKey(row, event, index),
               incidentImageUrl: eventImageUrl,
+              rowId: row._id || row.aggregationKey || row.id,
+              rowOffset,
             });
           }
         });
@@ -440,36 +450,46 @@ const IncidentLogsPage = ({ config }) => {
     return items;
   }, [previewNavigationEnabled, rows, config.showStockCountingFields]);
 
+  const rememberPreview = useCallback((entry) => {
+    setRecentlyViewedId(entry.rowId);
+    setRecentlyViewedIndex((currentPage - 1) * limit + entry.rowOffset);
+  }, [currentPage, limit]);
+
   const showPreviewAt = useCallback(
     (index) => {
       const nextRow = previewRows[index];
       if (!nextRow) return;
+      rememberPreview(nextRow);
       setPreviewIndex(index);
       setPreviewImageLoading(true);
       setPreviewImage(nextRow.incidentImageUrl);
     },
-    [previewRows]
+    [previewRows, rememberPreview]
   );
 
   const openPreview = useCallback(
     (url, previewKey) => {
       if (!url) return;
-      setPreviewIndex(previewNavigationEnabled
+      const index = previewNavigationEnabled
         ? previewRows.findIndex((row) => (
           previewKey ? row.previewKey === previewKey : row.incidentImageUrl === url
         ))
-        : -1);
+        : -1;
+      if (index >= 0) rememberPreview(previewRows[index]);
+      setPreviewIndex(index);
       setPreviewImageLoading(true);
       setPreviewImage(url);
     },
-    [previewNavigationEnabled, previewRows]
+    [previewNavigationEnabled, previewRows, rememberPreview]
   );
 
   const closePreview = useCallback(() => {
+    pendingPreviewPage.current = null;
+    if (recentlyViewedId != null) setRecentlyViewedPulse((pulse) => pulse + 1);
     setPreviewImage(null);
     setPreviewIndex(-1);
     setPreviewImageLoading(false);
-  }, []);
+  }, [recentlyViewedId]);
 
   const renderStockEvents = useCallback(
     (row) => {
@@ -588,15 +608,41 @@ const IncidentLogsPage = ({ config }) => {
     [openPreview]
   );
 
-  const showPreviousPreview = useCallback(() => {
-    if (previewIndex > 0) showPreviewAt(previewIndex - 1);
-  }, [previewIndex, showPreviewAt]);
+  const pageCount = Math.max(1, Math.ceil(totalCount / limit));
+  const movePreview = useCallback((direction) => {
+    if (pendingPreviewPage.current) return;
+    const index = previewIndex + direction;
+    if (index >= 0 && index < previewRows.length) return showPreviewAt(index);
+    const page = currentPage + direction;
+    if (page < 1 || page > pageCount) return;
+    pendingPreviewPage.current = { page, direction };
+    setPreviewImageLoading(true);
+    dispatch({ type: 'SET_CURRENT_PAGE', value: page });
+  }, [previewIndex, previewRows.length, showPreviewAt, currentPage, pageCount]);
 
-  const showNextPreview = useCallback(() => {
-    if (previewIndex >= 0 && previewIndex < previewRows.length - 1) {
-      showPreviewAt(previewIndex + 1);
+  useEffect(() => {
+    const pending = pendingPreviewPage.current;
+    if (!pending || loading || currentPage !== pending.page) return;
+    if (error) {
+      pendingPreviewPage.current = null;
+      setPreviewImageLoading(false);
+      return;
     }
-  }, [previewIndex, previewRows.length, showPreviewAt]);
+    if (loadedRowsPage.current !== pending.page) return;
+    if (previewRows.length) {
+      pendingPreviewPage.current = null;
+      showPreviewAt(pending.direction > 0 ? 0 : previewRows.length - 1);
+      return;
+    }
+    const page = currentPage + pending.direction;
+    if (page < 1 || page > pageCount) {
+      pendingPreviewPage.current = null;
+      setPreviewImageLoading(false);
+      return;
+    }
+    pendingPreviewPage.current = { ...pending, page };
+    dispatch({ type: 'SET_CURRENT_PAGE', value: page });
+  }, [currentPage, loading, error, previewRows, pageCount, showPreviewAt]);
 
   const onSort = useCallback(
     (field) => {
@@ -609,10 +655,10 @@ const IncidentLogsPage = ({ config }) => {
 
   const columns = useMemo(
     () => {
-      const allColumns = buildColumns(config, { onSort, onPreview: openPreview, sortField, sortOrder });
+      const allColumns = buildColumns(config, { onSort, onPreview: openPreview, sortField, sortOrder, recentlyViewedId: viewMode === 'grid' && !previewImage && recentlyViewedPulse ? recentlyViewedId : null });
       return config.showStockCountingFields ? stockMovementColumns(allColumns, stockDirection) : allColumns;
     },
-    [config, onSort, openPreview, stockDirection, sortField, sortOrder]
+    [config, onSort, openPreview, stockDirection, sortField, sortOrder, viewMode, previewImage, recentlyViewedId, recentlyViewedPulse]
   );
 
   const gridCard = useCallback(
@@ -713,10 +759,10 @@ const IncidentLogsPage = ({ config }) => {
         zoomControlsPosition={config.showStockCountingFields ? 'left' : 'right'}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
-        hasPrevious={previewNavigationEnabled && previewIndex > 0}
-        hasNext={previewNavigationEnabled && previewIndex >= 0 && previewIndex < previewRows.length - 1}
-        onPrevious={showPreviousPreview}
-        onNext={showNextPreview}
+        hasPrevious={previewNavigationEnabled && !pendingPreviewPage.current && (previewIndex > 0 || currentPage > 1)}
+        hasNext={previewNavigationEnabled && !pendingPreviewPage.current && previewIndex >= 0 && (previewIndex < previewRows.length - 1 || currentPage < pageCount)}
+        onPrevious={() => movePreview(-1)}
+        onNext={() => movePreview(1)}
         onClose={closePreview}
       />
 
@@ -729,6 +775,9 @@ const IncidentLogsPage = ({ config }) => {
         data={rows}
         columns={columns}
         gridCard={config.tableOnly ? undefined : gridCard}
+        recentlyViewedId={previewImage ? null : recentlyViewedId}
+        recentlyViewedIndex={recentlyViewedIndex}
+        recentlyViewedPulse={recentlyViewedPulse}
         viewMode={config.tableOnly ? 'table' : viewMode}
         onViewModeChange={config.tableOnly ? undefined : setViewMode}
         attendanceLogsCount={totalCount}

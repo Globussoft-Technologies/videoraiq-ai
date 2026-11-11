@@ -420,23 +420,29 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
       )}
 
       <div
+        data-incident-card-id={item._id || item.id}
         onClick={handleCardClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
           background: 'var(--bg1solid)',
-          border: `${resolveSelected || (deleteMode && selectedForDelete) ? '2px' : '1px'} solid ${resolveSelected ? '#22c55e' : deleteMode && selectedForDelete ? 'var(--crit)' : 'var(--bd)'}`,
+          // Match the log-card treatment: use the subtle base border normally,
+          // strengthen it on hover, and keep selection borders authoritative.
+          border: `${resolveSelected || (deleteMode && selectedForDelete) ? '2px' : '1px'} solid ${resolveSelected ? '#22c55e' : deleteMode && selectedForDelete ? 'var(--crit)' : hover ? 'var(--bd2)' : 'var(--bd)'}`,
           boxShadow: resolveSelected
             ? '0 0 0 2px rgba(34,197,94,.2), 0 4px 16px rgba(34,197,94,.16)'
             : deleteMode && selectedForDelete
             ? '0 0 0 2px rgba(239,68,68,.3), 0 4px 16px rgba(0,0,0,.14)'
-            : hover ? '0 4px 16px rgba(0,0,0,.14)' : '0 1px 4px rgba(0,0,0,.06)',
-          borderRadius: 12,
+            : 'none',
+          borderRadius: 13,
           overflow: 'hidden',
+          width: '100%',
+          height: '100%',
+          minWidth: 0,
           cursor: 'pointer',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'box-shadow .15s, border-color .15s, background .15s',
+          transition: 'border-color .15s, background .15s',
           position: 'relative',
         }}
       >

@@ -1,6 +1,7 @@
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
-import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
+import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
+import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
@@ -31,6 +32,7 @@ import {
 } from './Api';
 
 const HOST = import.meta.env.VITE_BACKEND;
+const anprImage = (row) => row.imageUrl;
 
 /**
  * PDF export button with a two-way split: the plain list-table PDF, and the
@@ -115,10 +117,12 @@ const ANPRLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  const fetchRequestId = useRef(0);
   const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid' — default grid
-  const [previewImage, setPreviewImage] = useState(null);
-  const [previewIndex, setPreviewIndex] = useState(-1);
-  const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const setPreviewPage = useCallback((page) => dispatch({ type: 'SET_CURRENT_PAGE', value: page }), []);
+  const { previewImage, previewIndex, previewImageLoading, setPreviewImageLoading, previewRows,
+    openPreview, movePreview, closePreview, recentlyViewedId, recentlyViewedIndex, recentlyViewedPulse, pageCount } =
+    usePagedLogImagePreview({ rows, currentPage, limit, totalCount, loading, error, setPage: setPreviewPage, imageOf: anprImage });
   const [editRow, setEditRow] = useState(null);
   // Row whose plate the Tag User dialog is currently linking to a user.
   const [tagRow, setTagRow] = useState(null);
@@ -216,12 +220,13 @@ const ANPRLogs = () => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, tagStatus, limit]);
+  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, tagStatus]);
 
   const skip = (currentPage - 1) * limit;
 
   /* ─────────────── Data fetch ─────────────── */
   const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    const requestId = ++fetchRequestId.current;
     if (!background) dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
@@ -245,6 +250,7 @@ const ANPRLogs = () => {
       const data = res?.data?.body?.data;
       const list = data?.data || [];
       const total = data?.totalCount || 0;
+      if (requestId !== fetchRequestId.current) return;
 
       const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
 
@@ -272,10 +278,11 @@ const ANPRLogs = () => {
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
     } catch (err) {
+      if (requestId !== fetchRequestId.current) return;
       console.log('Error fetching vehicle obstruction logs:', err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      if (!background) dispatch({ type: 'SET_LOADING', value: false });
+      if (!background && requestId === fetchRequestId.current) dispatch({ type: 'SET_LOADING', value: false });
     }
   }, [
     skip,
@@ -309,29 +316,6 @@ const ANPRLogs = () => {
     () => cameraList.map((cam) => ({ label: cam.customName || cam.name, id: cam._id || cam.id })),
     [cameraList]
   );
-
-  const previewRows = useMemo(() => rows.filter((row) => row.imageUrl), [rows]);
-
-  const openPreview = useCallback((url) => {
-    if (!url) return;
-    setPreviewIndex(previewRows.findIndex((row) => row.imageUrl === url));
-    setPreviewImageLoading(true);
-    setPreviewImage(url);
-  }, [previewRows]);
-
-  const showPreviewAt = useCallback((index) => {
-    const row = previewRows[index];
-    if (!row) return;
-    setPreviewIndex(index);
-    setPreviewImageLoading(true);
-    setPreviewImage(row.imageUrl);
-  }, [previewRows]);
-
-  const closePreview = () => {
-    setPreviewImage(null);
-    setPreviewIndex(-1);
-    setPreviewImageLoading(false);
-  };
 
   const onSort = useCallback((field) => {
     dispatch({ type: 'SET_SORT_FIELD', value: field });
@@ -418,12 +402,12 @@ const ANPRLogs = () => {
         previewImage={previewImage}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
-        hasPrevious={previewIndex > 0}
-        hasNext={previewIndex >= 0 && previewIndex < previewRows.length - 1}
-        onPrevious={() => showPreviewAt(previewIndex - 1)}
-        onNext={() => showPreviewAt(previewIndex + 1)}
-        position={previewIndex >= 0 ? previewIndex + 1 : 0}
-        total={previewRows.length}
+        hasPrevious={previewIndex > 0 || currentPage > 1}
+        hasNext={previewIndex >= 0 && (previewIndex < previewRows.length - 1 || currentPage < pageCount)}
+        onPrevious={() => movePreview(-1)}
+        onNext={() => movePreview(1)}
+        position={previewIndex >= 0 ? recentlyViewedIndex + 1 : 0}
+        total={totalCount}
         onClose={closePreview}
       />
 
@@ -467,6 +451,9 @@ const ANPRLogs = () => {
         data={rows}
         columns={columns}
         gridCard={gridCard}
+        recentlyViewedId={previewImage ? null : recentlyViewedId}
+        recentlyViewedIndex={recentlyViewedIndex}
+        recentlyViewedPulse={recentlyViewedPulse}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         attendanceLogsCount={totalCount}

@@ -1,6 +1,7 @@
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
@@ -21,6 +22,7 @@ import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect
 import { handleCarExport } from './carExport';
 
 const HOST = import.meta.env.VITE_BACKEND;
+const carImage = (row) => row.imageUrl;
 const HONDA_MODEL_OPTIONS = [
   'Amaze',
   'Amaze 2nd Gen',
@@ -344,9 +346,9 @@ const CarLogs = () => {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
-  const [previewImage, setPreviewImage] = useState(null);
-  const [previewIndex, setPreviewIndex] = useState(-1);
-  const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const { previewImage, previewIndex, previewImageLoading, setPreviewImageLoading, previewRows,
+    openPreview, movePreview, closePreview, recentlyViewedId, recentlyViewedIndex, recentlyViewedPulse, pageCount } =
+    usePagedLogImagePreview({ rows, currentPage, limit, totalCount, loading, error, setPage: setCurrentPage, imageOf: carImage });
   const [editRow, setEditRow] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
   const [pdfViewOpen, setPdfViewOpen] = useState(false);
@@ -364,10 +366,12 @@ const CarLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  const fetchRequestId = useRef(0);
 
   const skip = (currentPage - 1) * limit;
 
   const fetchLogs = useCallback(async ({ background = false } = {}) => {
+    const requestId = ++fetchRequestId.current;
     if (!background) setLoading(true);
     setError(null);
     try {
@@ -385,6 +389,7 @@ const CarLogs = () => {
       });
       const data = res?.data?.body?.data;
       const list = data?.data || [];
+      if (requestId !== fetchRequestId.current) return;
       setRows(
         list.map((item) => ({
           id: item._id,
@@ -403,11 +408,12 @@ const CarLogs = () => {
       );
       setTotalCount(data?.totalCount || 0);
     } catch (err) {
+      if (requestId !== fetchRequestId.current) return;
       console.log('Error fetching car logs:', err);
       setError(err);
       toast.error(getApiMessage(err, 'Failed to load car logs'));
     } finally {
-      if (!background) setLoading(false);
+      if (!background && requestId === fetchRequestId.current) setLoading(false);
     }
   }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, vehicleNumber, searchInput]);
 
@@ -487,46 +493,6 @@ const CarLogs = () => {
     setSortOrder((prev) => (field === sortField && prev === 'asc' ? 'desc' : 'asc'));
   };
 
-  const previewRows = useMemo(() => rows.filter((row) => row.imageUrl), [rows]);
-
-  const showPreviewAt = useCallback(
-    (index) => {
-      const nextRow = previewRows[index];
-      if (!nextRow) return;
-      setPreviewIndex(index);
-      setPreviewImageLoading(true);
-      setPreviewImage(nextRow.imageUrl);
-    },
-    [previewRows]
-  );
-
-  const openPreview = useCallback(
-    (url) => {
-      if (!url) return;
-      const index = previewRows.findIndex((row) => row.imageUrl === url);
-      setPreviewIndex(index);
-      setPreviewImageLoading(true);
-      setPreviewImage(url);
-    },
-    [previewRows]
-  );
-
-  const closePreview = useCallback(() => {
-    setPreviewImage(null);
-    setPreviewIndex(-1);
-    setPreviewImageLoading(false);
-  }, []);
-
-  const showPreviousPreview = useCallback(() => {
-    if (previewIndex > 0) showPreviewAt(previewIndex - 1);
-  }, [previewIndex, showPreviewAt]);
-
-  const showNextPreview = useCallback(() => {
-    if (previewIndex >= 0 && previewIndex < previewRows.length - 1) {
-      showPreviewAt(previewIndex + 1);
-    }
-  }, [previewIndex, previewRows.length, showPreviewAt]);
-
   const openEdit = (row) => setEditRow(row);
 
   const handleSaveEdit = async ({ model, company, year }) => {
@@ -587,7 +553,7 @@ const CarLogs = () => {
           const imageUrl = row.original.imageUrl;
           return imageUrl ? (
             <button
-              onClick={() => openPreview(imageUrl)}
+              onClick={() => openPreview(imageUrl, row.original.id || row.original._id)}
               className="w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block"
               title="View car image"
               aria-label="View car image"
@@ -811,7 +777,7 @@ const CarLogs = () => {
               alt={row.modelName}
               className="absolute inset-0 cursor-pointer"
               imgClassName="w-full h-full object-cover"
-              onClick={() => openPreview(row.imageUrl)}
+              onClick={() => openPreview(row.imageUrl, row.id || row._id)}
               title="Click to enlarge"
             />
           ) : (
@@ -916,10 +882,10 @@ const CarLogs = () => {
         previewImage={previewImage}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
-        hasPrevious={previewIndex > 0}
-        hasNext={previewIndex >= 0 && previewIndex < previewRows.length - 1}
-        onPrevious={showPreviousPreview}
-        onNext={showNextPreview}
+        hasPrevious={previewIndex > 0 || currentPage > 1}
+        hasNext={previewIndex >= 0 && (previewIndex < previewRows.length - 1 || currentPage < pageCount)}
+        onPrevious={() => movePreview(-1)}
+        onNext={() => movePreview(1)}
         onClose={closePreview}
       />
       <EditCarModelModal
@@ -934,6 +900,9 @@ const CarLogs = () => {
         data={rows}
         columns={columns}
         gridCard={gridCard}
+        recentlyViewedId={previewImage ? null : recentlyViewedId}
+        recentlyViewedIndex={recentlyViewedIndex}
+        recentlyViewedPulse={recentlyViewedPulse}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         attendanceLogsCount={totalCount}

@@ -33,7 +33,7 @@ export const buildColumns = ({ onPreview }) => [
       const url = row.original.incidentImageUrl;
       return url ? (
         <button
-          onClick={() => onPreview(url)}
+          onClick={() => onPreview(url, row.original.id || row.original._id)}
           className="w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block"
           title="View image"
           aria-label="View incident image"
@@ -88,14 +88,14 @@ const CardRow = ({ icon: Icon, label, value, valueNode }) => (
 
 export const renderSleepActivityCard = (row, { onPreview }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
-    <div className="relative bg-[#0a0e15] flex items-center justify-center" style={{ aspectRatio: '4 / 3' }}>
+    <div className="relative bg-[#0a0e15] flex items-center justify-center" style={{ aspectRatio: '16 / 9' }}>
       {row.incidentImageUrl ? (
         <ImageWithLoader
           src={row.incidentImageUrl}
           alt="Sleep activity detection"
-          className="absolute inset-0 cursor-pointer"
+          className="absolute inset-0 w-full h-full cursor-pointer"
           imgClassName="w-full h-full object-cover"
-          onClick={() => onPreview(row.incidentImageUrl)}
+          onClick={() => onPreview(row.incidentImageUrl, row.id || row._id)}
           title="Click to enlarge"
         />
       ) : (
