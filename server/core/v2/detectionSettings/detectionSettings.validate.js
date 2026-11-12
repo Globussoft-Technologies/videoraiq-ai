@@ -140,14 +140,14 @@ class DetectionSettingsValidation {
         : zone),
     } : settings;
     return Joi.object({
-      target_gender: Joi.string().valid("Male", "Female"),
+      target_gender: Joi.string().valid("Male", "Female", "both"),
       gender_confidence_threshold: Joi.number().min(0).max(1),
       gender_age_min_confirmation_frames: Joi.number().integer().min(1),
       face_crop_padding: Joi.number().min(0).max(1),
       trigger_notification: Joi.boolean(),
       zone_configs: Joi.array().items(Joi.object({
         name: Joi.string().trim().required(),
-        target_gender: Joi.string().valid("Male", "Female"),
+        target_gender: Joi.string().valid("Male", "Female", "both"),
       }).unknown(true)),
     }).unknown(true).validate(normalized, { convert: false });
   }

@@ -8,6 +8,16 @@ const zones = [ [[120, 80], [900, 80], [900, 700], [120, 700]], [[950, 80], [185
 const payload = { camera_id: 'camera', nvr_id: 'nvr', admin_id: 'admin', stream_url: 'http://stream.test/live.m3u8', detection_modes: ['genderAgeDetectionSettings'], zones, zone_configs: [{ name: 'Reception', target_gender: 'Female', telegramChatIds: ['private'] }, { name: 'Shop Floor', target_gender: 'Male' }], videoResolution: [1920, 1080] };
 beforeEach(() => { vi.clearAllMocks(); axios.post.mockResolvedValue({ data: { status: 'ok' } }); });
 describe('Gender & Age detector requests', () => {
+  it.each(['startNewDetection', 'updateNewDetection'])('%s forwards lowercase both without changing the target gender', async method => {
+    await python[method]({ ...payload,
+      confidence_thresholds: { target_gender: 'both' },
+      zone_configs: [{ name: 'Reception', target_gender: 'both' }, { name: 'Shop Floor', target_gender: 'Male' }],
+    });
+    expect(axios.post.mock.calls[0][1].detectors[0]).toMatchObject({
+      target_gender: 'both',
+      zone_configs: [{ name: 'Reception', target_gender: 'both' }, { name: 'Shop Floor', target_gender: 'Male' }],
+    });
+  });
   it.each(['startNewDetection', 'updateNewDetection'])('%s preserves different per-zone target genders', async method => {
     await python[method](payload);
     expect(axios.post.mock.calls[0][1].detectors).toEqual([{

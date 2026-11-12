@@ -5,7 +5,7 @@
     "title": "EMP Surveillance API's — v2",
     "description": "API Documentation for v2 endpoints"
   },
-  "host": "dev-api.videoraiq.com",
+  "host": "localhost:5001",
   "basePath": "/",
   "schemes": [
     "http",
@@ -329,6 +329,26 @@
           },
           "429": {
             "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/refresh": {
+      "post": {
+        "description": "",
+        "responses": {
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/logout": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
           }
         }
       }

@@ -24,8 +24,8 @@ describe('Gender & Age contracts', () => {
     expect(incidentsValidator.validateGenderAgeIncident(snapshot).error).toBeUndefined();
     expect(new GenderAgeDetectionIncident({ ...alert, userId: 'test' }).validateSync()).toBeUndefined();
   });
-  it.each(['Male', 'Female'])('supports %s per zone with detector defaults', gender => {
-    const settings = { zone_configs: [{ name: 'Reception', target_gender: gender }] };
+  it.each(['Male', 'Female', 'both'])('supports %s per zone with detector defaults', gender => {
+    const settings = { target_gender: gender, zone_configs: [{ name: 'Reception', target_gender: gender }] };
     expect(settingsValidator.validateGenderAgeSettings('genderAgeDetectionSettings', settings).error).toBeUndefined();
     const doc = new GenderAgeDetectionSetting({ name: 'Gender', userId: 'test', enabled: true, settings });
     expect(doc.validateSync()).toBeUndefined();
@@ -33,6 +33,7 @@ describe('Gender & Age contracts', () => {
     expect(doc.settings.gender_age_min_confirmation_frames).toBe(2);
     expect(doc.settings.face_crop_padding).toBe(0.15);
     expect(doc.settings.zone_configs[0].target_gender).toBe(gender);
+    expect(doc.settings.target_gender).toBe(gender);
   });
   it.each([
     { target_gender: 'all' }, { gender_confidence_threshold: 1.1 },

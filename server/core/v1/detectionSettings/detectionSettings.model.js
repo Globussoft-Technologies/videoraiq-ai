@@ -1302,9 +1302,9 @@ GenderAgeDetectionSchema.remove("zone_configs");
 GenderAgeDetectionSchema.add({
   zone_configs: [{
     ...zoneConfigsField.zone_configs[0],
-    target_gender: { type: String, enum: ["Male", "Female"] },
+    target_gender: { type: String, enum: ["Male", "Female", "both"] },
   }],
-  target_gender: { type: String, enum: ["Male", "Female"], default: "Female" },
+  target_gender: { type: String, enum: ["Male", "Female", "both"], default: "Female" },
   gender_confidence_threshold: { type: Number, min: 0, max: 1, default: 0.6 },
   gender_age_min_confirmation_frames: { type: Number, min: 1, default: 2, validate: Number.isInteger },
   face_crop_padding: { type: Number, min: 0, max: 1, default: 0.15 },
