@@ -26,6 +26,7 @@ const objectClients = new Map();
 
 const sanitize = (value) => String(value ?? "")
   .replace(/[/\\]/g, "_")
+  .replace(/[\x00-\x1f\x7f]/g, "_")
   .replace(/\.\.+/g, "_")
   .trim() || "default";
 
@@ -86,6 +87,11 @@ function legacyPath(value) {
   return !parseV2StoragePath(value);
 }
 
+export function isGeneralFilePath(value) {
+  const key = parseV2StoragePath(value)?.relativeKey;
+  return Boolean(key && /^v2\/[^/]+\/[^/]+\/[^/]+\/uploads\/files\//i.test(path.posix.normalize(key)));
+}
+
 function resolveLegacyMediaPath(value) {
   const mediaPath = String(value || "").replace(/\\/g, "/");
   if (!/^\/?uploads\//i.test(mediaPath)) return value;
@@ -112,15 +118,17 @@ async function putWithContext({ context, adminId, buffer, mediaType, folderName,
     Key: key,
     Body: buffer,
     ContentLength: buffer.length,
-    ContentType: mime.lookup(originalName) || "application/octet-stream",
+    ContentType: mediaType === "file" ? "application/octet-stream" : mime.lookup(originalName) || "application/octet-stream",
+    ...(mediaType === "file" ? { ContentDisposition: "attachment" } : {}),
   }));
   return `/${key}`;
 }
 
 export async function putMediaV2({ adminId, buffer, mediaType, folderName, originalName, objectId, fallbackToEnv = false }) {
+  if (mediaType === "file" && !adminId) throw new Error("An organisation account is required to upload files");
   if (!adminId) return putLegacyMedia({ buffer, mediaType, folderName, originalName, objectId });
   if (!Buffer.isBuffer(buffer)) throw new Error("Media buffer is required");
-  if (!["image", "video", "report"].includes(mediaType)) throw new Error("Invalid media type");
+  if (!["image", "video", "report", "file"].includes(mediaType)) throw new Error("Invalid media type");
 
   const context = await resolveStorageConfig({ adminId });
   try {
@@ -147,6 +155,14 @@ export async function streamMediaV2(mediaPath, res, { signal } = {}) {
   if (legacyPath(mediaPath)) return streamLegacyMedia(resolveLegacyMediaPath(mediaPath), res, { signal });
   const context = await resolveStorageConfig({ storagePath: mediaPath });
   signal?.throwIfAborted();
+  const isFile = isGeneralFilePath(mediaPath);
+  if (isFile && !res.headersSent) {
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (!String(res.getHeader?.("Content-Disposition") || "").startsWith("attachment")) {
+      res.setHeader("Content-Disposition", "attachment");
+    }
+  }
   if (context.provider === "nas") {
     return withSftp(context.config, async (sftp) => {
       const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${context.parsed.relativeKey}`;
@@ -166,7 +182,7 @@ export async function streamMediaV2(mediaPath, res, { signal } = {}) {
     Key: context.parsed.relativeKey,
   }), { abortSignal: signal });
   signal?.throwIfAborted();
-  if (!res.headersSent && result.ContentType) res.setHeader("Content-Type", result.ContentType);
+  if (!res.headersSent && !isFile && result.ContentType) res.setHeader("Content-Type", result.ContentType);
   if (!res.headersSent && result.ContentLength != null) res.setHeader("Content-Length", String(result.ContentLength));
   await pipeline(result.Body, res, { signal });
 }

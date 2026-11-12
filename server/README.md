@@ -319,6 +319,23 @@ STARTTLS. Restart the server after changing the provider.
 
 ---
 
+## General file uploads
+
+`POST /api/v2/uploads/media?mediaType=file&folderName=documents` accepts any file
+type, including files without an extension. Send one multipart field named `file`
+and authenticate with `x-access-token`. The maximum size is 25 MiB per file;
+oversized uploads return HTTP 413. The response includes `originalName` and
+`remotePath`, using the organisation's configured storage and a generated key.
+
+Download using `GET /api/v2/uploads/<remotePath>` (remove the leading slash from
+`remotePath`). These links are public: anyone with the link can download the file.
+General files are served as attachments with `application/octet-stream` and
+`X-Content-Type-Options: nosniff`, including through compatible v1 upload URLs.
+Add `?download=<filename>` to choose the saved filename. Cloud objects also carry
+attachment metadata. Files are stored without parsing or executing their contents;
+there is no malware scanning. Existing `mediaType=image` and `mediaType=video`
+validation is retained.
+
 ## AI service authentication
 
 Set these runtime environment variables on the backend and any workers that call

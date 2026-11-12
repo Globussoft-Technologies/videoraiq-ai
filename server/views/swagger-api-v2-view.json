@@ -766,7 +766,7 @@
         "tags": [
           "Uploads"
         ],
-        "description": "This route is used to upload media.",
+        "description": "Upload images, videos or general files. General files accept any extension, are limited to 25 MB, and are publicly downloadable by anyone with the link.",
         "consumes": [
           "multipart/form-data"
         ],
@@ -774,12 +774,13 @@
           {
             "name": "mediaType",
             "in": "query",
-            "description": "Provide alertType",
+            "description": "Use file to upload any file type as a download.",
             "required": true,
             "type": "string",
             "enum": [
               "image",
-              "video"
+              "video",
+              "file"
             ]
           },
           {
@@ -794,7 +795,7 @@
             "in": "formData",
             "type": "file",
             "required": true,
-            "description": "Upload a media file (image or video)"
+            "description": "Upload an image, video or general file. General files are limited to 25 MB."
           }
         ],
         "responses": {

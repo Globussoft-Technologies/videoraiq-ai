@@ -31,6 +31,7 @@ import { pipeline } from "stream/promises";
 import fs from "fs";
 import { decode } from "js-base64";
 import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
+import { isGeneralFilePath, streamMediaV2 } from "../../v2/adminStorage/mediaStorage.v2.js";
 
 const sftpPool = new Map();
 const SFTP_IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -978,6 +979,11 @@ class StorageService {
       const inputPath = decodeURIComponent(req.params.path);
       if (!inputPath || !inputPath.trim()) {
         return res.status(400).json({ error: "Path parameter is required" });
+      }
+      // General uploads must keep attachment headers through legacy storage URLs.
+      if (isGeneralFilePath(inputPath)) {
+        if (inputPath.includes("..")) return res.status(400).json({ error: "Invalid media path." });
+        return await streamMediaV2(inputPath, res);
       }
 
       const fileExist = await filesModel.findOne({

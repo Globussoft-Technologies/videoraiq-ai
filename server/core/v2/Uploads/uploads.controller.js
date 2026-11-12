@@ -4,13 +4,13 @@ import uploadsService from "./uploads.service.js";
 class UploadController {
       async uploadMedia(req, res, next) {
             /* #swagger.tags = ['Uploads']
-               #swagger.description = 'This route is used to upload media.' */
+               #swagger.description = 'Upload images, videos or general files. General files accept any extension, are limited to 25 MB, and are publicly downloadable by anyone with the link.' */
             /* #swagger.parameters['mediaType'] = {
                   in: 'query',
-                  description: 'Provide alertType',
+                  description: 'Use file to upload any file type as a download.',
                   required: true,
                   type: 'string',
-                  enum: ['image', 'video']
+                  enum: ['image', 'video', 'file']
             } */
             /* #swagger.parameters['folderName'] = {
                    in: 'query',
@@ -24,7 +24,7 @@ class UploadController {
                   name: 'file',
                   type: 'file',
                   required: true,
-                  description: 'Upload a media file (image or video)'
+                  description: 'Upload an image, video or general file. General files are limited to 25 MB.'
             } */
 
             return await uploadsService.uploadMedia(req, res, next);

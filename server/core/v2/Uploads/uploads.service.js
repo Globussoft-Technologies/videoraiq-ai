@@ -15,6 +15,7 @@ import {
 import { parseV2StoragePath } from "../adminStorage/adminStorage.resolver.js";
 
 const cacheDir = path.join('/tmp', 'media-cache'); // You can change this to './cache' or any path
+export const MAX_FILE_UPLOAD_BYTES = 25 * 1024 * 1024;
 if (!fs.existsSync(cacheDir)) {
     fs.mkdirSync(cacheDir, {
         recursive: true
@@ -83,12 +84,12 @@ class UploadService {
             const { mediaType, folderName } = req.query;
             const file = req.file;
 
-            if (!mediaType || !['image', 'video'].includes(mediaType)) {
+            if (!['image', 'video', 'file'].includes(mediaType)) {
                 return res.status(400).json(
-                    Response.errorResp('Validation Failed!', 'Invalid or missing mediaType (must be "image" or "video")')
+                    Response.errorResp('Validation Failed!', 'Invalid or missing mediaType (must be "image", "video" or "file")')
                 );
             }
-            if (!folderName || !folderName.trim()) {
+            if (typeof folderName !== 'string' || !folderName.trim()) {
                 return res.status(400).json(
                     Response.errorResp('Validation Failed!', 'Missing folderName in query.')
                 );
@@ -97,6 +98,14 @@ class UploadService {
                 return res.status(400).json(
                     Response.errorResp('Validation Failed!', 'No file uploaded.')
                 );
+            }
+            if (mediaType === 'file') {
+                if (!req?.verified?.userData?.adminId) {
+                    return res.status(403).json(Response.accessDeniedResp('An organisation account is required to upload files.'));
+                }
+                if (file.buffer.length > MAX_FILE_UPLOAD_BYTES) {
+                    return res.status(413).json(Response.errorResp('Validation Failed!', 'Files must not exceed 25 MB.'));
+                }
             }
 
             const extension = path.extname(file.originalname).toLowerCase();
@@ -109,6 +118,7 @@ class UploadService {
             const allowedVideoTypes = ['.mp4', '.mov', '.avi', '.mkv'];
 
             const isValid =
+                mediaType === 'file' ||
                 (mediaType === 'image' && allowedImageTypes.includes(extension)) ||
                 (mediaType === 'video' && allowedVideoTypes.includes(extension));
 
