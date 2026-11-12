@@ -97,6 +97,34 @@ const licenseDeniedResponse = (res, verdict) =>
   );
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+// The interactive playback URL is already a server-generated media URL. It is
+// a useful preview fallback when a camera's direct NVR archive URL is missing
+// or the NVR refuses a short RTSP seek. Keep this narrowly scoped to the
+// configured playback host and generated /playback/ manifests so the preview
+// endpoint cannot be turned into an arbitrary URL fetcher.
+async function resolveTrustedPlaybackPreview({ playbackUrl, playbackStartTime, previewTime, channel, nvr }) {
+  if (!playbackUrl || !playbackStartTime) return null;
+
+  try {
+    const playbackHost = await resolvePlaybackHost(channel?.userId, nvr?.domain);
+    const trustedOrigin = new URL(playbackHost).origin;
+    const parsed = new URL(playbackUrl, `${trustedOrigin}/`);
+    const isGeneratedManifest = /\/playback\//i.test(parsed.pathname)
+      && /\.(m3u8|mpd)$/i.test(parsed.pathname);
+
+    if (parsed.origin !== trustedOrigin || !isGeneratedManifest) return null;
+
+    const sourceStart = parseCompactDeviceTime(playbackStartTime);
+    return {
+      inputUrl: parsed.toString(),
+      offsetSeconds: Math.max(0, (previewTime.getTime() - sourceStart.getTime()) / 1000),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const resolveAdminObjectId = async ({
   adminId,
   userId,
@@ -1508,6 +1536,17 @@ class ChannelService {
           offsetSeconds,
         });
       } else {
+        let playbackFallbackPromise;
+        const getPlaybackFallback = () => {
+          playbackFallbackPromise ||= resolveTrustedPlaybackPreview({
+            playbackUrl,
+            playbackStartTime,
+            previewTime,
+            channel,
+            nvr,
+          });
+          return playbackFallbackPromise;
+        };
         const inputUrl = buildNvrPreviewSource({
           nvr,
           channel,
@@ -1516,13 +1555,32 @@ class ChannelService {
           ip: decrypt(nvr.ip),
           password: decrypt(nvr.password),
         });
-        if (!inputUrl) {
-          return res.status(422).json(Response.userFailResp(`Playback preview is not available for ${brand || "this device"}`));
+        if (inputUrl) {
+          try {
+            preview = await getAnimatedPlaybackPreview({
+              cacheKey: `${channel._id}:${previewTime.getTime()}`,
+              inputUrl,
+            });
+          } catch (directPreviewError) {
+            const playbackFallback = await getPlaybackFallback();
+            if (!playbackFallback) throw directPreviewError;
+            preview = await getAnimatedPlaybackPreview({
+              cacheKey: `${channel._id}:${previewTime.getTime()}:media`,
+              inputUrl: playbackFallback.inputUrl,
+              offsetSeconds: playbackFallback.offsetSeconds,
+            });
+          }
+        } else {
+          const playbackFallback = await getPlaybackFallback();
+          if (!playbackFallback) {
+            return res.status(422).json(Response.userFailResp(`Playback preview is not available for ${brand || "this device"}`));
+          }
+          preview = await getAnimatedPlaybackPreview({
+            cacheKey: `${channel._id}:${previewTime.getTime()}:media`,
+            inputUrl: playbackFallback.inputUrl,
+            offsetSeconds: playbackFallback.offsetSeconds,
+          });
         }
-        preview = await getAnimatedPlaybackPreview({
-          cacheKey: `${channel._id}:${previewTime.getTime()}`,
-          inputUrl,
-        });
       }
 
       res.set({

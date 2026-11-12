@@ -11,19 +11,24 @@ async create(req,res,next){
         const result = req.verified;
         let { orgId ,adminId, memberId } = result?.userData;
         orgId = orgId?.toString()
-        const {departmentName,orgId:OrgId,empDepartmentId,isActive,softDelete,description,isImportedFromEMP} = req?.body;
+        const {empDepartmentId,isActive,softDelete,description,isImportedFromEMP} = req?.body;
         
         let {error,value} = createDepartment.createDepartment(req?.body);
         if(error) return res.send(Response.userFailResp(error,"Validation Failed!."));
 
-        const departmentExists = await departmentsModel.findOne({ departmentName: new RegExp(`^${departmentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') ,empDepartmentId, adminId})
+        const normalizedDepartmentName = value.departmentName.trim();
+        const escapedDepartmentName = normalizedDepartmentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const departmentExists = await departmentsModel.findOne({
+          adminId,
+          departmentName: { $regex: `^${escapedDepartmentName}$`, $options: 'i' },
+        });
         if (departmentExists) return res.send(Response.userFailResp('department already exists','Validation failed!.'));
 
 
         // ✅ Create new department
         const newDepartment = await departmentsModel.create({
             orgId,
-            departmentName,
+            departmentName: normalizedDepartmentName,
             description,
             empDepartmentId,
             isActive,
@@ -145,11 +150,12 @@ async get(req, res, next) {
   
       // ✅ Prevent duplicate departmentName within the same admin
       if (value.departmentName) {
-        const escapedDept = String(value.departmentName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const normalizedDept = value.departmentName.trim();
+        const escapedDept = normalizedDept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const duplicate = await departmentsModel.findOne({
           _id: { $ne: departmentId }, // exclude current one
           adminId: existingDepartment.adminId, // per admin — orgId defaults to false, so it matched every admin
-          departmentName: new RegExp(`^${escapedDept}$`, "i"),
+          departmentName: { $regex: `^${escapedDept}$`, $options: "i" },
           softDelete: false,
         });
         if (duplicate) {
@@ -162,7 +168,7 @@ async get(req, res, next) {
       // ✅ Update department
       const updatedDepartment = await departmentsModel.findByIdAndUpdate(
         departmentId,
-        { $set: value },
+        { $set: { ...value, departmentName: normalizedDept } },
         { new: true }
       );
   
