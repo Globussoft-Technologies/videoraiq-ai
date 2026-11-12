@@ -8,6 +8,7 @@ import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import IncidentZoneDetails from './IncidentZoneDetails';
+import IncidentReportMessage from './IncidentReportMessage';
 import IncidentHygieneDetails from './IncidentHygieneDetails';
 import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
 
@@ -725,6 +726,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0f766e', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}><Activity size={13} aria-hidden="true" />{item.incidentType === 'lightingVisibilitySiteConditionsDetection' ? 'Lighting / site condition violations' : 'Hygiene violations'}</div>
              <IncidentHygieneDetails item={item} showIssueCount={false} showZone={false} showViolationNumber={false} showViolationSeverity={false} showViolationSeparator={false} showViolationMarker showConfidence={false} />
            </div> : <IncidentZoneDetails item={item} />}
+          <IncidentReportMessage item={item} compact />
           {isConditionIncident && <div style={{ display: 'flex', gap: 6, minWidth: 0, fontSize: 11, color: 'var(--tx2)' }}><span style={{ fontWeight: 700, flexShrink: 0 }}>Zone Name:</span><span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{item.zoneName || item.zone || '--'}</span></div>}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(isConditionIncident || item.incidentType === 'boxPackingDetection' ? { marginTop: isConditionIncident ? 'auto' : 0, paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {isCarModel ? (

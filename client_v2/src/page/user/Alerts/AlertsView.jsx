@@ -12,6 +12,7 @@ import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../.
 import { fetchIncidents, fetchIncidentById, fetchDetectionTypes, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { emotionAlertLabel } from '@/helpers/emotionDetection';
+import IncidentReportMessage from '../Incidents/IncidentReportMessage';
 
 const PAGE_SIZE = 50;
 // Auto-refresh only while the user is looking at just the first page â€” once
@@ -901,6 +902,7 @@ export default function AlertsView() {
                         {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{eventDescription}</span>}
                         </div>
                         {detailParts.length > 0 && <div style={{ gridColumn: '1 / -1', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
+                        <IncidentReportMessage item={it} compact />
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
@@ -952,6 +954,7 @@ export default function AlertsView() {
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', wordBreak: 'break-word' }}>{activeDescription}</div>
                 <div style={{ fontSize: 12, color: 'var(--tx2)', wordBreak: 'break-word' }}>{activeCameraLine}</div>
+                <IncidentReportMessage item={active} />
                 <div style={{ display: 'grid', gridTemplateColumns: confidenceOf(active) == null ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 1 }}>
                   {confidenceOf(active) != null && <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
                     <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 4 }}>Confidence</div>

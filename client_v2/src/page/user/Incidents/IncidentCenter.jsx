@@ -19,6 +19,7 @@ import {
 } from '../../../pages/AttendanceLogs/components/timeUtils';
 import IncidentCard, { apiMarkResolved, formatDoorStatus, ReportModal, VehicleTagStrip } from './IncidentCard';
 import IncidentZoneDetails from './IncidentZoneDetails';
+import IncidentReportMessage from './IncidentReportMessage';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
@@ -132,6 +133,7 @@ const SEVERITIES = [
 
 const STATUSES = [
   { key: 'resolved',     label: 'Resolved' },
+  { key: 'reported',     label: 'Reported' },
 ];
 
 const chip = (active, color = 'var(--blue)') => ({
@@ -1195,6 +1197,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                 <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
                   {shortDateTime(item.timeOfIncident)}
                 </span>
+                <IncidentReportMessage item={item} lightbox />
                 {item.incidentType === 'doorDetection' && (
                   <div style={{
                     display: 'grid',
@@ -1495,6 +1498,7 @@ function IncidentListRow({
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
           {!isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>}
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
+          <IncidentReportMessage item={item} compact />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
         </div>
 
@@ -2508,7 +2512,7 @@ export default function IncidentCenter() {
               disabled={statusFiltersDisabled}
               aria-pressed={statusSet.has(x.key)}
               title={statusFiltersDisabled ? 'No incidents available to filter.' : undefined}
-              style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
+              style={chip(statusSet.has(x.key), x.key === 'reported' ? 'var(--warn)' : x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
             >
               {x.label}
             </button>
