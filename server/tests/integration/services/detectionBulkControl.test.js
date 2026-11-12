@@ -6,6 +6,7 @@ import { serviceCtx, payload } from '../../helpers/service.js';
 
 vi.mock('../../../utils/database.js', () => ({ redis: {} }));
 vi.mock('../../../utils/stopStreams.js', () => ({ stopAllStreams: vi.fn() }));
+vi.mock('../../../services/amemberSubscriptionAccess.js', () => ({ loadAmemberSubscriptions: vi.fn() }));
 vi.mock('../../../services/python.service.js', () => ({ default: {
   stopAdminPipelines: vi.fn(), handleDetectionStartStop: vi.fn(),
 } }));
@@ -18,10 +19,11 @@ vi.mock('../../../core/v2/Auth/auth.service.js', () => ({ default: {
 
 const { bulkDetectionControl, consumeResetApproval, verifyResetPassword, getBulkDetectionState } = await import('../../../services/detectionBulkControl.js');
 const { resolveDesiredDetectionState } = await import('../../../services/detectionSchedule.resolver.js');
-const { expireSubscription, activateSubscription } = await import('../../../services/subscriptionExpiry.js');
+const { expireSubscription, activateSubscription, runSubscriptionExpirySweep } = await import('../../../services/subscriptionExpiry.js');
+const { loadAmemberSubscriptions } = await import('../../../services/amemberSubscriptionAccess.js');
 const { default: Admin } = await import('../../../core/v1/admin/admin.model.js');
 const { default: Channel } = await import('../../../core/v1/channels/channels.model.js');
-const { MobilePhoneDetectionSetting, DetectionSetting } = await import('../../../core/v2/detectionSettings/detectionSettings.model.js');
+const { MobilePhoneDetectionSetting, CrowdDetectionSetting, DetectionSetting } = await import('../../../core/v2/detectionSettings/detectionSettings.model.js');
 const { default: python } = await import('../../../services/python.service.js');
 const { default: auth } = await import('../../../core/v2/Auth/auth.service.js');
 let owner, setting;
@@ -68,6 +70,36 @@ async function control(action) {
 }
 
 describe('bulk detection pause and resume', () => {
+  it('pauses crowd detection after remote expiry and keeps it paused through renewal until Resume', async () => {
+    owner.user_id = '42';
+    owner.subscriptionSnapshot = { expiresAt: new Date('2099-01-01'), source: 'amember_login' };
+    await owner.save();
+    const crowd = await CrowdDetectionSetting.create({ userId: '42', name: 'Saved crowd zone', enabled: true, settings: {} });
+    const camera = await Channel.create({ userId: '42', nvrId: new mongoose.Types.ObjectId(), isAdded: true, checkType: 'checkin',
+      detections: { crowdDetectionSettings: { id: crowd._id, enabled: true },
+        faceAuthenticationSettings: { id: new mongoose.Types.ObjectId(), enabled: true } } });
+    crowd.settings.referencePoints = { [String(camera._id)]: [[1, 2], [3, 4], [5, 6]] };
+    crowd.markModified('settings');
+    await crowd.save();
+    loadAmemberSubscriptions.mockResolvedValue({ 3: '2020-01-01' });
+    await runSubscriptionExpirySweep(new Date('2030-01-02'));
+    expect((await Channel.findById(camera._id)).toObject()).toMatchObject({
+      subscriptionPaused: true, detectionBulkPaused: true, checkType: 'none',
+      detections: { crowdDetectionSettings: { enabled: false }, faceAuthenticationSettings: { enabled: false } },
+    });
+    await activateSubscription(await Admin.findById(owner._id), { 3: '2099-01-01' });
+    // Background checks must not restart a renewed account either.
+    loadAmemberSubscriptions.mockResolvedValue({ 3: '2099-01-01' });
+    await runSubscriptionExpirySweep(new Date('2030-01-02'));
+    expect((await Channel.findById(camera._id)).detections.crowdDetectionSettings.enabled).toBe(false);
+    expect(python.handleDetectionStartStop).not.toHaveBeenCalled();
+    expect(await DetectionSetting.findById(crowd._id)).toBeTruthy();
+    await control('resume');
+    expect((await Channel.findById(camera._id)).toObject()).toMatchObject({
+      subscriptionPaused: false, detectionBulkPaused: false, checkType: 'none',
+      detections: { crowdDetectionSettings: { enabled: true }, faceAuthenticationSettings: { enabled: false } },
+    });
+  });
   it('turns toggles off on expiry, keeps saved settings through renewal, and requires manual resume', async () => {
     const before = await cameras();
     for (let i = 0; i < before.length; i++) {

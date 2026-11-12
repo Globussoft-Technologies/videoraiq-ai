@@ -9,6 +9,18 @@ import LegacyReport from '../core/v1/autoEmailReport/autoEmailReport.model.js';
 import User from '../core/v1/users/users.model.js';
 import { stopAllStreams } from '../utils/stopStreams.js';
 import logger from '../utils/logger.js';
+import config from 'config';
+import { loadAmemberSubscriptions } from './amemberSubscriptionAccess.js';
+
+function subscriptionExpiry(subscriptions) {
+  const expiries = Object.values(subscriptions || {}).filter(Boolean).map(value => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setUTCHours(23, 59, 59, 999);
+    return date;
+  }).filter(Boolean);
+  return expiries.length ? new Date(Math.max(...expiries.map(date => date.getTime()))) : null;
+}
 
 // Persist the scheduler barrier before removing schedules or stopping streams.
 // Repeated expired requests retry cleanup; one failed write must not skip others.
@@ -58,13 +70,7 @@ export async function activateSubscription(owner, subscriptions) {
     await expireSubscription(owner._id);
   }
   const entries = Object.entries(subscriptions || {}).filter(([, value]) => value);
-  const expiries = entries.map(([, value]) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    date.setUTCHours(23, 59, 59, 999);
-    return date;
-  }).filter(Boolean);
-  const expiresAt = expiries.length ? new Date(Math.max(...expiries.map(date => date.getTime()))) : null;
+  const expiresAt = subscriptionExpiry(Object.fromEntries(entries));
   await Admin.updateOne({ _id: owner._id }, { $set: {
     streamsStopped: false,
     'subscriptionSnapshot.subscriptions': Object.fromEntries(entries),
@@ -75,17 +81,35 @@ export async function activateSubscription(owner, subscriptions) {
 
 export async function runSubscriptionExpirySweep(now = new Date()) {
   if (isLocalXrayTest()) return;
-  const owners = await Admin.find({
-    'subscriptionSnapshot.expiresAt': { $ne: null, $lt: now },
-  }).select('_id').lean();
-  for (const owner of owners) {
+  const owners = await Admin.find({}).select('_id user_id login streamsStopped subscriptionSnapshot').lean();
+  const bypassLogins = new Set((config.has('bypass_users') ? config.get('bypass_users') : []).map(user => user.login));
+  let cursor = 0;
+  const checkOwner = async owner => {
     try {
       // Repeated sweeps retry failed remote stops as well as failed cleanup.
-      await expireSubscription(owner._id);
+      if (owner.streamsStopped || (owner.subscriptionSnapshot?.expiresAt && new Date(owner.subscriptionSnapshot.expiresAt) < now)) {
+        await expireSubscription(owner._id);
+        return;
+      }
+      if (!/^\d+$/.test(String(owner.user_id)) || owner.subscriptionSnapshot?.source === 'bypass_login' || bypassLogins.has(owner.login)) return;
+      const subscriptions = await loadAmemberSubscriptions(owner.user_id, now);
+      const expiresAt = subscriptionExpiry(subscriptions);
+      if (!expiresAt || expiresAt < now) await expireSubscription(owner._id);
+      // Background checks never clear streamsStopped or camera pause flags.
+      await Admin.updateOne({ _id: owner._id }, { $set: {
+        'subscriptionSnapshot.subscriptions': subscriptions,
+        'subscriptionSnapshot.expiresAt': expiresAt,
+        'subscriptionSnapshot.syncedAt': now,
+      } });
     } catch (error) {
-      logger.error(`[PLAN_EXPIRED] cleanup failed for ${owner._id}: ${error.message}`);
+      logger.error(`[PLAN_EXPIRED] subscription check failed for ${owner._id}: ${error.message}`);
     }
-  }
+  };
+  // Bound upstream traffic while preventing a single slow account from
+  // delaying all other expiry checks.
+  await Promise.all(Array.from({ length: Math.min(4, owners.length) }, async () => {
+    while (cursor < owners.length) await checkOwner(owners[cursor++]);
+  }));
 }
 
 export function scheduleSubscriptionExpirySweep() {

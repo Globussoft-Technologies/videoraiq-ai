@@ -1,6 +1,7 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), stop: vi.fn(), barrier: vi.fn(), owners: vi.fn() }));
+const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), stop: vi.fn(), barrier: vi.fn(), owners: vi.fn(), subscriptions: vi.fn() }));
+vi.mock('../../../services/amemberSubscriptionAccess.js', () => ({ loadAmemberSubscriptions: (...args) => mocks.subscriptions(...args) }));
 vi.mock('../../../core/v1/admin/admin.model.js', () => ({ default: {
   find: (...args) => ({ select: () => ({ lean: () => mocks.owners(...args) }) }),
   findById: () => ({ select: () => ({ lean: async () => ({ user_id: '42' }) }) }),
@@ -21,6 +22,7 @@ import { activateSubscription, expireSubscription, runSubscriptionExpirySweep } 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.owners.mockResolvedValue([]);
+  mocks.subscriptions.mockResolvedValue({ 3: '2099-01-01' });
 });
 
 describe('subscription expiry', () => {
@@ -61,11 +63,40 @@ describe('subscription expiry', () => {
   });
   it('stops expired accounts without requiring login and isolates cleanup failures', async () => {
     const now = new Date('2030-01-02');
-    mocks.owners.mockResolvedValue([{ _id: 'failed' }, { _id: 'expired' }]);
+    mocks.owners.mockResolvedValue([{ _id: 'failed', streamsStopped: true }, { _id: 'expired', subscriptionSnapshot: { expiresAt: new Date('2030-01-01') } }]);
     mocks.remove.mockRejectedValueOnce(new Error('cleanup failed'));
     await runSubscriptionExpirySweep(now);
-    expect(mocks.owners).toHaveBeenCalledWith({ 'subscriptionSnapshot.expiresAt': { $ne: null, $lt: now } });
+    expect(mocks.owners).toHaveBeenCalledWith({});
     expect(mocks.stop).toHaveBeenCalledWith('failed');
     expect(mocks.stop).toHaveBeenCalledWith('expired');
+  });
+  it('detects an expiry edited in aMember despite a future cached expiry', async () => {
+    mocks.owners.mockResolvedValue([{ _id: 'edited', user_id: '42', subscriptionSnapshot: { expiresAt: new Date('2099-01-01') } }]);
+    mocks.subscriptions.mockResolvedValue({ 3: '2020-01-01' });
+    await runSubscriptionExpirySweep(new Date('2030-01-02'));
+    expect(mocks.subscriptions).toHaveBeenCalledWith('42', new Date('2030-01-02'));
+    expect(mocks.barrier).toHaveBeenCalledTimes(1);
+    expect(mocks.stop).toHaveBeenCalledWith('edited');
+    expect(mocks.update).not.toHaveBeenCalledWith(expect.anything(), { $set: expect.objectContaining({ streamsStopped: false }) });
+  });
+  it('pauses removed access and accounts without an existing snapshot', async () => {
+    mocks.owners.mockResolvedValue([{ _id: 'legacy', user_id: '42' }]);
+    mocks.subscriptions.mockResolvedValue({});
+    await runSubscriptionExpirySweep();
+    expect(mocks.stop).toHaveBeenCalledWith('legacy');
+  });
+  it('keeps healthy accounts running and leaves them alone during upstream failures', async () => {
+    mocks.owners.mockResolvedValue([{ _id: 'unavailable', user_id: '42' }, { _id: 'healthy', user_id: '43' }]);
+    mocks.subscriptions.mockRejectedValueOnce(new Error('upstream unavailable'));
+    await runSubscriptionExpirySweep();
+    expect(mocks.stop).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledWith({ _id: 'healthy' }, { $set: expect.objectContaining({ 'subscriptionSnapshot.expiresAt': new Date('2099-01-01T23:59:59.999Z') }) });
+  });
+  it('does not look up bypass accounts in aMember', async () => {
+    mocks.owners.mockResolvedValue([{ _id: 'bypass', user_id: '42', subscriptionSnapshot: { source: 'bypass_login' } }]);
+    await runSubscriptionExpirySweep();
+    expect(mocks.subscriptions).not.toHaveBeenCalled();
+    expect(mocks.stop).not.toHaveBeenCalled();
   });
 });

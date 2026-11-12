@@ -1963,7 +1963,11 @@ return bypassUsers.find(
         const subscriptions = bypass
           ? { bypass: bypass.expire }
           : this.extractSubscriptions(await this.getAmemberAccessByUserId(Number(admin.user_id)));
-        if (!this.isPlanActive({ subscriptions })) return null;
+        if (!this.isPlanActive({ subscriptions })) {
+          await expireSubscription(admin._id);
+          return null;
+        }
+        await activateSubscription(admin, subscriptions);
         return {
           ...claims,
           userSubscriptionType: subscriptions,
