@@ -227,19 +227,46 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
     });
   }, []);
 
+  const getTimelinePreviewFallback = useCallback((targetMs) => {
+    if (!thumbnailCache || thumbnailCache.size === 0) return null;
+    if (thumbnailCache.has(targetMs)) return thumbnailCache.get(targetMs);
+
+    let closest = null;
+    let distance = Infinity;
+    for (const [key, url] of thumbnailCache.entries()) {
+      const currentDistance = Math.abs(key - targetMs);
+      if (currentDistance < distance) {
+        distance = currentDistance;
+        closest = url;
+      }
+    }
+    return distance <= 5 * 60 * 1000 ? closest : null;
+  }, [thumbnailCache]);
+
   const requestHoverPreview = useCallback(async (ms, { signal } = {}) => {
     if (!channelId) return null;
     const bucketMs = Math.floor(Math.max(0, ms) / PLAYBACK_PREVIEW_WINDOW_MS) * PLAYBACK_PREVIEW_WINDOW_MS;
     const cached = hoverThumbnailCacheRef.current.get(bucketMs);
     if (cached) return { url: cached, timeMs: bucketMs };
 
-    const blob = await getPlaybackThumbnail({
-      channelId,
-      time: new Date(day.getTime() + bucketMs),
-      playbackUrl: videoUrl,
-      playbackStartTime: new Date(day.getTime() + streamStartMsRef.current),
-      signal,
-    });
+    let blob;
+    try {
+      blob = await getPlaybackThumbnail({
+        channelId,
+        time: new Date(day.getTime() + bucketMs),
+        playbackUrl: videoUrl,
+        playbackStartTime: new Date(day.getTime() + streamStartMsRef.current),
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const fallback = getTimelinePreviewFallback(bucketMs);
+      if (fallback) {
+        hoverThumbnailCacheRef.current.set(bucketMs, fallback);
+        return { url: fallback, timeMs: bucketMs };
+      }
+      throw error;
+    }
     if (signal?.aborted || !blob) return null;
     const url = URL.createObjectURL(blob);
     generatedThumbnailUrlsRef.current.add(url);
@@ -259,7 +286,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), initialAt
       return next;
     });
     return { url, timeMs: bucketMs };
-  }, [channelId, day, videoUrl]);
+  }, [channelId, day, videoUrl, getTimelinePreviewFallback]);
 
   // Resolve + load a playable segment for the current cursor (debounced)
   const loadAt = useCallback((ms, mutexRetries = 0, incidentStart = false) => {

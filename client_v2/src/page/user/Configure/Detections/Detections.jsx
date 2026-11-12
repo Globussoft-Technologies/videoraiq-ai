@@ -726,8 +726,19 @@ export default function Detections() {
         return;
       }
     }
-    if (selectedId && !models.some((m) => m.id === selectedId)) setSelectedId('');
-  }, [models, selectedId]);
+    if (selectedId && !models.some((m) => m.id === selectedId)) {
+      setSelectedId(enteredDetections && zoneCamera?._id ? models[0].id : '');
+      return;
+    }
+
+    // Entering from the camera list without a detection deep link should still
+    // open a useful detail view. DetectionZoneMarking only mounts for a selected
+    // model, so select the first licensed catalogue item and show the camera
+    // preview immediately instead of leaving the right-hand panel empty.
+    if (enteredDetections && zoneCamera?._id && !selectedId) {
+      setSelectedId(models[0].id);
+    }
+  }, [enteredDetections, models, selectedId, zoneCamera?._id]);
 
   const selected = models.find((m) => m.id === selectedId);
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
