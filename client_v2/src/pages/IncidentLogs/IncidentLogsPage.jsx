@@ -19,8 +19,9 @@ import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 import { initialState, reducer } from './incidentState';
-import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns';
-import { handleIncidentExport } from './incidentExport';
+// Keep the log renderer and exports on the same revision when staging caches source modules.
+import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns?v=machine-ops-logs-2';
+import { handleIncidentExport } from './incidentExport?v=machine-ops-logs-2';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
 import { packingExportValues, packingZones } from './boxPacking';

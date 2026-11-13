@@ -1,5 +1,5 @@
 import { lightingCategoryLabel } from '@/helpers/lightingDetection';
-import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection';
+import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection?v=machine-ops-logs-2';
 import { hygieneCategoryLabel } from '@/helpers/hygieneDetection';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';

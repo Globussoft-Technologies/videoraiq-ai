@@ -1,5 +1,5 @@
 import React from 'react';
-import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection';
+import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection?v=machine-ops-logs-2';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';

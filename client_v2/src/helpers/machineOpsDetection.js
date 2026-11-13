@@ -64,7 +64,7 @@ export function machineOpsMachines(zones, width, height) {
     const id = String(fields.machine_id).trim();
     if (!id) throw new Error('Enter a machine ID for every zone.');
     if (!['machine', 'indicator'].includes(fields.zone_role)) throw new Error('Select a machine or indicator zone.');
-    const machine = machines.get(id) || { machine_id: id };
+    const machine = machines.get(id) || { machine_id: id, name: String(zone.name || id).trim() };
     const key = `${fields.zone_role}_zone`;
     if (machine[key]) throw new Error(`Machine ${id} has more than one ${fields.zone_role} zone.`);
     const points = (zone.points || []).map(({ x, y }) => [x / width, y / height]);
@@ -78,7 +78,7 @@ export function machineOpsMachines(zones, width, height) {
   if (!machines.size) throw new Error('Draw at least one machine and its indicator zone.');
   const ids = new Set();
   for (const machine of machines.values()) {
-    if (!machine.machine_zone || !machine.indicator_zone) throw new Error(`Machine ${machine.machine_id} needs both a machine zone and an indicator zone with the same machine ID.`);
+    if (!machine.machine_zone || !machine.indicator_zone) throw new Error(`Machine ${machine.name} needs both machine zone and indicator zone.`);
     const id = machineOpsId(machine.name);
     if (!id) throw new Error('Enter a name for every machine.');
     if (ids.has(id)) throw new Error('Use a different name for each machine. Machine names must produce unique IDs.');
