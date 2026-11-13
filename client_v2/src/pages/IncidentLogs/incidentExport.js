@@ -117,7 +117,7 @@ const fetchAllForExport = async (config, params) => {
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
 // only present for log types that carry a current-status value.
 const buildExportColumns = (config) => {
-  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
+  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
   const cols = [];
   if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });

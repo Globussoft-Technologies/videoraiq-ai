@@ -37,7 +37,7 @@ import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings, emotionAlertGroupsError } from '../../../helpers/emotionDetection';
-import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId } from '../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId, machineOpsSharedZones } from '../../../helpers/machineOpsDetection';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,
@@ -635,6 +635,7 @@ export default function DetectionZoneMarking({
         }
       : null;
     if (isLighting && nextZones.some(zone => Object.keys(lightingZoneErrors(zone)).length)) throw new Error('Please check lighting settings for each zone before saving.');
+    if (isMachineOps) nextZones = machineOpsSharedZones(nextZones);
     const machineSettings = isMachineOps ? { machines: machineOpsMachines(nextZones, videoSize.w, videoSize.h) } : {};
     const machineIdsByZone = isMachineOps ? Object.fromEntries(groupMachineOpsZones(nextZones).flatMap(group =>
       group.entries.map(({ index }) => [index, machineOpsId(group.name)]))) : {};

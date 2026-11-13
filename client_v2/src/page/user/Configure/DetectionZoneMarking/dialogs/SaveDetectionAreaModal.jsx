@@ -14,6 +14,7 @@ import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import EmotionAlertGroups from '../components/EmotionAlertGroups';
 import { emotionAlertGroupsError } from '../../../../../helpers/emotionDetection';
+import { machineOpsSharedZones } from '../../../../../helpers/machineOpsDetection';
 import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
@@ -60,7 +61,7 @@ export default function SaveDetectionAreaModal({
 }) {
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
-  const [zoneDrafts, setZoneDrafts] = useState(() => zones.map(zone => ({
+  const [zoneDrafts, setZoneDrafts] = useState(() => (isMachineOps ? machineOpsSharedZones(zones) : zones).map(zone => ({
     ...zone,
     ...(isLighting ? lightingZoneSettings(zone, initialLightingSettings) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: zone.fireOutsideZoneEnabled ?? initialFireOutsideZoneEnabled } : {}),
@@ -310,7 +311,7 @@ export default function SaveDetectionAreaModal({
 
           </div>
 
-          <MachineOpsGroups zones={zoneDrafts} enabled={isMachineOps} onUpdateField={updateZoneField} disabled={saving} errors={errors} id="save-machine">{(z, i) => (
+          <MachineOpsGroups zones={zoneDrafts} enabled={isMachineOps} onUpdateField={updateZoneField} disabled={saving} errors={errors} whatsappApi={whatsappApi} channelOptions={channelOptions} id="save-machine">{(z, i) => (
             <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isMachineOps ? `${z.zone_role === 'indicator' ? 'Indicator Zone' : 'Machine Zone'} (${z.points?.length || 0} points)` : isDoor ? `Door ${i + 1}` : `${areaLabel} ${i + 1}`}</div>
               {!isMachineOps && <div>
@@ -384,8 +385,8 @@ export default function SaveDetectionAreaModal({
                   </select>
                 </div>
               )}
-              <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => updateZoneField(i, 'whatsappRecipientIds', selected)} />
-              {showZoneExtras && (
+              {!isMachineOps && <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => updateZoneField(i, 'whatsappRecipientIds', selected)} />}
+              {showZoneExtras && !isMachineOps && (
               <div>
                 {isDoor && <div style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.4, marginBottom: 8 }}>Optional Telegram delivery: select a channel, then set its active time range below.</div>}
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
@@ -476,7 +477,7 @@ export default function SaveDetectionAreaModal({
                   )}
                 </div>
               )}
-              {showZoneExtras && (
+              {showZoneExtras && !isMachineOps && (
                 <>
                   <ZoneScheduleFields
                     value={z.schedule}

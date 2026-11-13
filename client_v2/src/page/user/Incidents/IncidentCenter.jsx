@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { nowInConfiguredTimezone } from '../../../utils/timezone';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import DraggableZoomControls from '../../../components/DraggableZoomControls';
@@ -18,8 +18,8 @@ import {
   formatTime,
 } from '../../../pages/AttendanceLogs/components/timeUtils';
 import IncidentCard, { apiMarkResolved, apiReport, formatDoorStatus, ReportModal, VehicleTagStrip } from './IncidentCard';
-import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentReportMessage from './IncidentReportMessage';
+import IncidentSummary from './IncidentSummary';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
@@ -689,99 +689,6 @@ function navBtnStyle(side) {
   };
 }
 
-const displayValue = (value) => {
-  if (value == null) return '--';
-  const text = String(value).trim();
-  return text ? text : '--';
-};
-
-const isCarModelDetection = (item) =>
-  item?.incidentType === 'carModelDetection' ||
-  /car\s*model/i.test(item?.incidentName || item?.displayName || '');
-
-function CarModelDetails({ item }) {
-  if (!isCarModelDetection(item)) return null;
-
-  const details = [
-    // Model Name and Year hidden for car model detection
-    // { label: 'Model Name', value: displayValue(item.model_name || item.modelName || item.carModelName || item.carModel), icon: Car, accent: '#38bdf8' },
-    { label: 'Vehicle No', value: formatPlate(item.vehicleNumber) || '--', icon: Hash, accent: '#facc15', mono: true },
-    { label: 'Company', value: displayValue(item.company || item.make || item.carCompany), icon: Building2, accent: '#a78bfa' },
-    // { label: 'Year', value: displayValue(item.year), icon: CalendarClock, accent: '#34d399' },
-    { label: 'NVR Name', value: displayValue(item.nvrData?.nvrName), icon: Server, accent: '#60a5fa' },
-    { label: 'Camera Name', value: displayValue(item.channelData?.name || item.channelName), icon: Video, accent: '#fb7185' },
-    { label: 'Time of Incident', value: shortDateTime(item.timeOfIncident) || '--', icon: CalendarClock, accent: '#f97316', mono: true },
-  ];
-
-  return (
-    <div
-      style={{
-        position: 'relative',
-        marginTop: 10,
-        display: 'flex',
-        alignItems: 'stretch',
-        gap: 0,
-        maxWidth: 'min(100%, 1100px)',
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        paddingBottom: 2,
-      }}
-    >
-      {details.map(({ label, value, icon: Icon, accent, mono }, idx) => (
-        <Fragment key={label}>
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 1,
-              flex: '1 0 124px',
-              minWidth: 0,
-              padding: '7px 9px 8px',
-              borderRadius: 8,
-              background: 'rgba(15,23,42,.78)',
-              border: '1px solid rgba(255,255,255,.16)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-              <Icon size={12} color={accent} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '.12em', color: 'rgba(255,255,255,.52)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {label}
-              </span>
-            </div>
-            <div
-              title={value}
-              style={{
-                color: '#fff',
-                fontSize: mono ? 12.5 : 12,
-                fontWeight: 750,
-                fontFamily: mono ? 'monospace' : 'inherit',
-                overflow: 'visible',
-                overflowWrap: 'anywhere',
-                whiteSpace: 'normal',
-                lineHeight: 1.3,
-              }}
-            >
-              {value}
-            </div>
-          </div>
-          {idx < details.length - 1 && (
-            <div
-              aria-hidden="true"
-              style={{
-                alignSelf: 'center',
-                flex: '0 0 10px',
-                height: 1,
-                background: `linear-gradient(90deg, ${accent}, ${details[idx + 1].accent})`,
-                opacity: .72,
-              }}
-            />
-          )}
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
 function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onIndexChange, onClose, onRefresh, onResolvedChange, onTagUser, onUntagUser, onViewUser, tagOpen = false, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
   const item = selectedItem || items[index];
   // Navigation spans the whole filtered result set, not just the loaded page:
@@ -994,14 +901,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   const arrowSpinning = navLoading && ((navDir === 'prev' && hasPrev) || (navDir === 'next' && hasNext));
   const imgSrc = item.Image ? mediaUrl(item.Image) : null;
   const det    = detectionLabel(item.incidentType || item.displayName);
-  const cam    = item.channelData?.name || '';
-  const site   = item.nvrData?.nvrName  || item.location  || '';
-  const carModel = isCarModelDetection(item);
-  const isSolder = item.incidentType === 'deskSolarShoulderDetection';
+  const cam    = item.channelData?.customName || item.channelData?.name || item.cameraName || '';
   const isPacking = item.incidentType === 'boxPackingDetection';
-  const isHygiene = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
-  const isDoorDetection = item.incidentType === 'doorDetection';
-  const compactDetails = isDoorDetection || isSolder || isPacking || isHygiene;
 
   return (
     <div
@@ -1140,7 +1041,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
             // expand keeps working while a fetch is in flight — the panel is
             // independent of navigation state.
             position: 'absolute', bottom: 32, left: 32, zIndex: 30,
-            display: 'flex', alignItems: 'stretch', maxWidth: carModel ? 'min(calc(100% - 64px), 1220px)' : 'calc(100% - 64px)',
+            display: 'flex', alignItems: 'stretch', maxWidth: 'calc(100% - 64px)',
           }}
         >
           {/* Blue collapse tab — own stacking context above the panel body so a
@@ -1150,7 +1051,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               onClick={(e) => { e.stopPropagation(); setIsCollapsed(c => !c); }}
               title={isCollapsed ? 'Show details' : 'Hide details'}
               style={{
-                width: 16, height: compactDetails ? 76 : 120, borderRadius: 3, flexShrink: 0,
+                width: 16, height: 76, borderRadius: 3, flexShrink: 0,
                 background: '#38bdf8', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background .15s', zIndex: 10,
@@ -1180,71 +1081,10 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               backdropFilter: 'blur(6px)',
               clipPath: isPacking ? undefined : 'polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)',
               borderRadius: isPacking ? 12 : undefined,
-              width: carModel ? 'fit-content' : undefined,
-              maxWidth: carModel ? '100%' : undefined,
             }}
           >
-            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel || compactDetails ? 20 : 40, padding: carModel || compactDetails ? '10px 18px 12px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : compactDetails ? 'min(580px, calc(100vw - 100px))' : 'max-content', maxWidth: '100%', ...(compactDetails ? { maxHeight: '36vh', overflowY: 'auto', boxSizing: 'border-box' } : {}) }}>
-              {/* Title block */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: compactDetails ? 2 : 4, minWidth: 0, width: carModel || compactDetails ? '100%' : undefined }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
-                  Security Feed
-                </span>
-                <h1 style={{ margin: 0, fontSize: carModel ? 22 : compactDetails ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
-                  {item.incidentName || det}
-                </h1>
-                {item.incidentType === 'emotionDetection' ? <IncidentZoneDetails item={item} variant="lightbox" /> : <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
-                  {lateArrivalDescription(item) || [cam, site].filter(Boolean).join(' · ')}
-                </p>}
-                <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
-                  {shortDateTime(item.timeOfIncident)}
-                </span>
-                <IncidentReportMessage item={item} lightbox />
-                {item.incidentType === 'doorDetection' && (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto minmax(0, 1fr)',
-                    gap: '5px 14px',
-                    marginTop: compactDetails ? 4 : 8,
-                    paddingTop: compactDetails ? 4 : 8,
-                    borderTop: '1px solid rgba(255,255,255,.14)',
-                    maxWidth: 360,
-                  }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      Door Name
-                    </span>
-                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
-                      {item.zoneName || item.zone || '--'}
-                    </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      Door Status
-                    </span>
-                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right', textTransform: 'capitalize' }}>
-                      {formatDoorStatus(item)}
-                    </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.48)' }}>
-                      {doorDurationLabel(item)}
-                    </span>
-                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600, textAlign: 'right' }}>
-                      {formatDoorDuration(item.durationSec)}
-                    </span>
-                  </div>
-                )}
-                <CarModelDetails item={item} />
-                {item.incidentType !== 'emotionDetection' && <IncidentZoneDetails item={item} variant="lightbox" compact={isSolder || isPacking} />}
-                {/* Vehicle Detection: the plate and who it belongs to, with
-                    Tag User inline for a plate nobody owns yet. */}
-                <div style={{ marginTop: carModel ? 6 : compactDetails ? 3 : 8 }}>
-                  <VehicleTagStrip
-                    item={item}
-                    onTagUser={onTagUser}
-                    onUntagUser={onUntagUser}
-                    onViewUser={onViewUser}
-                    variant="lightbox"
-                    showPlate={!carModel}
-                  />
-                </div>
-              </div>
+            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 16, padding: '14px 20px', flexWrap: 'wrap', width: 'min(580px, calc(100vw - 100px))', maxWidth: '100%', maxHeight: '36vh', overflowY: 'auto', boxSizing: 'border-box' }}>
+              <IncidentSummary item={item} cameraName={cam} titleFallback={det} lightbox />
 
               {/* Mark as resolved */}
               {/* Three states: idle checkbox → spinner while the request is in
@@ -1255,11 +1095,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                 aria-pressed={resolved}
                 onClick={(e) => { e.stopPropagation(); handleMarkResolved(); }}
                 style={{
-                  position: carModel ? 'absolute' : undefined,
-                  top: carModel ? 26 : undefined,
-                  right: carModel ? 250 : undefined,
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: compactDetails ? '6px 14px' : '8px 20px', cursor: resolving || navLoading ? 'wait' : 'pointer',
+                  padding: '6px 14px', cursor: resolving || navLoading ? 'wait' : 'pointer',
                   fontFamily: 'inherit',
                   border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
                   background: saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)') : 'rgba(255,255,255,.05)',
@@ -1292,11 +1129,8 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               <button
                 onClick={(e) => { e.stopPropagation(); setReportOpen(true); }}
                 style={{
-                  position: carModel ? 'absolute' : undefined,
-                  top: carModel ? 26 : undefined,
-                  right: carModel ? 56 : undefined,
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: compactDetails ? '6px 14px' : '8px 20px', cursor: 'pointer',
+                  padding: '6px 14px', cursor: 'pointer',
                   border: '1px solid rgba(59,130,246,.5)',
                   background: 'rgba(59,130,246,.2)',
                   color: '#60a5fa', transition: 'background .15s', whiteSpace: 'nowrap',

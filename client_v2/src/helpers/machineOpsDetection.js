@@ -1,13 +1,13 @@
 export const MACHINE_OPS_SETTING_TYPE = 'machineOpsDetectionSettings';
 export const machineOpsId = name => String(name || '').trim().toLowerCase().replace(/\s+/g, '-');
 export const MACHINE_OPS_LOG_FIELDS = Object.freeze([
-  { key: 'timeOfIncident', label: 'Time of Incident', sortField: 'timeOfIncident' },
-  { key: 'machineState', label: 'Machine State', sortField: 'machineState' },
-  { key: 'machineName', label: 'Machine Name', sortField: 'machineName' },
-  { key: 'description', label: 'Description', sortField: 'description' },
-  { key: 'incidentName', label: 'Incident Name', sortField: 'incidentName' },
-  { key: 'channelName', label: 'Camera Name', sortField: 'channelData.name' },
+  { key: 'snap', label: 'Snapshot' },
   { key: 'nvrName', label: 'NVR Name', sortField: 'nvrData.nvrName' },
+  { key: 'channelName', label: 'Camera Name', sortField: 'channelData.name' },
+  { key: 'machineName', label: 'Machine Name', sortField: 'machineName' },
+  { key: 'machineState', label: 'Machine State', sortField: 'machineState' },
+  { key: 'description', label: 'Description', sortField: 'description' },
+  { key: 'timeOfIncident', label: 'Time of Incident', sortField: 'timeOfIncident' },
 ]);
 
 export function machineOpsZoneSettings(zone = {}, index = 0) {
@@ -39,6 +39,20 @@ export function nextMachineOpsZone(zones) {
   let number = 1;
   while (ids.has(`machine-${number}`)) number++;
   return { machine_id: `machine-${number}`, zone_role: 'machine', name: `Machine ${number}` };
+}
+
+export function machineOpsSharedZones(zones) {
+  const shared = new Map();
+  groupMachineOpsZones(zones).forEach(group => {
+    const primary = (group.entries.find(entry => entry.role === 'machine') || group.entries[0]).zone;
+    group.entries.forEach(({ index }) => shared.set(index, {
+      whatsappRecipientIds: primary.whatsappRecipientIds,
+      telegramChatIds: primary.telegramChatIds,
+      telegramChatId: primary.telegramChatId,
+      schedule: primary.schedule,
+    }));
+  });
+  return zones.map((zone, index) => ({ ...zone, ...shared.get(index) }));
 }
 
 // Draw in video pixels, send the normalized polygons required by DS.

@@ -384,7 +384,7 @@ export const MACHINE_OPS_CONFIG = {
   endpoint: '/incidents/logs/machine-ops-detection', title: 'Machine Operations Logs',
   fileName: 'machine_operations_logs', sheetName: 'Machine Operations Logs', storagePrefix: 'machine_ops',
   permissionKey: 'machineOpsLogs', accessDenied: "You don't have permission to view Machine Operations Logs.",
-  showMachineOpsFields: true, tableOnly: true, showStatus: false, showSeverity: false, showSeverityFilter: false,
+  showMachineOpsFields: true, showStatus: false, showSeverity: false, showSeverityFilter: false,
   showStats: false, sortable: true, enableViewExports: true, timeLabel: 'Time of Incident', datePickerVariant: 'preset',
 };
 

@@ -8,7 +8,7 @@ import { scheduleFromConfig } from '../ZoneScheduleFields';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings } from '../../../../helpers/hygieneDetection';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings } from '../../../../helpers/lightingDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings } from '../../../../helpers/emotionDetection';
-import { MACHINE_OPS_SETTING_TYPE, machineOpsZoneSettings } from '../../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, machineOpsZoneSettings, machineOpsSharedZones } from '../../../../helpers/machineOpsDetection';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../../helpers/genderAgeDetection';
 
 export function extraFieldsFor(settingType) {
@@ -42,7 +42,7 @@ export function zonesFor(setting, cameraId, settingType) {
 
   const isMultiZone = Array.isArray(raw[0]?.[0]);
   const polygons = isMultiZone ? raw : [raw];
-  return polygons.map((poly, i) => ({
+  const zones = polygons.map((poly, i) => ({
     ...(settingType === MACHINE_OPS_SETTING_TYPE ? machineOpsZoneSettings(configs[i], i) : {}),
     ...(settingType === HYGIENE_SETTING_TYPE ? hygieneZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === LIGHTING_SETTING_TYPE ? lightingZoneSettings(configs[i], setting?.settings) : {}),
@@ -81,6 +81,7 @@ export function zonesFor(setting, cameraId, settingType) {
       : null,
     points: (poly || []).map(p => (Array.isArray(p) ? { x: p[0], y: p[1] } : p)),
   }));
+  return settingType === MACHINE_OPS_SETTING_TYPE ? machineOpsSharedZones(zones) : zones;
 }
 
 export function allTypesFor(camera, typeLabels) {

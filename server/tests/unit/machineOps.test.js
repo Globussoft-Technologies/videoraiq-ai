@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { machineOpsSettingsSchema, machineOpsIncidentSchema } from '../../services/machineOps.js';
 import { MachineOpsDetectionSetting } from '../../core/v1/detectionSettings/detectionSettings.model.js';
 import { MachineOpsDetectionIncident } from '../../core/v1/incidents/incidents.model.js';
-import { MACHINE_OPS_LOG_FIELDS, machineOpsMachines, machineOpsZoneSettings, machineOpsId, groupMachineOpsZones, nextMachineOpsZone } from '../../../client_v2/src/helpers/machineOpsDetection.js';
+import { MACHINE_OPS_LOG_FIELDS, machineOpsMachines, machineOpsZoneSettings, machineOpsId, groupMachineOpsZones, nextMachineOpsZone, machineOpsSharedZones } from '../../../client_v2/src/helpers/machineOpsDetection.js';
 
 const machine = { machine_id: 'laser-cutter-1', name: 'Laser Cutter 1',
   machine_zone: [[0.02, 0.1], [0.48, 0.1], [0.48, 0.9], [0.02, 0.9]],
@@ -38,8 +38,21 @@ describe('Machine Operations contracts', () => {
   });
   it('limits the logs and exports to the seven requested fields', () => {
     expect(MACHINE_OPS_LOG_FIELDS.map(field => field.key)).toEqual([
-      'timeOfIncident', 'machineState', 'machineName', 'description', 'incidentName', 'channelName', 'nvrName',
+      'snap', 'nvrName', 'channelName', 'machineName', 'machineState', 'description', 'timeOfIncident',
     ]);
+  });
+  it('uses one notification configuration per machine for both polygons and preserves other machines', () => {
+    const settings = { whatsappRecipientIds: ['recipient-1'], telegramChatIds: ['chat-1'], telegramChatId: 'chat-1', schedule: { from: '09:00 AM', to: '06:00 PM' } };
+    const zones = [
+      { machine_id: 'one', zone_role: 'machine', ...settings },
+      { machine_id: 'one', zone_role: 'indicator', telegramChatIds: ['old-chat'] },
+      { machine_id: 'two', zone_role: 'machine', telegramChatIds: ['chat-2'] },
+    ];
+    const result = machineOpsSharedZones(zones);
+    expect(result[0]).toMatchObject(settings);
+    expect(result[1]).toMatchObject(settings);
+    expect(result[2].telegramChatIds).toEqual(['chat-2']);
+    expect(zones[1].telegramChatIds).toEqual(['old-chat']);
   });
   it('stores normalized paired polygons and machine IDs without adding DS fields', () => {
     const settings = { machines: [machine] };

@@ -143,7 +143,7 @@ export default function ZoneSettingsPanel({
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <MachineOpsGroups zones={zones} enabled={isMachineOps} onUpdateField={onUpdateField} disabled={savingIndex !== null} errors={errors} id="machine-settings">{(z, i) => {
+        <MachineOpsGroups zones={zones} enabled={isMachineOps} onUpdateField={onUpdateField} disabled={savingIndex !== null} errors={errors} whatsappApi={whatsappApi} channelOptions={channelOptions} id="machine-settings">{(z, i) => {
           const isOpen = expanded === i;
           return (
             <div
@@ -241,8 +241,8 @@ export default function ZoneSettingsPanel({
                       </select>
                     </div>
                   )}
-                  <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => onUpdateField(i, 'whatsappRecipientIds', selected)} />
-                  {showZoneExtras && (
+                  {!isMachineOps && <WhatsAppRecipientSelect api={whatsappApi} value={z.whatsappRecipientIds} onChange={selected => onUpdateField(i, 'whatsappRecipientIds', selected)} />}
+                  {showZoneExtras && !isMachineOps && (
                   <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
                       Telegram Channels
@@ -331,7 +331,7 @@ export default function ZoneSettingsPanel({
                       )}
                     </div>
                   )}
-                  {showZoneExtras && (
+                  {showZoneExtras && !isMachineOps && (
                     <>
                       <ZoneScheduleFields
                         value={z.schedule}

@@ -164,11 +164,21 @@ const sortableHeader = (label, field, onSort, sortable, sortField, sortOrder) =>
       }
     : label;
 
+const MachineOpsSnapshot = ({ row, onPreview, grid = false }) => {
+  const className = `${grid ? 'w-full aspect-video' : 'w-11 h-9 rounded-[6px]'} overflow-hidden bg-[var(--bg2)] flex items-center justify-center shrink-0`;
+  if (!row.incidentImageUrl) return <div className={className} title="No snapshot"><Image className="h-5 w-5 text-[var(--tx3)]" /></div>;
+  return <button type="button" className={`${className} cursor-pointer`} title="View snapshot" aria-label="View machine snapshot"
+    onClick={event => { event.stopPropagation(); onPreview(row.incidentImageUrl, `incident:${row._id || row.id}`); }}>
+    <ImageWithLoader src={row.incidentImageUrl} alt={row.machineName || 'Machine snapshot'} className="w-full h-full" imgClassName="w-full h-full object-cover" />
+  </button>;
+};
+
 export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, recentlyViewedId }) => {
   const sortable = config.sortable !== false;
   const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
-  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label, sortField: field }) => ({ accessorKey: key, header: sortHeader(label, field),
-    cell: ({ row }) => <span className="block max-w-sm whitespace-pre-wrap break-words text-xs text-[var(--tx2)]">{key === 'timeOfIncident' ? formatTime(row.original.timeOfIncident) : row.original[key] || '--'}</span>,
+  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label, sortField: field }) => ({ accessorKey: key, header: key === 'snap' ? label : sortHeader(label, field),
+    cell: ({ row }) => key === 'snap' ? <MachineOpsSnapshot row={row.original} onPreview={onPreview} />
+      : <span className="block max-w-sm whitespace-pre-wrap break-words text-xs text-[var(--tx2)]">{key === 'timeOfIncident' ? formatTime(row.original.timeOfIncident) : row.original[key] || '--'}</span>,
   }));
   const cols = [
     {
@@ -474,7 +484,17 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
   return cols;
 };
 
-export const renderIncidentCard = (row, config, { onPreview }) => (
+export const renderIncidentCard = (row, config, { onPreview }) => {
+  if (config.showMachineOpsFields) return <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden h-full w-full min-w-0">
+    <MachineOpsSnapshot row={row} onPreview={onPreview} grid />
+    <dl className="p-3 space-y-2">
+      {MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => <div key={key} className="grid grid-cols-[100px_minmax(0,1fr)] gap-2 text-xs">
+        <dt className="text-[var(--tx3)]">{label}</dt>
+        <dd className="m-0 whitespace-pre-wrap break-words text-[var(--tx)]">{key === 'timeOfIncident' ? formatTime(row.timeOfIncident) : row[key] || '--'}</dd>
+      </div>)}
+    </dl>
+  </div>;
+  return (
   <div className={`bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0 ${(config.showLightingFields || config.showHygieneFields) ? 'flex flex-col' : ''}`}>
     <div
       className={`relative shrink-0 overflow-hidden bg-[#0a0e15] flex items-center justify-center ${config.showBoxPackingFields ? 'h-[190px]' : ''}`}
@@ -722,3 +742,4 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
     )}
   </div>
 );
+};
