@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, VideoOff, Maximize2, Minimize2, Play, Pause, MoreVertical, Download, Check } from 'lucide-react';
+import { X, Loader2, VideoOff, Maximize2, Minimize2, Play, Pause, RotateCcw, MoreVertical, Download, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPlaybackUrl, getPlaybackSessionId } from '../../../helpers/playback';
 import { getIncidentPreviewSettings, INCIDENT_PREVIEW_DEFAULTS } from '../../../helpers/administer';
@@ -672,6 +672,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
           <FullscreenZoomSurface
             enabled
             resetKey={item?._id || item?.id || url}
+            compactToolbar
             toolbarStyle={{ right: 58 }}
           >
             <video
@@ -727,14 +728,14 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
               <button
                 type="button"
                 onClick={togglePlay}
-                title={playing ? 'Pause' : 'Play'}
+                title={playing ? 'Pause' : finished ? 'Replay' : 'Play'}
                 style={{
                   flex: '0 0 auto', width: 28, height: 28, display: 'flex',
                   alignItems: 'center', justifyContent: 'center', borderRadius: '50%',
                   border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer',
                 }}
               >
-                {playing ? <Pause size={16} /> : <Play size={16} />}
+                {playing ? <Pause size={16} /> : finished ? <RotateCcw size={16} /> : <Play size={16} />}
               </button>
 
               <div

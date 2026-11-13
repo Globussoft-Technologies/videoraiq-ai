@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { router } from '@/App';
 import { Bell, Trash2, X } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
@@ -132,7 +133,7 @@ function detectionTime(detection) {
   return timeOfDay(value) || 'Unknown time';
 }
 
-function AlertRow({ alert, showDivider, onDismiss }) {
+function AlertRow({ alert, showDivider, onDismiss, onOpen }) {
   const color = SEVERITY_COLOR[alert.severity] || SEVERITY_COLOR.info;
   return (
     <li
@@ -145,14 +146,14 @@ function AlertRow({ alert, showDivider, onDismiss }) {
       >
         <Bell size={14} strokeWidth={2} />
       </span>
-      <div className="min-w-0 flex-1">
+      <button type="button" onClick={() => onOpen(alert)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Open ${alert.title} alert`}>
         <div className="truncate text-[13px] font-semibold leading-tight" style={{ color: 'var(--tx)' }}>
           {alert.title}
         </div>
         <div className="mt-1 truncate text-[11.5px] leading-tight" style={{ color: 'var(--tx2)' }}>
           {alert.description}
         </div>
-      </div>
+      </button>
       <button
         type="button"
         onClick={() => onDismiss(alert.id)}
@@ -172,7 +173,7 @@ function AlertRow({ alert, showDivider, onDismiss }) {
  * than fit in the max height, only the list scrolls — the "Clear All Alerts"
  * footer stays pinned outside that scroll area.
  */
-function DetectionAlertStack({ alerts, onDismiss, onClearAll }) {
+function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
   const timersRef = useRef(new Map());
   const pausedRef = useRef(false);
 
@@ -237,7 +238,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll }) {
     >
       <ul className="vq-scroll m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto p-0">
         {alerts.map((alert, index) => (
-          <AlertRow key={alert.id} alert={alert} showDivider={index > 0} onDismiss={onDismiss} />
+          <AlertRow key={alert.id} alert={alert} showDivider={index > 0} onDismiss={onDismiss} onOpen={onOpen} />
         ))}
       </ul>
 
@@ -275,6 +276,12 @@ export function DetectionNotificationProvider({ children }) {
   const clearAllAlerts = useCallback(() => {
     setAlerts([]);
   }, []);
+
+  const openAlert = useCallback((alert) => {
+    if (!alert.incidentId) return;
+    router.navigate(`/alerts?alertId=${encodeURIComponent(alert.incidentId)}`, { state: { alertId: alert.incidentId, alert: alert.incident } });
+    dismissAlert(alert.id);
+  }, [dismissAlert]);
 
   useEffect(() => {
     if (!socket || !user?.adminId) return undefined;
@@ -328,7 +335,7 @@ export function DetectionNotificationProvider({ children }) {
       // invisible exactly when you went looking for it — and it depended on
       // `incidentType` being present, which it isn't always (detectionTitle
       // falls back to incidentName/displayName for the same reason).
-      setAlerts((prev) => [...prev, { id: key, title, description, severity: severityBucket(data?.severity) }]);
+      setAlerts((prev) => [...prev, { id: key, incidentId: String(data?.incidentId || data?._id || data?.id || ''), incident: data, title, description, severity: severityBucket(data?.severity) }]);
     };
 
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
@@ -344,7 +351,7 @@ export function DetectionNotificationProvider({ children }) {
   return (
     <>
       {children}
-      <DetectionAlertStack alerts={alerts} onDismiss={dismissAlert} onClearAll={clearAllAlerts} />
+      <DetectionAlertStack alerts={alerts} onDismiss={dismissAlert} onClearAll={clearAllAlerts} onOpen={openAlert} />
     </>
   );
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useSocket } from '../../../context/SocketContext';
+import { useAuth } from '../../../context/AuthContext';
 import { X, Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import DraggableZoomControls from '../../../components/DraggableZoomControls';
 import { Panel, Badge } from '../../../components/primitives';
@@ -441,6 +443,8 @@ function ReportModal({ item, onClose, onSuccess }) {
 }
 
 export default function AlertsView() {
+  const { socket } = useSocket() || {};
+  const { user } = useAuth();
   const ctx = useOutletContext() || {};
   const location = ctx.location || '';
   const routerLocation = useLocation();
@@ -461,7 +465,6 @@ export default function AlertsView() {
   const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
   const [selected, setSelected] = useState(routedAlert);
   const [deepLinkedIncident, setDeepLinkedIncident] = useState(routedAlert);
-  const suppressAlertFetchRef = useRef('');
   const preserveInitialSelectionRef = useRef(Boolean(initialAlertId || routedAlert));
 
   useEffect(() => {
@@ -470,10 +473,6 @@ export default function AlertsView() {
       setSelected(routedAlert);
     }
     if (!initialAlertId) return undefined;
-    if (suppressAlertFetchRef.current === String(initialAlertId)) {
-      suppressAlertFetchRef.current = '';
-      return undefined;
-    }
     let cancelled = false;
     fetchIncidentById(initialAlertId)
       .then((incident) => {
@@ -542,24 +541,14 @@ export default function AlertsView() {
 
   const handleSelectAlert = useCallback((incident) => {
     setSelected(incident);
-    const incidentId = incidentIdOf(incident);
-    if (!incidentId || incidentId === String(initialAlertId || '')) return;
-
-    // This row is already loaded, so only synchronize the address bar. The
-    // deep-link fetch effect skips this ID and the old pinned row is released.
-    suppressAlertFetchRef.current = incidentId;
-    setDeepLinkedIncident(null);
-    const params = new URLSearchParams(routerLocation.search);
-    params.set('alertId', incidentId);
-    navigate(
-      { pathname: routerLocation.pathname, search: `?${params.toString()}` },
-      { replace: true, state: null },
-    );
-  }, [initialAlertId, navigate, routerLocation.pathname, routerLocation.search]);
+    // A row already in the feed keeps its position; selection never changes
+    // the route or turns it into a newly pinned deep-link result.
+  }, []);
 
   // Manual pagination (not useApi) so pages can accumulate as the user
   // scrolls, instead of each fetch replacing the whole list.
   const [items, setItems] = useState([]);
+  const liveItemsRef = useRef(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [countSummary, setCountSummary] = useState(() => normalizeIncidentCounts(null, 0));
   const [loading, setLoading] = useState(true);
@@ -582,7 +571,9 @@ export default function AlertsView() {
     try {
       const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, listFilter);
       if (requestId !== requestIdRef.current) return; // superseded by a newer request
-      setItems((prev) => (append ? [...prev, ...result.items] : result.items));
+      const fetchedIds = new Set(result.items.map(incidentIdOf));
+      const liveItems = [...liveItemsRef.current.values()].filter((item) => !fetchedIds.has(incidentIdOf(item)));
+      setItems((prev) => append ? [...prev, ...result.items] : [...liveItems, ...result.items]);
       setTotalCount(result.totalCount);
     } catch (err) {
       if (requestId === requestIdRef.current) setError(err);
@@ -592,6 +583,18 @@ export default function AlertsView() {
       }
     }
   }, [listFilter]);
+
+  useEffect(() => {
+    if (!socket || !user?.adminId) return undefined;
+    const onDetection = (incident) => {
+      const id = incidentIdOf(incident);
+      if (!id || !incident?.Image) return;
+      liveItemsRef.current.set(id, incident);
+      setItems((previous) => [incident, ...previous.filter((item) => incidentIdOf(item) !== id)]);
+    };
+    socket.on(`cameradetection_${user.adminId}`, onDetection);
+    return () => socket.off(`cameradetection_${user.adminId}`, onDetection);
+  }, [socket, user?.adminId]);
 
   const loadCounts = useCallback(async () => {
     const requestId = ++countsRequestIdRef.current;
@@ -666,9 +669,10 @@ export default function AlertsView() {
   const rows = useMemo(() => {
     if (!deepLinkedIncident) return items;
     const deepLinkedId = incidentIdOf(deepLinkedIncident);
+    if (items.some((item) => incidentIdOf(item) === deepLinkedId)) return items;
     return [
       deepLinkedIncident,
-      ...items.filter((item) => incidentIdOf(item) !== deepLinkedId),
+      ...items,
     ];
   }, [items, deepLinkedIncident]);
 

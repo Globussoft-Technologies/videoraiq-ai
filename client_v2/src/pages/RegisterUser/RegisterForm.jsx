@@ -5,7 +5,7 @@ import * as Yup from 'yup';
 import { ArrowLeft, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { COMPACT_TOAST } from './toastOptions';
-import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji, isValidEmailFormat } from '@/utils/emailValidation';
 import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import {
@@ -43,8 +43,8 @@ const validationSchemaStep1 = Yup.object().shape({
     .min(1, 'Last name must be at least 1 character'),
   email: Yup.string()
     .test('no-email-emoji', EMAIL_EMOJI_ERROR, (value) => !hasEmailEmoji(value))
-    .email('Invalid email')
-    .matches(/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/, 'Invalid email format'),
+    .test('valid-email-format', 'Invalid email format', (value) => !value?.trim() || isValidEmailFormat(value))
+    .email('Invalid email'),
   vehicleNumber: Yup.string(),
   designation: Yup.string().required('Designation is required'),
   location: Yup.string(),

@@ -92,6 +92,7 @@ export default function KpiRow({
   const camerasTotal = onlineCameras.total;
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
   const activeAlerts = incidentCounts?.status?.new ?? stats.totalAlerts ?? 0;
+  // The incident count uses the same new-only filter as the High drill-down.
   const highAlerts = incidentCounts?.severity?.high ?? stats.criticalAlerts ?? 0;
   const resolved = incidentCounts?.status?.resolved ?? stats.incidentsResolved ?? 0;
   const activeTrend = dayTrend(dailyComparison, 'activeAlerts');

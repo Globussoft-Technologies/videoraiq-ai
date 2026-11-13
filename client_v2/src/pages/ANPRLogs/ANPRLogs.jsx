@@ -31,8 +31,9 @@ import {
   editIncidentDetails,
 } from './Api';
 
-const HOST = import.meta.env.VITE_BACKEND;
-const anprImage = (row) => row.imageUrl;
+// Preview the same upload URL used by the visible ANPR thumbnails. The API
+// base is for JSON requests and is not necessarily the host serving snapshots.
+const anprImage = (row) => row.incidentImageUrl || row.imageUrl;
 
 /**
  * PDF export button with a two-way split: the plain list-table PDF, and the
@@ -201,21 +202,26 @@ const ANPRLogs = () => {
     return () => { metadataActive = false; };
   }, [nvrIds], ["cameras"]);
 
-  // Fetch distinct vehicle numbers (debounced when search changes).
+  // Fetch the complete vehicle catalog once. The API returns the distinct
+  // values and does not consistently apply its optional `search` query, so
+  // filtering the catalog in the client keeps the dropdown reliable while
+  // typing a plate number.
   useEffect(() => {
-    const handle = setTimeout(async () => {
+    let active = true;
+    (async () => {
       try {
-        const res = await getVehicleNumbers(vehicleNumberSearch);
+        const res = await getVehicleNumbers();
+        if (!active) return;
         dispatch({
           type: 'SET_VEHICLE_NUMBER_LIST',
           value: res?.data?.body?.data?.vehicleNumbers || [],
         });
       } catch (err) {
-        console.log('Error fetching vehicle numbers:', err);
+        if (active) console.log('Error fetching vehicle numbers:', err);
       }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [vehicleNumberSearch]);
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
@@ -264,7 +270,7 @@ const ANPRLogs = () => {
         channelId: item.channelId || item.channelData?._id || '',
         timeOfIncident: item.timeOfIncident || '--',
         createdAt: item.createdAt,
-        imageUrl: item.Image ? `${HOST}${item.Image}` : null,
+        imageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         vehicleNumber: item.vehicleNumber || '--',
         // Resolved server-side from the plate, so it is already correct for
@@ -316,6 +322,21 @@ const ANPRLogs = () => {
     () => cameraList.map((cam) => ({ label: cam.customName || cam.name, id: cam._id || cam.id })),
     [cameraList]
   );
+
+  const filteredVehicleNumberList = useMemo(() => {
+    const catalog = [...vehicleNumberList, ...rows.map((row) => row.vehicleNumber)]
+      .filter((number) => number && number !== '--');
+    const unique = [...new Set(catalog.map((number) => String(number).trim()))];
+    const query = vehicleNumberSearch.trim().toLowerCase();
+    if (!query) return unique;
+
+    const normalizedQuery = query.replace(/[^a-z0-9]/g, '');
+    return unique.filter((number) => {
+      const value = number.toLowerCase();
+      const normalizedValue = value.replace(/[^a-z0-9]/g, '');
+      return value.includes(query) || normalizedValue.includes(normalizedQuery);
+    });
+  }, [vehicleNumberList, rows, vehicleNumberSearch]);
 
   const onSort = useCallback((field) => {
     dispatch({ type: 'SET_SORT_FIELD', value: field });
@@ -500,7 +521,7 @@ const ANPRLogs = () => {
         <VehicleNumberSelect
           vehicleNumber={vehicleNumber}
           setVehicleNumber={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER', value: v })}
-          vehicleNumberList={vehicleNumberList}
+          vehicleNumberList={filteredVehicleNumberList}
           vehicleNumberSearch={vehicleNumberSearch}
           setVehicleNumberSearch={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER_SEARCH', value: v })}
         />

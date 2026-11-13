@@ -17,7 +17,7 @@ import {
   parseTime,
   formatTime,
 } from '../../../pages/AttendanceLogs/components/timeUtils';
-import IncidentCard, { apiMarkResolved, formatDoorStatus, ReportModal, VehicleTagStrip } from './IncidentCard';
+import IncidentCard, { apiMarkResolved, apiReport, formatDoorStatus, ReportModal, VehicleTagStrip } from './IncidentCard';
 import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentReportMessage from './IncidentReportMessage';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
@@ -135,6 +135,7 @@ const STATUSES = [
   { key: 'resolved',     label: 'Resolved' },
   { key: 'reported',     label: 'Reported' },
 ];
+const ALL_INCIDENT_STATUSES = ['new', 'resolved', 'reported'];
 
 const chip = (active, color = 'var(--blue)') => ({
   fontSize: 12, fontWeight: 500,
@@ -905,6 +906,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
       onResolvedChange?.(incidentId, savedIncident.resolved, savedIncident);
       if (mountedRef.current && activeIncidentIdRef.current === incidentId) {
         setResolved(savedIncident.resolved);
+        toast.success(next ? 'Incident resolved' : 'Incident reopened');
         setSaveFlash({ text: savedIncident.resolved ? 'Marked as resolved' : 'Mark as resolved', ok: true });
         flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
       }
@@ -1057,7 +1059,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
         {imgSrc && (
           <DraggableZoomControls
             onWheel={(e) => e.stopPropagation()}
-            handleStyle={{ color: '#1f2a44' }}
+            handleStyle={{ width: 20, height: 26, color: '#1f2a44' }}
             style={{
               position: 'absolute',
               top: 16,
@@ -1065,9 +1067,9 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               zIndex: 35,
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: 4,
-              borderRadius: 10,
+              gap: 3,
+              padding: 3,
+              borderRadius: 8,
               border: '1px solid rgba(255,255,255,.22)',
               background: 'rgba(255,255,255,.94)',
               boxShadow: '0 10px 30px rgba(0,0,0,.28)',
@@ -1078,20 +1080,20 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
               type="button"
               onClick={() => updateZoom((current) => current - 0.2)}
               title="Zoom out"
-              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 26, height: 26, border: 'none', borderRadius: 6, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <Minus size={15} />
+              <Minus size={14} />
             </button>
-            <span style={{ minWidth: 50, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#33415f' }}>
+            <span style={{ minWidth: 42, textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#33415f' }}>
               {Math.round(zoom * 100)}%
             </span>
             <button
               type="button"
               onClick={() => updateZoom((current) => current + 0.2)}
               title="Zoom in"
-              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 26, height: 26, border: 'none', borderRadius: 6, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <Plus size={15} />
+              <Plus size={14} />
             </button>
             <button
               type="button"
@@ -1100,9 +1102,9 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                 setPan({ x: 0, y: 0 });
               }}
               title="Reset zoom"
-              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 26, height: 26, border: 'none', borderRadius: 6, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <RotateCcw size={15} />
+              <RotateCcw size={14} />
             </button>
           </DraggableZoomControls>
         )}
@@ -1681,6 +1683,12 @@ export default function IncidentCenter() {
   const [selectedForResolve, setSelectedForResolve] = useState(() => new Set());
   const [pageScopePage, setPageScopePage] = useState(null);
   const [resolveMenuOpen, setResolveMenuOpen] = useState(false);
+  const [resolveMenuStep, setResolveMenuStep] = useState('actions');
+  const [scopeAction, setScopeAction] = useState('resolve');
+  const [reportScope, setReportScope] = useState(null);
+  const [reportResolveOpen, setReportResolveOpen] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportResolveError, setReportResolveError] = useState('');
   const [resolveMenuLayout, setResolveMenuLayout] = useState({ left: 0, width: 292 });
   const [resolveMode, setResolveMode] = useState(null);
   const [resolveConfirm, setResolveConfirm] = useState(null);
@@ -1748,12 +1756,11 @@ export default function IncidentCenter() {
     if (deptIds.length)    f.department         = deptIds;
     if (locIds.length)     f.location           = locIds;
     if (sevSet.size)       f.severity           = [...sevSet];
-    // The Incident Center's All view is the active incident feed. Resolved
-    // incidents belong in the Resolved tab and must not appear here unless a
-    // caller explicitly selects the resolved status.
+    // The default feed contains only new incidents. Reported and resolved
+    // incidents remain available through their dedicated status tabs.
     f.statusFilter = statusSet.size
       ? [...statusSet]
-      : ['new', 'reported'];
+      : ['new'];
     if (showsVehicleControls) {
       if (debouncedVehicleSearch.trim()) f.search = debouncedVehicleSearch.trim();
       if (tagStatus) f.tagStatus = tagStatus;
@@ -1784,6 +1791,18 @@ export default function IncidentCenter() {
   const grid  = useApi(
     () => fetchIncidents({ skip: page * pageSize, limit: pageSize }, serverFilter),
     [page, pageSize, JSON.stringify(serverFilter)]
+  );
+  // The grid intentionally excludes reported and resolved incidents in the default view,
+  // so its status counts cannot be used for the Resolved KPI: `resolved: 0`
+  // is a valid count for that filtered page, not the global resolved count.
+  // Keep a small all-status summary request for the KPI and status controls.
+  const statusSummary = useApi(
+    () => fetchIncidents(
+      { skip: 0, limit: 1 },
+      { ...serverFilter, statusFilter: ALL_INCIDENT_STATUSES },
+    ),
+    [JSON.stringify(serverFilter)],
+    { pollMs: 60000 },
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
@@ -1852,7 +1871,8 @@ export default function IncidentCenter() {
   const refreshIncidentData = useCallback(() => {
     grid.refetch({ silent: true });
     stats.refetch({ silent: true });
-  }, [grid, stats]);
+    statusSummary.refetch({ silent: true });
+  }, [grid, stats, statusSummary]);
 
   const handleExport = useCallback(async (format) => {
     if (exportingFormat || !grid.data?.totalCount) return;
@@ -1873,15 +1893,15 @@ export default function IncidentCenter() {
       // Merge the server document while keeping joined camera/NVR details.
       return { ...item, ...savedIncident, resolved };
     };
+    const previousIncident = grid.data?.items?.find((item) => (item._id || item.id) === incidentId);
+    const statusOf = (item) => item?.resolved ? 'resolved' : item?.report?.status === true ? 'reported' : 'new';
+    const previousStatus = statusOf(previousIncident);
+    const updatedIncident = updateIncident(previousIncident);
+    const nextStatus = statusOf(updatedIncident);
     setLinkedIncident(updateIncident);
     setLightboxIncident(updateIncident);
     grid.setData((prev) => {
       if (!prev?.items) return prev;
-      const previousIncident = prev.items.find((item) => (item._id || item.id) === incidentId);
-      const updatedIncident = updateIncident(previousIncident);
-      const statusOf = (item) => item?.resolved ? 'resolved' : item?.report?.status === true ? 'reported' : 'new';
-      const previousStatus = statusOf(previousIncident);
-      const nextStatus = statusOf(updatedIncident);
       return {
         ...prev,
         items: prev.items.map(updateIncident),
@@ -1897,6 +1917,20 @@ export default function IncidentCenter() {
           : prev.counts,
       };
     });
+    statusSummary.setData((prev) => {
+      if (!prev?.counts?.status || !previousIncident || previousStatus === nextStatus) return prev;
+      return {
+        ...prev,
+        counts: {
+          ...prev.counts,
+          status: {
+            ...prev.counts.status,
+            [previousStatus]: Math.max(0, Number(prev.counts.status[previousStatus] || 0) - 1),
+            [nextStatus]: Number(prev.counts.status[nextStatus] || 0) + 1,
+          },
+        },
+      };
+    });
     stats.setData((prev) => {
       if (!prev) return prev;
       const delta = resolved ? 1 : -1;
@@ -1906,9 +1940,12 @@ export default function IncidentCenter() {
         incidentsResolved: Math.max(0, Number(prev.incidentsResolved || 0) + delta),
       };
     });
-    stats.refetch({ silent: true });
+    // Keep the optimistic KPI update visible. Refetching immediately here can
+    // win a race with the just-written incident and put the Resolved card back
+    // at zero until the next poll. The normal poll and the grid refresh below
+    // reconcile it with the server shortly afterwards.
     grid.refetch({ silent: true });
-  }, [grid, stats]);
+  }, [grid, stats, statusSummary]);
 
   const totalCount = grid.data?.totalCount ?? 0;
   // Only a successful, settled response establishes an empty result. Loading
@@ -2066,6 +2103,67 @@ export default function IncidentCenter() {
     openResolveConfirmation(mode);
   }, [openResolveConfirmation, resolveMode, selectedForResolve.size]);
 
+  const openReportResolution = () => {
+    const mode = resolveMode || (selectedForResolve.size ? 'selected' : 'page');
+    const count = mode === 'selected' ? selectedForResolve.size : mode === 'page' ? currentPageIds.length : totalCount;
+    if (!count) return;
+    setReportScope({ mode, count, incidentIds: mode === 'selected' ? [...selectedForResolve] : mode === 'page' ? [...currentPageIds] : [] });
+    setResolveMenuOpen(false);
+    setReportResolveError('');
+    setReportDescription('');
+    setReportResolveOpen(true);
+  };
+
+  const handleConfirmReportResolve = async () => {
+    if (resolvingBulk || !reportScope) return;
+    const description = reportDescription.trim();
+    if (!description) {
+      setReportResolveError('Please enter a description');
+      return;
+    }
+    const { mode, count } = reportScope;
+    setResolvingBulk(true);
+    setReportResolveError('');
+    let reportedCount = 0;
+    try {
+      const ids = [...reportScope.incidentIds];
+      if (mode === 'filtered') {
+        // Snapshot IDs before writing reports: reporting can remove incidents
+        // from the active filter and would make offset pagination skip rows.
+        for (let offset = 0; offset < count; offset += 100) {
+          const batch = (await fetchIncidents({ skip: offset, limit: 100 }, serverFilter)).items;
+          if (!batch.length) break;
+          ids.push(...batch.map((item) => item._id || item.id).filter(Boolean));
+        }
+      }
+      for (const id of new Set(ids)) {
+        await apiReport(id, description);
+        reportedCount += 1;
+      }
+      toast.success(`${reportedCount} incident${reportedCount === 1 ? '' : 's'} reported`);
+      setReportResolveOpen(false);
+      setReportScope(null);
+      setSelectedForResolve(new Set());
+      setResolveMode(null);
+      if (!statusSet.size || (statusSet.size === 1 && statusSet.has('new'))) {
+        const reportedIds = new Set(ids);
+        grid.setData((previous) => previous ? {
+          ...previous,
+          items: previous.items?.filter((item) => !reportedIds.has(item._id || item.id)) || [],
+          totalCount: Math.max(0, Number(previous.totalCount || 0) - reportedCount),
+        } : previous);
+      }
+      grid.refetch();
+      stats.refetch();
+      statusSummary.refetch();
+    } catch (err) {
+      setReportResolveError(`${reportedCount} of ${count} reported. ${err?.response?.data?.body?.message || err?.response?.data?.message || 'Unable to report remaining incidents'}.`);
+      grid.refetch({ silent: true });
+    } finally {
+      setResolvingBulk(false);
+    }
+  };
+
   const handleConfirmBulkResolve = async () => {
     if (!resolveConfirm || resolvingBulk) return;
     setResolvingBulk(true);
@@ -2084,6 +2182,19 @@ export default function IncidentCenter() {
         result?.resolvedCount ?? result?.body?.resolvedCount ?? result?.data?.resolvedCount ?? 0
       );
       toast.success(`${resolvedCount} incident${resolvedCount === 1 ? '' : 's'} marked as resolved`);
+      statusSummary.setData((prev) => {
+        if (!prev?.counts?.status || !resolvedCount) return prev;
+        return {
+          ...prev,
+          counts: {
+            ...prev.counts,
+            status: {
+              ...prev.counts.status,
+              resolved: Number(prev.counts.status.resolved || 0) + resolvedCount,
+            },
+          },
+        };
+      });
       setSelectedForResolve(new Set());
       setResolveMode(null);
       setResolveConfirm(null);
@@ -2094,6 +2205,7 @@ export default function IncidentCenter() {
         setResolveSuccessAnimating(false);
         grid.refetch({ silent: true });
         stats.refetch({ silent: true });
+        statusSummary.refetch({ silent: true });
       }, 850);
     } catch (err) {
       toast.error(err?.response?.data?.message || err?.response?.data?.body?.message || 'Failed to resolve incidents');
@@ -2112,6 +2224,7 @@ export default function IncidentCenter() {
         setDeleteConfirmOpen(false);
         grid.refetch();
         stats.refetch();
+        statusSummary.refetch();
       } else {
         toast.error(result?.message || 'Failed to delete incidents');
       }
@@ -2156,6 +2269,7 @@ export default function IncidentCenter() {
       setPage(0);
       grid.refetch();
       stats.refetch();
+      statusSummary.refetch();
     } catch (err) {
       toast.error(err?.response?.data?.message || err?.response?.data?.body?.message || 'Failed to delete incidents');
     } finally {
@@ -2276,16 +2390,36 @@ export default function IncidentCenter() {
   // user. Date/detection, Clear and refresh remain available for recovery.
   const additionalFiltersDisabled = noIncidents && !(nvrIds.length || channelIds.length || deptIds.length || locIds.length || timeFrom || timeTo);
   const severityFiltersDisabled = noIncidents && !sevSet.size && !statusSet.size;
-  const statusFiltersDisabled = severityFiltersDisabled && !(s.incidentsResolved > 0);
+  const statusFiltersDisabled = severityFiltersDisabled
+    && !(s.incidentsResolved > 0 || statusSummary.data?.counts?.status?.resolved > 0 || statusSummary.data?.counts?.status?.reported > 0);
   const incidentCounts = grid.data?.counts || {};
   const severityCounts = incidentCounts.severity || {};
   const statusCounts = incidentCounts.status || {};
   const allIncidents = statusCounts.all ?? severityCounts.all ?? grid.data?.totalCount;
+  const hasExplicitStatusFilter = statusSet.size > 0;
+  // With an explicit status tab selected, every KPI must describe that
+  // filtered result. In particular, the all-status summary used by the
+  // default feed must not leak its resolved total into the Reported tab.
+  const resolvedIncidentCount = hasExplicitStatusFilter
+    ? Number(statusCounts.resolved ?? 0)
+    : Number(statusSummary.data?.counts?.status?.resolved ?? s.incidentsResolved ?? statusCounts.resolved ?? 0);
+  const reportedIncidentCount = hasExplicitStatusFilter
+    ? Number(statusCounts.reported ?? 0)
+    : Number(statusSummary.data?.counts?.status?.reported ?? statusCounts.reported ?? 0);
+  // Reported incidents are unresolved too. When the Reported tab is active,
+  // show its count in the Unresolved (New) card; for multiple explicit status
+  // selections, sum whichever unresolved statuses were selected.
+  const unresolvedIncidentCount = hasExplicitStatusFilter
+    ? ['new', 'reported']
+      .filter((status) => statusSet.has(status))
+      .reduce((total, status) => total + Number(statusCounts[status] ?? 0), 0)
+    : Number(statusCounts.new ?? s.totalAlerts ?? 0);
   const kpis = [
     { label: 'Total Incidents',       value: num(allIncidents ?? ((s.totalAlerts ?? 0) + (s.incidentsResolved ?? 0))), color: 'var(--tx)' },
     { label: 'High',                  value: num(severityCounts.high ?? s.criticalAlerts ?? 0), color: 'var(--crit)' },
-    { label: 'Unresolved (New)',      value: num(statusCounts.new ?? s.totalAlerts ?? 0), color: 'var(--warn)' },
-    { label: 'Resolved',              value: num(statusCounts.resolved ?? s.incidentsResolved ?? 0), color: 'var(--ok)' },
+    { label: 'Unresolved (New)',      value: num(unresolvedIncidentCount), color: 'var(--warn)' },
+    { label: 'Resolved',              value: num(resolvedIncidentCount), color: 'var(--ok)' },
+    { label: 'Reported',              value: num(reportedIncidentCount), color: 'var(--blue)' },
   ];
 
   const typeOptions = useMemo(() => {
@@ -2370,7 +2504,7 @@ export default function IncidentCenter() {
       `}</style>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+      <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
@@ -2530,40 +2664,58 @@ export default function IncidentCenter() {
               <button
                 type="button"
                 className="vq-inc-resolve"
-                onClick={() => setResolveMenuOpen((open) => !open)}
+                onClick={() => { setResolveMenuStep('actions'); setResolveMenuOpen((open) => !open); }}
                 disabled={resolveDisabled}
                 title={!items.length ? 'No incidents available to resolve.' : undefined}
                 aria-expanded={resolveMenuOpen && !resolveDisabled}
-                style={{ display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 600, color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderRight: '1px solid rgba(255,255,255,.45)', borderRadius: '7px 0 0 7px', padding: '6px 10px', cursor: resolvingBulk || !items.length ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !items.length ? 0.65 : 1, whiteSpace: 'nowrap' }}
+                style={{ display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #16c978, #00b85c)', border: '1px solid #16c978', borderRight: '1px solid rgba(255,255,255,.4)', borderRadius: '9px 0 0 9px', padding: '7px 12px', cursor: resolvingBulk || !items.length ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !items.length ? 0.65 : 1, whiteSpace: 'nowrap', boxShadow: '0 3px 9px rgba(16,185,129,.18)' }}
               >
                 {resolvingBulk
                   ? 'Resolving…'
                   : resolveMode === 'filtered'
-                    ? `Mark as resolved (${num(totalCount)})`
+                    ? `Incident Actions (${num(totalCount)})`
                     : resolveMode === 'page'
-                      ? `Mark as resolved (${num(currentPageIds.length)})`
+                      ? `Incident Actions (${num(currentPageIds.length)})`
                       : resolveMode === 'selected'
-                        ? `Mark as resolved (${num(selectedForResolve.size)})`
+                        ? `Incident Actions (${num(selectedForResolve.size)})`
                         : selectedForResolve.size > 0
-                          ? `Mark as resolved (${num(selectedForResolve.size)})`
-                        : 'Mark as resolved'}
+                          ? `Incident Actions (${num(selectedForResolve.size)})`
+                        : 'Incident Actions'}
               </button>
               <button
                 type="button"
                 className="vq-inc-resolve"
-                aria-label="Choose resolve action"
-                onClick={() => setResolveMenuOpen((open) => !open)}
+                aria-label="Choose incident action"
+                onClick={() => { setResolveMenuStep('actions'); setResolveMenuOpen((open) => !open); }}
                 disabled={resolveDisabled}
                 title={!items.length ? 'No incidents available to resolve.' : undefined}
                 aria-expanded={resolveMenuOpen && !resolveDisabled}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderLeft: 0, borderRadius: '0 7px 7px 0', padding: '0 7px', cursor: resolveDisabled ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? 0.65 : 1 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#00b85c', border: '1px solid #16c978', borderLeft: 0, borderRadius: '0 9px 9px 0', padding: '0 9px', cursor: resolveDisabled ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? 0.65 : 1 }}
               >
                 <ChevronDown size={13} />
               </button>
             </div>
             {resolveMenuOpen && !resolveDisabled && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', ...resolveMenuLayout, boxSizing: 'border-box', zIndex: 300, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 16, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
-                <div style={{ padding: '4px 10px 9px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Resolve scope</div>
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', ...resolveMenuLayout, boxSizing: 'border-box', zIndex: 300, padding: 10, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, boxShadow: '0 16px 38px rgba(15,23,42,.2), 0 3px 8px rgba(15,23,42,.08)' }}>
+                {resolveMenuStep === 'actions' ? (
+                  <div style={{ display: 'grid', gap: 7 }}>
+                    <div style={{ padding: '3px 5px 4px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Choose an action</div>
+                    <button type="button" onClick={() => { setScopeAction('resolve'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                      <span style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(34,197,94,.14)', color: 'var(--ok)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Check size={16} /></span>
+                      <span style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Resolve</span><span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Mark incidents as resolved</span></span>
+                      <ChevronRight size={14} style={{ marginLeft: 'auto', color: 'var(--tx3)' }} />
+                    </button>
+                    <button type="button" onClick={() => { setScopeAction('report'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                      <span style={{ width: 30, height: 30, borderRadius: 8, background: 'color-mix(in srgb, var(--blue) 14%, transparent)', color: 'var(--blue)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><FileText size={15} /></span>
+                      <span style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Report</span><span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Add a report to incidents</span></span>
+                      <ChevronRight size={14} style={{ marginLeft: 'auto', color: 'var(--tx3)' }} />
+                    </button>
+                  </div>
+                ) : <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 6px 9px' }}>
+                  <span style={{ color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>{scopeAction === 'report' ? 'Report scope' : 'Resolve scope'}</span>
+                  <button type="button" onClick={() => setResolveMenuStep('actions')} aria-label="Back to incident actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 7px', border: '1px solid var(--bd)', borderRadius: 7, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}><ChevronLeft size={13} /> Back</button>
+                </div>
                 {resolveMode !== 'filtered' && resolveMode !== 'page' && selectedForResolve.size > 0 && (
                   <label onMouseEnter={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'rgba(99,102,241,.10)'; }} onMouseLeave={(e) => { if (!(resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0))) e.currentTarget.style.background = 'transparent'; }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 10px', borderRadius: 11, background: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 'rgba(34,197,94,.16)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: (resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)) ? 650 : 500, transition: 'background .15s' }}>
                     <input type="radio" name="resolve-scope" checked={resolveMode === 'selected' || (!resolveMode && selectedForResolve.size > 0)} onChange={() => handleResolveScope('selected')} disabled={resolvingBulk} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
@@ -2607,9 +2759,9 @@ export default function IncidentCenter() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                   <button
                     type="button"
-                    onClick={handlePrimaryResolve}
-                    disabled={resolvingBulk || !resolveMode}
-                    style={{ width: '100%', padding: '10px 12px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg, #16c978, #00b85c)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: resolvingBulk || !resolveMode ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !resolveMode ? 0.6 : 1, boxShadow: '0 5px 12px rgba(16,185,129,.22)' }}
+                    onClick={scopeAction === 'report' ? openReportResolution : handlePrimaryResolve}
+                    disabled={resolvingBulk || !(resolveMode || selectedForResolve.size)}
+                    style={{ width: '100%', padding: '10px 12px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg, #16c978, #00b85c)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: resolvingBulk || !(resolveMode || selectedForResolve.size) ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !(resolveMode || selectedForResolve.size) ? 0.6 : 1, boxShadow: '0 5px 12px rgba(16,185,129,.22)' }}
                   >
                     Apply selection
                   </button>
@@ -2628,6 +2780,7 @@ export default function IncidentCenter() {
                   </button>
                   )}
                 </div>
+                </>}
               </div>
             )}
           </div>
@@ -3067,6 +3220,25 @@ export default function IncidentCenter() {
         loading={deletingAll}
       />
 
+      {reportResolveOpen && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,13,30,.58)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
+          <div role="dialog" aria-modal="true" aria-label="Report Incidents" style={{ width: 'min(440px, 100%)', boxSizing: 'border-box', background: 'var(--bg1solid)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 16, padding: 24, boxShadow: '0 24px 70px rgba(0,0,0,.28)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <span style={{ width: 40, height: 40, borderRadius: 11, display: 'grid', placeItems: 'center', color: 'var(--blue)', background: 'color-mix(in srgb, var(--blue) 12%, var(--bg2))', flexShrink: 0 }}><FileText size={20} /></span>
+              <div><h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Report Incidents</h3><span style={{ color: 'var(--tx3)', fontSize: 11.5 }}>Add details to the selected incidents</span></div>
+            </div>
+            <p style={{ color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '10px 12px', fontSize: 12.5, margin: '0 0 18px' }}>Report <strong style={{ color: 'var(--tx)' }}>{reportScope?.count || 0} incident{reportScope?.count === 1 ? '' : 's'}</strong>{reportScope?.mode === 'filtered' ? ' matching the current filters across all pages' : reportScope?.mode === 'page' ? ' on this page' : ' selected'}?</p>
+            <label htmlFor="bulk-resolve-report" style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 650, color: 'var(--tx)' }}>Report description <span style={{ color: 'var(--crit)' }}>*</span></label>
+            <textarea id="bulk-resolve-report" value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} disabled={resolvingBulk} rows={4} placeholder="Describe the incidents and actions taken..." style={{ width: '100%', boxSizing: 'border-box', borderRadius: 10, border: '1px solid var(--bd2)', background: 'var(--bg2)', color: 'var(--tx)', padding: '12px 14px', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.5, resize: 'vertical' }} />
+            {reportResolveError && <p role="alert" style={{ color: 'var(--crit)', fontSize: 12, margin: '8px 0 0' }}>{reportResolveError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--bd)' }}>
+              <button type="button" disabled={resolvingBulk} onClick={() => setReportResolveOpen(false)} style={{ padding: '9px 17px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)', color: 'var(--tx)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button type="button" disabled={resolvingBulk} onClick={handleConfirmReportResolve} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 18px', border: 0, borderRadius: 9, background: 'var(--blue)', color: '#fff', fontWeight: 650, cursor: resolvingBulk ? 'wait' : 'pointer', opacity: resolvingBulk ? .65 : 1 }}><FileText size={15} />{resolvingBulk ? 'Reporting...' : 'Submit Report'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DeleteConfirmation
         open={!!resolveConfirm}
         icon={<Check className="text-[var(--ok)] h-8 w-8" />}
@@ -3080,7 +3252,7 @@ export default function IncidentCenter() {
           : resolveConfirm?.mode === 'page'
             ? `Mark all ${resolveConfirm.count} incidents on this page as resolved?`
             : `Mark ${resolveConfirm?.count || 0} selected incident${resolveConfirm?.count === 1 ? '' : 's'} as resolved?`}
-        confirmLabel="Mark as resolved"
+        confirmLabel="Resolve Incident"
         confirmClass="bg-[var(--ok)] text-white hover:opacity-90 shadow-sm shadow-[var(--ok)]/20"
         onClose={() => !resolvingBulk && setResolveConfirm(null)}
         onConfirm={handleConfirmBulkResolve}

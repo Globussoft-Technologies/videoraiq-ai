@@ -18,7 +18,7 @@ import ShiftSelect from './ShiftSelect';
 import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import { COMPACT_TOAST } from './toastOptions';
-import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
+import { EMAIL_EMOJI_ERROR, hasEmailEmoji, isValidEmailFormat } from '@/utils/emailValidation';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -198,7 +198,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     if (!lastName.trim()) errs.lastName = 'Last name is required';
     else if (lastName.trim().length > 30) errs.lastName = 'Last name must be at most 30 characters';
     if (hasEmailEmoji(email)) errs.email = EMAIL_EMOJI_ERROR;
-    else if (email.trim() && !/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
+    else if (email.trim() && !isValidEmailFormat(email))
       errs.email = 'Invalid email format';
     if (!designation.trim()) errs.designation = 'Designation is required';
     if (!departmentId) errs.department = 'Department is required';
@@ -355,6 +355,12 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                   }
                   setEmail(e.target.value);
                   setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                onBlur={() => {
+                  const value = email.trim();
+                  if (value && !isValidEmailFormat(value)) {
+                    setErrors((prev) => ({ ...prev, email: 'Invalid email format' }));
+                  }
                 }}
               />
               {errors.email && <p className="text-xs text-[var(--crit)] mt-1">{errors.email}</p>}

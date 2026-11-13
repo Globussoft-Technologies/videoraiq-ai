@@ -560,6 +560,8 @@ function ScheduleFieldDropdown({
   placeholder,
   onChange,
   disabled,
+  readOnly = false,
+  onReadOnlyClick,
   icon: Icon,
   searchable = false,
   minMenuWidth = 260
@@ -691,8 +693,8 @@ function ScheduleFieldDropdown({
       <button
         ref={triggerRef}
         type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled && !readOnly}
+        onClick={() => readOnly ? onReadOnlyClick?.() : !disabled && setOpen((o) => !o)}
         style={{
           width: '100%',
           height: 48,
@@ -708,7 +710,7 @@ function ScheduleFieldDropdown({
           background: 'var(--bg1solid)',
           border: `1px solid ${open ? 'var(--violet)' : 'var(--bd2)'}`,
           color: disabled ? 'var(--tx3)' : 'var(--tx)',
-          cursor: disabled ? 'not-allowed' : 'pointer',
+          cursor: disabled && !readOnly ? 'not-allowed' : 'pointer',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -717,7 +719,7 @@ function ScheduleFieldDropdown({
             {value || placeholder}
           </span>
         </div>
-        <ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--tx2)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+        {!readOnly && <ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--tx2)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />}
       </button>
 
       {/* Floating label positioned on the top border */}
@@ -1841,8 +1843,8 @@ export default function DetectionDetailPanel({
                       label="Time zone"
                       value={timezone}
                       options={[timezone]}
-                      disabled
-                      onChange={() => {}}
+                      readOnly
+                      onReadOnlyClick={() => toast.info('Time zone can be managed from the Settings page.')}
                       icon={Globe}
                     />
 

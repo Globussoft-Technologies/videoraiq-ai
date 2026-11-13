@@ -1699,9 +1699,9 @@ export default function Detections() {
       >
         <div
           className="vq-det-toolbar-row"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}
         >
-          <div className="vq-det-search" style={{ position: 'relative', flex: '0 0 200px', minWidth: 170 }}>
+          <div className="vq-det-search" style={{ position: 'relative', flex: '0 1 200px', minWidth: 170 }}>
             <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
             <input
               value={search}
@@ -1721,11 +1721,22 @@ export default function Detections() {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flex: '1 1 320px',
+              minWidth: 0,
+              maxWidth: '100%',
+              flexWrap: 'wrap',
+              alignContent: 'flex-start',
+            }}
+          >
             {[{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES].map((c) => {
               const active = category === c.key;
               return (
-                <button key={c.key} type="button" onClick={() => setCategory(c.key)} style={chipStyle(active, !!c.color)}>
+                <button key={c.key} type="button" onClick={() => setCategory(c.key)} style={{ ...chipStyle(active, !!c.color), flex: '0 0 auto' }}>
                   {c.color && (
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: active ? '#fff' : c.color, flex: '0 0 auto' }} />
                   )}

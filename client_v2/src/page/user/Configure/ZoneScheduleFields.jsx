@@ -350,7 +350,6 @@ export default function ZoneScheduleFields({
 
 /** Read-only global time zone shared by every detection zone form. */
 export function TimezoneField({ controlHeight = 34 }) {
-  const timezones = useTimezones();
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(true);
   const message = 'Time zone can be managed from the Settings page.';
@@ -364,40 +363,21 @@ export function TimezoneField({ controlHeight = 34 }) {
     return () => { alive = false; };
   }, []);
 
-  const explain = () => toast.info(message);
-  // Keep the saved value visible even if the options have not loaded.
-  const options = value && !timezones.includes(value)
-    ? [...timezones, value]
-    : timezones;
-
   return (
     <div>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Time Zone</label>
-      <div
-        role="button"
-        tabIndex={0}
+      <button type="button"
         aria-label={`Time zone: ${value || (loading ? 'Loading' : 'Not set')}. ${message}`}
         title={message}
-        onClick={explain}
-        onKeyDown={event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            explain();
-          }
+        onClick={() => toast.info(message)}
+        style={{
+          height: controlHeight, display: 'flex', alignItems: 'center', padding: '0 10px',
+          borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)',
+          boxSizing: 'border-box', fontSize: 12.5, color: 'var(--tx)', width: '100%', cursor: 'pointer',
         }}
-        style={{ cursor: 'not-allowed', borderRadius: 7 }}
       >
-        <div style={{ pointerEvents: 'none' }}>
-          <Dropdown
-            value={value}
-            options={options}
-            placeholder={loading ? 'Loading time zone?' : 'Not set'}
-            disabled
-            width="100%"
-            height={controlHeight}
-          />
-        </div>
-      </div>
+        {value || (loading ? 'Loading time zone…' : 'Not set')}
+      </button>
     </div>
   );
 }

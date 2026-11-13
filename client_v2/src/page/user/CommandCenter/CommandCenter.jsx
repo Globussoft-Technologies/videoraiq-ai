@@ -24,6 +24,9 @@ const CAMERA_TYPE_OPTIONS = [
   { id: 'checkout', label: 'Check Out' },
 ];
 const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
+// Match the Incident Center's default feed: reported and resolved incidents
+// have their own tabs and do not contribute to the High tile.
+const ACTIVE_STATUS_FILTER = ['new'];
 
 function severityFilterValue(value) {
   if (value === 'high') return ['high', 'High', 'HIGH'];
@@ -41,10 +44,14 @@ async function getDashboardIncidentCounts(filters = {}) {
   const counts = result.counts || {};
 
   if (counts.severity && counts.status) {
+    const highActive = await fetchDashboardCountIncidents(
+      { skip: 0, limit: 1 },
+      { ...filters, severity: severityFilterValue('high'), statusFilter: ACTIVE_STATUS_FILTER },
+    );
     return {
       severity: {
         all: Number(counts.severity.all ?? result.totalCount) || 0,
-        high: Number(counts.severity.high) || 0,
+        high: Number(highActive.totalCount) || 0,
         moderate: Number(counts.severity.moderate ?? counts.severity.medium) || 0,
         low: Number(counts.severity.low) || 0,
       },
@@ -58,7 +65,7 @@ async function getDashboardIncidentCounts(filters = {}) {
   }
 
   const [high, active, resolved, reported] = await Promise.all([
-    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
+    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, severity: severityFilterValue('high'), statusFilter: ACTIVE_STATUS_FILTER }),
     fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'new' }),
     fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'resolved' }),
     fetchDashboardCountIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'reported' }),
@@ -85,12 +92,11 @@ function toCount(value) {
   return Number.isFinite(count) ? count : 0;
 }
 
-function extractKpiDayCounts(result = {}) {
-  const counts = result.counts || {};
+function extractKpiDayCounts(counts = {}, fallbackTotal = 0) {
   return {
     activeAlerts: toCount(counts.status?.new),
     highAlerts: toCount(counts.severity?.high),
-    events: toCount(counts.severity?.all ?? counts.status?.all ?? result.totalCount),
+    events: toCount(counts.severity?.all ?? counts.status?.all ?? fallbackTotal),
     resolved: toCount(counts.status?.resolved),
   };
 }
@@ -104,13 +110,13 @@ async function getDashboardDailyComparison(filters = {}, today, previousDay) {
   });
 
   const [todayResult, previousResult] = await Promise.all([
-    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, dailyFilter(today)),
-    fetchDashboardCountIncidents({ skip: 0, limit: 1 }, dailyFilter(previousDay)),
+    getDashboardIncidentCounts(dailyFilter(today)),
+    getDashboardIncidentCounts(dailyFilter(previousDay)),
   ]);
 
   return {
-    today: extractKpiDayCounts(todayResult),
-    previous: extractKpiDayCounts(previousResult),
+    today: extractKpiDayCounts(todayResult, todayResult.severity?.all),
+    previous: extractKpiDayCounts(previousResult, previousResult.severity?.all),
   };
 }
 

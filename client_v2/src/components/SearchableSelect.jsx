@@ -9,6 +9,7 @@ export default function SearchableSelect({
   placeholder = 'Select…',
   searchPlaceholder = 'Search…',
   emptyLabel = 'No options found',
+  leadingIcon: LeadingIcon,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -62,7 +63,7 @@ export default function SearchableSelect({
         style={{
           width: '100%',
           height: 38,
-          padding: '0 34px 0 12px',
+          padding: `0 34px 0 ${LeadingIcon ? 40 : 12}px`,
           boxSizing: 'border-box',
           borderRadius: 9,
           background: 'var(--bg2)',
@@ -80,6 +81,7 @@ export default function SearchableSelect({
       >
         {value || placeholder}
       </button>
+      {LeadingIcon && <LeadingIcon size={18} style={{ position: 'absolute', left: 12, top: 19, transform: 'translateY(-50%)', color: 'var(--tx2)', pointerEvents: 'none' }} />}
       <ChevronDown
         size={14}
         style={{

@@ -24,6 +24,7 @@ export default function FullscreenZoomSurface({
   enabled = false,
   resetKey,
   toolbarStyle,
+  compactToolbar = false,
   children,
 }) {
   const viewportRef = useRef(null);
@@ -160,6 +161,7 @@ export default function FullscreenZoomSurface({
       {enabled && (
         <DraggableZoomControls
           resetKey={resetKey}
+          handleStyle={compactToolbar ? { width: 20, height: 26 } : undefined}
           style={{
             position: 'absolute',
             top: 14,
@@ -167,9 +169,9 @@ export default function FullscreenZoomSurface({
             zIndex: 30,
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '8px 10px',
-            borderRadius: 10,
+            gap: compactToolbar ? 4 : 8,
+            padding: compactToolbar ? '4px 6px' : '8px 10px',
+            borderRadius: compactToolbar ? 8 : 10,
             background: 'rgba(15,23,42,0.72)',
             border: '1px solid rgba(255,255,255,0.15)',
             backdropFilter: 'blur(8px)',
@@ -188,9 +190,9 @@ export default function FullscreenZoomSurface({
               style={{
                 ...toolbarButtonStyle,
                 width: 'auto',
-                minWidth: 58,
+                minWidth: compactToolbar ? 48 : 58,
                 padding: '0 12px',
-                fontSize: 12,
+                fontSize: compactToolbar ? 11 : 12,
                 fontWeight: 700,
                 fontFamily: 'var(--mono)',
                 letterSpacing: '.3px',
@@ -206,16 +208,16 @@ export default function FullscreenZoomSurface({
                 zoomBy(-ZOOM_STEP);
             }}
             title="Zoom out"
-            style={toolbarButtonStyle}
+            style={compactToolbar ? { ...toolbarButtonStyle, width: 26, height: 26, borderRadius: 7 } : toolbarButtonStyle}
           >
             <Minus size={14} />
           </button>
           <span
             style={{
-              minWidth: 52,
+              minWidth: compactToolbar ? 42 : 52,
               textAlign: 'center',
               fontFamily: 'var(--mono)',
-              fontSize: 12,
+              fontSize: compactToolbar ? 11 : 12,
               fontWeight: 700,
               letterSpacing: '.4px',
             }}
@@ -229,7 +231,7 @@ export default function FullscreenZoomSurface({
                 zoomBy(ZOOM_STEP);
             }}
             title="Zoom in"
-            style={toolbarButtonStyle}
+            style={compactToolbar ? { ...toolbarButtonStyle, width: 26, height: 26, borderRadius: 7 } : toolbarButtonStyle}
           >
             <Plus size={14} />
           </button>

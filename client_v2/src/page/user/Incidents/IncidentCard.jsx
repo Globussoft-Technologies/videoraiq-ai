@@ -185,7 +185,7 @@ export async function apiMarkResolved(id, incidentType, resolved) {
   return incident;
 }
 
-async function apiReport(incidentId, description) {
+export async function apiReport(incidentId, description) {
   const token = getAccessToken();
   const res = await axios.post(
     `${import.meta.env.VITE_BACKEND}/incidents/update-report-status`,
@@ -396,6 +396,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
       const savedIncident = await apiMarkResolved(item._id || item.id, item.incidentType, next);
       setLocalResolved(savedIncident.resolved);
       onResolvedChange?.(item._id || item.id, savedIncident.resolved, savedIncident);
+      toast.success(next ? 'Incident resolved' : 'Incident reopened');
       setSaveFlash({ text: next ? 'Resolved' : 'Mark as resolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch (err) {

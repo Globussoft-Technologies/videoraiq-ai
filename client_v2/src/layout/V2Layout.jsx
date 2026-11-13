@@ -48,8 +48,12 @@ function notificationTarget(alert, navigate) {
       },
     });
   }
-  if (!alert._id) return undefined;
-  return () => navigate('/alerts', { state: { alertId: alert._id } });
+  const alertId = alert?._id || alert?.id || alert?.incidentId;
+  if (!alertId) return undefined;
+  return () => navigate(
+    `/alerts?alertId=${encodeURIComponent(String(alertId))}`,
+    { state: { alertId: String(alertId), alert } },
+  );
 }
 
 // Read notification ids persist locally so the unread badge stays cleared

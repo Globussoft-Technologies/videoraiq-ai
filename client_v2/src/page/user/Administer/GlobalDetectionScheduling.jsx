@@ -1592,28 +1592,24 @@ export default function GlobalDetectionScheduling({ canEdit = true, cacheScope =
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-                <div>
-                  <FieldLabel>
-                    <Globe size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
-                    Time zone
-                  </FieldLabel>
-                    <div style={{ minHeight: 40, display: 'flex', alignItems: 'center', padding: '0 11px', border: '1px solid var(--bd)', borderRadius: 8, color: 'var(--tx2)', background: 'var(--bg2)', fontSize: 12 }}>
-                      {timezone}
-                    </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, paddingTop: 8 }}>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ minHeight: 40, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', border: '1px solid var(--bd)', borderRadius: 9, color: 'var(--tx2)', background: 'var(--bg2)', fontSize: 12.5 }}>
+                    <Globe size={18} style={{ flexShrink: 0 }} />
+                    {timezone}
+                  </div>
+                  <span style={{ position: 'absolute', top: 0, left: 14, transform: 'translateY(-50%)', padding: '0 6px', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 11, fontWeight: 600, pointerEvents: 'none' }}>Time zone</span>
                 </div>
-                <div>
-                  <FieldLabel>
-                    <Clock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
-                    Mode
-                  </FieldLabel>
+                <div style={{ position: 'relative' }}>
                   <SearchableSelect
                     value={form.mode === 'always' ? 'Always' : 'Custom'}
                     options={['Always', 'Custom']}
                     onChange={(value) => setForm((current) => ({ ...current, mode: value.toLowerCase() }))}
                     disabled={!canEdit}
                     placeholder="Select mode"
+                    leadingIcon={Clock}
                   />
+                  <span style={{ position: 'absolute', top: 0, left: 14, transform: 'translateY(-50%)', padding: '0 6px', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 11, fontWeight: 600, pointerEvents: 'none', zIndex: 21 }}>Mode</span>
                 </div>
               </div>
 
