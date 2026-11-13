@@ -8,7 +8,6 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
-  machineOpsDetectionSettings: "Machine Operations",
   genderAgeDetectionSettings: "Gender & Age Detection",
   emotionDetectionSettings: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
@@ -69,7 +68,6 @@ export const DETECTION_TYPES = {
 };
 
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
-  "machineOpsDetectionSettings",
   "workingAtHeightDetectionSettings",
   "oilLeakageDetectionSettings",
   "equipmentOilLeakageDetectionSettings",
@@ -89,7 +87,6 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
-  "machineOpsDetection",
   "workingAtHeightDetection",
   "oilLeakageDetection",
   "equipmentOilLeakageDetection",
@@ -120,7 +117,6 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
-  machineOpsDetectionSettings: { permissionKey: "machineOpsLogs", logsConfigKey: "machineOpsLogs" },
   genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
   emotionDetectionSettings: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
   uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
@@ -175,7 +171,6 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
 export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles", "genderAgeCount"];
 
 export const TYPE_MAP = {
-  machineOpsDetectionSettings: "machineOpsDetection",
   genderAgeDetectionSettings: "genderAgeDetection",
   emotionDetectionSettings: "emotionDetection",
   uniformDetectionSettings: "uniformDetection",
@@ -237,7 +232,6 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 });
 
 export const DETECTION_MODES_MAP = {
-  machineOpsDetectionSettings: ["machineOpsDetectionSettings"],
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
   emotionDetectionSettings: ["emotionDetectionSettings"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
@@ -306,7 +300,6 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
-  machineOpsDetectionSettings: "machineOpsDetectionSettings",
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
   emotionDetectionSettings: "emotionDetectionSettings",
   uniformDetectionSettings: "uniformDetectionSettings",
@@ -452,7 +445,6 @@ export const dsLogicNamesFor = (settingType) => {
 };
 
 export const toPopulateDetections = [
-  { path: "detections.machineOpsDetectionSettings.id" },
   { path: "detections.genderAgeDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
@@ -1805,9 +1797,4 @@ export const uniformDetectionSettings = {
       ],
     },
   },
-};
-
-export const machineOpsDetectionSettings = {
-  name: "Machine Operations", settingType: "machineOpsDetectionSettings", enabled: false,
-  settings: { machines: [], levelOfImportance: "low", trigger_notification: true, metricType: "gauge" },
 };

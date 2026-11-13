@@ -190,7 +190,6 @@ router.get(
   viewAccessCheck,
   incidentsController.getUnauthorizedAccessLogs,
 );
-router.get("/logs/machine-ops-detection", viewAccessCheck, incidentsController.getMachineOpsLogs);
 router.get(
   "/logs/door-detection",
   viewAccessCheck,

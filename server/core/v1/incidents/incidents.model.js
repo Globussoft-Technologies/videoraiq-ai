@@ -377,19 +377,6 @@ const SafetyHelmetIncident = Incident.discriminator('personalProtectiveEquipment
 // A door left open (or closed) too long, per DS's door contract. One incident
 // per DS post: each alert (every threshold) and the resolved post. Posts of one
 // episode share stateSince; eventId names the post (see doorIncident.js).
-const MachineOpsSchema = new Schema({
-  eventId: { type: String, required: true, maxlength: 128 },
-  machineId: { type: String, required: true, maxlength: 128 },
-  machineName: { type: String, required: true, maxlength: 128 },
-  machineState: { type: String, enum: ["ON", "OFF"], required: true },
-  profileId: String,
-  triggerNotification: { type: Boolean, default: true },
-});
-MachineOpsSchema.index({ userId: 1, channelId: 1, machineId: 1, eventId: 1 },
-  { unique: true, partialFilterExpression: { incidentType: "machineOpsDetection" } });
-MachineOpsSchema.index({ userId: 1, channelId: 1, machineId: 1, timeOfIncident: -1 });
-const MachineOpsIncident = Incident.discriminator('machineOpsDetection', MachineOpsSchema);
-
 const DoorStatusSchema = new Schema({
   eventId: { type: String, default: null },
   zoneName: { type: String, default: null },
@@ -994,7 +981,6 @@ export  {
   CroudIncident,
   SafetyHelmetIncident,
   DoorStatusIncident,
-  MachineOpsIncident,
   LightStatusIncident,
   BagDetectionIncident,
   VehicleDetectionIncident,

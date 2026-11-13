@@ -51,10 +51,6 @@ const lateArrivalDescription = (item) => {
   return description.replace(minuteText[0], `${duration} after the grace deadline.`);
 };
 const INCIDENT_LIST_DETAILS = {
-  machineOpsDetection: [
-    { field: 'machineName', label: 'Machine', width: 160 },
-    { field: 'machineState', label: 'Machine State', width: 120 },
-  ],
   emotionDetection: [
     { field: 'emotionGroup', label: 'Emotion Group', width: 140 },
     { field: 'emotion', label: 'Emotion', width: 120 },
@@ -1523,7 +1519,7 @@ function IncidentListRow({
                   done: formatDoorStatus(item),
                 }[field]}
               </span>
-            ) : ['emotionGroup', 'emotion', 'machineName', 'machineState'].includes(field) ? (
+            ) : field === 'emotionGroup' || field === 'emotion' ? (
               <span>{item[field] || '--'}</span>
             ) : field === 'vehicleNumber' ? (
               <span>{item.vehicleNumber || '—'}</span>

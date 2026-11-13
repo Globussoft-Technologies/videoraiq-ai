@@ -72,7 +72,6 @@ const fetchAllForExport = async (config, params) => {
       } : {}),
       emotion: item.emotion || '--',
       ...(config.showGenderAgeFields ? { targetGender: item.targetGender || '--', zone: item.zone || '--' } : {}),
-      machineId: item.machineId || '--', machineName: item.machineName || '--', machineState: item.machineState || '--',
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -118,7 +117,6 @@ const fetchAllForExport = async (config, params) => {
 const buildExportColumns = (config) => {
   const cols = [];
   if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
-  if (config.showMachineOpsFields) cols.push({ key: 'machineName', label: 'Machine' }, { key: 'machineState', label: 'Machine State' }, { key: 'machineId', label: 'Machine ID' });
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });
   cols.push(
     { key: 'nvrName', label: 'NVR Name' },

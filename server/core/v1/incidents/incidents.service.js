@@ -1,5 +1,3 @@
-import { findMachineOpsRetry } from "./machineOpsIncident.js";
-import { normalizeMachineOpsIncident } from "../../../services/machineOpsDetection.js";
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
@@ -39,7 +37,6 @@ import {
   CroudIncident,
   SafetyHelmetIncident,
   DoorStatusIncident,
-  MachineOpsIncident,
   LightStatusIncident,
   BagDetectionIncident,
   VehicleDetectionIncident,
@@ -60,7 +57,6 @@ import {
 } from "./incidents.model.js";
 import { deleteMedia } from "../../../utils/mediaStorage.js";
 const modelMap = {
-  machineOpsDetection: MachineOpsIncident,
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
   motionDetection: MotionIncident,
@@ -202,9 +198,6 @@ if (!fs.existsSync(cacheDir)) {
 class IncidentsService {
   async createIncidents(req, res, next) {
     try {
-      try { normalizeMachineOpsIncident(req.body); }
-      catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
-
       normalizeVehicleObstructionPayload(req.body);
       try { normalizeUniformIncident(req.body); }
       catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
@@ -247,14 +240,6 @@ class IncidentsService {
         return res.status(400).json({ error: "channelId is required" });
       }
 
-      if (incidentType === "machineOpsDetection") {
-        if (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId) ||
-            (req.body.cameraId && String(req.body.cameraId) !== String(channelId))) {
-          return res.status(400).json({ error: "Machine camera/NVR does not belong to this admin" });
-        }
-        const retry = await findMachineOpsRetry(MachineOpsIncident, { userId, channelId, body: req.body });
-        if (retry) return res.status(200).json(Response.userSuccessResp("Incident already processed", { Incident: retry.toObject(), duplicate: true }));
-      }
       const Model = modelMap[incidentType];
       if (!Model) {
         return res
@@ -646,15 +631,7 @@ class IncidentsService {
 
 
 
-      if (incidentType === "machineOpsDetection") newIncident.timeOfIncident = req.body.timeOfIncident;
-      let incidentObj;
-      try { incidentObj = await newIncident.save(); }
-      catch (error) {
-        if (incidentType !== "machineOpsDetection" || error.code !== 11000) throw error;
-        const retry = await findMachineOpsRetry(MachineOpsIncident, { userId, channelId, body: req.body });
-        if (!retry) throw error;
-        return res.status(200).json(Response.userSuccessResp("Incident already processed", { Incident: retry.toObject(), duplicate: true }));
-      }
+      const incidentObj = await newIncident.save();
       let saved = incidentObj.toObject();
 
       // No real channel to enrich from / route alerts through — live-demo

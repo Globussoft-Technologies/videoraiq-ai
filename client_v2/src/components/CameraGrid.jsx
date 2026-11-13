@@ -37,7 +37,6 @@ export const ENGINE_LABEL_MAP = {
   unattendedBaggageDetectionSettings:'Unattended Baggage',
   personalProtectiveEquipmentSettings:'PPE Compliance',
   crowdDetectionSettings:            'Crowd Detection',
-  machineOpsDetectionSettings: 'Machine Operations',
   doorDetectionSettings:             'Door Detection',
   lightDetectionSettings:            'Light Detection',
   vehicleDetectionSettings:          'Vehicle Detection',

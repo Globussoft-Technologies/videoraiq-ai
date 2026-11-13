@@ -1,5 +1,3 @@
-import { findMachineOpsRetry } from "../../v1/incidents/machineOpsIncident.js";
-import { normalizeMachineOpsIncident } from "../../../services/machineOpsDetection.js";
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import { getGenderAgeSummary } from "./genderAgeSummary.js";
 import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
@@ -53,7 +51,6 @@ import {
   CroudIncident,
   SafetyHelmetIncident,
   DoorStatusIncident,
-  MachineOpsIncident,
   LightStatusIncident,
   BagDetectionIncident,
   VehicleDetectionIncident,
@@ -94,7 +91,6 @@ import {
 import { recordSolderPanel } from "./solderLine.service.js";
 import { findDoorRetry, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
 const modelMap = {
-  machineOpsDetection: MachineOpsIncident,
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
   motionDetection: MotionIncident,
@@ -366,8 +362,6 @@ const LOG_SORT_FIELDS = {
   colour: "color",
   year: "year",
   currentStatus: "currentStatus",
-  machineName: "machineName",
-  machineState: "machineState",
   count: "count",
   fireCount: "fireCount",
   smokeCount: "smokeCount",
@@ -406,9 +400,6 @@ if (!fs.existsSync(cacheDir)) {
 class IncidentsService {
   async createIncidents(req, res, next) {
     try {
-      try { normalizeMachineOpsIncident(req.body); }
-      catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
-
       normalizeVehicleObstructionPayload(req.body);
       try { normalizeUniformIncident(req.body); }
       catch (error) { return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!")); }
@@ -462,14 +453,6 @@ class IncidentsService {
         return res.status(400).json({ error: "channelId is required" });
       }
 
-      if (incidentType === "machineOpsDetection") {
-        if (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId) ||
-            (req.body.cameraId && String(req.body.cameraId) !== String(channelId))) {
-          return res.status(400).json({ error: "Machine camera/NVR does not belong to this admin" });
-        }
-        const retry = await findMachineOpsRetry(MachineOpsIncident, { userId, channelId, body: req.body });
-        if (retry) return res.status(200).json(Response.userSuccessResp("Incident already processed", { Incident: retry.toObject(), duplicate: true }));
-      }
       const Model = modelMap[incidentType];
       if (!Model) {
         return res
@@ -1063,15 +1046,7 @@ class IncidentsService {
 
 
 
-      if (incidentType === "machineOpsDetection") newIncident.timeOfIncident = req.body.timeOfIncident;
-      let incidentObj;
-      try { incidentObj = await newIncident.save(); }
-      catch (error) {
-        if (incidentType !== "machineOpsDetection" || error.code !== 11000) throw error;
-        const retry = await findMachineOpsRetry(MachineOpsIncident, { userId, channelId, body: req.body });
-        if (!retry) throw error;
-        return res.status(200).json(Response.userSuccessResp("Incident already processed", { Incident: retry.toObject(), duplicate: true }));
-      }
+      const incidentObj = await newIncident.save();
       let saved = incidentObj.toObject();
 
       // No real channel to enrich from / route alerts through — live-demo
@@ -6096,19 +6071,6 @@ console.log(result,'result');
       logger.error(error);
       next(new AppError("Failed to fetch unauthorized access logs", 500));
     }
-  }
-
-  async getMachineOpsLogs(req, res, next) {
-    try {
-      const { machineId, machineState } = req.query;
-      if ((machineId !== undefined && (typeof machineId !== 'string' || !machineId.trim())) ||
-          (machineState !== undefined && !['ON', 'OFF'].includes(machineState))) {
-        return res.status(400).json({ error: 'Invalid machineId or machineState filter' });
-      }
-      return await this._fetchIncidentLogs({ req, res, incidentType: 'machineOpsDetection',
-        extraMatch: { ...(machineId ? { machineId: machineId.trim() } : {}), ...(machineState ? { machineState } : {}) },
-        searchFields: ['machineId', 'machineName', 'machineState', 'incidentName', 'zone'], postLookupSearch: true });
-    } catch (error) { next(new AppError('Failed to fetch machine operations logs', 500)); }
   }
 
   async getDoorDetectionLogs(req, res, next) {

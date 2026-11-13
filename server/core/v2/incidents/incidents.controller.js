@@ -849,9 +849,6 @@ class IncidentsController {
     return await incidentsService.getUnauthorizedAccessLogs(req, res, next);
   }
 
-  async getMachineOpsLogs(req, res, next) {
-    return await incidentsService.getMachineOpsLogs(req, res, next);
-  }
   async getDoorDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Door Detection logs.' */
