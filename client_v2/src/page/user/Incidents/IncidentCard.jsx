@@ -700,6 +700,12 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               </div>
             </>
           )}
+           {item.incidentType === 'machineOpsDetection' && (
+             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+               <span>{item.machineName || item.machineId}</span>
+               <strong style={{ color: item.machineState === 'ON' ? 'var(--ok)' : 'var(--tx2)' }}>{item.machineState}</strong>
+             </div>
+           )}
            {isDoorDetection && (
              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

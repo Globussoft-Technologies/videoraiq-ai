@@ -399,3 +399,11 @@ export const EMOTION_CONFIG = {
   timeLabel: 'Time of Incident',
   datePickerVariant: 'preset',
 };
+
+export const MACHINE_OPS_CONFIG = {
+  endpoint: '/incidents/logs/machine-ops-detection', title: 'Machine Operations Logs',
+  fileName: 'machine_ops_logs', sheetName: 'Machine Operations', storagePrefix: 'machine_ops',
+  permissionKey: 'machineOpsLogs', accessDenied: "You don't have permission to view Machine Operations Logs.",
+  showMachineOpsFields: true, showStats: false, showStatus: false, tableOnly: true,
+  sortable: true, gridVariant: 'details', datePickerVariant: 'preset',
+};

@@ -653,6 +653,17 @@ const PersonalProtectiveEquipmentSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: PersonalProtectiveEquipmentSchema }),
 );
 
+const MachineOpsDetectionSetting = DetectionSetting.discriminator(
+  "machineOpsDetectionSettings", new mongoose.Schema({ settings: {
+    ...zoneConfigsField,
+    machines: [{ _id: false, machineId: { type: String, required: true }, name: { type: String, required: true },
+      profileId: String, machineZone: [[Number]], indicatorZone: [[Number]] }],
+    levelOfImportance: { type: String, enum: ["low", "moderate", "high"], default: "low" },
+    trigger_notification: { type: Boolean, default: true },
+    metricType: { type: String, default: "gauge" }, referencePoints: Object, videoResolution: [Number],
+  } }),
+);
+
 const DoorDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   imageRequired: {
@@ -1747,6 +1758,7 @@ export {
   CrowdDetectionSetting,
   PersonalProtectiveEquipmentSetting,
   DoorDetectionSetting,
+  MachineOpsDetectionSetting,
   LightDetectionSetting,
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,

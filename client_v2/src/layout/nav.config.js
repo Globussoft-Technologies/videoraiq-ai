@@ -210,6 +210,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs', logsConfigKey: 'attendanceLogs' },
       { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs', logsConfigKey: 'accessLogs' },
+      { key: 'machine-ops', label: 'Machine Operations Logs', path: 'logs/machine-ops', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'machineOpsLogs', logsConfigKey: 'machineOpsLogs' },
       { key: 'door-detection', label: 'Door Logs', path: 'logs/door', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'doorDetectionLogs', logsConfigKey: 'doorDetectionLogs' },
       { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs', logsConfigKey: 'taggedUsers' },
       { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs', logsConfigKey: 'detectedUsers' },

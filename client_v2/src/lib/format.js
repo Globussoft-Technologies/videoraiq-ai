@@ -58,6 +58,8 @@ export function severity(sev) {
 }
 
 const CUSTOM_DETECTION_LABELS = {
+  machineOpsDetection: 'Machine Operations',
+  machineOpsDetectionSettings: 'Machine Operations',
   uniformDetection: 'Uniform Detection',
   uniformDetectionSettings: 'Uniform Detection',
   fireSmokeDetection: 'Fire & Smoke Detection',

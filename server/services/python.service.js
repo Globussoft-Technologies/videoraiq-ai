@@ -1,3 +1,4 @@
+import { buildMachineOpsDetector } from "./machineOpsDetection.js";
 import { buildUniformDetector } from "./uniformDetection.js";
 import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../constants/emotionDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
@@ -45,6 +46,11 @@ const appendIndustrialDetectors = (
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === "machineOpsDetectionSettings") {
+        detectors.push(buildMachineOpsDetector(stockSettings, severity ?? "low"));
+        continue;
+      }
+
       if (name === "genderAgeDetectionSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];

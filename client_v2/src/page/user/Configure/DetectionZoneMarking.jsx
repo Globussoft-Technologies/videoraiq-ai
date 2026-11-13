@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import MachineOpsZoneEditor from './MachineOpsZoneEditor';
 import { createPortal } from 'react-dom';
 import { XRAY_ENABLED } from '@/xray/flag';
 import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw, MoreVertical, Trash2, Undo2, Save } from 'lucide-react';
@@ -1018,6 +1019,10 @@ export default function DetectionZoneMarking({
 
   const addRecipient = (id) => { if (id) persistAlerts([...alertIds, id]); };
   const removeRecipient = (id) => persistAlerts(alertIds.filter(x => x !== id));
+
+  if (activeType?.settingType === 'machineOpsDetectionSettings') {
+    return <MachineOpsZoneEditor key={`${camera?._id}:${activeType.settingId || 'new'}`} camera={camera} activeType={activeType} onSaved={onSaved} onBack={onBack} />;
+  }
 
   return (
     <div style={{ padding: embedded ? 0 : 22, display: 'flex', flexDirection: 'column', gap: 16 }}>

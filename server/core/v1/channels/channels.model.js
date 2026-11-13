@@ -78,6 +78,7 @@ const detectionSettingSchema = new mongoose.Schema(
 
 
 const detectionFields = {
+  machineOpsDetectionSettings: detectionSettingSchema,
   countPersonsSettings: detectionSettingSchema,
   motionDetectionSettings: detectionSettingSchema,
   genericObjectDetectionSettings: detectionSettingSchema,

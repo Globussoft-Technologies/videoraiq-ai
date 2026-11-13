@@ -1,3 +1,4 @@
+import { validateMachineOpsSettings } from "../../../services/machineOpsDetection.js";
 import { acquireDetectionControlLease } from '../../../services/detectionControlLease.js';
 import Admin from "../admin/admin.model.js";
 import {
@@ -19,6 +20,7 @@ import {
   crowdDetectionSettings,
   personalProtectiveEquipmentSettings,
   doorDetectionSettings,
+  machineOpsDetectionSettings,
   lightDetectionSettings,
   vehicleDetectionSettings,
   deskAbsenceSettings,
@@ -59,6 +61,7 @@ import {
   CrowdDetectionSetting,
   PersonalProtectiveEquipmentSetting,
   DoorDetectionSetting,
+  MachineOpsDetectionSetting,
   LightDetectionSetting,
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,
@@ -91,6 +94,7 @@ import clientDetectionAllocationModel from "../clientConfig/clientDetectionAlloc
 import mongoose, { Types } from "mongoose";
 
 const modelMap = {
+  machineOpsDetectionSettings: MachineOpsDetectionSetting,
   countPersonsSettings: CountPersonsDetectionSetting,
   motionDetectionSettings: MotionDetectionSetting,
   genericObjectDetectionSettings: GenericObjectDetectionSetting,
@@ -391,6 +395,8 @@ class DetectionSettingService {
           .json(Response.userFailResp("Validation Failed", error.message));
       }
 
+      const machineOpsValidation = validateMachineOpsSettings(value.settingType, value.settings);
+      if (machineOpsValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", machineOpsValidation.error.message));
       const uniformValidation = DetectionSettingsValidation.validateUniformSettings(value.settingType, value.settings, true);
       if (uniformValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", uniformValidation.error.message));
 
@@ -728,6 +734,8 @@ class DetectionSettingService {
       const settingType = detectionSetting.settingType;
 
       if (value.settings && typeof value.settings === "object") {
+        const machineOpsValidation = validateMachineOpsSettings(settingType, { ...(detectionSetting.settings?.toObject?.() || detectionSetting.settings), ...value.settings });
+        if (machineOpsValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", machineOpsValidation.error.message));
         const thresholdValidation =
           DetectionSettingsValidation.validateConfidenceThresholds(
             settingType,
@@ -2052,6 +2060,7 @@ class DetectionSettingService {
         crowdDetectionSettings,
         personalProtectiveEquipmentSettings,
         doorDetectionSettings,
+        machineOpsDetectionSettings,
         lightDetectionSettings,
         vehicleDetectionSettings,
         deskAbsenceSettings,

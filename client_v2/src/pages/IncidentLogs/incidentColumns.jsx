@@ -203,6 +203,12 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
     });
   }
 
+  if (config.showMachineOpsFields) {
+    cols.push({ accessorKey: 'machineName', header: sortHeader('Machine', 'machineName'),
+      cell: ({ row }) => <span className={styles.text}>{row.original.machineName || '--'}</span> },
+      { accessorKey: 'machineState', header: sortHeader('Machine State', 'machineState'),
+        cell: ({ row }) => <span className={row.original.machineState === 'ON' ? 'text-green-400' : 'text-slate-400'}>{row.original.machineState || '--'}</span> });
+  }
   if (config.showStatus) {
     cols.push({
       accessorKey: 'currentStatus',
@@ -580,6 +586,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
       </div>
     ) : config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
+        {config.showMachineOpsFields && <><IncidentCardRow icon={Activity} label="Machine" value={row.machineName || '--'} /><IncidentCardRow icon={Activity} label="State" value={row.machineState || '--'} /></>}
         {config.showIncidentName !== false && !config.showDoorFields && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
         )}

@@ -94,6 +94,9 @@ const mapRow = (item, index) => {
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
+    ...(item?.incidentType === 'machineOpsDetection' ? {
+      Machine: text(item.machineName), 'Machine State': text(item.machineState), 'Machine ID': text(item.machineId),
+    } : {}),
     ...(isConditionIncident ? {
       'Issues Detected': Number.isInteger(item.violationCount) && item.violationCount >= 0 ? item.violationCount : violations.length,
       Violations: violations.length

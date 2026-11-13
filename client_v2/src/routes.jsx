@@ -63,6 +63,7 @@ const BoxPackingLogs = lazy(() => import('./pages/BoxPackingLogs/BoxPackingLogs'
 const StockCountingLogs = lazy(() => import('./pages/StockCountingLogs/StockCountingLogs'));
 const StockCountingAnalytics = lazy(() => import('./pages/StockCountingAnalytics/StockCountingAnalytics'));
 const BlurredCameraLogs = lazy(() => import('./pages/BlurredCameraLogs/BlurredCameraLogs'));
+const MachineOpsLogs = lazy(() => import('./pages/MachineOpsLogs/MachineOpsLogs'));
 const DoorDetectionLogs = lazy(() => import('./pages/DoorDetectionLogs/DoorDetectionLogs'));
 const SolderLine = lazy(() => import('./pages/SolderLine/SolderLine'));
 const HygieneLogs = lazy(() => import('./pages/HygieneLogs/HygieneLogs'));
@@ -204,6 +205,7 @@ export const v2Routes = (
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
+    <Route path="logs/machine-ops" element={guard('logs', 'machineOpsLogs', <MachineOpsLogs />)} />
     <Route path="logs/door" element={guard('logs', 'doorDetectionLogs', <DoorDetectionLogs />)} />
     <Route path="logs/door-detection" element={<Navigate to="/logs/door" replace />} />
 
