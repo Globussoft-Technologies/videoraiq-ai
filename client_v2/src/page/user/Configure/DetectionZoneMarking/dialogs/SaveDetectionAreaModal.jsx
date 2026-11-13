@@ -14,7 +14,7 @@ import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import EmotionAlertGroups from '../components/EmotionAlertGroups';
 import { emotionAlertGroupsError } from '../../../../../helpers/emotionDetection';
-import { machineOpsSharedZones } from '../../../../../helpers/machineOpsDetection';
+import { machineOpsSharedZones } from '../../../../../helpers/machineOpsDetection?v=shared-zones-1';
 import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';

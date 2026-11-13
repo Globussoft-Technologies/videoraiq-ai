@@ -37,7 +37,7 @@ import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings, emotionAlertGroupsError } from '../../../helpers/emotionDetection';
-import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId, machineOpsSharedZones } from '../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId, machineOpsSharedZones } from '../../../helpers/machineOpsDetection?v=shared-zones-1';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,

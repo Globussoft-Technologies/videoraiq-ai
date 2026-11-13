@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
-import { PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { Activity, PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentSummary from './IncidentSummary';
-import { doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
+import IncidentReportMessage from './IncidentReportMessage';
+import IncidentHygieneDetails from './IncidentHygieneDetails';
+import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const SEV_COLOR = {
   high: '#ef4444', critical: '#ef4444',
@@ -25,6 +28,40 @@ const SEV_LABEL = {
   low: 'LOW',
 };
 
+const INDUSTRIAL_DETECTION_TYPES = new Set([
+  'workingAtHeightDetection',
+  'oilLeakageDetection',
+  'equipmentOilLeakageDetection',
+  'vehicleFuelOilLeakageDetection',
+  'gunnyBagsMaterialsWrongLocationDetection',
+  'sandDustWasteScrapDisposalDetection',
+  'unauthorizedAnimalEntryDetection',
+  'spillsDirtyMessyAreasDetection',
+  'loadingUnloadingStockCountingDetection',
+  'boxPackingDetection',
+]);
+
+// These two incident types show their detected count, but not the threshold
+// value in the Incident Center card.
+const HIDE_ALERT_THRESHOLD_TYPES = new Set([
+  'oilLeakageDetection',
+  'gunnyBagsMaterialsWrongLocationDetection',
+]);
+
+const formatDoorDuration = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return '--';
+  const totalMinutes = Math.floor(value / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hr${hours === 1 ? '' : 's'}`);
+  if (minutes) parts.push(`${minutes} min${minutes === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' ') : `${Math.floor(value)} sec${Math.floor(value) === 1 ? '' : 's'}`;
+};
+
 // Detector resolution is separate from the staff review status.
 export const formatDoorStatus = doorStatusLabel;
 
@@ -34,7 +71,7 @@ export const formatDoorStatus = doorStatusLabel;
  * offers Tag User so an admin can link it to a registered user at any time;
  * a detection with no readable plate renders nothing.
  *
- * Exported for the Incident Center list view and other vehicle incident surfaces.
+ * Exported so the Incident Center lightbox shows exactly the same thing.
  */
 export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, variant = 'card', showPlate = true }) {
   const hasPlate = hasReadablePlate(item?.vehicleNumber);
@@ -308,6 +345,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const det      = detectionLabel(item.incidentType || item.displayName);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const st       = statusOf({ ...item, resolved: localResolved });
+  const isMachineOps = item.incidentType === 'machineOpsDetection';
   const cam      = item.channelData?.customName || item.channelData?.name || item.cameraName || '';
 
   // Preview the recorded moment in place. channelData is the whole channel
@@ -317,6 +355,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const previewChannelId = previewChannel?._id || item.channelId || null;
   const previewAt = item.timeOfIncident || null;
   const canPreview = Boolean(previewChannelId && previewAt);
+  const site     = item.nvrData?.nvrName  || item.location  || '';
   const conf     = item.confidence ?? item.accuracy ?? item.score;
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;
   const sevKey   = (item.severity || '').toLowerCase();
@@ -325,6 +364,22 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   // map doesn't know, so a new backend value reads oddly rather than wrongly.
   const sevLabel = SEV_LABEL[sevKey] || (item.severity || 'LOW').toUpperCase();
   const reported = item.report?.status === true;
+
+  // Car Model Detection cards surface the model name plus an identifier: the
+  // vehicle number when one was read, otherwise the model year.
+  const isCarModel =
+    item.incidentType === 'carModelDetection' ||
+    /car\s*model/i.test(item.incidentName || item.displayName || '');
+  const carModelName = String(
+    item.model_name || item.modelName || item.carModelName || item.carModel || ''
+  ).trim();
+  const carPlate = formatPlate(item.vehicleNumber);
+  const carYear = String(item.year ?? '').trim();
+
+  const isGuardSleeping =
+    item.incidentType === 'guardSleepingDetection' ||
+    /guard\s*sleeping|sleep\s*activity/i.test(item.incidentName || item.displayName || '');
+  const isDoorDetection = item.incidentType === 'doorDetection';
 
   function handleCardClick() {
     if (deleteMode) { onToggleDelete?.(); return; }
@@ -549,10 +604,150 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
 
         </div>
 
-        {/* Keep grid details consistent across detection types. */}
-        <div style={{ padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, flex: 1 }}>
-          <IncidentSummary item={item} cameraName={cam} titleFallback={det} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, minWidth: 0 }}>
+        {/* Info row */}
+        <div style={{ padding: item.incidentType === 'boxPackingDetection' ? '12px 14px' : '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: isConditionIncident ? 10 : item.incidentType === 'boxPackingDetection' ? 8 : 5, minWidth: 0, flex: 1 }}>
+          {isMachineOps ? <IncidentSummary item={item} cameraName={cam} titleFallback={det} /> : <>
+          {isCarModel ? (
+            <>
+              {/* Title + Tag User on one row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                  {item.incidentName || det}
+                </span>
+                <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} showPlate={false} />
+              </div>
+              {/* Aligned key/value list. With a plate: Model + Year share a
+                  row, then Vehicle No. Without: just Model + Year. */}
+              {(() => {
+                const Cell = ({ label, value, mono, grow }) => (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: grow ? '1 1 0' : '0 0 auto' }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>
+                      {label}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', fontFamily: mono ? 'var(--mono, monospace)' : undefined, letterSpacing: mono ? '.05em' : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                      {value}
+                    </span>
+                  </div>
+                );
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                    {carPlate ? (
+                      <>
+                        {/* Model Name and Year hidden for car model detection cards */}
+                        {/* <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+                          <Cell label="Model Name" value={`${carModelName || '--'} ,`} />
+                          <Cell label="Year" value={carYear || '--'} />
+                        </div> */}
+                        <Cell label="Vehicle No" value={carPlate} mono />
+                      </>
+                    ) : (
+                      <>
+                        {/* Model Name and Year hidden for car model detection cards */}
+                        {/* <Cell label="Model Name" value={carModelName || '--'} />
+                        <Cell label="Year" value={carYear || '--'} /> */}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <>
+              {/* Plate + tagged user, for Vehicle Detection and friends. */}
+              <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: item.incidentType === 'boxPackingDetection' ? 14 : 13, fontWeight: item.incidentType === 'boxPackingDetection' || isConditionIncident ? 700 : 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: isConditionIncident ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: isConditionIncident ? 'clip' : 'ellipsis', overflowWrap: 'anywhere', minWidth: 0 }}>
+                  {item.incidentName || det}
+                </span>
+                {isGuardSleeping && (
+                  <span style={{ flexShrink: 0, fontSize: 11.5 }}>
+                    <span style={{ color: 'var(--tx3)', fontWeight: 500 }}>Status: </span>
+                    <span style={{ fontWeight: 700, color: '#169656' }}>Sleeping</span>
+                  </span>
+                )}
+                {(item.incidentType === 'fireSmokeDetection' || item.fireCount != null || item.smokeCount != null) && (item.fireCount != null || item.smokeCount != null) && (
+                  <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--tx2)' }}>
+                    {item.fireCount != null && <span style={{ color: '#ff5b57', fontWeight: 600 }}>Fire: {item.fireCount} </span>}
+                    {item.smokeCount != null && <span style={{ color: 'var(--tx3)', fontWeight: 600 }}>Smoke: {item.smokeCount}</span>}
+                  </span>
+                )}
+                {(item.incidentType === 'personFallSickDetection' || item.isFallDetected != null) && (
+                  <span style={{ flexShrink: 0, fontSize: 11 }}>
+                    {item.isFallDetected && <span style={{ color: 'var(--crit)', fontWeight: 700 }}>Fall Detected</span>}
+                    {item.evidenceScore != null && (
+                      <span style={{ color: 'var(--tx3)', marginLeft: 5 }}>
+                        ({Number(item.evidenceScore) <= 1 ? Math.round(Number(item.evidenceScore) * 100) + '%' : item.evidenceScore + '%'})
+                      </span>
+                    )}
+                  </span>
+                )}
+                {/* Absence stays open until DS reports the operator back (returnedAt). */}
+                {item.incidentType === 'deskSolarShoulderDetection' && (
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: item.eventType !== 'panel' && item.returnedAt ? 'var(--ok)' : 'var(--crit)' }}>
+                    {item.zone && <span style={{ color: 'var(--tx3)', fontWeight: 500, marginRight: 5 }}>{item.zone}</span>}
+                    {item.eventType === 'panel'
+                      ? `Missed ${item.missedJoints ?? '?'} joint${item.missedJoints === 1 ? '' : 's'}${item.panelId ? ` · ${item.panelId}` : ''}`
+                      : item.returnedAt
+                        ? 'Returned'
+                        : 'Desk empty'}
+                  </span>
+                )}
+                {INDUSTRIAL_DETECTION_TYPES.has(item.incidentType) && (item.count != null || item.alertThreshold != null) && (
+                  <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--tx2)' }}>
+                    {item.count != null && <span style={{ fontWeight: 600 }}>Detected: {item.count}</span>}
+                    {item.alertThreshold != null && !HIDE_ALERT_THRESHOLD_TYPES.has(item.incidentType) && (
+                      <span style={{ color: 'var(--tx3)', marginLeft: 5 }}>Threshold: {item.alertThreshold}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+           {isDoorDetection && (
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Name</span>
+                 <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{item.zoneName || item.zone || '--'}</span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Door Status</span>
+                 <span style={{
+                   color: formatDoorStatus(item) === 'Resolved' ? 'var(--violet)' : formatDoorStatus(item) === 'Open' ? 'var(--crit)' : 'var(--ok)',
+                   fontSize: 11.5,
+                   fontWeight: 600,
+                   textTransform: 'capitalize',
+                 }}>
+                   {formatDoorStatus(item)}
+                 </span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>{doorDurationLabel(item)}</span>
+                 <span style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{formatDoorDuration(item.durationSec)}</span>
+               </div>
+             </div>
+           )}
+           {isConditionIncident ? <div style={{ padding: '12px 13px', border: '1px solid rgba(45,212,191,.55)', borderRadius: 9, background: 'rgba(20,184,166,.06)', minWidth: 0 }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0f766e', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}><Activity size={13} aria-hidden="true" />{item.incidentType === 'lightingVisibilitySiteConditionsDetection' ? 'Lighting / site condition violations' : 'Hygiene violations'}</div>
+             <IncidentHygieneDetails item={item} showIssueCount={false} showZone={false} showViolationNumber={false} showViolationSeverity={false} showViolationSeparator={false} showViolationMarker showConfidence={false} />
+           </div> : <IncidentZoneDetails item={item} />}
+          <IncidentReportMessage item={item} compact />
+          {isConditionIncident && <div style={{ display: 'flex', gap: 6, minWidth: 0, fontSize: 11, color: 'var(--tx2)' }}><span style={{ fontWeight: 700, flexShrink: 0 }}>Zone Name:</span><span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{item.zoneName || item.zone || '--'}</span></div>}
+          </>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(isConditionIncident || item.incidentType === 'boxPackingDetection' ? { marginTop: isConditionIncident ? 'auto' : 0, paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
+            {!isMachineOps && <>
+            {isCarModel ? (
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>Camera</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{cam || '--'}</span>
+              </span>
+            ) : isDoorDetection ? (
+              <span style={{ flex: '1 1 auto', minWidth: 0 }} />
+            ) : (
+              <span style={{ fontSize: 11, color: item.incidentType === 'boxPackingDetection' ? 'var(--tx2)' : 'var(--tx3)', fontWeight: item.incidentType === 'boxPackingDetection' ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
+                {isConditionIncident ? `Camera: ${cam || '--'}` : cam}
+              </span>
+            )}
+            </>}
             {/* Opens Playback on this camera at the second the incident was
                 recorded. Hidden rather than disabled when the incident carries
                 no camera or timestamp — a dead control is worse than none. */}

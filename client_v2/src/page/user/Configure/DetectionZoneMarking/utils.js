@@ -8,7 +8,7 @@ import { scheduleFromConfig } from '../ZoneScheduleFields';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings } from '../../../../helpers/hygieneDetection';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings } from '../../../../helpers/lightingDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings } from '../../../../helpers/emotionDetection';
-import { MACHINE_OPS_SETTING_TYPE, machineOpsZoneSettings, machineOpsSharedZones } from '../../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, machineOpsZoneSettings, machineOpsSharedZones } from '../../../../helpers/machineOpsDetection?v=shared-zones-1';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../../helpers/genderAgeDetection';
 
 export function extraFieldsFor(settingType) {
