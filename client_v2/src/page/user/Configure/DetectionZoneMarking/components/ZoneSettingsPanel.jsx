@@ -10,6 +10,7 @@ import { CAR_COMPANIES } from '../constants';
 import HygieneZoneFields from './HygieneZoneFields';
 import LightingFields from './LightingFields';
 import EmotionAlertGroups from './EmotionAlertGroups';
+import MachineOpsGroups from './MachineOpsGroups';
 import TargetGenderSelect from './TargetGenderSelect';
 
 function normalizeTelegramChannels(channels = []) {
@@ -36,6 +37,7 @@ export default function ZoneSettingsPanel({
   isLighting = false,
   isEmotion = false,
   isGenderAge = false,
+  isMachineOps = false,
   isDoor = false,
   doorAlertMode = 'open',
   onDoorAlertModeChange,
@@ -61,7 +63,7 @@ export default function ZoneSettingsPanel({
 }) {
   const [expanded, setExpanded] = useState(null);
   const areaLabel = isDoor ? 'door' : isLineCrossing ? 'line' : 'zone';
-  const areaTitle = isDoor ? 'Door Settings' : isLineCrossing ? 'Line Settings' : 'Zone Settings';
+  const areaTitle = isMachineOps ? 'Machine Settings' : isDoor ? 'Door Settings' : isLineCrossing ? 'Line Settings' : 'Zone Settings';
   const nameLabel = isDoor ? 'Door Name' : isLineCrossing ? 'Line Name' : 'Zone Name';
   // Line Crossing keeps its per-line mode; Check-In / Check-Out has a single
   // detection-wide mode rendered once in the panel header.
@@ -78,7 +80,7 @@ export default function ZoneSettingsPanel({
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
       <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>{areaTitle}</div>
       <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-        {zones.length} {areaLabel}{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
+        {isMachineOps ? 'Each machine has one name, a Machine Zone and an Indicator Zone.' : `${zones.length} ${areaLabel}${zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.`}
       </div>
       {showZoneExtras && (
         <div style={{ marginBottom: 12 }}>
@@ -141,7 +143,7 @@ export default function ZoneSettingsPanel({
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {zones.map((z, i) => {
+        <MachineOpsGroups zones={zones} enabled={isMachineOps} onUpdateField={onUpdateField} disabled={savingIndex !== null} errors={errors} id="machine-settings">{(z, i) => {
           const isOpen = expanded === i;
           return (
             <div
@@ -158,7 +160,7 @@ export default function ZoneSettingsPanel({
                 }}
               >
                 <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.name}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isMachineOps ? `${z.zone_role === 'indicator' ? 'Indicator Zone' : 'Machine Zone'} (${z.points?.length || 0} points)` : z.name}</span>
                 {canDelete && (
                   <span
                     onClick={(e) => { e.stopPropagation(); onDelete(i); }}
@@ -171,7 +173,7 @@ export default function ZoneSettingsPanel({
               </div>
               {isOpen && (
                 <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
+                  {!isMachineOps && <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>{nameLabel} *</label>
                     <input
                       value={z.name}
@@ -185,7 +187,7 @@ export default function ZoneSettingsPanel({
                     {errors[`zone-${i}-name`] && (
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
                     )}
-                  </div>
+                  </div>}
                   {isFireSmoke && (
                     <div>
                       <label htmlFor={`zone-fire-outside-enabled-${i}`} style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
@@ -361,7 +363,7 @@ export default function ZoneSettingsPanel({
               )}
             </div>
           );
-        })}
+        }}</MachineOpsGroups>
       </div>
     </div>
   );

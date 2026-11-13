@@ -127,6 +127,7 @@ const detectionFields = {
   boxPackingDetectionSettings: detectionSettingSchema,
   emotionDetectionSettings: detectionSettingSchema,
   genderAgeDetectionSettings: detectionSettingSchema,
+  machineOpsDetectionSettings: detectionSettingSchema,
   hygieneSanitationFoodSafetyDetectionSettings: detectionSettingSchema,
   lightingVisibilitySiteConditionsDetectionSettings: detectionSettingSchema,
 };

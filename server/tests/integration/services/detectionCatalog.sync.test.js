@@ -22,6 +22,13 @@ afterAll(async () => { await disconnectMongo(); });
 beforeEach(async () => { await clearCollections(); });
 
 describe("syncDetectionCatalog", () => {
+  it('publishes Machine Operations with the detector support returned by DS', async () => {
+    const { default: python } = await import('../../../services/python.service.js');
+    python.fetchDsDetectorNames.mockResolvedValueOnce({ names: ['machineOpsDetectionSettings'] });
+    await syncDetectionCatalog();
+    expect(await DetectionCatalog.findOne({ settingType: 'machineOpsDetectionSettings' }).lean())
+      .toMatchObject({ name: 'Machine Operations Detection', active: true, dsSupported: true });
+  });
   it("publishes Uniform Detection with DS support for Super Admin allocations", async () => {
     await syncDetectionCatalog();
     const row = await DetectionCatalog.findOne({ settingType: "uniformDetectionSettings" }).lean();

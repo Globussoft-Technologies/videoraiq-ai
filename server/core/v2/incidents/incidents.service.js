@@ -1,4 +1,5 @@
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
+import { machineOpsIncidentSchema } from '../../../services/machineOps.js';
 import { getGenderAgeSummary } from "./genderAgeSummary.js";
 import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
@@ -86,6 +87,7 @@ import {
   LightingVisibilitySiteConditionsDetectionIncident,
   EmotionDetectionIncident,
   GenderAgeDetectionIncident,
+  MachineOpsDetectionIncident,
   GenderAgeCountIncident,
 } from "./incidents.model.js";
 import { recordSolderPanel } from "./solderLine.service.js";
@@ -140,6 +142,7 @@ const modelMap = {
   lightingVisibilitySiteConditionsDetection: LightingVisibilitySiteConditionsDetectionIncident,
   emotionDetection: EmotionDetectionIncident,
   genderAgeDetection: GenderAgeDetectionIncident,
+  machineOpsDetection: MachineOpsDetectionIncident,
   genderAgeCount: GenderAgeCountIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
@@ -344,6 +347,8 @@ const firstFilled = (...values) => {
 // arbitrary path into $sort, and so UI column ids (modelName, nvrName) map
 // onto the fields those columns actually render.
 const LOG_SORT_FIELDS = {
+  machineState: 'machineState',
+  machineName: 'machineName',
   targetGender: "targetGender",
   description: "description",
   emotion: "emotion",
@@ -407,6 +412,11 @@ class IncidentsService {
       // A type DS renamed is stored under our existing one (e.g. camera tampering).
       const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
       if (aliasedType) req.body.incidentType = aliasedType;
+      if (req.body.incidentType === 'machineOpsDetection') {
+        const validation = machineOpsIncidentSchema.validate(req.body, { convert: false });
+        if (validation.error) return res.status(400).json(Response.validationFailResp(validation.error.message, 'Validation Failed!'));
+        req.body.channelId ??= req.body.cameraId;
+      }
       const emotionValidation = incidentsValidate.validateEmotionIncident(req.body);
       const genderAgeValidation = incidentsValidate.validateGenderAgeIncident(req.body);
       if (genderAgeValidation.error) return res.status(400).json(Response.validationFailResp(genderAgeValidation.error.message, "Validation Failed!"));
@@ -460,7 +470,7 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
-      if (["genderAgeDetection", "genderAgeCount"].includes(incidentType) &&
+      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection"].includes(incidentType) &&
         (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
         return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
       }
@@ -491,16 +501,15 @@ class IncidentsService {
         }
       }
 
-      // DS can retry a delivery after a timeout. eventId is its idempotency
-      // key; accepting the retry as another stock event would inflate the
-      // per-vehicle box total and send the same notification twice.
+      // Retry deliveries keep their eventId so stock counts and machine
+      // state events do not create duplicate incidents or notifications.
       if (
-        incidentType === "loadingUnloadingStockCountingDetection" &&
+        ["loadingUnloadingStockCountingDetection", "machineOpsDetection"].includes(incidentType) &&
         req.body.eventId
       ) {
         const existingIncident = await Model.findOne({
           userId: userId?.toString(),
-          eventId: String(req.body.eventId).trim(),
+          incidentType, eventId: String(req.body.eventId).trim(),
         });
         if (existingIncident) {
           return res.status(200).json(
@@ -6010,6 +6019,20 @@ console.log(result,'result');
       logger.error(error);
       next(new AppError("Failed to fetch stock analytics", 500));
     }
+  }
+
+  async getMachineOpsDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('machineOpsDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Machine Operations Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.machineOpsLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Machine Operations Logs'));
+      }
+      return await this._fetchIncidentLogs({ req, res, incidentType: 'machineOpsDetection',
+        searchFields: ['machineName', 'machineState', 'description', 'incidentName'], postLookupSearch: true });
+    } catch (error) { next(new AppError('Failed to fetch machine operations logs', 500)); }
   }
 
   async getGenderAgeDetectionLogs(req, res, next) {

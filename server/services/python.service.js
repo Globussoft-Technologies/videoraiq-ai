@@ -45,6 +45,16 @@ const appendIndustrialDetectors = (
 ) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
+      if (name === 'machineOpsDetectionSettings') {
+        detectors.push({ name, severity: severity ?? 'low',
+          trigger_notification: stockSettings.trigger_notification ?? true,
+          machines: (stockSettings.machines || []).map(machine => ({
+            machine_id: machine.machine_id, name: machine.name,
+            machine_zone: machine.machine_zone, indicator_zone: machine.indicator_zone,
+          })),
+        });
+        continue;
+      }
       if (name === "genderAgeDetectionSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const polygons = Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0]) ? [zones] : zones || [];

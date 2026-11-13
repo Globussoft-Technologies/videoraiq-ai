@@ -36,6 +36,7 @@ beforeEach(async () => {
 
 describe("detection allocation revocation", () => {
   it.each([
+    ["machine operations detection", "machineOpsDetectionSettings"],
     ["gender and age detection", "genderAgeDetectionSettings"],
     ["emotion detection", "emotionDetectionSettings"],
     ["loading/unloading stock counting", STOCK_COUNTING],

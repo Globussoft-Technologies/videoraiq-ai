@@ -2,6 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { clearCollections, connectMongo, disconnectMongo } from "../dbSetup.js";
 import { payload, serviceCtx } from "../../helpers/service.js";
 
+
+vi.mock('../../../core/v2/jobs/utils/deletionQueue.js', () => ({ deletionQueue: { add: vi.fn() } }));
+vi.mock('../../../core/v2/jobs/jobs.service.js', () => ({ default: {} }));
 vi.mock("../../../socket.js", () => ({
   sendPayloadToUser: vi.fn().mockResolvedValue(undefined),
 }));
@@ -33,6 +36,12 @@ const { industrialDetectionTemplate } = await import(
 );
 
 const CASES = [
+  {
+    settingType: 'machineOpsDetectionSettings', incidentType: 'machineOpsDetection',
+    SettingModel: settingsModels.MachineOpsDetectionSetting, IncidentModel: incidentModels.MachineOpsDetectionIncident,
+    logMethod: 'getMachineOpsDetectionLogs',
+    incidentFields: { eventId: 'machine-off-1', machineId: 'laser-cutter-1', machineName: 'Laser Cutter 1', machineState: 'OFF' },
+  },
   {
     settingType: "genderAgeDetectionSettings", incidentType: "genderAgeDetection",
     SettingModel: settingsModels.GenderAgeDetectionSetting, IncidentModel: incidentModels.GenderAgeDetectionIncident,
@@ -430,6 +439,9 @@ describe("v2 industrial detection incidents and logs", () => {
               ] },
               zone_configs: [{ name: " Reception ", target_gender: "Female" }, { name: " Shop Floor ", target_gender: "Male" }],
             } : {}),
+            ...(settingType === 'machineOpsDetectionSettings' ? { machines: [{ machine_id: 'laser-cutter-1', name: 'Laser Cutter 1',
+              machine_zone: [[0, 0], [0.5, 0], [0.5, 1]], indicator_zone: [[0.1, 0.1], [0.2, 0.1], [0.2, 0.2]],
+            }] } : {}),
             ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
           },
         },
@@ -516,8 +528,8 @@ describe("v2 industrial detection incidents and logs", () => {
       expect(payload(createContext.res).status).toBe("success");
       const saved = await IncidentModel.findOne({ incidentType });
       expect(saved.timeOfIncident.toISOString()).toBe("2026-09-21T12:30:45.000Z");
-      if (incidentType !== "genderAgeDetection") expect(saved.alertThreshold).toBe(400);
-      if (["emotionDetection", "genderAgeDetection"].includes(incidentType)) expect(saved.toObject()).toMatchObject(incidentFields);
+      if (!["genderAgeDetection", "machineOpsDetection"].includes(incidentType)) expect(saved.alertThreshold).toBe(400);
+      if (["emotionDetection", "genderAgeDetection", "machineOpsDetection"].includes(incidentType)) expect(saved.toObject()).toMatchObject(incidentFields);
       if (incidentType === "boxPackingDetection") {
         const box = saved.toObject();
         expect(box).toMatchObject({

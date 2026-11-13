@@ -97,6 +97,7 @@ const DETECTION_LABELS = {
   blurredCameraDetection: 'Camera Tampering Detection',
   emotionDetection: 'Emotion Detection',
   genderAgeDetection: 'Gender & Age Detection',
+  machineOpsDetection: 'Machine Operations Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',
   boxPackingDetection: 'Box Packing Detection',

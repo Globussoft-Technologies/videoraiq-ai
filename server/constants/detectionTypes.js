@@ -9,6 +9,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 
 export const DETECTION_TYPES = {
   genderAgeDetectionSettings: "Gender & Age Detection",
+  machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   faceAuthenticationSettings: "Attendance Settings",
@@ -84,6 +85,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "uniformDetectionSettings",
   "emotionDetectionSettings",
   "genderAgeDetectionSettings",
+  "machineOpsDetectionSettings",
 ]);
 
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
@@ -103,6 +105,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "uniformDetection",
   "emotionDetection",
   "genderAgeDetection",
+  "machineOpsDetection",
 ]);
 
 /**
@@ -118,6 +121,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
   genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
+  machineOpsDetectionSettings: { permissionKey: "machineOpsLogs", logsConfigKey: "machineOpsLogs" },
   emotionDetectionSettings: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
   uniformDetectionSettings: { permissionKey: "uniformLogs", logsConfigKey: "uniformLogs" },
   countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
@@ -172,6 +176,7 @@ export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "count
 
 export const TYPE_MAP = {
   genderAgeDetectionSettings: "genderAgeDetection",
+  machineOpsDetectionSettings: "machineOpsDetection",
   emotionDetectionSettings: "emotionDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
@@ -233,6 +238,7 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 
 export const DETECTION_MODES_MAP = {
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
+  machineOpsDetectionSettings: ["machineOpsDetectionSettings"],
   emotionDetectionSettings: ["emotionDetectionSettings"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
@@ -301,6 +307,7 @@ export const DETECTION_MODES_MAP = {
  */
 export const DS_DETECTOR_BY_MODE = {
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
+  machineOpsDetectionSettings: "machineOpsDetectionSettings",
   emotionDetectionSettings: "emotionDetectionSettings",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
@@ -393,6 +400,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  */
 export const DS_LOGIC_BY_MODE = {
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
+  machineOpsDetectionSettings: "machineOpsDetectionSettings",
   emotionDetectionSettings: "emotionDetectionSettings",
   uniformDetectionSettings: "uniformDetectionSettings",
   helmet: "personalProtectiveEquipmentSettings",
@@ -446,6 +454,7 @@ export const dsLogicNamesFor = (settingType) => {
 
 export const toPopulateDetections = [
   { path: "detections.genderAgeDetectionSettings.id" },
+  { path: "detections.machineOpsDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },
@@ -1723,6 +1732,16 @@ export const deskSolarShoulderDetectionSettings = {
   },
 };
 export const emotionDetectionSettings = industrialDetectionExample("emotionDetectionSettings", "Emotion Detection");
+export const machineOpsDetectionSettings = {
+  ...industrialDetectionExample('machineOpsDetectionSettings', 'Machine Operations Detection'),
+  settings: {
+    ...industrialDetectionExample('machineOpsDetectionSettings', 'Machine Operations Detection').settings,
+    machines: [{ machine_id: 'laser-cutter-1', name: 'Laser Cutter 1',
+      machine_zone: [[0.02, 0.1], [0.48, 0.1], [0.48, 0.9], [0.02, 0.9]],
+      indicator_zone: [[0.1, 0.2], [0.15, 0.2], [0.15, 0.3], [0.1, 0.3]],
+    }],
+  },
+};
 export const genderAgeDetectionSettings = {
   ...industrialDetectionExample("genderAgeDetectionSettings", "Gender & Age Detection"),
   settings: {

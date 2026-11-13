@@ -86,6 +86,7 @@ const CUSTOM_DETECTION_LABELS = {
   emotionDetection: 'Emotion Detection',
   emotionDetectionSettings: 'Emotion Detection',
   genderAgeDetection: 'Gender & Age Detection',
+  machineOpsDetection: 'Machine Operations Detection',
   genderAgeCount: 'Gender Counts',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
   deskSolarShoulderDetection: 'Desk Solar Shoulder Detection',

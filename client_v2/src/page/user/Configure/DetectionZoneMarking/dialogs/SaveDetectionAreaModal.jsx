@@ -14,6 +14,7 @@ import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers
 import HygieneZoneFields from '../components/HygieneZoneFields';
 import EmotionAlertGroups from '../components/EmotionAlertGroups';
 import { emotionAlertGroupsError } from '../../../../../helpers/emotionDetection';
+import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
@@ -49,6 +50,7 @@ export default function SaveDetectionAreaModal({
   isLighting = false,
   isEmotion = false,
   isGenderAge = false,
+  isMachineOps = false,
   initialLightingSettings,
   saving,
   onCancel,
@@ -308,10 +310,10 @@ export default function SaveDetectionAreaModal({
 
           </div>
 
-          {zoneDrafts.map((z, i) => (
+          <MachineOpsGroups zones={zoneDrafts} enabled={isMachineOps} onUpdateField={updateZoneField} disabled={saving} errors={errors} id="save-machine">{(z, i) => (
             <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isDoor ? `Door ${i + 1}` : `${areaLabel} ${i + 1}`}</div>
-              <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isMachineOps ? `${z.zone_role === 'indicator' ? 'Indicator Zone' : 'Machine Zone'} (${z.points?.length || 0} points)` : isDoor ? `Door ${i + 1}` : `${areaLabel} ${i + 1}`}</div>
+              {!isMachineOps && <div>
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>{isDoor ? 'Door' : areaLabel} Name *</label>
                 <input
                   value={z.name}
@@ -327,8 +329,8 @@ export default function SaveDetectionAreaModal({
               {errors[`zone-${i}-name`] && (
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
-              </div>
-              {isGenderAge && <TargetGenderSelect id={`save-zone-target-gender-${i}`} value={z.target_gender}
+              </div>}
+                  {isGenderAge && <TargetGenderSelect id={`save-zone-target-gender-${i}`} value={z.target_gender}
                 disabled={saving} onChange={value => updateZoneField(i, 'target_gender', value)} />}
               {isEmotion && <EmotionAlertGroups id={`save-zone-emotion-groups-${i}`} value={z.emotion_alert_groups}
                 error={errors[`zone-${i}-emotion_alert_groups`]}
@@ -492,7 +494,7 @@ export default function SaveDetectionAreaModal({
                 </>
               )}
             </div>
-          ))}
+          )}</MachineOpsGroups>
         </div>
 
         <div style={{

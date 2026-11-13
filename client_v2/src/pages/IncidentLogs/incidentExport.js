@@ -1,4 +1,5 @@
 import { lightingCategoryLabel } from '@/helpers/lightingDetection';
+import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection';
 import { hygieneCategoryLabel } from '@/helpers/hygieneDetection';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
@@ -72,6 +73,7 @@ const fetchAllForExport = async (config, params) => {
       } : {}),
       emotion: item.emotion || '--',
       ...(config.showGenderAgeFields ? { targetGender: item.targetGender || '--', zone: item.zone || '--' } : {}),
+      ...(config.showMachineOpsFields ? { machineName: item.machineName || '--', machineState: item.machineState || '--' } : {}),
       incidentName: item.incidentName || '--',
       currentStatus: formatStatus(item.currentStatus || '--', config),
       nvrName: item.nvrData?.nvrName || '--',
@@ -115,6 +117,7 @@ const fetchAllForExport = async (config, params) => {
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
 // only present for log types that carry a current-status value.
 const buildExportColumns = (config) => {
+  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
   const cols = [];
   if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });

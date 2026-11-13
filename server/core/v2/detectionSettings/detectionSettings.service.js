@@ -49,9 +49,11 @@ import {
   boxPackingDetectionSettings,
   emotionDetectionSettings,
   genderAgeDetectionSettings,
+  machineOpsDetectionSettings,
   hygieneSanitationFoodSafetyDetectionSettings,
   lightingVisibilitySiteConditionsDetectionSettings,
 } from "../../../constants/detectionTypes.js";
+import { machineOpsSettingsSchema } from '../../../services/machineOps.js';
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
@@ -108,6 +110,7 @@ import {
   BoxPackingDetectionSetting,
   EmotionDetectionSetting,
   GenderAgeDetectionSetting,
+  MachineOpsDetectionSetting,
   HygieneSanitationFoodSafetyDetectionSetting,
   LightingVisibilitySiteConditionsDetectionSetting,
 } from "./detectionSettings.model.js";
@@ -177,6 +180,7 @@ const modelMap = {
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
   emotionDetectionSettings: EmotionDetectionSetting,
   genderAgeDetectionSettings: GenderAgeDetectionSetting,
+  machineOpsDetectionSettings: MachineOpsDetectionSetting,
   hygieneSanitationFoodSafetyDetectionSettings: HygieneSanitationFoodSafetyDetectionSetting,
   lightingVisibilitySiteConditionsDetectionSettings: LightingVisibilitySiteConditionsDetectionSetting,
 };
@@ -530,6 +534,10 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
+      if (value.settingType === 'machineOpsDetectionSettings' && value.settings) {
+        const machineValidation = machineOpsSettingsSchema.validate(value.settings, { convert: false });
+        if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
+      }
       const genderAgeValidation = DetectionSettingsValidation.validateGenderAgeSettings(value.settingType, value.settings);
       if (genderAgeValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", genderAgeValidation.error.message));
       if (genderAgeValidation.value && value.settings) value.settings = genderAgeValidation.value;
@@ -973,6 +981,10 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
+      if ((value.settingType || settingType) === 'machineOpsDetectionSettings' && value.settings) {
+        const machineValidation = machineOpsSettingsSchema.validate(value.settings, { convert: false });
+        if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
+      }
       const genderAgeValidation = DetectionSettingsValidation.validateGenderAgeSettings(settingType, value.settings);
       if (genderAgeValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", genderAgeValidation.error.message));
       if (genderAgeValidation.value && value.settings) value.settings = genderAgeValidation.value;
@@ -1921,6 +1933,7 @@ class DetectionSettingService {
         boxPackingDetectionSettings,
         emotionDetectionSettings,
         genderAgeDetectionSettings,
+        machineOpsDetectionSettings,
         hygieneSanitationFoodSafetyDetectionSettings,
         lightingVisibilitySiteConditionsDetectionSettings,
       };

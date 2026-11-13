@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { isMachinePolygon } from '../../../services/machineOps.js';
 import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../../../constants/emotionDetection.js";
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
@@ -14,6 +15,8 @@ const zoneConfigsField = {
   zone_configs: [
     {
       name: { type: String },
+      machine_id: { type: String },
+      zone_role: { type: String, enum: ['machine', 'indicator'] },
       // Undefined preserves legacy account routing; [] explicitly disables this zone.
       whatsappRecipientIds: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
       fire_outside_zone_enabled: { type: Boolean },
@@ -1314,6 +1317,23 @@ const GenderAgeDetectionSetting = DetectionSetting.discriminator(
   "genderAgeDetectionSettings", new mongoose.Schema({ settings: GenderAgeDetectionSchema }),
 );
 
+const MachineOpsSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
+MachineOpsSchema.add({
+  machines: {
+    type: [new mongoose.Schema({
+      machine_id: { type: String, required: true, trim: true },
+      name: { type: String, required: true, trim: true },
+      machine_zone: { type: [[Number]], required: true, validate: isMachinePolygon },
+      indicator_zone: { type: [[Number]], required: true, validate: isMachinePolygon },
+    }, { _id: false })],
+    required: true,
+    validate: value => value.length > 0 && new Set(value.map(machine => machine.machine_id)).size === value.length,
+  },
+});
+const MachineOpsDetectionSetting = DetectionSetting.discriminator(
+  'machineOpsDetectionSettings', new mongoose.Schema({ settings: MachineOpsSchema }),
+);
+
 // Box packing uses the generic named-zone settings shape.
 const BoxPackingDetectionSetting = DetectionSetting.discriminator(
   "boxPackingDetectionSettings",
@@ -1731,6 +1751,7 @@ const attendanceDetectionSetting = DetectionSetting.discriminator(
 
 export {
   GenderAgeDetectionSetting,
+  MachineOpsDetectionSetting,
   DetectionSetting,
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,

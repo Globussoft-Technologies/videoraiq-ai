@@ -28,6 +28,7 @@ export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, 
 const DETECTION_LABEL_OVERRIDES = {
   emotionDetectionSettings: 'Emotion Detection',
   genderAgeDetectionSettings: 'Gender & Age Detection',
+  machineOpsDetectionSettings: 'Machine Operations Detection',
   uniformDetectionSettings: 'Uniform Detection',
   cylinderDetectionSettings: 'Cylinder Detection',
   fireSmokeDetectionSettings: 'Fire & Smoke Detection',
@@ -64,6 +65,7 @@ export const INCIDENT_STATUS = {
 export const DETECTION_THRESHOLDS = {
   emotionDetectionSettings: [],
   genderAgeDetectionSettings: [],
+  machineOpsDetectionSettings: [],
   uniformDetectionSettings: ['person_threshold', 'uniform_confidence'],
   faceAuth: ['person_threshold'],
   faceRecognitionSettings: ['person_threshold'],
@@ -161,6 +163,7 @@ const CATEGORY_MATCHERS = [
 const DETECTION_CATEGORY_OVERRIDES = {
   emotionDetectionSettings: 'people',
   genderAgeDetectionSettings: 'people',
+  machineOpsDetectionSettings: 'industrial',
   uniformDetectionSettings: 'safety',
 };
 

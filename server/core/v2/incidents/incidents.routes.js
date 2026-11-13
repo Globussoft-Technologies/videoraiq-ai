@@ -12,6 +12,7 @@ import { getHygieneAnalytics, getHygieneLogFilters } from "./hygieneAnalytics.se
 const upload = multer();
 
 const router = express.Router();
+router.get("/logs/machine-ops-detection", viewAccessCheck, incidentsController.getMachineOpsDetectionLogs);
 router.get("/logs/gender-age-detection", viewAccessCheck, incidentsController.getGenderAgeDetectionLogs);
 router.get("/logs/emotion-detection", viewAccessCheck, incidentsController.getEmotionDetectionLogs);
 router.get('/hygiene-analytics', viewAccessCheck, getHygieneAnalytics);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection';
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
@@ -166,6 +167,9 @@ const sortableHeader = (label, field, onSort, sortable, sortField, sortOrder) =>
 export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, recentlyViewedId }) => {
   const sortable = config.sortable !== false;
   const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
+  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label, sortField: field }) => ({ accessorKey: key, header: sortHeader(label, field),
+    cell: ({ row }) => <span className="block max-w-sm whitespace-pre-wrap break-words text-xs text-[var(--tx2)]">{key === 'timeOfIncident' ? formatTime(row.original.timeOfIncident) : row.original[key] || '--'}</span>,
+  }));
   const cols = [
     {
       accessorKey: 'snap',

@@ -1,4 +1,5 @@
 import api, { unwrap } from '@/helpers/client';
+import { measurementRecordMediaUrls } from './mediaUrls';
 
 const BASE = '/measurement-logs';
 
@@ -11,7 +12,7 @@ export async function getMeasurementRecords(params = {}) {
   const res = await api.get(BASE, { params });
   const data = unwrap(res) || {};
   return {
-    rows: data.rows ?? [],
+    rows: (data.rows ?? []).map(row => measurementRecordMediaUrls(row, import.meta.env.VITE_BACKEND)),
     total: data.total ?? 0,
     stats: data.stats ?? null,
     skus: data.skus ?? [],

@@ -65,6 +65,10 @@ const AnprRecognition = createLucideIcon('AnprRecognition', [
 // Covers every known detection type returned by /detection-settings/types.
 // Any settingType not listed here falls back to FALLBACK_META.
 export const DETECTION_META = {
+  machineOpsDetectionSettings: {
+    Icon: Anvil,
+    tint: 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-300',
+  },
   genderAgeDetectionSettings: {
     Icon: Users,
     tint: 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-300',

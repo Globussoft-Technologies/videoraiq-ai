@@ -19,6 +19,13 @@ afterAll(async () => { await disconnectMongo(); });
 beforeEach(async () => { await clearCollections(); });
 
 describe("resolveDetectionTypes", () => {
+  it('includes Machine Operations when the shared catalog predates this detection', async () => {
+    await DetectionCatalog.create({ settingType: 'crowdDetectionSettings', name: 'Crowd Detection' });
+    const result = await resolveDetectionTypes();
+    expect(result.stale).toBe(true);
+    expect(result.detections).toContainEqual(expect.objectContaining({ settingType: 'machineOpsDetectionSettings', name: 'Machine Operations Detection', dsSupported: null }));
+    expect(result.detections.find(row => row.settingType === 'machineOpsDetectionSettings').description).not.toBe('');
+  });
   it("offers only the canonical emotion setting key when an older publisher still lists the legacy key", async () => {
     await DetectionCatalog.create({ settingType: "emotionDetection", name: "Emotion Detection", active: true });
     const result = await resolveDetectionTypes();

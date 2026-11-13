@@ -226,6 +226,7 @@ export const NAV_GROUPS = [
       // { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield, permissionKey: 'logs', permissionSubKey: 'guardLogs' , logsConfigKey: 'guardLogs' },
       { key: 'emotion-detection', label: 'Emotion Logs', path: 'logs/emotion-detection', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'emotionLogs', logsConfigKey: 'emotionLogs' },
       { key: 'gender-age-detection', label: 'Gender & Age Logs', path: 'logs/gender-age-detection', icon: Users, permissionKey: 'logs', permissionSubKey: 'genderAgeLogs', logsConfigKey: 'genderAgeLogs' },
+      { key: 'machine-ops-detection', label: 'Machine Operations Logs', path: 'logs/machine-ops-detection', icon: Users, permissionKey: 'logs', permissionSubKey: 'machineOpsLogs', logsConfigKey: 'machineOpsLogs' },
       { key: 'sleep-activity', label: 'Sleep Activity Logs', path: 'logs/sleep-activity', icon: Moon, permissionKey: 'logs', permissionSubKey: 'sleepActivityLogs', logsConfigKey: 'sleepActivityLogs' },
       // Mining incident logs — shown for every client.
       ...stevinrockLogItems,

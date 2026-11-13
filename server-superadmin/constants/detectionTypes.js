@@ -8,6 +8,7 @@
 
 export const DETECTION_TYPES = {
   genderAgeDetectionSettings: "Gender & Age Detection",
+  machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -53,6 +54,7 @@ export const DETECTION_TYPES = {
 }
 export const DETECTION_TYPES2 = {
   genderAgeDetectionSettings: "Gender & Age Detection",
+  machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
   uniformDetectionSettings: "Uniform Detection",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -100,6 +102,7 @@ export const DETECTION_TYPES2 = {
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
   genderAgeDetectionSettings: "Gender alerts and male/female counts by camera and zone",
+  machineOpsDetectionSettings: "Machine ON/OFF state monitoring with paired machine and indicator zones",
   emotionDetectionSettings: "Facial emotion recognition and expression monitoring",
   uniformDetectionSettings: "Uniform compliance monitoring across named zones",
   personalProtectiveEquipmentSettings: "Helmet, vest & mask compliance monitoring",
@@ -141,6 +144,7 @@ export const DETECTION_DESCRIPTIONS = {
 export const TYPE_MAP = {
   emotionDetectionSettings: "emotionDetection",
   genderAgeDetectionSettings: "genderAgeDetection",
+  machineOpsDetectionSettings: "machineOpsDetection",
   uniformDetectionSettings: "uniformDetection",
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",
@@ -181,6 +185,7 @@ export const TYPE_MAP = {
 export const DETECTION_MODES_MAP = {
   emotionDetectionSettings: ["emotionDetectionSettings"],
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
+  machineOpsDetectionSettings: ["machineOpsDetectionSettings"],
   uniformDetectionSettings: ["uniformDetectionSettings"],
   personalProtectiveEquipmentSettings: ["helmet", "vest"],
   crowdDetectionSettings: ["crowd"],
@@ -222,6 +227,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
 export const toPopulateDetections = [
   { path: "detections.emotionDetectionSettings.id" },
   { path: "detections.genderAgeDetectionSettings.id" },
+  { path: "detections.machineOpsDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },

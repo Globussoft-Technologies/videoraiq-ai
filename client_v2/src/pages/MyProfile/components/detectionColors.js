@@ -64,6 +64,7 @@ const SHORT_LABELS = {
   blurredCameraDetectionSettings: 'Camera Tampering',
   emotionDetectionSettings: 'Emotion Detection',
   genderAgeDetectionSettings: 'Gender & Age Detection',
+  machineOpsDetectionSettings: 'Machine Operations Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder',
   boxPackingDetectionSettings: 'Box Packing',
   lightingVisibilitySiteConditionsDetectionSettings: 'Lighting / Visibility / Site Conditions Detection',

@@ -37,6 +37,7 @@ import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings, emotionAlertGroupsError } from '../../../helpers/emotionDetection';
+import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId } from '../../../helpers/machineOpsDetection';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,
@@ -135,6 +136,7 @@ export default function DetectionZoneMarking({
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const isEmotion = activeType?.settingType === EMOTION_SETTING_TYPE;
+  const isMachineOps = activeType?.settingType === MACHINE_OPS_SETTING_TYPE;
   const isGenderAge = activeType?.settingType === GENDER_AGE_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
@@ -395,6 +397,7 @@ export default function DetectionZoneMarking({
     ...(isLighting ? lightingZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isEmotion ? emotionZoneSettings({}, activeType.setting?.settings) : {}),
     ...(isGenderAge ? genderAgeZoneSettings({}, activeType.setting?.settings) : {}),
+    ...(isMachineOps ? nextMachineOpsZone([...visibleZones, ...draftZones]) : {}),
     ...(isFireSmoke ? { fireOutsideZoneEnabled: activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
     capacity: '',
     threshold: isDoor ? String(DOOR_DEFAULT_THRESHOLD_SEC) : '0',
@@ -632,6 +635,9 @@ export default function DetectionZoneMarking({
         }
       : null;
     if (isLighting && nextZones.some(zone => Object.keys(lightingZoneErrors(zone)).length)) throw new Error('Please check lighting settings for each zone before saving.');
+    const machineSettings = isMachineOps ? { machines: machineOpsMachines(nextZones, videoSize.w, videoSize.h) } : {};
+    const machineIdsByZone = isMachineOps ? Object.fromEntries(groupMachineOpsZones(nextZones).flatMap(group =>
+      group.entries.map(({ index }) => [index, machineOpsId(group.name)]))) : {};
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
     const fields = extraFieldsFor(activeType.settingType);
     const usesLineMode = activeType.settingType === 'lineCrossingSettings' || isCheckInOut;
@@ -660,7 +666,7 @@ export default function DetectionZoneMarking({
             : {}),
         }
       : null;
-    const zoneConfigs = nextZones.map(z => ({
+    const zoneConfigs = nextZones.map((z, index) => ({
       telegramChatIds: Array.isArray(z.telegramChatIds)
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
@@ -670,6 +676,7 @@ export default function DetectionZoneMarking({
       ...(isLighting ? lightingZonePayload(z) : {}),
       ...(isEmotion ? emotionZoneSettings(z) : {}),
       ...(isGenderAge ? genderAgeZoneSettings(z) : {}),
+      ...(isMachineOps ? { machine_id: machineIdsByZone[index], zone_role: z.zone_role } : {}),
       ...(isFireSmoke ? { fire_outside_zone_enabled: z.fireOutsideZoneEnabled ?? activeType.setting?.settings?.fire_outside_zone_enabled ?? false } : {}),
       telegramChatId: isCheckInOut
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
@@ -718,6 +725,7 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority ?? setting.settings?.levelOfImportance,
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...machineSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
@@ -753,6 +761,7 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority,
           referencePoints: { [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...machineSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
@@ -831,7 +840,7 @@ export default function DetectionZoneMarking({
       toast.success(activeType.settingId ? 'Detection settings updated successfully.' : 'Detection area created and saved.');
       onSaved?.();
     } catch (err) {
-      toast.error(err?.response?.data?.body?.message || 'Failed to save zone.');
+      toast.error(err?.response?.data?.body?.message || err.message || 'Failed to save zone.');
     } finally {
       setSaving(false);
     }
@@ -1661,6 +1670,7 @@ export default function DetectionZoneMarking({
                 isLighting={isLighting}
                 isEmotion={isEmotion}
                 isGenderAge={isGenderAge}
+                isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
                 doorAlertMode={doorAlertModeDraft}
@@ -1802,6 +1812,7 @@ export default function DetectionZoneMarking({
                 isLighting={isLighting}
                 isEmotion={isEmotion}
                 isGenderAge={isGenderAge}
+                isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
                 doorAlertMode={doorAlertModeDraft}
@@ -1833,6 +1844,7 @@ export default function DetectionZoneMarking({
           isLighting={isLighting}
           isEmotion={isEmotion}
           isGenderAge={isGenderAge}
+          isMachineOps={isMachineOps}
           initialLightingSettings={activeType.setting?.settings}
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={isDoor ? doorSeverityDraft : (activeType.setting?.settings?.levelOfImportance || (isHygiene || isGenderAge ? 'high' : 'moderate'))}

@@ -80,6 +80,13 @@ incidentSchema.post('save', async function populateAgentProjections(doc) {
 
 const Incident = model('Incident', incidentSchema);
 
+const MachineOpsDetectionIncident = Incident.discriminator('machineOpsDetection', new Schema({
+  eventId: { type: String, required: true, index: true },
+  machineId: { type: String, required: true },
+  machineName: { type: String, required: true },
+  machineState: { type: String, enum: ['ON', 'OFF'], required: true },
+}));
+
 const GenderAgeDetectionIncident = Incident.discriminator('genderAgeDetection', new Schema({
   incidentName: { type: String, required: true },
   Image: { type: String, required: true },
@@ -964,6 +971,7 @@ const VehicleCheckInOutIncident = Incident.discriminator('vehicleCheckInOut', ve
 
 export  {
   GenderAgeDetectionIncident,
+  MachineOpsDetectionIncident,
   GenderAgeCountIncident,
   EmotionDetectionIncident,
   Incident,
