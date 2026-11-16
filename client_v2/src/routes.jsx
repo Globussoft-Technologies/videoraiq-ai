@@ -1,3 +1,4 @@
+import SackLoadingLogs from './pages/SackLoadingLogs/SackLoadingLogs';
 import { lazy } from 'react';
 import { Navigate, Route, useLocation } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
@@ -203,6 +204,7 @@ export const v2Routes = (
     <Route path="logs/box-packing/reports" element={<Navigate to="/box-packing/reports" replace />} />
     <Route path="logs/box-packing/analytics" element={<Navigate to="/box-packing" replace />} />
     <Route path="logs/box-packing" element={<Navigate to="/box-packing" replace />} />
+    <Route path="logs/sack-loading-unloading" element={guard('logs', 'sackLoadingLogs', <SackLoadingLogs />)} />
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />

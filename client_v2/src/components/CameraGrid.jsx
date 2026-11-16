@@ -63,6 +63,7 @@ export const ENGINE_LABEL_MAP = {
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
   loadingUnloadingStockCountingSettings: 'Loading/Unloading Stock Counting Detection',
+  sackLoadingUnloadingSettings: 'Sack Loading/Unloading Detection',
   blurredCameraDetectionSettings: 'Camera Tampering Detection',
   emotionDetectionSettings: 'Emotion Detection',
   deskSolarShoulderDetectionSettings: 'Desk Solar Shoulder Detection',

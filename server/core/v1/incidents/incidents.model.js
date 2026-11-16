@@ -759,6 +759,13 @@ const LoadingUnloadingStockCountingIncident = Incident.discriminator(
   LoadingUnloadingStockCountingDetectionSchema,
 );
 
+const SackLoadingUnloadingSchema = LoadingUnloadingStockCountingDetectionSchema.clone();
+SackLoadingUnloadingSchema.add(Object.fromEntries(
+  ["sackCount", "whiteSackCount", "brownSackCount", "otherSackCount", "cottonBoxCount", "totalCount"]
+    .map(key => [key, { type: Number, min: 0, required: true }]),
+));
+const SackLoadingUnloadingIncident = Incident.discriminator("sackLoadingUnloadingDetection", SackLoadingUnloadingSchema);
+
 const BlurredCameraDetectionSchema = new Schema({
   // Camera tampering kind from DS, e.g. "covered".
   tamperType: { type: String, default: undefined },
@@ -1017,6 +1024,7 @@ export  {
   UnauthorizedAnimalEntryDetectionIncident,
   SpillsDirtyMessyAreasDetectionIncident,
   LoadingUnloadingStockCountingIncident,
+  SackLoadingUnloadingIncident,
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,

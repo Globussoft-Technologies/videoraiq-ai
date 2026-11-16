@@ -5,6 +5,7 @@
 const INCIDENT_KEY_BY_SETTING = {
   personalProtectiveEquipmentSettings: 'personalProtectiveEquipment',
   loadingUnloadingStockCountingSettings: 'loadingUnloadingStockCountingDetection',
+  sackLoadingUnloadingSettings: 'sackLoadingUnloadingDetection',
 };
 
 // Keys the recipient form used to save, which no incident ever matched. Read as
@@ -12,6 +13,7 @@ const INCIDENT_KEY_BY_SETTING = {
 const LEGACY_INCIDENT_KEYS = {
   personProtectiveEquipment: 'personalProtectiveEquipment',
   loadingUnloadingStockCounting: 'loadingUnloadingStockCountingDetection',
+  sackLoadingUnloading: 'sackLoadingUnloadingDetection',
 };
 
 export const fromLegacyKey = (key) => LEGACY_INCIDENT_KEYS[key] || key;

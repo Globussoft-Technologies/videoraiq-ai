@@ -19,6 +19,13 @@ afterAll(async () => { await disconnectMongo(); });
 beforeEach(async () => { await clearCollections(); });
 
 describe("resolveDetectionTypes", () => {
+  it('includes sack loading/unloading when the shared catalog is outdated', async () => {
+    await DetectionCatalog.create({ settingType: 'crowdDetectionSettings', name: 'Crowd Detection' });
+    const result = await resolveDetectionTypes();
+    expect(result.stale).toBe(true);
+    expect(result.detections).toContainEqual(expect.objectContaining({ settingType: 'sackLoadingUnloadingSettings', name: 'Sack Loading/Unloading Detection', dsSupported: null }));
+  });
+
   it('includes Machine Operations when the shared catalog predates this detection', async () => {
     await DetectionCatalog.create({ settingType: 'crowdDetectionSettings', name: 'Crowd Detection' });
     const result = await resolveDetectionTypes();

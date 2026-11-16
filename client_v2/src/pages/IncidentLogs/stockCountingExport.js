@@ -103,6 +103,10 @@ const filterNote = (filters) => (
   `${filters?.vehicleNumber ? `Vehicle: ${filters.vehicleNumber}` : 'All vehicles'}${filters?.direction && filters.direction !== 'all' ? ` | ${filters.direction === 'loading' ? 'Loaded' : 'Unloaded'}` : ''}`
 );
 
+const sackHeaders = (headers, config) => !config.showSackFields ? headers : headers.map(label => ({
+  'Box Type': 'Sacks / Cotton Boxes', 'Total Boxes': 'Total Items', 'Boxes': 'Items',
+}[label] || label));
+
 const PARENT_HEADERS = [
   'S.No',
   'Image',
@@ -224,11 +228,11 @@ const drawReportHeader = async (doc, title, subtitle) => {
   doc.setTextColor(0, 0, 0);
 };
 
-const excelHeaderBlock = (columnCount, filters, total) => {
+const excelHeaderBlock = (columnCount, filters, total, config) => {
   const pad = new Array(Math.max(0, columnCount - 1)).fill('');
   return [
     ['VIDEORAIQ', ...pad],
-    ['Loading/Unloading Stock Logs', ...pad],
+    [config.showSackFields ? config.title : 'Loading/Unloading Stock Logs', ...pad],
     [`${rangeNote(filters)}  |  ${filterNote(filters)}`, ...pad],
     [`Generated on ${moment().format('DD/MM/YYYY hh:mm A')}  |  Total vehicles: ${total}`, ...pad],
     [],
@@ -319,8 +323,8 @@ const exportToExcel = async (config, filters) => {
     });
 
     const vehiclesSheet = XLSX.utils.aoa_to_sheet([
-      ...excelHeaderBlock(PARENT_HEADERS.length, filters, vehicles.length),
-      PARENT_HEADERS,
+      ...excelHeaderBlock(PARENT_HEADERS.length, filters, vehicles.length, config),
+      sackHeaders(PARENT_HEADERS, config),
       ...groupedLines.map((line) => line.cells),
     ]);
     vehiclesSheet['!merges'] = excelMerges(PARENT_HEADERS.length);
@@ -340,8 +344,8 @@ const exportToExcel = async (config, filters) => {
       movementRow(vehicle, event, index + 1)
     ));
     const movementsSheet = XLSX.utils.aoa_to_sheet([
-      ...excelHeaderBlock(MOVEMENT_HEADERS.length, filters, vehicles.length),
-      MOVEMENT_HEADERS,
+      ...excelHeaderBlock(MOVEMENT_HEADERS.length, filters, vehicles.length, config),
+      sackHeaders(MOVEMENT_HEADERS, config),
       ...movementRows,
     ]);
     movementsSheet['!merges'] = excelMerges(MOVEMENT_HEADERS.length);
@@ -354,7 +358,7 @@ const exportToExcel = async (config, filters) => {
     styleExcelRows(movementsSheet, dataStart, movementLines, MOVEMENT_HEADERS.length);
     XLSX.utils.book_append_sheet(workbook, movementsSheet, 'Movements');
 
-    XLSX.writeFile(workbook, `${EXPORT_FILE_NAME}.xlsx`);
+    XLSX.writeFile(workbook, `${config.showSackFields ? config.fileName : EXPORT_FILE_NAME}.xlsx`);
     toast.success(`Exported ${vehicles.length} vehicles`);
   } catch (error) {
     console.error('Failed to export loading/unloading stock Excel:', error);
@@ -373,7 +377,7 @@ const exportToPDF = async (config, filters) => {
     const doc = new jsPDF('landscape');
     await drawReportHeader(
       doc,
-      'Loading/Unloading Stock Logs',
+      config.showSackFields ? config.title : 'Loading/Unloading Stock Logs',
       `${rangeNote(filters)}  |  ${filterNote(filters)}  |  ${vehicles.length} vehicles  |  Generated on ${moment().format('DD/MM/YYYY hh:mm A')}`,
     );
 
@@ -398,7 +402,7 @@ const exportToPDF = async (config, filters) => {
     autoTable(doc, {
       startY: 44,
       margin: { left: 8, right: 8 },
-      head: [PARENT_HEADERS],
+      head: [sackHeaders(PARENT_HEADERS, config)],
       body: body.map((line) => line.cells),
       styles: {
         fontSize: 6.2,
@@ -436,7 +440,7 @@ const exportToPDF = async (config, filters) => {
       },
     });
 
-    doc.save(`${EXPORT_FILE_NAME}.pdf`);
+    doc.save(`${config.showSackFields ? config.fileName : EXPORT_FILE_NAME}.pdf`);
     toast.success(`Exported ${vehicles.length} vehicles`);
   } catch (error) {
     console.error('Failed to export loading/unloading stock PDF:', error);

@@ -1,3 +1,4 @@
+import { sackSettingsSchema } from "../../../services/sackLoading.js";
 import { acquireDetectionControlLease } from '../../../services/detectionControlLease.js';
 import Admin from "../admin/admin.model.js";
 import {
@@ -44,6 +45,7 @@ import {
   unauthorizedAnimalEntryDetectionSettings,
   spillsDirtyMessyAreasDetectionSettings,
   loadingUnloadingStockCountingSettings,
+  sackLoadingUnloadingSettings,
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
   boxPackingDetectionSettings,
@@ -105,6 +107,7 @@ import {
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
   LoadingUnloadingStockCountingSetting,
+  SackLoadingUnloadingSetting,
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,
@@ -175,6 +178,7 @@ const modelMap = {
   unauthorizedAnimalEntryDetectionSettings: UnauthorizedAnimalEntryDetectionSetting,
   spillsDirtyMessyAreasDetectionSettings: SpillsDirtyMessyAreasDetectionSetting,
   loadingUnloadingStockCountingSettings: LoadingUnloadingStockCountingSetting,
+  sackLoadingUnloadingSettings: SackLoadingUnloadingSetting,
   blurredCameraDetectionSettings: BlurredCameraDetectionSetting,
   deskSolarShoulderDetectionSettings: DeskSolarShoulderDetectionSetting,
   boxPackingDetectionSettings: BoxPackingDetectionSetting,
@@ -534,6 +538,10 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(value.settingType, value.settings);
+      if (value.settingType === 'sackLoadingUnloadingSettings' && value.settings) {
+        const validation = sackSettingsSchema.validate(value.settings, { convert: false });
+        if (validation.error) return res.status(400).json(Response.userFailResp('Validation Failed', validation.error.message));
+      }
       if (value.settingType === 'machineOpsDetectionSettings' && value.settings) {
         const machineValidation = machineOpsSettingsSchema.validate(value.settings, { convert: false });
         if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
@@ -981,6 +989,10 @@ class DetectionSettingService {
       }
 
       const hygieneValidation = DetectionSettingsValidation.validateHygieneSettings(settingType, value.settings);
+      if ((value.settingType || settingType) === 'sackLoadingUnloadingSettings' && value.settings) {
+        const validation = sackSettingsSchema.validate(value.settings, { convert: false });
+        if (validation.error) return res.status(400).json(Response.userFailResp('Validation Failed', validation.error.message));
+      }
       if ((value.settingType || settingType) === 'machineOpsDetectionSettings' && value.settings) {
         const machineValidation = machineOpsSettingsSchema.validate(value.settings, { convert: false });
         if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
@@ -1928,6 +1940,7 @@ class DetectionSettingService {
         unauthorizedAnimalEntryDetectionSettings,
         spillsDirtyMessyAreasDetectionSettings,
         loadingUnloadingStockCountingSettings,
+        sackLoadingUnloadingSettings,
         blurredCameraDetectionSettings,
         deskSolarShoulderDetectionSettings,
         boxPackingDetectionSettings,

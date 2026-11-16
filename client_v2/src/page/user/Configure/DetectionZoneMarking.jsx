@@ -132,6 +132,7 @@ export default function DetectionZoneMarking({
   // line sub-tool. So it keeps the full polygon toolbar and adds "Draw Line".
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
   const isStockCounting = isStockCountingType(activeType?.settingType);
+  const isSackLoading = activeType?.settingType === 'sackLoadingUnloadingSettings';
   const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
@@ -406,7 +407,7 @@ export default function DetectionZoneMarking({
     whatsappRecipientIds: [],
     telegramChatId: '',
     countMode: (isLineCrossing || isCheckInOut) ? savedDetectionMode : '',
-    activityMode: 'all',
+    activityMode: isSackLoading ? 'both' : 'all',
     schedule: emptySchedule(),
     ...pointZoneDraft,
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
@@ -683,7 +684,7 @@ export default function DetectionZoneMarking({
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
         : z.telegramChatId || undefined,
       ...(usesLineMode ? { count_mode: toApiMode(z.countMode) } : {}),
-      ...(isStockCounting ? { activity_mode: z.activityMode || 'all' } : {}),
+      ...(isStockCounting ? { activity_mode: isSackLoading ? (['loading', 'unloading'].includes(z.activityMode) ? z.activityMode : 'both') : z.activityMode || 'all' } : {}),
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
       ...(fields.includes('company') && String(z.company ?? '').trim() !== '' ? { company: z.company } : {}),
@@ -1667,6 +1668,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+          isSackLoading={isSackLoading}
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isEmotion={isEmotion}
@@ -1809,6 +1811,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+          isSackLoading={isSackLoading}
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
                 isEmotion={isEmotion}
@@ -1857,6 +1860,7 @@ export default function DetectionZoneMarking({
           isLineCrossing={isLineCrossing}
           isCheckInOut={isCheckInOut}
           isStockCounting={isStockCounting}
+          isSackLoading={isSackLoading}
           isFireSmoke={isFireSmoke}
           isDoor={isDoor}
           initialDoorAlertMode={doorAlertModeDraft}

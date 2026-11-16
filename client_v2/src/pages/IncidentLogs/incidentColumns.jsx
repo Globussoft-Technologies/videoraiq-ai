@@ -434,7 +434,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
       },
       {
         accessorKey: 'boxTypes',
-        header: 'Box Type',
+        header: config.showSackFields ? 'Sacks / Cotton Boxes' : 'Box Type',
         cell: ({ row }) => <span className={`${styles.text} capitalize`}>{boxSplitLabel(row.original)}</span>,
       },
       {
@@ -449,7 +449,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
       },
       {
         accessorKey: 'boxCount',
-        header: sortHeader('Total Boxes', 'boxCount'),
+        header: sortHeader(config.showSackFields ? 'Total Items' : 'Total Boxes', 'boxCount'),
         cell: ({ row }) => <span className={`${styles.text} font-semibold`}>{row.original.boxCount ?? 0}</span>,
       },
     );

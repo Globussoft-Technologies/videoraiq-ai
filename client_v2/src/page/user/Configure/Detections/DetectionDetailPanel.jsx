@@ -83,6 +83,7 @@ const DETECTION_ICONS = {
   unauthorizedAnimalEntryDetectionSettings: PawPrint,
   spillsDirtyMessyAreasDetectionSettings: Sparkles,
   loadingUnloadingStockCountingSettings: PackageSearch,
+  sackLoadingUnloadingSettings: PackageSearch,
   blurredCameraDetectionSettings: ScanEye,
   deskSolarShoulderDetectionSettings: Armchair,
   boxPackingDetectionSettings: Package,

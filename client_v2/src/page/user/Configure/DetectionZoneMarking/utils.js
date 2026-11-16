@@ -60,6 +60,7 @@ export function zonesFor(setting, cameraId, settingType) {
     })(),
     activityMode: (() => {
       const mode = configs[i]?.activity_mode ?? configs[i]?.mode ?? setting?.settings?.mode;
+      if (settingType === 'sackLoadingUnloadingSettings') return ['loading', 'unloading', 'both'].includes(mode) ? mode : 'both';
       return ['loading', 'unloading'].includes(mode) ? mode : 'all';
     })(),
     schedule: scheduleFromConfig(configs[i]),

@@ -241,6 +241,10 @@ export const DETECTION_META = {
     Icon: PackageSearch,
     tint: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',
   },
+  sackLoadingUnloadingSettings: {
+    Icon: PackageSearch,
+    tint: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',
+  },
   uniformDetectionSettings: {
     Icon: ScanEye,
     tint: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',

@@ -61,6 +61,7 @@ export const DETECTION_TYPES = {
   unauthorizedAnimalEntryDetectionSettings: "Unauthorized Animal Entry Detection",
   spillsDirtyMessyAreasDetectionSettings: "Spills, Dirty or Messy Areas Detection",
   loadingUnloadingStockCountingSettings: "Loading/Unloading Stock Counting Detection",
+  sackLoadingUnloadingSettings: "Sack Loading/Unloading Detection",
   blurredCameraDetectionSettings: "Camera Tampering Detection",
   deskSolarShoulderDetectionSettings: "Desk Solar Shoulder Detection",
   boxPackingDetectionSettings: "Box Packing Detection",
@@ -78,6 +79,7 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "unauthorizedAnimalEntryDetectionSettings",
   "spillsDirtyMessyAreasDetectionSettings",
   "loadingUnloadingStockCountingSettings",
+  "sackLoadingUnloadingSettings",
   "deskSolarShoulderDetectionSettings",
   "boxPackingDetectionSettings",
   "hygieneSanitationFoodSafetyDetectionSettings",
@@ -98,6 +100,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "unauthorizedAnimalEntryDetection",
   "spillsDirtyMessyAreasDetection",
   "loadingUnloadingStockCountingDetection",
+  "sackLoadingUnloadingDetection",
   "deskSolarShoulderDetection",
   "boxPackingDetection",
   "hygieneSanitationFoodSafetyDetection",
@@ -151,6 +154,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   unauthorizedAnimalEntryDetectionSettings: { permissionKey: "animalEntryLogs", logsConfigKey: "animalEntryLogs" },
   spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
   loadingUnloadingStockCountingSettings: { permissionKey: "stockCountingLogs", logsConfigKey: "stockCountingLogs" },
+  sackLoadingUnloadingSettings: { permissionKey: "sackLoadingLogs", logsConfigKey: "sackLoadingLogs" },
   boxPackingDetectionSettings: { permissionKey: "boxPackingLogs", logsConfigKey: "boxPackingLogs" },
   hygieneSanitationFoodSafetyDetectionSettings: { permissionKey: "hygieneSanitationFoodSafetyLogs", logsConfigKey: "hygieneSanitationFoodSafetyLogs" },
   lightingVisibilitySiteConditionsDetectionSettings: { permissionKey: "lightingVisibilitySiteConditionsLogs", logsConfigKey: "lightingVisibilitySiteConditionsLogs" },
@@ -222,6 +226,7 @@ export const TYPE_MAP = {
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetection",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetection",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingDetection",
+  sackLoadingUnloadingSettings: "sackLoadingUnloadingDetection",
   blurredCameraDetectionSettings: "blurredCameraDetection",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetection",
   boxPackingDetectionSettings: "boxPackingDetection",
@@ -279,6 +284,7 @@ export const DETECTION_MODES_MAP = {
   unauthorizedAnimalEntryDetectionSettings: ["unauthorizedAnimalEntryDetectionSettings"],
   spillsDirtyMessyAreasDetectionSettings: ["spillsDirtyMessyAreasDetectionSettings"],
   loadingUnloadingStockCountingSettings: ["loadingUnloadingStockCountingSettings"],
+  sackLoadingUnloadingSettings: ["sackLoadingUnloadingSettings"],
   blurredCameraDetectionSettings: ["blurredCameraDetectionSettings"],
   deskSolarShoulderDetectionSettings: ["deskSolarShoulderDetectionSettings"],
   boxPackingDetectionSettings: ["boxPackingDetectionSettings"],
@@ -350,6 +356,7 @@ export const DS_DETECTOR_BY_MODE = {
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
+  sackLoadingUnloadingSettings: "sackLoadingUnloadingSettings",
   // DS renamed it Camera Tampering (2026-10-22); our stored key stays.
   blurredCameraDetectionSettings: "cameraTamperingDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
@@ -435,6 +442,7 @@ export const DS_LOGIC_BY_MODE = {
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
   spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
   loadingUnloadingStockCountingSettings: "loadingUnloadingStockCountingSettings",
+  sackLoadingUnloadingSettings: "sackLoadingUnloadingSettings",
   // DS renamed it Camera Tampering (2026-10-22); our stored key stays.
   blurredCameraDetectionSettings: "cameraTamperingDetectionSettings",
   deskSolarShoulderDetectionSettings: "deskSolarShoulderDetectionSettings",
@@ -499,6 +507,7 @@ export const toPopulateDetections = [
   { path: "detections.unauthorizedAnimalEntryDetectionSettings.id" },
   { path: "detections.spillsDirtyMessyAreasDetectionSettings.id" },
   { path: "detections.loadingUnloadingStockCountingSettings.id" },
+  { path: "detections.sackLoadingUnloadingSettings.id" },
   { path: "detections.blurredCameraDetectionSettings.id" },
   { path: "detections.deskSolarShoulderDetectionSettings.id" },
   { path: "detections.boxPackingDetectionSettings.id" },
@@ -1815,5 +1824,18 @@ export const uniformDetectionSettings = {
         [[10, 10], [100, 10], [100, 200], [10, 200]],
       ],
     },
+  },
+};
+
+export const sackLoadingUnloadingSettings = {
+  ...industrialDetectionExample("sackLoadingUnloadingSettings", "Sack Loading/Unloading Detection"),
+  settings: {
+    ...industrialDetectionExample("sackLoadingUnloadingSettings", "Sack Loading/Unloading Detection").settings,
+    levelOfImportance: "moderate", trigger_notification: true, mode: "both",
+    referencePoints: { "664f89e8a9d345001ee326b1": [
+      [[100, 100], [800, 100], [800, 700], [100, 700]],
+      [[950, 100], [1800, 100], [1800, 700], [950, 700]],
+    ] },
+    zone_configs: [{ name: "Loading Bay", activity_mode: "loading" }, { name: "Unloading Bay", activity_mode: "unloading" }],
   },
 };

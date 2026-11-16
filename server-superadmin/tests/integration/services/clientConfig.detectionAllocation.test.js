@@ -40,6 +40,7 @@ describe("detection allocation revocation", () => {
     ["gender and age detection", "genderAgeDetectionSettings"],
     ["emotion detection", "emotionDetectionSettings"],
     ["loading/unloading stock counting", STOCK_COUNTING],
+    ["sack loading/unloading", "sackLoadingUnloadingSettings"],
     ["blurred camera detection", BLURRED_CAMERA],
   ])("licenses %s with a camera allocation", async (_label, settingType) => {
     const admin = await Admin.create({

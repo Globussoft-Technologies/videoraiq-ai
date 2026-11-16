@@ -1,3 +1,4 @@
+import { sackIncidentSchema } from "../../../services/sackLoading.js";
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import { machineOpsIncidentSchema } from '../../../services/machineOps.js';
 import { getGenderAgeSummary } from "./genderAgeSummary.js";
@@ -80,6 +81,7 @@ import {
   UnauthorizedAnimalEntryDetectionIncident,
   SpillsDirtyMessyAreasDetectionIncident,
   LoadingUnloadingStockCountingIncident,
+  SackLoadingUnloadingIncident,
   BlurredCameraDetectionIncident,
   DeskSolarShoulderDetectionIncident,
   BoxPackingDetectionIncident,
@@ -135,6 +137,7 @@ const modelMap = {
   unauthorizedAnimalEntryDetection: UnauthorizedAnimalEntryDetectionIncident,
   spillsDirtyMessyAreasDetection: SpillsDirtyMessyAreasDetectionIncident,
   loadingUnloadingStockCountingDetection: LoadingUnloadingStockCountingIncident,
+  sackLoadingUnloadingDetection: SackLoadingUnloadingIncident,
   blurredCameraDetection: BlurredCameraDetectionIncident,
   deskSolarShoulderDetection: DeskSolarShoulderDetectionIncident,
   boxPackingDetection: BoxPackingDetectionIncident,
@@ -412,6 +415,11 @@ class IncidentsService {
       // A type DS renamed is stored under our existing one (e.g. camera tampering).
       const aliasedType = INCIDENT_TYPE_ALIASES[req.body?.incidentType];
       if (aliasedType) req.body.incidentType = aliasedType;
+      if (req.body.incidentType === 'sackLoadingUnloadingDetection') {
+        const validation = sackIncidentSchema.validate(req.body, { convert: false });
+        if (validation.error) return res.status(400).json(Response.validationFailResp(validation.error.message, 'Validation Failed!'));
+        req.body.channelId ??= req.body.cameraId;
+      }
       if (req.body.incidentType === 'machineOpsDetection') {
         const validation = machineOpsIncidentSchema.validate(req.body, { convert: false });
         if (validation.error) return res.status(400).json(Response.validationFailResp(validation.error.message, 'Validation Failed!'));
@@ -470,7 +478,7 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
-      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection"].includes(incidentType) &&
+      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection", "sackLoadingUnloadingDetection"].includes(incidentType) &&
         (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
         return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
       }
@@ -504,7 +512,7 @@ class IncidentsService {
       // Retry deliveries keep their eventId so stock counts and machine
       // state events do not create duplicate incidents or notifications.
       if (
-        ["loadingUnloadingStockCountingDetection", "machineOpsDetection"].includes(incidentType) &&
+        ["loadingUnloadingStockCountingDetection", "sackLoadingUnloadingDetection", "machineOpsDetection"].includes(incidentType) &&
         req.body.eventId
       ) {
         const existingIncident = await Model.findOne({

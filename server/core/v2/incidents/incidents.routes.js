@@ -1,3 +1,4 @@
+import { getSackLoadingLogs, getSackVehicleNumbers } from "./sackLoadingLogs.js";
 import express from "express";
 import incidentsController from "./incidents.controller.js";
 import {
@@ -12,6 +13,8 @@ import { getHygieneAnalytics, getHygieneLogFilters } from "./hygieneAnalytics.se
 const upload = multer();
 
 const router = express.Router();
+router.get("/logs/sack-loading-unloading/numbers", viewAccessCheck, getSackVehicleNumbers);
+router.get("/logs/sack-loading-unloading", viewAccessCheck, getSackLoadingLogs);
 router.get("/logs/machine-ops-detection", viewAccessCheck, incidentsController.getMachineOpsDetectionLogs);
 router.get("/logs/gender-age-detection", viewAccessCheck, incidentsController.getGenderAgeDetectionLogs);
 router.get("/logs/emotion-detection", viewAccessCheck, incidentsController.getEmotionDetectionLogs);

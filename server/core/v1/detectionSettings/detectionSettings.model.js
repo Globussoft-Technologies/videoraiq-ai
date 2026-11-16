@@ -24,7 +24,7 @@ const zoneConfigsField = {
       threshold_sec: { type: Number },
       activity_mode: {
         type: String,
-        enum: ["loading", "unloading", "all"],
+        enum: ["loading", "unloading", "all", "both"],
       },
       mode: {
         type: String,
@@ -1225,6 +1225,10 @@ const LoadingUnloadingStockCountingSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: LoadingUnloadingStockCountingDetectionSchema }),
 );
 
+const SackLoadingUnloadingSetting = DetectionSetting.discriminator(
+  "sackLoadingUnloadingSettings", new mongoose.Schema({ settings: LoadingUnloadingStockCountingDetectionSchema.clone() }),
+);
+
 const BlurredCameraDetectionSchema = new mongoose.Schema({
   imageRequired: { type: Boolean, default: true },
   videoLinkRequirement: { type: Boolean, default: false },
@@ -1796,6 +1800,7 @@ export {
   UnauthorizedAnimalEntryDetectionSetting,
   SpillsDirtyMessyAreasDetectionSetting,
   LoadingUnloadingStockCountingSetting,
+  SackLoadingUnloadingSetting,
   BlurredCameraDetectionSetting,
   DeskSolarShoulderDetectionSetting,
   BoxPackingDetectionSetting,

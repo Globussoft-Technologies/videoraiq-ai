@@ -32,6 +32,7 @@ export default function ZoneSettingsPanel({
   isLineCrossing = false,
   isCheckInOut = false,
   isStockCounting = false,
+  isSackLoading = false,
   isFireSmoke = false,
   isHygiene = false,
   isLighting = false,
@@ -228,7 +229,7 @@ export default function ZoneSettingsPanel({
                     <div>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                       <select
-                        value={z.activityMode || 'all'}
+                        value={z.activityMode || (isSackLoading ? 'both' : 'all')}
                         onChange={e => onUpdateField(i, 'activityMode', e.target.value)}
                         style={{
                           width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
@@ -237,7 +238,7 @@ export default function ZoneSettingsPanel({
                       >
                         <option value="loading">Loading</option>
                         <option value="unloading">Unloading</option>
-                        <option value="all">All</option>
+                        <option value={isSackLoading ? "both" : "all"}>{isSackLoading ? "Both" : "All"}</option>
                       </select>
                     </div>
                   )}

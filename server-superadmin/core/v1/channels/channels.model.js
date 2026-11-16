@@ -56,6 +56,7 @@ const detectionFields = {
   equipmentOilLeakageDetectionSettings: detectionSettingSchema,
   vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,
+  sackLoadingUnloadingSettings: detectionSettingSchema,
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,

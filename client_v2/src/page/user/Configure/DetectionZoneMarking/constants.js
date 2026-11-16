@@ -20,6 +20,7 @@ export const DETECTION_FIELD_KEYS = [
   'gunnyBagsMaterialsWrongLocationDetectionSettings', 'sandDustWasteScrapDisposalDetectionSettings',
   'unauthorizedAnimalEntryDetectionSettings', 'spillsDirtyMessyAreasDetectionSettings',
   'loadingUnloadingStockCountingSettings',
+  'sackLoadingUnloadingSettings',
   'deskSolarShoulderDetectionSettings',
   'boxPackingDetectionSettings',
   'hygieneSanitationFoodSafetyDetectionSettings',
@@ -31,7 +32,7 @@ export const PERSON_FALL_SICK_SETTING_TYPE = 'personFallSickDetectionSettings';
 export const STOCK_COUNTING_SETTING_TYPE = 'loadingUnloadingStockCountingSettings';
 
 export function isStockCountingType(value) {
-  return String(value || '') === STOCK_COUNTING_SETTING_TYPE;
+  return [STOCK_COUNTING_SETTING_TYPE, 'sackLoadingUnloadingSettings'].includes(String(value || ''));
 }
 
 export function isSpecialDetectionType(value) {

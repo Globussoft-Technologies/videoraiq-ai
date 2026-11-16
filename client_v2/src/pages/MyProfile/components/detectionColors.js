@@ -61,6 +61,7 @@ const SHORT_LABELS = {
   unauthorizedAnimalEntryDetectionSettings: 'Animal Entry',
   spillsDirtyMessyAreasDetectionSettings: 'Messy Area',
   loadingUnloadingStockCountingSettings: 'Stock Counting',
+  sackLoadingUnloadingSettings: 'Sack Loading/Unloading',
   blurredCameraDetectionSettings: 'Camera Tampering',
   emotionDetectionSettings: 'Emotion Detection',
   genderAgeDetectionSettings: 'Gender & Age Detection',

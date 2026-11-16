@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Production service
+  cctv-ui-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cctv-ui-prod
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - cctv-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Development service
+  cctv-ui-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cctv-ui-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - VITE_HMR_HOST=localhost
+      - VITE_HMR_PORT=5173
+    networks:
+      - cctv-network
+    command: npm run dev -- --host
+
+networks:
+  cctv-network:
+    driver: bridge

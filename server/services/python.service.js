@@ -1,3 +1,4 @@
+import { sackDetector } from "./sackLoading.js";
 import { buildUniformDetector } from "./uniformDetection.js";
 import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../constants/emotionDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
@@ -165,6 +166,10 @@ const appendIndustrialDetectors = (
             };
           }),
         });
+        continue;
+      }
+      if (name === "sackLoadingUnloadingSettings") {
+        detectors.push(sackDetector({ zones, zone_configs, settings: stockSettings }));
         continue;
       }
       if (name === "loadingUnloadingStockCountingSettings") {

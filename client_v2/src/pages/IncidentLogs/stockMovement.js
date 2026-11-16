@@ -13,6 +13,8 @@ const splitText = (brown, white, other) => [['Brown', brown], ['White', white], 
 // "Brown 3, White 1" when DS sent the colour split (a vehicle row only when
 // every event has it, see colourCounted), else the plain box type(s).
 export function boxSplitLabel(item) {
+  if (Number.isFinite(item?.sackCount)) return [['White sacks', item.whiteSackCount], ['Brown sacks', item.brownSackCount], ['Other sacks', item.otherSackCount], ['Cotton boxes', item.cottonBoxCount]]
+    .map(([label, count]) => `${label}: ${count ?? 0}`).join(', ');
   if (item?.colourCounted ?? Number.isFinite(item?.brownCount)) {
     const text = splitText(item.brownCount, item.whiteCount, item.otherCount);
     if (text) return text;
@@ -25,6 +27,7 @@ export function boxSplitLabel(item) {
 // events; '' when any of those events predates the colour split.
 export function directionSplitLabel(row, direction) {
   const events = (row?.events || []).filter((event) => event?.direction === direction);
+  if (events.length && events.every(event => Number.isFinite(event.sackCount))) return boxSplitLabel(Object.fromEntries(['sackCount', 'whiteSackCount', 'brownSackCount', 'otherSackCount', 'cottonBoxCount'].map(key => [key, events.reduce((sum, event) => sum + (event[key] || 0), 0)])));
   if (!events.length || !events.every((event) => Number.isFinite(event.brownCount))) return '';
   const sum = (key) => events.reduce((total, event) => total + (event[key] || 0), 0);
   return splitText(sum('brownCount'), sum('whiteCount'), sum('otherCount'));

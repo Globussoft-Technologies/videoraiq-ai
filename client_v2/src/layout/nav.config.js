@@ -118,6 +118,7 @@ const stevinrockLogItems = [
       { key: 'stock-counting-analytics', label: 'Analytics', path: 'logs/stock-counting/analytics', icon: BarChart3 },
     ],
   },
+  { key: 'sack-loading-unloading', label: 'Sack Loading/Unloading Logs', path: 'logs/sack-loading-unloading', icon: PackageSearch, permissionKey: 'logs', permissionSubKey: 'sackLoadingLogs', logsConfigKey: 'sackLoadingLogs' },
   { key: 'blurred-camera', label: 'Camera Tampering Logs', path: 'logs/blurred-camera', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'blurredCameraLogs', logsConfigKey: 'blurredCameraLogs' },
 ];
 

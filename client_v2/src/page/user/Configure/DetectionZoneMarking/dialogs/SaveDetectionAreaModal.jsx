@@ -43,6 +43,7 @@ export default function SaveDetectionAreaModal({
   isLineCrossing = false,
   isCheckInOut = false,
   isStockCounting = false,
+  isSackLoading = false,
   isFireSmoke = false,
   isDoor = false,
   initialDoorAlertMode = 'open',
@@ -372,7 +373,7 @@ export default function SaveDetectionAreaModal({
                 <div>
                   <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                   <select
-                    value={z.activityMode || 'all'}
+                    value={z.activityMode || (isSackLoading ? 'both' : 'all')}
                     onChange={e => updateZoneField(i, 'activityMode', e.target.value)}
                     style={{
                       width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
@@ -381,7 +382,7 @@ export default function SaveDetectionAreaModal({
                   >
                     <option value="loading">Loading</option>
                     <option value="unloading">Unloading</option>
-                    <option value="all">All</option>
+                    <option value={isSackLoading ? "both" : "all"}>{isSackLoading ? "Both" : "All"}</option>
                   </select>
                 </div>
               )}

@@ -407,3 +407,11 @@ export const EMOTION_CONFIG = {
   timeLabel: 'Time of Incident',
   datePickerVariant: 'preset',
 };
+
+export const SACK_LOADING_CONFIG = {
+  ...STOCK_COUNTING_CONFIG, endpoint: '/incidents/logs/sack-loading-unloading',
+  title: 'Sack Loading/Unloading Logs', fileName: 'sack_loading_unloading_logs', sheetName: 'Sack Loading Logs',
+  storagePrefix: 'sack_loading', permissionKey: 'sackLoadingLogs', showSackFields: true,
+  showBoxTypeFilter: false, boxTypesEndpoint: undefined,
+  vehicleNumbersEndpoint: '/incidents/logs/sack-loading-unloading/numbers',
+};

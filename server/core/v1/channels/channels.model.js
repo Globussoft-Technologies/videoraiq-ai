@@ -122,6 +122,7 @@ const detectionFields = {
   unauthorizedAnimalEntryDetectionSettings: detectionSettingSchema,
   spillsDirtyMessyAreasDetectionSettings: detectionSettingSchema,
   loadingUnloadingStockCountingSettings: detectionSettingSchema,
+  sackLoadingUnloadingSettings: detectionSettingSchema,
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,

@@ -498,7 +498,7 @@ const IncidentLogsPage = ({ config }) => {
       return (
         <div className="bg-[var(--bg2)] px-5 py-4">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)]">
-            <span>All stock movements for</span>
+            <span>{config.showSackFields ? 'All sack movements for' : 'All stock movements for'}</span>
             <Truck
               className="h-3.5 w-3.5 shrink-0 text-black dark:text-[var(--blue)]"
               strokeWidth={2.75}
@@ -580,11 +580,11 @@ const IncidentLogsPage = ({ config }) => {
                           {direction || '--'}
                         </span>
                         <span className="text-[13px] text-[var(--tx2)]">
-                          <span className="font-bold text-[var(--tx)]">Boxes:</span>{' '}
+                          <span className="font-bold text-[var(--tx)]">{config.showSackFields ? 'Items:' : 'Boxes:'}</span>{' '}
                           <span className="font-semibold">{event?.boxCount ?? 0}</span>
                         </span>
                         <span className="text-[13px] text-[var(--tx2)]">
-                          <span className="font-bold text-[var(--tx)]">Box Type:</span>{' '}
+                          <span className="font-bold text-[var(--tx)]">{config.showSackFields ? 'Sacks / Cotton Boxes:' : 'Box Type:'}</span>{' '}
                           <span className="font-semibold capitalize">{boxSplitLabel(event)}</span>
                         </span>
                         {event?.description && (
@@ -606,7 +606,7 @@ const IncidentLogsPage = ({ config }) => {
         </div>
       );
     },
-    [openPreview]
+    [openPreview, config.showSackFields]
   );
 
   const pageCount = Math.max(1, Math.ceil(totalCount / limit));
@@ -683,9 +683,9 @@ const IncidentLogsPage = ({ config }) => {
     if (config.showStockCountingFields) {
       return [
         { label: config.statsLabel || 'Vehicles', value: stockSummary.vehicles ?? totalCount ?? 0, color: 'var(--blue)' },
-        { label: 'Loaded Boxes', value: stockSummary.loadedBoxes || 0, color: 'var(--ok)' },
-        { label: 'Unloaded Boxes', value: stockSummary.unloadedBoxes || 0, color: 'var(--warn)' },
-        { label: 'Total Boxes', value: stockSummary.totalBoxes || 0, color: 'var(--violet)' },
+        { label: config.showSackFields ? 'Loaded Items' : 'Loaded Boxes', value: stockSummary.loadedBoxes || 0, color: 'var(--ok)' },
+        { label: config.showSackFields ? 'Unloaded Items' : 'Unloaded Boxes', value: stockSummary.unloadedBoxes || 0, color: 'var(--warn)' },
+        { label: config.showSackFields ? 'Total Items' : 'Total Boxes', value: stockSummary.totalBoxes || 0, color: 'var(--violet)' },
       ];
     }
     return [
@@ -694,7 +694,7 @@ const IncidentLogsPage = ({ config }) => {
       { label: config.showLightingFields || config.showHygieneFields || config.showDoorFields ? 'Medium' : 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, config.showStockCountingFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
+  }, [config.showStats, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({
