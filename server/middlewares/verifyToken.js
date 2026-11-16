@@ -28,6 +28,7 @@ const AGENT_READ_GET = [
   /^\/api\/v2\/attendance\/settings\/?$/,
   /^\/api\/v2\/audit-events\/?$/,
   /^\/api\/v2\/channel\/(?:details|detection-status|[0-9a-fA-F]{24})\/?$/,
+  /^\/api\/v2\/client-config\/license\/?$/,
   /^\/api\/v2\/dashboard\/recentIncidents\/?$/,
   /^\/api\/v2\/detection-settings(?:\/[^/]+(?:\/schedule(?:\/[^/]+)?)?)?\/?$/,
   /^\/api\/v2\/incidents\/(?:getIncident|logs\/[^/]+(?:\/[^/]+){0,2})\/?$/,

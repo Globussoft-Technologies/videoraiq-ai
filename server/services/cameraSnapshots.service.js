@@ -114,6 +114,38 @@ export async function captureFrame(url, playbackToken) {
   }
 }
 
+/**
+ * Capture a camera frame for an API response without uploading it first.
+ * This keeps on-demand previews available when the configured media store is
+ * temporarily unreachable.
+ */
+export async function captureCameraFrame(camera, nvr, admin) {
+  const stream = await resolveStream(camera.userId);
+  const url = snapshotStreamUrl(camera, nvr, stream);
+  const captureLive = async () => {
+    if (!url) throw new Error("Camera has no usable stream URL");
+    return captureFrame(url, createSnapshotPlaybackToken(camera.userId));
+  };
+  try {
+    return { buffer: await captureLive(), source: "live", capturedAt: new Date() };
+  } catch (liveError) {
+    try {
+      const playback = await capturePlaybackSnapshot({
+        camera,
+        nvr,
+        timezone: admin?.timezone,
+        ffmpegPath: snapshotFfmpegExecutable(),
+        decode: input => decodeSnapshotFrame(input, undefined, true),
+      });
+      return { buffer: playback.buffer, source: "playback", capturedAt: new Date(), ...playback };
+    } catch (playbackError) {
+      playbackError.snapshotStage = "capture";
+      playbackError.liveFailure = snapshotFailureReason(liveError);
+      throw playbackError;
+    }
+  }
+}
+
 function snapshotFfmpegExecutable() {
   const configured = (config.has("FFMPEG_PATH") && config.get("FFMPEG_PATH")) || process.env.FFMPEG_PATH;
   if (configured) return configured;
@@ -251,6 +283,7 @@ export async function runCameraSnapshotSweep({ force = false, userId } = {}) {
   if (running) return { ...summary, alreadyRunning: true };
   running = true;
   const eligibility = now => ({
+    isAdded: true,
     ...(userId ? { userId: String(userId) } : {}),
     $and: [
       ...(!force ? [{ $or: [{ snapshotNextAttemptAt: { $exists: false } }, { snapshotNextAttemptAt: { $lte: now } }] }] : []),

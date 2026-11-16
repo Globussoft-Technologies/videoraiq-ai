@@ -3,18 +3,19 @@ import config from "config";
 import Channel from "./channels.model.js";
 import NVR from "../NVR/nvr.model.js";
 import Admin from "../admin/admin.model.js";
+import logger from "../../../utils/logger.js";
 
 export function snapshotUrl(path) {
   if (!path) return null;
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^(?:https?:\/\/|data:)/i.test(path)) return path;
   const base = config.has("ImageView") ? String(config.get("ImageView") || "").replace(/\/+$/, "") : "";
   return base ? `${base}/${String(path).replace(/^\/+/, "")}` : null;
 }
 
 const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function cameraData(camera, nvr) {
-  const stored = camera.latestSnapshot;
+function cameraData(camera, nvr, snapshotOverride = null) {
+  const stored = snapshotOverride || camera.latestSnapshot;
   const url = snapshotUrl(stored?.path);
   return {
     camera: {
@@ -93,7 +94,22 @@ export async function getCameraDetails(cameraId, principal, authorizedChannels =
   const camera = await Channel.findOne({ _id: cameraId, userId }).lean();
   if (!camera) return { code: 404, message: "Camera not found" };
   const nvr = camera.nvrId && await NVR.findOne({ _id: camera.nvrId, userId }).lean();
+  let snapshotOverride = null;
+  if (!camera.latestSnapshot?.path) {
+    try {
+      const admin = await Admin.findById(principal.adminId).select("_id timezone").lean();
+      const { captureCameraFrame } = await import("../../../services/cameraSnapshots.service.js");
+      const captured = await captureCameraFrame(camera, nvr, admin);
+      snapshotOverride = {
+        path: `data:image/jpeg;base64,${captured.buffer.toString("base64")}`,
+        capturedAt: captured.capturedAt || new Date(),
+        source: captured.source || "live",
+      };
+    } catch (error) {
+      logger.warn(`Camera ${cameraId} snapshot preview failed: ${error?.message || "unknown error"}`);
+    }
+  }
   return { code: 200, data: {
-    ...cameraData(camera, nvr), nvr: nvr ? nvrData(nvr) : null,
+    ...cameraData(camera, nvr, snapshotOverride), nvr: nvr ? nvrData(nvr) : null,
   } };
 }
