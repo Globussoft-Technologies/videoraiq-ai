@@ -1,4 +1,6 @@
 import { engineMeta } from '@/lib/engineMeta';
+import { useApi } from '@/hooks/useApi';
+import { fetchIncidents } from '@/helpers/incidents';
 
 function DetectionTypeChart({ rows, total }) {
   const visible = rows.slice(0, 11);
@@ -18,16 +20,25 @@ function DetectionTypeChart({ rows, total }) {
   </div>;
 }
 
-export default function LiveStats({ cameras, detections, incidents, cameraBars = [], detectionBars = [] }) {
-  const values = [cameras, detections, incidents];
-  const max = Math.max(1, ...cameraBars);
+export default function LiveStats({ detections, incidents, detectionBars = [] }) {
+  const today = new Date().toLocaleDateString('en-CA');
+  const alertsApi = useApi(
+    () => fetchIncidents(
+      { skip: 0, limit: 1 },
+      { startDate: today, endDate: today, severity: ['critical', 'Critical', 'CRITICAL'], statusFilter: ['new', 'resolved', 'reported'] },
+    ),
+    [today],
+    { pollMs: 60000, pollSilent: true },
+  );
+  const alertsToday = alertsApi.data ? Number(alertsApi.data.totalCount) : null;
+  const values = [alertsToday, detections, incidents];
   return <section className="agent-live-stats grid grid-cols-3">
-    {['Cameras online', 'Detections today', 'Open incidents'].map((label, index) => {
+    {['Critical alerts', 'Detections today', 'Open incidents'].map((label, index) => {
       const value = values[index];
       return <div className="agent-tile" key={label}>
         <span>{label}</span>
         <b key={`${index}-${value}`} className="agent-bump">{Number.isFinite(value) ? value.toLocaleString() : '—'}</b>
-        {index === 0 && <div className="agent-bars agent-camera-bars flex items-end" aria-label={`${cameras ?? 0} cameras online`}>{cameraBars.map((count, i) => <i key={i} className={count > 0 ? 'is-online' : ''} style={{ height: `${count / max * 100}%`, animationDelay: `${i * -0.23}s` }} />)}</div>}
+        {index === 0 && <div className="agent-scan" aria-label={`${alertsToday ?? 0} critical alerts today`} />}
         {index === 1 && <DetectionTypeChart rows={detectionBars} total={detections} />}
         {index === 2 && <div className="agent-scan" />}
       </div>;

@@ -307,6 +307,7 @@ export const VIEW_META = {
   'vehicle-check-in-out': { title: 'Vehicle Check-In/Out Logs', sub: 'Vehicle custody — one row per car, expand for its crossings' },
   crusher: { title: 'Crusher Logs', sub: 'Crusher operating-state detections' },
   'fire-smoke': { title: 'Fire & Smoke Logs', sub: 'Fire and smoke hazard detections' },
+  uniform: { title: 'Uniform Detection Logs', sub: 'Uniform compliance detection events' },
   'person-fall-sick': { title: 'Person Fall/Sick Logs', sub: 'Person fall and illness detections' },
   'line-crossing': { title: 'Line Crossing Logs', sub: 'Boundary & line-crossing detections' },
   'water-spill': { title: 'Water Spill Logs', sub: 'Water spillage detections' },

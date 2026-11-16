@@ -210,7 +210,7 @@ const ReusableTablePage = ({
       <div className="w-full min-w-0 flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-3 sm:p-5 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
-          {showSearch && <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
+          {showSearch && <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] hover:border-[var(--violet)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
             <Search className="absolute left-3 w-4 h-4 text-[var(--tx3)] pointer-events-none" />
             <input type="text" placeholder="Search" className="w-full h-full bg-transparent border-0 outline-none pl-9 pr-3 text-sm text-[var(--tx)] placeholder:text-[var(--tx3)]" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>}

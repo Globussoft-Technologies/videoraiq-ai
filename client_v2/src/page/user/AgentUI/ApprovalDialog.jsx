@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { agentApi } from './agentApi';
+import { zonePreviewBlob } from './zonePreview';
+import ZoneSnapshot from './ZoneSnapshot';
 
 const names = {
   camera_detection_toggle: 'Detection', camera_processing_toggle: 'Camera processing',
@@ -22,7 +23,7 @@ function changes(before, after, entityNames, path = '') {
   }
   return [`${readable(path || 'Value')}: ${value(before, entityNames)} → ${value(after, entityNames)}`];
 }
-function targetLines(proposal, target, entityNames) {
+export function targetLines(proposal, target, entityNames) {
   if (proposal.kind === 'admin' || proposal.operation?.startsWith('create_')) {
     const record = target.after || {};
     const linked = ['roleIds', 'departmentIds', 'channelIds', 'nvrIds', 'locations'].flatMap((key) => {
@@ -39,7 +40,7 @@ function targetLines(proposal, target, entityNames) {
   return changed.length ? changed.map((line) => `${prefix}: ${line}`) : [`${prefix}: ${readable(proposal.operation)}`];
 }
 
-export default function ApprovalDialog({ approval, error, entityNames, onDecide, onClose, theme }) {
+export default function ApprovalDialog({ approval, error, entityNames, onDecide, onClose, onNewChat, theme }) {
   const proposal = approval?.proposals?.[0];
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +56,7 @@ export default function ApprovalDialog({ approval, error, entityNames, onDecide,
     if (!proposal || proposal.kind !== 'zone' || !proposal.impact?.preview?.available) return undefined;
     let active = true;
     let url;
-    agentApi.preview(proposal.actionId).then((blob) => { if (active) { url = URL.createObjectURL(blob); setPreview(url); } }).catch(() => { if (active) setPreview('unavailable'); });
+    zonePreviewBlob(proposal.actionId).then((blob) => { if (active) { if (blob) { url = URL.createObjectURL(blob); setPreview(url); } else setPreview('unavailable'); } }).catch(() => { if (active) setPreview('unavailable'); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); setPreview(''); };
   }, [proposal?.actionId]);
   if (!proposal) return null;
@@ -71,11 +72,11 @@ export default function ApprovalDialog({ approval, error, entityNames, onDecide,
     <header className="agent-approval-header"><div><h2 id="agent-approval-title">{expired ? 'Proposal expired' : 'Confirm this change'}</h2><p className="agent-approval-unchanged">Nothing has changed yet.</p></div><span className={`agent-approval-status ${expired ? 'expired' : ''}`}>{expired ? 'Expired' : `Time left ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`}</span></header>
     {expired && <p className="agent-approval-expired" role="status">This proposal can no longer be approved. Ask the agent to prepare a new one.</p>}
     <div className="agent-approval-scroll"><h3>Changes <span>({targets.length})</span></h3>{targets.length > 10 && <label className="agent-approval-search"><span>Find a target</span><input type="search" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value)} placeholder="Search locations or cameras" /></label>}{targetFilter && <p className="agent-approval-filter-count">Showing {visibleTargets.length} of {targets.length} targets</p>}<ol className="agent-approval-targets">{visibleTargets.map((target) => <li key={target.index} data-number={target.index + 1}>{target.lines.map((line, lineIndex) => <p key={lineIndex}>{line}</p>)}</li>)}</ol>
-      {proposal.kind === 'zone' && (preview && preview !== 'unavailable' ? <img className="agent-approval-preview" src={preview} alt="Detection zone preview" /> : zonePoints && <p>No preview image: check the zone points carefully.</p>)}
+      {proposal.kind === 'zone' && (preview && preview !== 'unavailable' ? <ZoneSnapshot src={preview} label="Detection zone preview" /> : zonePoints && <p>No preview image: check the zone points carefully.</p>)}
       {warnings.length > 0 && <div className="agent-approval-warnings"><h3>Warnings</h3><ul>{warnings.map((note, index) => <li key={index}>{String(note)}</li>)}</ul></div>}
     </div>
     {!expired && <label className="agent-approval-check"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} /> I reviewed all {targets.length} {targets.length === 1 ? 'change' : 'changes'}.</label>}
     {(localError || error) && <p className="agent-approval-error" role="alert">{localError || error}</p>}
-    <div className="agent-approval-actions">{!expired && <><button type="button" onClick={() => submit('approve')} disabled={!reviewed || busy}>Approve</button><button type="button" onClick={() => submit('cancel')} disabled={busy}>Cancel change</button></>}<button type="button" onClick={() => onClose(proposal.actionId)} disabled={busy}>{expired ? 'Close' : 'Later'}</button></div>
+    <div className="agent-approval-actions">{!expired && <><button type="button" onClick={() => submit('approve')} disabled={!reviewed || busy}>Approve</button><button type="button" onClick={() => submit('cancel')} disabled={busy}>Cancel change</button></>}{expired && <button type="button" onClick={onNewChat} disabled={busy}>Start new chat</button>}<button type="button" onClick={() => onClose(proposal.actionId)} disabled={busy}>{expired ? 'Close' : 'Later'}</button></div>
   </section></div>, document.body);
 }

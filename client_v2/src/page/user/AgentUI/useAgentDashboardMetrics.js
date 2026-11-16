@@ -35,8 +35,8 @@ export function useAgentDashboardMetrics() {
     [today, timezone], { pollMs: 60000, pollSilent: true },
   );
   const openIncidents = useApi(
-    () => fetchIncidents({ skip: 0, limit: 1 }, { statusFilter: 'new' }),
-    [], { pollMs: 60000, pollSilent: true },
+    () => fetchIncidents({ skip: 0, limit: 1 }, { startDate: today, endDate: today, statusFilter: 'new' }),
+    [today], { pollMs: 60000, pollSilent: true },
   );
   const chart = useApi(() => getDetectionChart(), [], { pollMs: 120000, pollSilent: true });
 

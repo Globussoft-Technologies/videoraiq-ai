@@ -21,8 +21,8 @@ export const robotMoves = [
 
 export const prompts = ['Show me today’s incidents…', 'Which camera is offline?', 'Summarize this week’s detections…'];
 export const actionCards = [
-  { title: 'Incident overview', description: 'What are the latest incidents?', query: 'What are the latest incidents?', icon: 'incident', tone: 'i1' },
-  { title: 'Analytics insights', description: 'Show today’s analytics overview', query: 'Show me the analytics overview for today.', icon: 'analytics', tone: 'i2' },
-  { title: 'Camera activity', description: 'Which cameras are online?', query: 'Which cameras are online right now?', icon: 'camera', tone: 'i3' },
-  { title: 'Detection trends', description: 'What are today’s top detections?', query: 'What are the most common incidents today?', icon: 'detection', tone: 'i4' },
+  { title: 'Summarize incidents', description: 'Highlights from the last 7 days', query: 'Summarize all incidents from the last 7 days and highlight the busiest cameras', icon: 'incident', tone: 'i1' },
+  { title: 'Camera health', description: 'Find detections that stopped', query: 'Which cameras have detection that is not running right now?', icon: 'camera', tone: 'i2' },
+  { title: 'PPE violations', description: 'Group today’s violations by camera', query: 'Show PPE violations from today, grouped by camera', icon: 'detection', tone: 'i3' },
+  { title: 'Detection zones', description: 'Show intrusion detection zones', query: 'Show me the current detection zone for intrusion detection on my cameras', icon: 'detection', tone: 'i1' },
 ];

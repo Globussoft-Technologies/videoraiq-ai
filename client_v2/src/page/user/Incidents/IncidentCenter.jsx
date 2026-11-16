@@ -1790,6 +1790,8 @@ export default function IncidentCenter() {
   }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo, timeRangeError]);
 
   const isResolvedView = statusSet.size === 1 && statusSet.has('resolved');
+  const isReportedView = statusSet.size === 1 && statusSet.has('reported');
+  const hasBothStatusFilters = statusSet.has('resolved') && statusSet.has('reported');
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
@@ -2419,13 +2421,21 @@ export default function IncidentCenter() {
       .filter((status) => statusSet.has(status))
       .reduce((total, status) => total + Number(statusCounts[status] ?? 0), 0)
     : Number(statusCounts.new ?? s.totalAlerts ?? 0);
-  const kpis = [
+  const allKpis = [
     { label: 'Total Incidents',       value: num(allIncidents ?? ((s.totalAlerts ?? 0) + (s.incidentsResolved ?? 0))), color: 'var(--tx)' },
     { label: 'High',                  value: num(severityCounts.high ?? s.criticalAlerts ?? 0), color: 'var(--crit)' },
     { label: 'Unresolved (New)',      value: num(unresolvedIncidentCount), color: 'var(--warn)' },
     { label: 'Resolved',              value: num(resolvedIncidentCount), color: 'var(--ok)' },
     { label: 'Reported',              value: num(reportedIncidentCount), color: 'var(--blue)' },
   ];
+  // Status filters control which status KPI cards are visible, not their
+  // values. With no status filter selected, keep the complete five-card view;
+  // selecting one or both status filters only changes the relevant card set.
+  const kpis = allKpis.filter((kpi) => (
+    kpi.label !== 'Resolved' || statusSet.size === 0 || statusSet.has('resolved')
+  ) && (
+    kpi.label !== 'Reported' || statusSet.size === 0 || statusSet.has('reported')
+  ));
 
   const typeOptions = useMemo(() => {
     const raw = Array.isArray(types.data) ? types.data : [];
@@ -2509,7 +2519,7 @@ export default function IncidentCenter() {
       `}</style>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 16 }}>
+      <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, kpis.length)}, minmax(0, 1fr))`, gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
@@ -2658,7 +2668,7 @@ export default function IncidentCenter() {
           ))}
         </div>
 
-        {!isResolvedView && (
+        {!hasBothStatusFilters && (
           <>
             {/* Bulk resolve controls stay in the existing toolbar so they do not
                 add a second, visually heavy action row above the grid. */}
@@ -2705,16 +2715,16 @@ export default function IncidentCenter() {
                 {resolveMenuStep === 'actions' ? (
                   <div style={{ display: 'grid', gap: 7 }}>
                     <div style={{ padding: '3px 5px 4px', color: 'var(--tx3)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Choose an action</div>
-                    <button type="button" onClick={() => { setScopeAction('resolve'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                    {!isResolvedView && <button type="button" onClick={() => { setScopeAction('resolve'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
                       <span style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(34,197,94,.14)', color: 'var(--ok)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Check size={16} /></span>
                       <span style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Resolve</span><span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Mark incidents as resolved</span></span>
                       <ChevronRight size={14} style={{ marginLeft: 'auto', color: 'var(--tx3)' }} />
-                    </button>
-                    <button type="button" onClick={() => { setScopeAction('report'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                    </button>}
+                    {!isReportedView && <button type="button" onClick={() => { setScopeAction('report'); setResolveMenuStep('scope'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px', border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--tx)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
                       <span style={{ width: 30, height: 30, borderRadius: 8, background: 'color-mix(in srgb, var(--blue) 14%, transparent)', color: 'var(--blue)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><FileText size={15} /></span>
                       <span style={{ display: 'grid', gap: 2 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Report</span><span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Add a report to incidents</span></span>
                       <ChevronRight size={14} style={{ marginLeft: 'auto', color: 'var(--tx3)' }} />
-                    </button>
+                    </button>}
                   </div>
                 ) : <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 6px 9px' }}>
@@ -3227,18 +3237,30 @@ export default function IncidentCenter() {
 
       {reportResolveOpen && (
         <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,13,30,.58)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
-          <div role="dialog" aria-modal="true" aria-label="Report Incidents" style={{ width: 'min(440px, 100%)', boxSizing: 'border-box', background: 'var(--bg1solid)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 16, padding: 24, boxShadow: '0 24px 70px rgba(0,0,0,.28)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <span style={{ width: 40, height: 40, borderRadius: 11, display: 'grid', placeItems: 'center', color: 'var(--blue)', background: 'color-mix(in srgb, var(--blue) 12%, var(--bg2))', flexShrink: 0 }}><FileText size={20} /></span>
-              <div><h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Report Incidents</h3><span style={{ color: 'var(--tx3)', fontSize: 11.5 }}>Add details to the selected incidents</span></div>
+          <div role="dialog" aria-modal="true" aria-label="Report Incidents" style={{ width: 'min(480px, 100%)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box', background: 'var(--bg1solid)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 14, boxShadow: '0 20px 56px rgba(0,0,0,.28)' }}>
+            <div style={{ height: 3, background: 'linear-gradient(90deg, var(--blue), var(--violet))' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid var(--bd)' }}>
+              <span style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', color: '#fff', background: 'linear-gradient(135deg, var(--blue), var(--violet))', flexShrink: 0 }}><FileText size={18} /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Report Incidents</h3><span style={{ color: 'var(--tx3)', fontSize: 11 }}>Add details to the selected incidents</span></div>
+              <button type="button" aria-label="Close report dialog" title="Close" disabled={resolvingBulk} onClick={() => setReportResolveOpen(false)} onMouseEnter={(event) => { if (!resolvingBulk) { event.currentTarget.style.background = 'rgba(59,130,246,.10)'; event.currentTarget.style.borderColor = 'var(--blue)'; event.currentTarget.style.color = 'var(--blue)'; } }} onMouseLeave={(event) => { event.currentTarget.style.background = 'var(--bg2)'; event.currentTarget.style.borderColor = 'var(--bd)'; event.currentTarget.style.color = 'var(--tx3)'; }} style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', flexShrink: 0, border: '1px solid var(--bd)', borderRadius: 7, background: 'var(--bg2)', color: 'var(--tx3)', cursor: resolvingBulk ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? .6 : 1, transition: 'all .15s' }}><X size={14} /></button>
             </div>
-            <p style={{ color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '10px 12px', fontSize: 12.5, margin: '0 0 18px' }}>Report <strong style={{ color: 'var(--tx)' }}>{reportScope?.count || 0} incident{reportScope?.count === 1 ? '' : 's'}</strong>{reportScope?.mode === 'filtered' ? ' matching the current filters across all pages' : reportScope?.mode === 'page' ? ' on this page' : ' selected'}?</p>
-            <label htmlFor="bulk-resolve-report" style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 650, color: 'var(--tx)' }}>Report description <span style={{ color: 'var(--crit)' }}>*</span></label>
-            <textarea id="bulk-resolve-report" value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} disabled={resolvingBulk} rows={4} placeholder="Describe the incidents and actions taken..." style={{ width: '100%', boxSizing: 'border-box', borderRadius: 10, border: '1px solid var(--bd2)', background: 'var(--bg2)', color: 'var(--tx)', padding: '12px 14px', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.5, resize: 'vertical' }} />
-            {reportResolveError && <p role="alert" style={{ color: 'var(--crit)', fontSize: 12, margin: '8px 0 0' }}>{reportResolveError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--bd)' }}>
-              <button type="button" disabled={resolvingBulk} onClick={() => setReportResolveOpen(false)} style={{ padding: '9px 17px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)', color: 'var(--tx)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" disabled={resolvingBulk} onClick={handleConfirmReportResolve} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 18px', border: 0, borderRadius: 9, background: 'var(--blue)', color: '#fff', fontWeight: 650, cursor: resolvingBulk ? 'wait' : 'pointer', opacity: resolvingBulk ? .65 : 1 }}><FileText size={15} />{resolvingBulk ? 'Reporting...' : 'Submit Report'}</button>
+            <div style={{ padding: '18px 20px 20px' }}>
+              {reportScope?.mode === 'selected' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 50, boxSizing: 'border-box', padding: '9px 12px', marginBottom: 16, borderRadius: 9, border: '1px solid color-mix(in srgb, var(--blue) 38%, var(--bd))', background: 'color-mix(in srgb, var(--blue) 11%, var(--bg1solid))' }}>
+                  <span style={{ minWidth: 30, height: 30, padding: '0 5px', boxSizing: 'border-box', display: 'grid', placeItems: 'center', borderRadius: 7, background: 'var(--blue)', color: '#fff', fontSize: 12, fontWeight: 700 }}>{reportScope.count}</span>
+                  <span style={{ color: 'var(--tx2)', fontSize: 12 }}>Selected incidents will receive this report.</span>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '10px 12px', fontSize: 12, margin: '0 0 16px' }}>Report <strong style={{ color: 'var(--tx)' }}>{reportScope?.count || 0} incident{reportScope?.count === 1 ? '' : 's'}</strong>{reportScope?.mode === 'filtered' ? ' matching the current filters across all pages' : ' on this page'}?</p>
+              )}
+              <label htmlFor="bulk-resolve-report" style={{ display: 'block', marginBottom: 9, fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}>Report description <span style={{ color: 'var(--crit)' }}>*</span></label>
+              <textarea id="bulk-resolve-report" value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} disabled={resolvingBulk} rows={4} placeholder="Describe the incidents and actions taken..." style={{ width: '100%', boxSizing: 'border-box', borderRadius: 9, border: '1px solid var(--bd2)', background: 'var(--bg2)', color: 'var(--tx)', padding: '11px 12px', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.5, resize: 'vertical' }} />
+              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 6 }}>Include the key details and any action taken.</div>
+              {reportResolveError && <p role="alert" style={{ color: 'var(--crit)', fontSize: 12, margin: '8px 0 0' }}>{reportResolveError}</p>}
+              <div style={{ display: 'flex', gap: 10, borderTop: '1px solid var(--bd)', paddingTop: 14, marginTop: 18 }}>
+                <button type="button" disabled={resolvingBulk} onClick={() => setReportResolveOpen(false)} onMouseEnter={(event) => { if (!resolvingBulk) { event.currentTarget.style.background = 'var(--bd)'; event.currentTarget.style.borderColor = 'var(--blue)'; event.currentTarget.style.color = 'var(--tx)'; } }} onMouseLeave={(event) => { event.currentTarget.style.background = 'var(--bg2)'; event.currentTarget.style.borderColor = 'var(--bd2)'; event.currentTarget.style.color = 'var(--tx2)'; }} style={{ flex: 1, minHeight: 42, border: '1px solid var(--bd2)', borderRadius: 9, background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 13, fontWeight: 650, cursor: resolvingBulk ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? .65 : 1, transition: 'all .15s' }}>Cancel</button>
+                <button type="button" disabled={resolvingBulk} onClick={handleConfirmReportResolve} onMouseEnter={(event) => { if (!resolvingBulk) { event.currentTarget.style.background = 'linear-gradient(135deg, #2563eb, #c026d3)'; event.currentTarget.style.boxShadow = '0 6px 16px rgba(79,70,229,.30)'; } }} onMouseLeave={(event) => { event.currentTarget.style.background = 'linear-gradient(135deg, var(--blue), var(--violet))'; event.currentTarget.style.boxShadow = 'none'; }} style={{ flex: 1, minHeight: 42, border: '1px solid transparent', borderRadius: 9, background: 'linear-gradient(135deg, var(--blue), var(--violet))', color: '#fff', fontSize: 13, fontWeight: 650, cursor: resolvingBulk ? 'wait' : 'pointer', opacity: resolvingBulk ? .65 : 1, boxShadow: 'none', transition: 'all .15s' }}>{resolvingBulk ? 'Reporting...' : 'Submit Report'}</button>
+              </div>
             </div>
           </div>
         </div>

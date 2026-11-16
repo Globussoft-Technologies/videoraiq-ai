@@ -18,17 +18,22 @@ import ChatInput, { clearNewChatDraft } from './ChatInput';
 import Toasts from './Toasts';
 import { agentApi } from './agentApi';
 import { useAgentDashboardMetrics } from './useAgentDashboardMetrics';
+import CapabilitiesDrawer from './CapabilitiesDrawer';
 import './AgentUI.css';
 
 const MODE_KEY = 'videora_agent_sidebar_mode';
 const NARROW_PX = 820;
 const readMode = () => { try { const saved = localStorage.getItem(MODE_KEY); return ['collapsed', 'compact', 'full'].includes(saved) ? saved : 'full'; } catch { return 'full'; } };
 
-export default function AgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelPointerDown }) {
+export default function AgentUI(props) {
+  return <LiveAgentUI {...props} />;
+}
+
+function LiveAgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelPointerDown }) {
   const navigate = useNavigate();
   const location = useLocation();
   const compact = mode === 'compact';
-  const { conversations, activeId, messages, sending, historyLoading, historyError: historyApiError, threadLoading, threadError, newChat, selectChat, deleteChat, renameChat, send, approval, hasPendingApproval, decisionError, dismissApproval, reopenApproval, decide, recover } = useAgentConversations();
+  const { conversations, activeId, messages, sending, lockReason, uncertain, retryUncertain, discardUncertain, historyLoading, historyError: historyApiError, threadLoading, threadError, newChat, selectChat, deleteChat, renameChat, send, approval, hasPendingApproval, decisionError, dismissApproval, reopenApproval, decide, recover, stop } = useAgentConversations();
   const { channels, cameras, detections, incidents, cameraBars, detectionBars, analyticsReady } = useAgentDashboardMetrics();
   const needsDeviceNames = hasPendingApproval || messages.some((message) => message.role === 'assistant' && /\b[0-9a-f]{24}\b/i.test(message.text));
   const { data: nvrInventory } = useApi(() => getNvrs(0, 500), [], { enabled: needsDeviceNames });
@@ -57,6 +62,7 @@ export default function AgentUI({ mode = 'full', onClose, onExpand, panelPositio
   const [sidebarMode, setSidebarMode] = useState(readMode);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [composerVersion, setComposerVersion] = useState(0);
@@ -64,6 +70,16 @@ export default function AgentUI({ mode = 'full', onClose, onExpand, panelPositio
   const [activeCard, setActiveCard] = useState(-1);
   const [toasts, setToasts] = useState([]);
   const toastTimers = useRef(new Set());
+  const [approvalNow, setApprovalNow] = useState(Date.now());
+  useEffect(() => {
+    if (!hasPendingApproval) return undefined;
+    const timer = window.setInterval(() => setApprovalNow(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, [hasPendingApproval]);
+  const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+  const proposalExpiry = Date.parse(latestAssistant?.proposal?.expiresAt);
+  const expiredProposal = hasPendingApproval && latestAssistant?.status === 'approval_required'
+    && (!Number.isFinite(proposalExpiry) || proposalExpiry <= approvalNow);
   const showInputToast = (message) => {
     const id = crypto.randomUUID();
     setToasts((current) => [...current.slice(-1), { id, text: message, type: 'error' }]);
@@ -109,8 +125,17 @@ export default function AgentUI({ mode = 'full', onClose, onExpand, panelPositio
     return () => observer.disconnect();
   }, []);
   useEffect(() => { if (!isNarrow) setMobileOpen(false); }, [isNarrow]);
+  useEffect(() => { if (isNarrow || compact) setCapabilitiesOpen(false); }, [isNarrow, compact]);
 
-  useEffect(() => { const onKey = (event) => { if (event.key === 'Escape' && deleteTarget && !deleting) setDeleteTarget(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [deleteTarget, deleting]);
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return;
+      if (capabilitiesOpen) setCapabilitiesOpen(false);
+      else if (deleteTarget && !deleting) setDeleteTarget(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [capabilitiesOpen, deleteTarget, deleting]);
 
   useEffect(() => { if (!analyticsReady) return undefined; const id = window.setInterval(() => setShowAnalyticsStatus((current) => !current), timings.ticker); return () => window.clearInterval(id); }, [analyticsReady]);
   useEffect(() => { const id = window.setInterval(() => setActiveCard((current) => (current + 1) % 4), timings.card); return () => window.clearInterval(id); }, []);
@@ -123,11 +148,11 @@ export default function AgentUI({ mode = 'full', onClose, onExpand, panelPositio
     <main className="agent-main">
       <div className="agent-main-content">
         <div className="agent-page-header"><Header compact={compact} sidebarCollapsed={sidebarMode === 'collapsed' && !isNarrow && !mobileOpen} onToggleSidebar={toggleSidebar} onToggleExpand={toggleExpand} onNew={startNew} onClose={closeAgent} onPanelPointerDown={onPanelPointerDown} /></div>
-        <div className="agent-app">{threadLoading ? <div className="agent-thread-state" role="status">Loading conversation…</div> : messages.length ? <ChatLog messages={messages} sending={sending} onSend={ask} onRecover={recover} entityNames={entityNames} theme={theme} /> : <div className="agent-home-content"><Hero ticker={analyticsReady && showAnalyticsStatus ? 'Analytics report refreshed' : cameras === null ? 'Checking camera status…' : `Monitoring ${cameras} cameras live`} activeCard={activeCard} onAsk={ask} /><LiveStats cameras={cameras} detections={detections} incidents={incidents} cameraBars={cameraBars} detectionBars={detectionBars} /></div>}{hasPendingApproval && !approval && <div className="agent-pending-notice" role="status"><span className="agent-pending-icon"><CircleAlert size={16} /></span><span className="agent-pending-copy"><strong>Change awaiting review</strong><small>Nothing has changed yet.</small></span><button type="button" onClick={reopenApproval}>Review <ArrowRight size={14} /></button></div>}{(!activeId || !threadLoading) && <ChatInput key={`${activeId || 'new'}-${composerVersion}`} onSend={ask} sending={sending} conversationId={activeId} onToast={showInputToast} />}</div>
+        <div className={`agent-app ${capabilitiesOpen ? 'show-capabilities' : ''}`}>{capabilitiesOpen && !isNarrow && !compact && <CapabilitiesDrawer onClose={() => setCapabilitiesOpen(false)} theme={theme} />}{threadLoading ? <div className="agent-thread-state" role="status">Loading conversation…</div> : messages.length ? <ChatLog messages={messages} sending={sending} onSend={ask} onRecover={(id) => recover(id).catch((error) => showInputToast(error.message))} onStop={(id) => stop(id).catch((error) => showInputToast(error.message))} onReview={reopenApproval} onNewChat={startNew} entityNames={entityNames} theme={theme} /> : <div className="agent-home-content"><Hero ticker={analyticsReady && showAnalyticsStatus ? 'Analytics report refreshed' : cameras === null ? 'Checking camera status…' : `Monitoring ${cameras} cameras live`} activeCard={activeCard} onAsk={ask} /><LiveStats cameras={cameras} detections={detections} incidents={incidents} cameraBars={cameraBars} detectionBars={detectionBars} /></div>}{uncertain?.conversationId === activeId && <div className="agent-pending-notice agent-delivery-notice" role="alert"><span className="agent-pending-icon"><CircleAlert size={17} /></span><span className="agent-pending-copy"><strong>Message delivery uncertain</strong><small>Retry safely uses the same message ID.</small></span><span className="agent-delivery-actions"><button type="button" onClick={() => retryUncertain().catch((error) => showInputToast(error.message))}>Retry</button><button type="button" onClick={discardUncertain}>Discard</button></span></div>}{hasPendingApproval && !approval && <div className="agent-pending-notice" role="status"><span className="agent-pending-icon"><CircleAlert size={16} /></span><span className="agent-pending-copy"><strong>{expiredProposal ? 'Proposal expired' : 'Change awaiting review'}</strong><small>{expiredProposal ? 'Start a new chat to continue.' : 'Nothing has changed yet.'}</small></span><button type="button" onClick={expiredProposal ? startNew : reopenApproval}>{expiredProposal ? 'Start new chat' : 'Review'} <ArrowRight size={14} /></button></div>}{(!activeId || !threadLoading) && <ChatInput key={`${activeId || 'new'}-${composerVersion}`} onSend={ask} sending={sending} lockReason={uncertain?.conversationId === activeId ? 'Delivery uncertain. Retry or discard to continue.' : expiredProposal ? 'Proposal expired. Start a new chat to continue.' : lockReason} conversationId={activeId} onToast={showInputToast} />}</div>
       </div>
     </main>
     <Toasts items={toasts} />
-    <ApprovalDialog approval={approval} error={decisionError} entityNames={entityNames} onDecide={decide} onClose={dismissApproval} theme={theme} />
-    {deleteTarget && <div className="agent-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteTarget(null); }}><div className="agent-confirm" role="alertdialog" aria-modal="true" aria-labelledby="agent-delete-title" aria-describedby="agent-delete-desc"><button className="agent-confirm-close" type="button" aria-label="Cancel delete" onClick={() => setDeleteTarget(null)}><X size={17} /></button><h2 id="agent-delete-title">Delete conversation?</h2><p id="agent-delete-desc">“{deleteTarget.title}” and its messages will be permanently removed.</p><div><button type="button" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button><button type="button" onClick={confirmDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</button></div></div></div>}
+    <ApprovalDialog approval={approval} error={decisionError} entityNames={entityNames} onDecide={decide} onClose={dismissApproval} onNewChat={startNew} theme={theme} />
+    {deleteTarget && <div className="agent-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteTarget(null); }}><div className="agent-confirm" role="alertdialog" aria-modal="true" aria-labelledby="agent-delete-title" aria-describedby="agent-delete-desc"><button className="agent-confirm-close" type="button" aria-label="Cancel delete" onClick={() => setDeleteTarget(null)}><X size={17} /></button><h2 id="agent-delete-title">Delete conversation?</h2><p id="agent-delete-desc">This chat will be removed from your history, and you won’t be able to open it again here.</p><div><button type="button" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button><button type="button" onClick={confirmDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</button></div></div></div>}
   </div>;
 }

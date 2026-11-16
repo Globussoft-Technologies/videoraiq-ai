@@ -17,25 +17,38 @@ function ConversationRow({ conversation, selected, onSelect, onRename, onDelete 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(conversation.title || 'New chat');
   const [saving, setSaving] = useState(false);
-  const savingRef = useRef(false);
   const rowRef = useRef(null);
-  useEffect(() => setTitle(conversation.title || 'New chat'), [conversation.title]);
+  const inputRef = useRef(null);
+  const cancelBlurRef = useRef(false);
+  useEffect(() => {
+    if (!editing || !inputRef.current) return;
+    inputRef.current.focus();
+    const end = inputRef.current.value.length;
+    inputRef.current.setSelectionRange(end, end);
+  }, [editing]);
+  useEffect(() => { if (!editing) setTitle(conversation.title || 'New chat'); }, [conversation.title, editing]);
+  const saveTitle = async () => {
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    try { await onRename(conversation.id, title); setEditing(false); } catch { /* Parent displays the error. */ }
+    finally { setSaving(false); }
+  };
   useEffect(() => {
     if (!menuOpen) return undefined;
     const close = (event) => { if (!rowRef.current?.contains(event.target)) setMenuOpen(false); };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
   }, [menuOpen]);
-  const cancelEdit = () => { if (!savingRef.current) { setTitle(conversation.title || 'New chat'); setEditing(false); } };
-  const save = async () => { if (savingRef.current) return; const next = title.trim(); if (!next || next === conversation.title) { setEditing(false);setTitle(conversation.title);return; } savingRef.current = true;setSaving(true);try { await onRename(conversation.id, next);setEditing(false); } catch { setTitle(conversation.title); } finally { savingRef.current = false;setSaving(false); } };
   return <div ref={rowRef} className={`agent-history-row ${selected ? 'selected' : ''}`}>
-    {editing ? <input autoFocus aria-label="Rename conversation" value={title} maxLength={90} disabled={saving} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') save(); if (event.key === 'Escape') cancelEdit(); }} onBlur={cancelEdit} /> : <button type="button" className="agent-history-select" onClick={() => onSelect(conversation.id)} aria-current={selected ? 'page' : undefined}><MessageCircle size={15} /><span className="agent-history-copy"><strong>{conversation.title || 'New chat'}</strong><small>{conversation.messageCount == null ? 'Messages unavailable' : `${conversation.messageCount} ${conversation.messageCount === 1 ? 'message' : 'messages'}`}</small></span><time dateTime={conversation.lastActivityAt || conversation.updatedAt}>{formatTime(conversation.lastActivityAt || conversation.updatedAt)}</time></button>}
-    <button type="button" className="agent-history-menu-button" aria-label={`Options for ${conversation.title || 'conversation'}`} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={16} /></button>
-    {menuOpen && <div className="agent-history-menu"><button type="button" onClick={() => { setMenuOpen(false);setEditing(true); }}>Rename</button><button type="button" onClick={() => { setMenuOpen(false);onDelete(conversation); }}>Delete</button></div>}
+    {editing ? <div className="agent-history-rename"><input ref={inputRef} value={title} maxLength={80} disabled={saving} aria-label="Conversation title" onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); saveTitle(); } if (event.key === 'Escape') { cancelBlurRef.current = true; setEditing(false); setTitle(conversation.title || 'New chat'); } }} onBlur={() => { if (cancelBlurRef.current) { cancelBlurRef.current = false; return; } saveTitle(); }} /><small>{conversation.messageCount == null ? 'Messages unavailable' : `${conversation.messageCount} ${conversation.messageCount === 1 ? 'message' : 'messages'}`}</small></div> : <>
+      <button type="button" className="agent-history-select" onClick={() => onSelect(conversation.id)} aria-current={selected ? 'page' : undefined}><MessageCircle size={15} /><span className="agent-history-copy"><strong>{conversation.activeRun && <i className="agent-active-dot" aria-label="In progress" />} {conversation.title || 'New chat'}</strong><small>{conversation.messageCount == null ? 'Messages unavailable' : `${conversation.messageCount} ${conversation.messageCount === 1 ? 'message' : 'messages'}`}</small></span><time dateTime={conversation.lastActivityAt || conversation.updatedAt}>{formatTime(conversation.lastActivityAt || conversation.updatedAt)}</time></button>
+    </>}
+    <button type="button" className="agent-history-menu-button" aria-label={`Options for ${conversation.title || 'conversation'}`} aria-expanded={menuOpen} onClick={() => { if (!editing) setMenuOpen((open) => !open); }}><MoreHorizontal size={16} /></button>
+    {!editing && menuOpen && <div className="agent-history-menu"><button type="button" onClick={() => { setMenuOpen(false); setTitle(conversation.title || 'New chat'); setEditing(true); }}>Rename</button><button type="button" onClick={() => { setMenuOpen(false); onDelete(conversation); }}>Delete</button></div>}
   </div>;
 }
 
-export default function ChatHistorySidebar({ mode, mobileOpen, isNarrow, onModeChange, onToggle, onMobileClose, conversations, activeId, onSelect, onNew, onRename, onDelete, loading, onError, getConversation }) {
+export default function ChatHistorySidebar({ mode, mobileOpen, isNarrow, onModeChange, onToggle, onMobileClose, conversations, activeId, onSelect, onNew, onRename, onDelete, loading, onError }) {
   const [search, setSearch] = useState('');
   const [matches, setMatches] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -43,8 +56,8 @@ export default function ChatHistorySidebar({ mode, mobileOpen, isNarrow, onModeC
   useEffect(() => { if (searchError) onError?.(searchError); }, [searchError]);
   const searchInput = useRef(null);
   useEffect(() => { if (!mobileOpen) return; const onKey = (event) => { if (event.key === 'Escape') onMobileClose(); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [mobileOpen, onMobileClose]);
-  useEffect(() => { let cancelled = false; if (!search.trim()) { setMatches(null);setSearching(false);setSearchError('');return; } setSearching(true); const id = window.setTimeout(async () => { try { const query = search.trim().toLocaleLowerCase(); const results = await Promise.all(conversations.map(async (conversation) => { if ((conversation.title || '').toLocaleLowerCase().includes(query)) return conversation.id; const detail = await getConversation(conversation.id); return (detail?.runs || []).some((run) => String(run.message || '').toLocaleLowerCase().includes(query) || String(run.result?.report?.answer || '').toLocaleLowerCase().includes(query)) ? conversation.id : null; })); if (!cancelled) { setMatches(new Set(results.filter(Boolean)));setSearchError(''); } } catch { if (!cancelled) { setMatches(new Set());setSearchError('Search could not load message content. Try again.'); } } finally { if (!cancelled) setSearching(false); } }, 250); return () => { cancelled = true;window.clearTimeout(id); }; }, [search, conversations, getConversation]);
-  const groups = useMemo(() => { const result = Object.fromEntries(GROUPS.map((group) => [group, []])); conversations.filter((conversation) => !matches || matches.has(conversation.id)).forEach((conversation) => result[dateGroup(conversation.lastActivityAt || conversation.updatedAt || conversation.createdAt)].push(conversation)); return result; }, [conversations, matches]);
+  useEffect(() => { const query = search.trim().toLocaleLowerCase(); setMatches(query ? new Set(conversations.filter((conversation) => (conversation.title || '').toLocaleLowerCase().includes(query)).map((conversation) => conversation.id)) : null); setSearching(false); setSearchError(''); }, [search, conversations]);
+  const groups = useMemo(() => { const result = Object.fromEntries(GROUPS.map((group) => [group, []])); conversations.filter((conversation) => !matches || matches.has(conversation.id)).forEach((conversation) => result[dateGroup(conversation.createdAt)].push(conversation)); return result; }, [conversations, matches]);
   const count = Object.values(groups).reduce((total, group) => total + group.length, 0);
   const select = (id) => { onSelect(id);onMobileClose(); };
   const startNew = () => { onNew();onMobileClose(); };

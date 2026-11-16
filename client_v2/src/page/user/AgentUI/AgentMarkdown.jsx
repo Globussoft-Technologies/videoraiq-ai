@@ -11,6 +11,15 @@ import 'katex/dist/katex.min.css';
 
 const calloutKinds = new Set(['important', 'warning', 'success', 'error', 'info', 'tip', 'note']);
 
+// Tool output occasionally wraps a record after its timestamp or before a
+// comma. Those are soft wraps, not separate pieces of information, so keep
+// each incident readable as one flowing list item.
+function normalizeRecordWraps(text) {
+  return String(text || '')
+    .replace(/(\d{4}-\d{2}-\d{2}\s+\d{1,2}(?::\d{2})?)\s*\n\s*,\s*/g, '$1 — ')
+    .replace(/([^\n])\n\s*,\s*/g, '$1, ');
+}
+
 // Directives are parsed as Markdown nodes. Only the explicit names below become elements.
 function remarkAgentExtensions() {
   return (tree) => {
@@ -99,7 +108,7 @@ function CodeBlock({ children, className = '', theme }) {
 const safeHref = (href) => /^(https?:\/\/|mailto:|\/|#)/i.test(href || '') ? href : undefined;
 
 const baseComponents = {
-  a: ({ href, children, node, ...props }) => <a {...props} href={safeHref(href)} target={/^https?:\/\//i.test(href || '') ? '_blank' : undefined} rel="noopener noreferrer">{children}</a>,
+  a: ({ href, children, node, ...props }) => <a {...props} href={safeHref(href)} target={/^https?:\/\//i.test(href || '') ? '_blank' : undefined} rel="noopener noreferrer nofollow">{children}</a>,
   img: ({ alt }) => <span>{alt || ''}</span>,
   table: ({ children }) => <div className="agent-md-table-wrap" tabIndex={0}><table>{children}</table></div>,
   input: ({ type, node, ...props }) => type === 'checkbox' ? <input {...props} type="checkbox" disabled readOnly /> : null,
@@ -111,7 +120,7 @@ function AgentMarkdown({ text, theme }) {
     code: ({ children, className, node, ...props }) => <code {...props} className={className || 'agent-md-inline-code'}>{children}</code>,
     pre: ({ children }) => <CodeBlock className={children?.props?.className} theme={theme}>{children?.props?.children}</CodeBlock>,
   }), [theme]);
-  return <div className="agent-message-text agent-markdown" dir="auto"><ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml>{String(text || '')}</ReactMarkdown></div>;
+  return <div className="agent-message-text agent-markdown" dir="auto"><ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml>{normalizeRecordWraps(text)}</ReactMarkdown></div>;
 }
 
 export default memo(AgentMarkdown);

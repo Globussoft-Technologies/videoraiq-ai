@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
-import { Activity, PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { Activity, PlayCircle, ImageOff, Maximize2, X, Flag, Check, FileText, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
@@ -214,6 +214,7 @@ export function ReportModal({ item, onClose, onSuccess }) {
       await apiReport(item._id || item.id, desc.trim());
       onSuccess?.();
       onClose();
+      toast.success(existing ? 'Report updated successfully' : 'Incident reported successfully');
     } catch (e) {
       setErr(e?.response?.data?.body?.message || 'Something went wrong');
     } finally {
@@ -224,32 +225,38 @@ export function ReportModal({ item, onClose, onSuccess }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16, boxSizing: 'border-box' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,13,30,.58)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16, boxSizing: 'border-box' }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 'min(420px, 92vw)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}
+        style={{ width: 'min(410px, 100%)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 0, boxShadow: '0 20px 56px rgba(0,0,0,.28)' }}
       >
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--blue), var(--violet))' }} />
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Report Incident</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '18px 20px', borderBottom: '1px solid var(--bd)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', color: '#fff', background: 'linear-gradient(135deg, var(--blue), var(--violet))', flexShrink: 0 }}><FileText size={18} /></span>
+            <div><div style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{existing && editing ? 'Edit report' : existing ? 'Report details' : 'Report incident'}</div><div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>{existing && !editing ? 'Review the submitted details' : 'Describe what happened and what you did'}</div></div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {existing && !editing && (
               <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
                 ✓ Reported
               </span>
             )}
-            <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx3)' }}>
+            <button onClick={onClose} aria-label="Close report dialog" onMouseEnter={(event) => { event.currentTarget.style.background = 'rgba(59,130,246,.10)'; event.currentTarget.style.borderColor = 'var(--blue)'; event.currentTarget.style.color = 'var(--blue)'; }} onMouseLeave={(event) => { event.currentTarget.style.background = 'var(--bg2)'; event.currentTarget.style.borderColor = 'var(--bd)'; event.currentTarget.style.color = 'var(--tx3)'; }} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx3)', transition: 'all .15s' }}>
               <X size={14} />
             </button>
           </div>
         </div>
 
+        <div style={{ padding: '18px 20px 20px' }}>
+
         {/* View existing report */}
         {existing && !editing ? (
           <>
-            <div style={{ background: 'rgba(34,197,94,.07)', border: '1px solid rgba(34,197,94,.2)', borderRadius: 10, padding: '14px', marginBottom: 14 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', marginBottom: 8 }}>Report Status: Completed</div>
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ok)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Report completed</div>
               <div style={{ fontSize: 13, color: existing.description ? 'var(--tx2)' : 'var(--tx3)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {existing.description || 'No description provided.'}
               </div>
@@ -259,57 +266,100 @@ export function ReportModal({ item, onClose, onSuccess }) {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button onClick={onClose} style={btnStyle('secondary')}>Close</button>
-              <button onClick={() => setEditing(true)} style={btnStyle('outline-blue')}>Edit Report</button>
+            <div style={{ display: 'flex', gap: 10, borderTop: '1px solid var(--bd)', paddingTop: 14 }}>
+              <button onClick={onClose} {...btnHoverProps('secondary')} style={btnStyle('secondary')}>Close</button>
+              <button onClick={() => setEditing(true)} {...btnHoverProps('outline-blue')} style={btnStyle('outline-blue')}>Edit Report</button>
             </div>
           </>
         ) : (
           /* Write/edit report */
           <>
-            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', display: 'block', marginBottom: 7 }}>Description</label>
+            <label htmlFor="incident-report-description" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)', display: 'block', marginBottom: 9 }}>Report description <span style={{ color: 'var(--crit)' }}>*</span></label>
             <textarea
+              id="incident-report-description"
               value={desc}
               onChange={e => setDesc(e.target.value)}
               placeholder="Describe the incident and actions taken..."
               rows={4}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                borderRadius: 10, border: '1px solid var(--bd2)',
+                borderRadius: 9, border: '1px solid var(--bd2)',
                 background: 'var(--bg2)', color: 'var(--tx)',
-                fontSize: 13, padding: '10px 12px',
-                resize: 'vertical', outline: 'none',
-                fontFamily: 'inherit', lineHeight: 1.55,
+                fontSize: 13, padding: '11px 12px',
+                resize: 'vertical',
+                fontFamily: 'inherit', lineHeight: 1.5,
               }}
             />
-            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 5, marginBottom: 14 }}>
-              Provide details about the incident and any actions taken.
-            </div>
+            <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 6 }}>Include the key details and any action taken.</div>
             {err && <div style={{ fontSize: 12, color: 'var(--crit)', marginBottom: 10 }}>{err}</div>}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, borderTop: '1px solid var(--bd)', paddingTop: 14, marginTop: 18 }}>
               <button
                 onClick={() => { if (editing && existing) { setEditing(false); setDesc(existing.description); } else onClose(); }}
+                {...btnHoverProps('secondary')}
                 style={btnStyle('secondary')}
                 disabled={loading}
               >
                 {editing && existing ? 'Cancel' : 'Close'}
               </button>
-              <button onClick={submit} style={btnStyle('primary')} disabled={loading}>
-                {loading ? 'Reporting…' : 'Report'}
+              <button onClick={submit} {...btnHoverProps('primary')} style={btnStyle('primary')} disabled={loading}>
+                {loading ? 'Saving...' : existing ? 'Save Changes' : 'Submit Report'}
               </button>
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
 }
 
 function btnStyle(variant) {
-  const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
-  if (variant === 'primary')      return { ...base, background: 'var(--blue)', color: '#fff', border: '1px solid var(--blue)' };
-  if (variant === 'outline-blue') return { ...base, background: 'transparent', color: 'var(--blue)', border: '1px solid var(--blue)' };
-  return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
+  const base = { flex: 1, minWidth: 0, minHeight: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 650, borderRadius: 9, padding: '0 14px', cursor: 'pointer', transition: 'all .15s' };
+  if (variant === 'primary') return { ...base, background: 'linear-gradient(135deg, var(--blue), var(--violet))', color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px color-mix(in srgb, var(--blue) 24%, transparent)' };
+  if (variant === 'outline-blue') return { ...base, background: 'color-mix(in srgb, var(--blue) 8%, var(--bg1solid))', color: 'var(--blue)', border: '1px solid color-mix(in srgb, var(--blue) 28%, var(--bd))' };
+  return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd2)' };
+}
+
+function btnHoverProps(variant) {
+  if (variant === 'primary') {
+    return {
+      onMouseEnter: (event) => {
+        if (event.currentTarget.disabled) return;
+        event.currentTarget.style.background = 'linear-gradient(135deg, #2563eb, #c026d3)';
+        event.currentTarget.style.boxShadow = '0 6px 16px rgba(79,70,229,.30)';
+      },
+      onMouseLeave: (event) => {
+        event.currentTarget.style.background = 'linear-gradient(135deg, var(--blue), var(--violet))';
+        event.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--blue) 24%, transparent)';
+      },
+    };
+  }
+  if (variant === 'outline-blue') {
+    return {
+      onMouseEnter: (event) => {
+        if (event.currentTarget.disabled) return;
+        event.currentTarget.style.background = 'color-mix(in srgb, var(--blue) 16%, var(--bg1solid))';
+        event.currentTarget.style.borderColor = 'var(--blue)';
+      },
+      onMouseLeave: (event) => {
+        event.currentTarget.style.background = 'color-mix(in srgb, var(--blue) 8%, var(--bg1solid))';
+        event.currentTarget.style.borderColor = 'color-mix(in srgb, var(--blue) 28%, var(--bd))';
+      },
+    };
+  }
+  return {
+    onMouseEnter: (event) => {
+      if (event.currentTarget.disabled) return;
+      event.currentTarget.style.background = 'var(--bd)';
+      event.currentTarget.style.borderColor = 'var(--blue)';
+      event.currentTarget.style.color = 'var(--tx)';
+    },
+    onMouseLeave: (event) => {
+      event.currentTarget.style.background = 'var(--bg2)';
+      event.currentTarget.style.borderColor = 'var(--bd2)';
+      event.currentTarget.style.color = 'var(--tx2)';
+    },
+  };
 }
 
 /* Inline spinner — `vq-spin` keyframes live in theme/tokens.css, so this works

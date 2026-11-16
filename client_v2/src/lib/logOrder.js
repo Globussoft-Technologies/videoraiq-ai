@@ -20,9 +20,11 @@ const ENABLED_KEY = 'logs-order-enabled';
 // within a single tab.
 const CHANGE_EVENT = 'logs-order-changed';
 
-/** The log nav items in their shipped order, straight from nav.config. */
+const compareLogs = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+
+/** All log nav items in alphabetical order, independent of their declaration order. */
 export function defaultLogItems() {
-  return NAV_GROUPS.find((g) => g.label === LOGS_GROUP_LABEL)?.items || [];
+  return [...(NAV_GROUPS.find((g) => g.label === LOGS_GROUP_LABEL)?.items || [])].sort(compareLogs);
 }
 
 function readOrder() {
@@ -80,24 +82,26 @@ export function setLogOrderEnabled(on) {
 /**
  * Reorder `items` to match `order` (a list of item keys).
  *
- * Keys in `order` that no longer exist are ignored, and items missing from it
- * — a log page shipped after the user saved their arrangement — go to the end
- * keeping their relative default order, rather than silently disappearing.
- * Reset restores the shipped sequence.
+ * Saved keys retain their relative order. New logs are inserted according to
+ * their alphabetical position among the current log labels.
  */
 export function applyLogOrder(items, order) {
-  if (!order?.length) return items;
-  const rank = new Map(order.map((key, i) => [key, i]));
-  const known = [];
-  const added = [];
-  items.forEach((item) => (rank.has(item.key) ? known : added).push(item));
-  known.sort((a, b) => rank.get(a.key) - rank.get(b.key));
-  return [...known, ...added];
+  const sorted = [...items].sort(compareLogs);
+  if (!order?.length) return sorted;
+  const byKey = new Map(sorted.map((item) => [item.key, item]));
+  const result = [...new Set(order)].map((key) => byKey.get(key)).filter(Boolean);
+  const saved = new Set(result.map((item) => item.key));
+  for (const item of sorted) {
+    if (saved.has(item.key)) continue;
+    const next = result.findIndex((existing) => compareLogs(item, existing) < 0);
+    result.splice(next < 0 ? result.length : next, 0, item);
+  }
+  return result;
 }
 
 /** applyLogOrder, but a no-op while the feature is switched off. */
 export function orderLogItems(items, { enabled, order }) {
-  return enabled ? applyLogOrder(items, order) : items;
+  return applyLogOrder(items, enabled ? order : []);
 }
 
 /**
