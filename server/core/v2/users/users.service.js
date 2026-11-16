@@ -876,20 +876,35 @@ class UsersService {
       async authUserLogin(req, res, _next) {
         try {
           const { usernameOrEmail, password } = req.body;
+          const identifier = String(usernameOrEmail || '').trim();
       
-          if (!usernameOrEmail || !password) {
+          if (!identifier || !password) {
             return res.status(400).json(Response.userFailResp("Missing email/username or password", "Validation Failed!"));
           }
-          // Find the authorized user by email or userName
-          const user = await authorizedUsersModel.findOne({
-            $or: [{ email:usernameOrEmail }, { userName: usernameOrEmail }]
-          }).populate("roleIds","role empRoleId").populate("adminId","user_id");
 
-          if(!user){
+          // Usernames and emails are scoped to an admin, so duplicate values
+          // can exist across tenants. Find all candidates first, then select
+          // the account whose stored password matches. The selected user's
+          // adminId is used below for tenant-specific access and permissions.
+          const candidates = await authorizedUsersModel.find({
+            $or: [{ email: identifier }, { userName: identifier }]
+          }).populate("roleIds", "role empRoleId").populate("adminId", "user_id");
+
+          if (!candidates.length) {
             return res.status(400).json(
               Response.userFailResp("Invalid email/username or password", "Authentication Failed!")
             );
           }
+
+          const matchingUsers = candidates.filter((candidate) => {
+            try {
+              return decrypt(candidate?.password) === password;
+            } catch (_) {
+              return false;
+            }
+          });
+
+          const user = matchingUsers[0] || candidates[0];
 
           if(user?.active === false){
             return res.status(403).json(Response.userFailResp("User account is deactivated. Please contact administrator.", "Validation Failed!"));

@@ -291,6 +291,7 @@ export const VIEW_META = {
   'emotion-detection': { title: 'Emotion Detection Logs', sub: 'Review facial emotion events across your sites' },
   'gender-age-detection': { title: 'Gender & Age Logs', sub: 'Review gender and age detection events across your sites' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
+  'machine-ops-detection': { title: 'Machine Operations Logs', sub: 'Review machine operation and activity detection events across your sites' },
   'desk-absence': { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
   // productivity: { title: 'Productivity Logs', sub: 'Productive vs. non-productive hours by employee' },
   track: { title: 'Track Logs', sub: 'Live user & vehicle activity tracking' },
