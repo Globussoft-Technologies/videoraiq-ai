@@ -52,10 +52,8 @@ import reworkedAccessLogsModel from "../core/v1/accesslogs/reworkedAccesslogs.mo
 import { toRelativeMediaPath } from "../utils/mediaStorage.js";
 import { collectMediaPaths, deleteMediaBestEffort } from "../utils/mediaCleanup.js";
 
-// Re-exported for backward compatibility — this module used to define
-// collectMediaPaths itself; it now lives in utils/mediaCleanup.js so
-// NVR/channel deletion (services/delete.service.js) can share the exact
-// same field list and nested-path walk instead of redefining it.
+// Re-exported for backward compatibility; the shared helper also handles
+// cleanup of camera preview snapshots without deleting historical log media.
 export { collectMediaPaths };
 
 // Only the fields the sweep needs — keeps batch memory small.

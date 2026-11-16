@@ -1,7 +1,7 @@
 /**
  * services/delete.service.js — previously at 0% coverage. This service
- * orchestrates cascading deletion of an NVR (and its channels, incidents, and
- * references on authorizedChannels documents). It also calls an external
+ * orchestrates deletion of an NVR (and its channels and
+ * references on authorizedChannels documents), retaining all historical logs. It also calls an external
  * RTSP streaming API to remove the streaming camera entry, and (in cloud
  * mode) prunes the per-camera stream_url:* keys from Redis.
  *
@@ -15,6 +15,11 @@
  * paths we exercise, so it's mocked to a no-op to satisfy the import).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("../../../services/deviceDeletionLog.service.js", () => ({
+  resolveDeletionAccount: vi.fn(async userId => ({ userId: String(userId || "unknown"), name: String(userId || "Unknown account") })),
+  logDeviceDeletion: vi.fn(),
+}));
 
 vi.mock("axios", () => ({
   default: { delete: vi.fn() },
@@ -111,116 +116,62 @@ const { default: authorizedChannelsModel } = await import(
 );
 const { redis } = await import("../../../utils/database.js");
 const { deleteMedia } = await import("../../../utils/mediaStorage.js");
-const { default: DeleteService, INCIDENT_BATCH_SIZE } = await import(
+const { default: DeleteService } = await import(
   "../../../services/delete.service.js"
 );
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // mockReset (not just clearAllMocks) so a prior test's unconsumed
-  // mockReturnValueOnce queue can't leak into this one — a test whose batch
-  // loop breaks after one page (because that page was already short) leaves
-  // its second queued value unused, and clearAllMocks alone does not drain
-  // that queue.
-  Incident.find.mockReset().mockReturnValue(query([]));
+  Incident.find.mockReset();
   deleteMedia.mockResolvedValue(undefined);
 });
 
 describe("DeleteService.deleteChannel", () => {
-  it("deletes each incident's stored media before its DB row, then the channel itself", async () => {
+  it("removes an RTSP camera without reading or deleting historical incidents or media", async () => {
     Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
-    Incident.find
-      .mockReturnValueOnce(
-        query([
-          { _id: "inc-1", Image: "/uploads/images/a.jpg" },
-          { _id: "inc-2", Image: null },
-          { _id: "inc-3", Image: "/uploads/images/b.jpg" },
-        ]),
-      )
-      .mockReturnValueOnce(query([])); // second batch: nothing left, loop ends
-    Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 3 });
-    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-
     const out = await DeleteService.deleteChannel("ch-1");
     expect(out).toBe(true);
-
-    expect(Channel.findById).toHaveBeenCalledWith("ch-1");
-    expect(Incident.find).toHaveBeenCalledWith({ channelId: "ch-1" });
-    // Media deleted before the DB rows, one call per stored (non-null) path.
-    expect(deleteMedia).toHaveBeenCalledTimes(2);
-    expect(deleteMedia.mock.calls.map((c) => c[0]).sort()).toEqual([
-      "/uploads/images/a.jpg",
-      "/uploads/images/b.jpg",
-    ]);
-    expect(Incident.deleteMany).toHaveBeenCalledWith({
-      _id: { $in: ["inc-1", "inc-2", "inc-3"] },
-    });
     expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-1" });
+    expect(Incident.find).not.toHaveBeenCalled();
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
+    expect(deleteMedia).not.toHaveBeenCalled();
   });
 
-  it("still deletes the incident rows when its media fails to delete from storage", async () => {
+  it("keeps log media when storage is unavailable", async () => {
     Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
-    Incident.find
-      .mockReturnValueOnce(query([{ _id: "inc-1", Image: "/uploads/images/a.jpg" }]))
-      .mockReturnValueOnce(query([]));
-    deleteMedia.mockRejectedValueOnce(new Error("SFTP down"));
-    Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 1 });
-    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-
-    const out = await DeleteService.deleteChannel("ch-1");
-    expect(out).toBe(true);
-
-    // The DB row is still removed — a storage failure is logged, not fatal.
-    expect(Incident.deleteMany).toHaveBeenCalledWith({ _id: { $in: ["inc-1"] } });
+    deleteMedia.mockRejectedValue(new Error("SFTP down"));
+    await expect(DeleteService.deleteChannel("ch-1")).resolves.toBe(true);
     expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-1" });
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
+    expect(deleteMedia).not.toHaveBeenCalled();
   });
 
-  it("pages through incidents in batches of INCIDENT_BATCH_SIZE until a short page ends the loop", async () => {
-    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
-    const fullBatch = Array.from({ length: INCIDENT_BATCH_SIZE }, (_, i) => ({
-      _id: `inc-${i}`,
+  it("cleans up camera preview snapshots without touching incident image, video or timeline media", async () => {
+    Channel.findById.mockReturnValueOnce(query({
+      _id: "ch-1", nvrId: "nvr-1",
+      latestSnapshot: { path: "/uploads/images/camera-snapshots/current.jpg" },
+      snapshotPendingDelete: ["/uploads/images/camera-snapshots/old.jpg"],
     }));
-    Incident.find
-      .mockReturnValueOnce(query(fullBatch)) // exactly a full page -> loop continues
-      .mockReturnValueOnce(query([{ _id: "inc-last" }])) // short page -> loop ends
-      .mockReturnValueOnce(query([])); // must not be reached
-    Incident.deleteMany.mockResolvedValue({ deletedCount: 1 });
-    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-
+    Incident.find.mockReturnValue(query([{
+      _id: "inc-1", Image: "/uploads/images/incident.jpg", videoLink: "/uploads/videos/incident.mp4",
+      currentImage: "/uploads/images/current.jpg", timeSeries: [{ Image: "/uploads/images/timeline.jpg" }],
+    }]));
     await DeleteService.deleteChannel("ch-1");
-
-    expect(Incident.find).toHaveBeenCalledTimes(2);
-    expect(Incident.deleteMany).toHaveBeenCalledTimes(2);
-    expect(Incident.deleteMany.mock.calls[0][0]._id.$in).toHaveLength(
-      INCIDENT_BATCH_SIZE,
-    );
-    expect(Incident.deleteMany.mock.calls[1][0]._id.$in).toEqual(["inc-last"]);
+    expect(deleteMedia.mock.calls.map(([path]) => path).sort()).toEqual([
+      "/uploads/images/camera-snapshots/current.jpg", "/uploads/images/camera-snapshots/old.jpg",
+    ]);
+    expect(Incident.find).not.toHaveBeenCalled();
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("skips an incident's external videoLink but still deletes its Image, whatever the active storage provider", async () => {
-    // The service never inspects which provider is active — it hands every
-    // non-external stored path to deleteMedia() and lets the mediaStorage
-    // abstraction route it to NAS or Oracle. Here Image is an Oracle-style
-    // key to prove that path shape doesn't need special-casing at this layer.
-    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
-    Incident.find
-      .mockReturnValueOnce(
-        query([
-          {
-            _id: "inc-1",
-            Image: "oracle/uploads/images/ch-1/a.jpg",
-            videoLink: "https://cdn.example.com/incidents/a.mp4",
-          },
-        ]),
-      )
-      .mockReturnValueOnce(query([]));
-    Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 1 });
-    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-
-    await DeleteService.deleteChannel("ch-1");
-
-    expect(deleteMedia).toHaveBeenCalledTimes(1);
-    expect(deleteMedia).toHaveBeenCalledWith("oracle/uploads/images/ch-1/a.jpg");
+  it("still removes the camera if preview-snapshot cleanup fails, retaining historical incidents", async () => {
+    Channel.findById.mockReturnValueOnce(query({
+      _id: "ch-1", latestSnapshot: { path: "/uploads/images/camera-snapshots/current.jpg" },
+    }));
+    deleteMedia.mockRejectedValue(new Error("SFTP down"));
+    await expect(DeleteService.deleteChannel("ch-1")).resolves.toBe(true);
+    expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-1" });
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
   });
 
   it("wraps a missing channel in 'Failed to delete channel...' error", async () => {
@@ -242,6 +193,28 @@ describe("DeleteService.deleteChannel", () => {
 });
 
 describe("DeleteService.deleteStreamingCamera", () => {
+  it.each([
+    "Camera not found\n",
+    { error: "Camera not found" },
+    { message: "Camera not found" },
+  ])("accepts an already-missing streaming camera: %j", async data => {
+    axios.delete.mockRejectedValueOnce({ response: { status: 404, data } });
+    await expect(DeleteService.deleteStreamingCamera("nvr-1-ch-1")).resolves.toBe(true);
+  });
+
+  it.each([
+    { status: 404, data: "404 page not found" },
+    { status: 404, data: "<html>Not Found</html>" },
+    { status: 401, data: "Camera not found" },
+    { status: 403, data: "Forbidden" },
+    { status: 500, data: "Camera not found" },
+  ])("does not hide routing, permission or server failures: %j", async response => {
+    axios.delete.mockRejectedValueOnce({ response });
+    await expect(DeleteService.deleteStreamingCamera("nvr-1-ch-1")).rejects.toThrow(
+      "Failed to delete streaming camera and its associated resources.",
+    );
+  });
+
   it("DELETEs the streaming API with a bearer token and returns true", async () => {
     axios.delete.mockResolvedValueOnce({ status: 204 });
     const out = await DeleteService.deleteStreamingCamera("nvr-1-ch-1");
@@ -277,7 +250,6 @@ describe("DeleteService.deleteNVR", () => {
     Channel.findById
       .mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }))
       .mockReturnValueOnce(query({ _id: "ch-2", nvrId: "nvr-1" }));
-    Incident.deleteMany.mockResolvedValue({ deletedCount: 0 });
     Channel.deleteOne.mockResolvedValue({ deletedCount: 1 });
     NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
 
@@ -292,6 +264,9 @@ describe("DeleteService.deleteNVR", () => {
     // The two channels were cascade-deleted before the NVR itself.
     expect(Channel.deleteOne).toHaveBeenCalledTimes(2);
     expect(NVR.deleteOne).toHaveBeenCalledWith({ _id: "nvr-1" });
+    expect(Incident.find).not.toHaveBeenCalled();
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
+    expect(deleteMedia).not.toHaveBeenCalled();
 
     // In APP_ENV=local (see tests/setup.js) the cloud-only branch must NOT
     // fire: no streaming-camera DELETE and no redis.del.

@@ -21,6 +21,10 @@ vi.mock("../../../socket.js", () => ({
   sendPayloadToUser: vi.fn(),
   initSocket: vi.fn(),
 }));
+vi.mock("../../../utils/database.js", async () => {
+  const { fakeApiCacheRedis } = await import("../../helpers/fakeApiCacheRedis.js");
+  return { redis: { ...fakeApiCacheRedis(), del: vi.fn(async () => 0) } };
+});
 vi.mock("../../../services/delete.service.js", () => ({
   default: { deleteChannel: vi.fn().mockResolvedValue(true), deleteNVR: vi.fn().mockResolvedValue(true) },
 }));
@@ -258,6 +262,28 @@ describe("getRemainingCameraLimit", () => {
 });
 
 describe("direct RTSP bypass", () => {
+  it("logs the removed camera and owning account when editing a Direct RTSP group", async () => {
+    const admin = await makeAdmin(5);
+    await Admin.updateOne({ _id: admin._id }, { appEnv: "cloud", name_f: "Harish", name_l: "Gowda" });
+    const nvr = await makeNvr({ connectionMode: "direct", localNvrId: undefined });
+    const kept = await makeCamera(nvr._id, true);
+    const removed = await makeCamera(nvr._id, true);
+    const { default: logger } = await import("../../../utils/logger.js");
+    const logs = vi.spyOn(logger, "info").mockImplementation(() => {});
+    try {
+      const ctx = serviceCtx({ user_id: USER_ID, adminId: admin._id, params: { id: String(nvr._id) }, body: {
+        nvrName: nvr.nvrName, location: "HQ", brand: "hikvision",
+        cameras: [{ _id: String(kept._id), name: kept.name }],
+      } });
+      await NVRService.updateDirectNvr(ctx.req, ctx.res, ctx.next);
+      expect(ctx.res.statusCode).toBe(200);
+      expect(await Channel.findById(removed._id)).toBeNull();
+      expect(await Channel.findById(kept._id)).not.toBeNull();
+      const audit = logs.mock.calls.map(([message]) => message).filter(message => message.startsWith("[DEVICE-DELETE]"));
+      expect(audit).toEqual([`[DEVICE-DELETE] Camera "${removed.name}" (id: ${removed._id}) deleted from account "Harish Gowda" (userId: ${USER_ID}). Historical logs and incidents retained.`]);
+    } finally { logs.mockRestore(); }
+  });
+
   it("returns stored cameras and skips physical NVR refresh", async () => {
     const nvr = await makeNvr({ connectionMode: "direct" });
     const camera = await makeCamera(nvr._id, true);

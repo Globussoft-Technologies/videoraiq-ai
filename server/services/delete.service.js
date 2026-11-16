@@ -1,26 +1,14 @@
 import axios from "axios";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import Channel from "../core/v1/channels/channels.model.js";
-import { DetectionSetting } from "../core/v1/detectionSettings/detectionSettings.model.js";
-import { Incident } from "../core/v1/incidents/incidents.model.js";
 import logger from "../utils/logger.js";
 import config from "config";
 import { redis } from "../utils/database.js";
 import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedChannels.model.js";
-import usersModel from "../core/v1/users/users.model.js";
 import { isInstallerManaged, resolveStream } from "../utils/rtspStream.js";
-import { toRelativeMediaPath } from "../utils/mediaStorage.js";
-import { collectMediaPaths, deleteMediaBestEffort } from "../utils/mediaCleanup.js";
+import { deleteMediaBestEffort } from "../utils/mediaCleanup.js";
+import { logDeviceDeletion, resolveDeletionAccount } from "./deviceDeletionLog.service.js";
 const APP_ENV = config.get("APP_ENV");
-
-// Only the fields that can carry a stored media path on an Incident (base
-// schema Image/videoLink, plus the Door/Light discriminators' currentImage
-// and timeSeries[].Image) — see core/v1/incidents/incidents.model.js.
-const INCIDENT_MEDIA_SELECT = "_id Image currentImage videoLink timeSeries.Image";
-// Docs per batch: bounds memory for a channel with a very large incident
-// history, same sizing as the retention sweeper's default. Exported so tests
-// can construct an exact-size batch to exercise the multi-page loop.
-export const INCIDENT_BATCH_SIZE = 200;
 
 class DeleteService {
   static async deleteNVR(nId, options = {}) {
@@ -28,6 +16,7 @@ class DeleteService {
       const nvrId = nId?._id ? nId._id : nId;
       const appEnv = options.appEnv || APP_ENV;
       const nvr = await NVR.findById(nvrId);
+      const account = await resolveDeletionAccount(nvr?.userId);
 
       // includeInactive: the Channel pre(/^find/) hook injects { isAdded: true }
       // into every query unless we opt out. Without it this finds only added
@@ -52,8 +41,8 @@ class DeleteService {
           await redis.del(redisKey);
         }
 
-        // *commom
-        await this.deleteChannel(channel._id);
+        // Keep historical logs while removing the camera inventory entry.
+        await this.deleteChannel(channel._id, { account });
       }
       // Before deleting the NVR: this reads the NVR's location to strip it from
       // users' authorized lists, which found nothing once the row was gone.
@@ -62,7 +51,7 @@ class DeleteService {
       // Delete the NVR itself
       await NVR.deleteOne({ _id: nvrId });
 
-      logger.info(`Deleted NVR ${nvrId} and all associated resources.`);
+      await logDeviceDeletion("NVR", nvr || { _id: nvrId }, account);
       return true;
     } catch (error) {
       logger.error("Error deleting NVR:", error);
@@ -70,7 +59,7 @@ class DeleteService {
     }
   }
 
-  static async deleteChannel(channelId) {
+  static async deleteChannel(channelId, { account = null } = {}) {
     try {
       // findById hits the same isAdded pre-hook, so an un-added camera would
       // read as "not found" and abort the NVR delete mid-way.
@@ -81,15 +70,9 @@ class DeleteService {
         throw new Error("Channel not found");
       }
 
-      // const detectionIds = Object.values(channel.detections || {});
-      // if (detectionIds.length) {
-      //   await DetectionSetting.deleteMany({ _id: { $in: detectionIds } });
-      // }
-
-      const { deleted, mediaFailures } = await this.deleteChannelIncidents(
-        channelId
-      );
-
+      // Device removal does not delete historical incidents, access logs,
+      // attendance events, or their media. Retention and explicit log deletion
+      // manage those records independently of the camera inventory.
       await Channel.deleteOne({ _id: channelId });
 
       await deleteMediaBestEffort([
@@ -97,72 +80,13 @@ class DeleteService {
         ...(channel.snapshotPendingDelete || []),
       ].filter(Boolean), `Camera ${channelId} snapshots`);
 
-      logger.info(
-        `Deleted channel ${channelId}: removed ${deleted} incident(s)` +
-          (mediaFailures
-            ? ` (${mediaFailures} media file(s) failed to delete from storage — see warnings above; the incident rows are gone so those files can no longer be found and retried)`
-            : "") +
-          " and the channel itself."
-      );
+      await logDeviceDeletion("Camera", channel, account);
 
       return true;
     } catch (error) {
       logger.error("Error deleting channel:", error);
       throw new Error("Failed to delete channel and its associated resources.");
     }
-  }
-
-  /**
-   * Deletes every Incident under a channel: for each bounded batch, first
-   * best-effort deletes the incident's stored media (image/video, from
-   * whichever storage provider is active — NAS or Oracle, via
-   * utils/mediaStorage.js) and only then deletes that batch's DB rows.
-   * `Incident.deleteMany({ channelId })` alone (the old behaviour) dropped
-   * the rows but left every referenced file orphaned on storage.
-   *
-   * A storage failure is logged but never blocks the DB row from being
-   * removed — an incident whose file failed to delete is not left behind
-   * as a retryable unit; it's only recoverable via the warning log. This
-   * matches the retention sweeper's same trade-off (utils/mediaCleanup.js).
-   *
-   * Safe to re-run: querying `{ channelId }` after a partial run (e.g. the
-   * process died mid-cascade) simply finds whatever incidents are still
-   * there and continues; a channel with nothing left returns
-   * { deleted: 0, mediaFailures: 0 } and deleteChannel proceeds straight to
-   * removing the channel row.
-   */
-  static async deleteChannelIncidents(channelId) {
-    let deleted = 0;
-    let mediaFailures = 0;
-
-    for (;;) {
-      const batch = await Incident.find({ channelId })
-        .select(INCIDENT_MEDIA_SELECT)
-        .limit(INCIDENT_BATCH_SIZE)
-        .lean();
-      if (!batch.length) break;
-
-      const paths = batch
-        .flatMap((doc) => collectMediaPaths(doc))
-        .map(toRelativeMediaPath)
-        // videoLink can be an external URL rather than a storage path — not
-        // ours to delete.
-        .filter((p) => typeof p === "string" && p.trim() && !/^https?:\/\//i.test(p));
-
-      mediaFailures += await deleteMediaBestEffort(
-        paths,
-        `[NVR-DELETE] channel:${channelId}`
-      );
-
-      const res = await Incident.deleteMany({
-        _id: { $in: batch.map((d) => d._id) },
-      });
-      deleted += res.deletedCount || 0;
-
-      if (batch.length < INCIDENT_BATCH_SIZE) break;
-    }
-
-    return { deleted, mediaFailures };
   }
 
   static async deleteStreamingCamera(cameraId, userId, nvrDomain) {
@@ -180,6 +104,16 @@ class DeleteService {
       );
       return true;
     } catch (error) {
+      const upstream = error?.response;
+      const detail = typeof upstream?.data === "string"
+        ? upstream.data
+        : upstream?.data?.message || upstream?.data?.error || upstream?.data?.body?.message;
+      // A previously removed stream is already in the desired state. Only
+      // accept the camera-specific response, not a proxy/router 404.
+      if (upstream?.status === 404 && typeof detail === "string" && /\bcamera\b.*\bnot found\b/i.test(detail)) {
+        logger.info(`Streaming camera ${cameraId} is already absent; continuing device removal.`);
+        return true;
+      }
       logger.error("Error deleting streaming camera:", error);
       throw new Error(
         "Failed to delete streaming camera and its associated resources."

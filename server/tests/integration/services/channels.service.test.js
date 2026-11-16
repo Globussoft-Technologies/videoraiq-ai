@@ -14,9 +14,16 @@ vi.mock("../../../services/python.service.js", () => ({
     registerChannel: vi.fn().mockResolvedValue({}),
   },
 }));
+vi.mock("../../../services/deviceDeletionLog.service.js", () => ({ logDeviceDeletion: vi.fn() }));
+vi.mock("../../../utils/database.js", async () => {
+  const { fakeApiCacheRedis } = await import("../../helpers/fakeApiCacheRedis.js");
+  return { redis: { ...fakeApiCacheRedis(), del: vi.fn(async () => 0) } };
+});
 vi.mock("../../../services/delete.service.js", () => ({
   default: { deleteChannel: vi.fn().mockResolvedValue(true) },
 }));
+
+const { logDeviceDeletion } = await import("../../../services/deviceDeletionLog.service.js");
 
 const { default: ChannelsService } = await import(
   "../../../core/v1/channels/channels.service.js"
@@ -45,6 +52,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  vi.clearAllMocks();
 });
 
 function makeChannel(over = {}) {
@@ -137,6 +145,7 @@ describe("ChannelsService.deleteChannel", () => {
     });
     await ChannelsService.deleteChannel(req, res, next);
     expect(res.statusCode).toBe(404);
+    expect(logDeviceDeletion).not.toHaveBeenCalled();
   });
 
   it("deletes an existing channel", async () => {
@@ -147,6 +156,7 @@ describe("ChannelsService.deleteChannel", () => {
     await ChannelsService.deleteChannel(req, res, next);
     expect(res.statusCode).toBe(200);
     expect(await Channel.findById(channel._id)).toBeNull();
+    expect(logDeviceDeletion).toHaveBeenCalledWith("Camera", expect.objectContaining({ userId: "u1", name: "Lobby Cam" }));
   });
 });
 

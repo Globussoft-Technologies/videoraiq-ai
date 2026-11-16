@@ -87,10 +87,7 @@ vi.mock("../../../core/v1/cameraRestrictions/authorizedChannels.model.js", () =>
   },
 }));
 
-// Incident media/cascade behaviour has its own dedicated coverage in
-// tests/integration/services/delete.service.test.js; these unit tests are
-// about the channel/NVR cascade *shape*, so Incident.find always reports
-// "nothing left" and deleteChannelIncidents is a no-op.
+// Historical incidents must never be read or deleted during device removal.
 vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
   Incident: {
     find: vi.fn(() => ({
@@ -112,6 +109,11 @@ vi.mock("../../../utils/rtspStream.js", () => ({
   resolveStream: vi.fn(async () => ({ host: "http://stream", token: "t" })),
   isInstallerManaged: (nvr) => nvr?.managementSource === "installer" || Boolean(nvr?.localNvrId),
 }));
+vi.mock("../../../services/deviceDeletionLog.service.js", () => ({
+  resolveDeletionAccount: vi.fn(async userId => ({ userId: String(userId || "unknown"), name: String(userId || "Unknown account") })),
+  logDeviceDeletion: vi.fn(),
+}));
+
 vi.mock("axios", () => ({ default: { delete: vi.fn(async () => ({})) } }));
 
 const { default: DeleteService } = await import("../../../services/delete.service.js");

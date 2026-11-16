@@ -8,6 +8,7 @@ import { decrypt, encrypt } from "../../../utils/cryptoUtils.js";
 import Response from "../../../utils/response.js";
 import brandHandlers, { updateHandlers } from "./nvr.brands.js";
 import DeleteService from "../../../services/delete.service.js";
+import { logDeviceDeletion, resolveDeletionAccount } from "../../../services/deviceDeletionLog.service.js";
 import Channel from "../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
 import net from "net";
@@ -1332,10 +1333,13 @@ class NVRService {
       }
 
       const newInputs = value.cameras.filter((camera) => !camera._id);
-      const removedIds = existing
-        .filter((camera) => !requestedIds.includes(String(camera._id)))
-        .map((camera) => camera._id);
-      if (removedIds.length) await Camera.deleteMany({ _id: { $in: removedIds }, nvrId: nvr._id });
+      const removedCameras = existing.filter((camera) => !requestedIds.includes(String(camera._id)));
+      const removedIds = removedCameras.map((camera) => camera._id);
+      if (removedIds.length) {
+        await Camera.deleteMany({ _id: { $in: removedIds }, nvrId: nvr._id });
+        const account = await resolveDeletionAccount(nvr.userId);
+        for (const camera of removedCameras) await logDeviceDeletion("Camera", camera, account);
+      }
       const capacity = await this.getCameraCapacity(userId);
       if (newInputs.length > capacity.remaining) {
         return rejectDirectCameraLimit(res, newInputs.length, capacity);

@@ -2452,10 +2452,7 @@ export default function NVRCameras() {
         />
       )}
 
-      {/* Delete NVR confirmation. Spells out everything the cascade actually
-          removes (cameras, incidents, and their stored images/videos) — a
-          bare "cannot be undone" undersold how much this one click wipes
-          out, per NVR deletion cleanup requirements. */}
+      {/* Device removal preserves historical logs, incidents, and their media. */}
       <DeleteConfirmation
         open={!!deleteTarget}
         title="Delete this NVR permanently?"
@@ -2466,7 +2463,7 @@ export default function NVRCameras() {
             {(() => {
               const n = deleteTarget?.cameraCount ?? deleteTarget?.usedChannels ?? deleteTarget?.used ?? 0;
               return n > 0 ? `all ${n} of its cameras` : 'all of its cameras';
-            })()}, every recorded incident for them, and their stored images/videos. None of this can be recovered afterward.
+            })()}. Existing incidents, access logs, attendance logs, and their stored images/videos will be retained.
           </>
         }
         onClose={() => setDeleteTarget(null)}

@@ -29,6 +29,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const baseConfig = JSON.parse(process.env.NODE_CONFIG || "{}");
 process.env.NODE_CONFIG = JSON.stringify({ ...baseConfig, APP_ENV: "cloud" });
 
+vi.mock("../../../services/deviceDeletionLog.service.js", () => ({
+  resolveDeletionAccount: vi.fn(async userId => ({ userId: String(userId || "unknown"), name: String(userId || "Unknown account") })),
+  logDeviceDeletion: vi.fn(),
+}));
+
 vi.mock("axios", () => ({
   default: { delete: vi.fn() },
 }));
@@ -115,16 +120,25 @@ const { deleteMedia } = await import("../../../utils/mediaStorage.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // mockReset (not just clearAllMocks) so no unconsumed mockReturnValueOnce
-  // queue can leak between tests — see delete.service.test.js for why.
-  // No incidents left by default — that file has the dedicated media-cleanup
-  // coverage; these tests exercise the cloud-mode streaming teardown and the
-  // deleteDataFromUserAccounts error path.
-  Incident.find.mockReset().mockReturnValue(query([]));
+  Incident.find.mockReset();
   deleteMedia.mockResolvedValue(undefined);
 });
 
 describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {
+  it("removes the NVR and camera records when the stream camera was already deleted, retaining incidents", async () => {
+    Channel.find.mockReturnValueOnce(query([{ _id: "ch-A", nvrId: "nvr-cloud", isAdded: true }]));
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-A" }));
+    axios.delete.mockRejectedValueOnce({ response: { status: 404, data: "Camera not found\n" } });
+    NVR.distinct.mockResolvedValueOnce([]);
+
+    await expect(DeleteService.deleteNVR("nvr-cloud")).resolves.toBe(true);
+    expect(redis.del).toHaveBeenCalledWith("stream_url:nvr-cloud-ch-A");
+    expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-A" });
+    expect(NVR.deleteOne).toHaveBeenCalledWith({ _id: "nvr-cloud" });
+    expect(Incident.deleteMany).not.toHaveBeenCalled();
+    expect(deleteMedia).not.toHaveBeenCalled();
+  });
+
   it("calls deleteStreamingCamera + redis.del for each channel when APP_ENV is cloud", async () => {
     // Two added channels under the NVR. Only added cameras were ever
     // registered with the streaming service, so only they get torn down.

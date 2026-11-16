@@ -15,6 +15,7 @@ import {
 } from "../../../constants/detectionTypes.js";
 import { DetectionSetting } from "../detectionSettings/detectionSettings.model.js";
 import DeleteService from "../../../services/delete.service.js";
+import { logDeviceDeletion } from "../../../services/deviceDeletionLog.service.js";
 import AuthorizedUsers from "../authorizedUsers/authorizedUsers.model.js";
 import {
   buildRTSPUrl,
@@ -911,6 +912,7 @@ class ChannelService {
       if (!deletedCamera) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
       }
+      await logDeviceDeletion("Camera", deletedCamera);
       return res
         .status(200)
         .json(Response.userSuccessResp("Channels deleted successfully"));

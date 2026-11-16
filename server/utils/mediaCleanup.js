@@ -1,13 +1,6 @@
 /**
- * Shared "delete a document's stored media, best-effort" logic used by
- * anything that removes rows which may reference files on the active
- * storage provider (NAS or Oracle, via mediaStorage.js) — the retention
- * sweeper and NVR/channel cascade deletion.
- *
- * Kept in one place so both callers stay in sync on which fields carry a
- * media path and how a failed delete is handled, instead of drifting the
- * way retention and NVR-delete previously did (NVR-delete didn't touch
- * storage at all).
+ * Best-effort media cleanup for explicit log deletion, retention, and camera
+ * preview snapshots. Removing a device does not delete historical log media.
  */
 import logger from "./logger.js";
 import { deleteMedia as deleteLegacyMedia } from "./mediaStorage.js";
