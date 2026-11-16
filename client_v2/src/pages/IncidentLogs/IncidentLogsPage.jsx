@@ -884,6 +884,7 @@ const IncidentLogsPage = ({ config }) => {
         )}
 
         <IncidentFilterPopover
+          dropdownsOutside={config.filterDropdownsOutside}
           showEmotion={config.showEmotionFields}
           showZoneFilter={config.showGenderAgeFields}
           zone={zone}

@@ -62,6 +62,7 @@ const IncidentFilterPopover = ({
   setBoxType,
   boxTypeOptions = [],
   triggerClassName = '',
+  dropdownsOutside = false,
 }) => {
   const activeFiltersCount = useMemo(
     () =>
@@ -110,7 +111,10 @@ const IncidentFilterPopover = ({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl p-4" align="end">
+      <PopoverContent
+        className={`w-[320px] rounded-xl p-4 ${dropdownsOutside ? 'overflow-visible' : 'max-h-[calc(100vh-16px)] overflow-y-auto'}`}
+        align="end"
+      >
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
             <h4 className="font-semibold text-base text-[var(--tx)]">Filters</h4>
@@ -135,7 +139,7 @@ const IncidentFilterPopover = ({
               searchable
               className="w-full"
               maxHeight="max-h-40"
-              inlineDropdown
+              inlineDropdown={!dropdownsOutside}
               msg="No NVR Found"
             />
             <MultiSelect
@@ -146,7 +150,7 @@ const IncidentFilterPopover = ({
               searchable
               className="w-full"
               maxHeight="max-h-40"
-              inlineDropdown
+              inlineDropdown={!dropdownsOutside}
               msg="No Camera Found"
             />
             {showZoneFilter && <MultiSelect
