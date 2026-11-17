@@ -461,7 +461,8 @@ async function fetchDepartments() {
 function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime, timeRangeError, disabled = false }) {
   const [open, setOpen] = useState(false);
   const ref             = useRef(null);
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  // Keep an open popover available while a filter change refreshes the results.
+  const triggerDisabled = disabled && !open;
   // Collapsed by default so the popover isn't dominated by an empty time
   // picker — auto-expands once (and stays expanded) as soon as either time is
   // set, so an active filter is never hidden behind a collapsed section.
@@ -511,14 +512,14 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
       <button
         onClick={() => setOpen(o => !o)}
         className="vq-inc-filter-trigger"
-        disabled={disabled}
-        title={disabled ? 'No incidents available to filter. Change the date or detection type.' : undefined}
-        aria-expanded={open && !disabled}
+        disabled={triggerDisabled}
+        title={triggerDisabled ? 'No incidents available to filter. Change the date or detection type.' : undefined}
+        aria-expanded={open}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px',
           border: `1px solid ${activeCount > 0 ? 'var(--blue)' : 'var(--bd2)'}`,
           background: activeCount > 0 ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
-          borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12.5, fontWeight: 600,
+          borderRadius: 8, cursor: triggerDisabled ? 'not-allowed' : 'pointer', fontSize: 12.5, fontWeight: 600,
           color: activeCount > 0 ? 'var(--blue)' : 'var(--tx2)',
           boxShadow: open ? '0 0 0 3px rgba(59,130,246,.15)' : 'none',
           transition: 'all .15s',
@@ -533,7 +534,7 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
         )}
       </button>
 
-      {open && !disabled && (
+      {open && (
         <div className="vq-inc-filterspopover" style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300,
           width: 280, maxWidth: 'min(280px, calc(100vw - 24px))', background: 'var(--bg1solid)',
@@ -1793,7 +1794,7 @@ export default function IncidentCenter() {
   const isReportedView = statusSet.size === 1 && statusSet.has('reported');
   const hasBothStatusFilters = statusSet.has('resolved') && statusSet.has('reported');
 
-  const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
+  const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000, pollSilent: true });
   const types = useApi(() => fetchDetectionTypes(), []);
   const grid  = useApi(
     () => fetchIncidents({ skip: page * pageSize, limit: pageSize }, serverFilter),
@@ -1809,7 +1810,7 @@ export default function IncidentCenter() {
       { ...serverFilter, statusFilter: ALL_INCIDENT_STATUSES },
     ),
     [JSON.stringify(serverFilter)],
-    { pollMs: 60000 },
+    { pollMs: 60000, pollSilent: true },
   );
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
@@ -2528,7 +2529,7 @@ export default function IncidentCenter() {
           }}>
             <div style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: k.color, lineHeight: 1 }}>
-              {stats.loading ? '—' : k.value}
+              {stats.loading && !stats.data && !grid.data ? '—' : k.value}
             </div>
           </div>
         ))}

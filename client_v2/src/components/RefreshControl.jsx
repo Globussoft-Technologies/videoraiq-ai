@@ -122,7 +122,6 @@ export default function RefreshControl({
 
   function handlePreset(val) {
     setIntervalSecs(val);
-    setIsActive(true);
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -193,7 +192,9 @@ export default function RefreshControl({
           >
             {/* Auto-refresh toggle */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 13, color: 'var(--tx)' }}>On</span>
+              <span style={{ fontSize: 13, color: isActive && intervalSecs > 0 ? 'var(--tx)' : 'var(--tx2)' }}>
+                {isActive && intervalSecs > 0 ? 'On' : 'Off'}
+              </span>
               {/* An interval of 0 means "no auto-refresh", so there is nothing
                   to switch on — lock the toggle until a non-zero interval is
                   picked (matches V1's AutoRefreshComponent). */}

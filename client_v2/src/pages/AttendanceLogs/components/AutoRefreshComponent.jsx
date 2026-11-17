@@ -91,13 +91,10 @@ const AutoRefreshComponent = ({
                   {[30, 60, 120].map((val) => (
                     <button
                       key={val}
-                      onClick={() => {
-                        onIntervalChange(val);
-                        if (val > 0) onActiveChange(true);
-                      }}
+                      onClick={() => onIntervalChange(val)}
                       className={cn(
                         'text-[10px] font-medium py-1 rounded border transition-all cursor-pointer',
-                        refreshInterval === val
+                        isActive && refreshInterval === val
                           ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white border-transparent'
                           : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bd)] hover:border-[var(--violet)]'
                       )}
