@@ -15,6 +15,7 @@ const zoneConfigsField = {
   zone_configs: [
     {
       name: { type: String },
+      trigger_on: { type: String, enum: ["sitting", "standing", "both"] },
       machine_id: { type: String },
       zone_role: { type: String, enum: ['machine', 'indicator'] },
       // Undefined preserves legacy account routing; [] explicitly disables this zone.
@@ -1753,7 +1754,41 @@ const attendanceDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: attendanceDetectionSchema }),
 );  
 
+const PersonPostureDetectionSetting = DetectionSetting.discriminator(
+  "personPostureDetectionSettings",
+  new mongoose.Schema({ settings: new mongoose.Schema({
+    ...zoneConfigsField,
+    referencePoints: Object,
+    videoResolution: [Number],
+    levelOfImportance: { type: String, enum: ["low", "moderate", "high"], default: "moderate" },
+    trigger_on: { type: String, enum: ["sitting", "standing", "both"], default: "both" },
+    trigger_notification: { type: Boolean, default: true },
+    zone_name: String,
+  }) }),
+);
+
+const CansStackDetectionSetting = DetectionSetting.discriminator(
+  "cansStackDetectionSettings",
+  new mongoose.Schema({ settings: new mongoose.Schema({
+    ...zoneConfigsField,
+    referencePoints: Object,
+    videoResolution: [Number],
+    levelOfImportance: { type: String, enum: ["low", "moderate", "high"], default: "high" },
+    layers: { type: Number, min: 1, default: 3 },
+    trigger_notification: { type: Boolean, default: true },
+    zone_name: String,
+    // Can-stack has no polygon zones, so alert routing lives directly on the
+    // detector settings rather than inside zone_configs.
+    whatsappRecipientIds: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
+    telegramChatIds: { type: [String], default: [] },
+    telegramChatId: { type: String, default: null },
+    schedule: { type: Object, default: {} },
+  }) }),
+);
+
 export {
+  PersonPostureDetectionSetting,
+  CansStackDetectionSetting,
   GenderAgeDetectionSetting,
   MachineOpsDetectionSetting,
   DetectionSetting,

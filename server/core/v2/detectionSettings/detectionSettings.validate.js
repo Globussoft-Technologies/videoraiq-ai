@@ -131,6 +131,23 @@ const detectorThresholdAliasesBySettingType = {
 const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
+  validateNewDetectorSettings(settingType, settings = {}) {
+    if (settingType === 'personPostureDetectionSettings') {
+      return Joi.object({
+        trigger_on: Joi.string().valid('sitting', 'standing', 'both'),
+        trigger_notification: Joi.boolean(),
+        zone_name: Joi.string().trim().allow(''),
+      }).unknown(true).validate(settings, { convert: false });
+    }
+    if (settingType === 'cansStackDetectionSettings') {
+      return Joi.object({
+        layers: Joi.number().integer().min(1),
+        trigger_notification: Joi.boolean(),
+        zone_name: Joi.string().trim().allow(''),
+      }).unknown(true).validate(settings, { convert: false });
+    }
+    return { error: null };
+  }
   validateGenderAgeSettings(settingType, settings = {}) {
     if (settingType !== "genderAgeDetectionSettings") return { error: null };
     const normalized = Array.isArray(settings?.zone_configs) ? {

@@ -60,6 +60,8 @@ const detectionFields = {
   blurredCameraDetectionSettings: detectionSettingSchema,
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
+  personPostureDetectionSettings: detectionSettingSchema,
+  cansStackDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

@@ -229,9 +229,12 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
       if (phoneNumbers?.length || resolvedAdminId) {
         const zoneName = String(incidentZoneName || '').trim().toLowerCase();
         const zone = detectionZoneConfigs.find(item => String(item.name || '').trim().toLowerCase() === zoneName);
+        const detectionSettings = matchedDetection?.id?.settings || {};
         const recipientIds = Array.isArray(zone?.whatsappRecipientIds)
           ? zone.whatsappRecipientIds.map(String)
-          : (!zone && detectionZoneConfigs.some(item => Array.isArray(item.whatsappRecipientIds)) ? [] : undefined);
+          : (!zone && Array.isArray(detectionSettings.whatsappRecipientIds)
+            ? detectionSettings.whatsappRecipientIds.map(String)
+            : (!zone && detectionZoneConfigs.some(item => Array.isArray(item.whatsappRecipientIds)) ? [] : undefined));
         await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz, resolvedAdminId, recipientIds);
       }
     } catch (err) {
@@ -268,14 +271,18 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         matchingZoneConfig,
         detectionSettings,
       });
+      // Can Stack stores its optional schedule at detector level because it
+      // deliberately has no polygon zones. Zone-based detectors continue to
+      // use the matched zone schedule.
+      const telegramWindowConfig = matchingZoneConfig || detectionSettings?.schedule;
       const hasEvaluableWindow =
-        Boolean(matchingZoneConfig?.startTime) &&
-        Boolean(matchingZoneConfig?.endTime) &&
+        Boolean(telegramWindowConfig?.startTime) &&
+        Boolean(telegramWindowConfig?.endTime) &&
         Boolean(telegramIncident?.timeOfIncident) &&
         Boolean(adminTz);
       const windowOpen = vehicleChatIds !== null ? vehicleChatIds.length > 0 : hasEvaluableWindow
         ? isIncidentWithinZoneWindow(
-          matchingZoneConfig,
+          telegramWindowConfig,
           telegramIncident?.timeOfIncident,
           adminTz,
         )

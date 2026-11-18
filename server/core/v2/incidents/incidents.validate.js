@@ -2,6 +2,20 @@ import Joi from "joi";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validatePostureOrStackIncident(body) {
+    if (!['personPostureDetection', 'cansStackDetection'].includes(body?.incidentType)) return { error: null };
+    const shared = {
+      incidentType: Joi.string().valid('personPostureDetection', 'cansStackDetection').required(),
+      timeOfIncident: Joi.string().isoDate().required(),
+      zone: Joi.string().allow(''),
+      count: Joi.number().integer().min(0),
+      triggerNotification: Joi.boolean(),
+    };
+    const specific = body.incidentType === 'personPostureDetection'
+      ? { posture: Joi.string().valid('sitting', 'standing').required(), confidence: Joi.number().min(0).max(1) }
+      : { layers: Joi.number().integer().min(1), observedLayers: Joi.number().integer().min(0), currentStatus: Joi.string() };
+    return Joi.object({ ...shared, ...specific }).unknown(true).validate(body, { convert: false });
+  }
   validateGenderAgeIncident(body) {
     if (!["genderAgeDetection", "genderAgeCount"].includes(body?.incidentType)) return { error: null };
     const count = Joi.number().integer().min(0);

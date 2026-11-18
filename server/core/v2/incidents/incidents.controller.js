@@ -9,6 +9,12 @@ class IncidentsController {
   async getGenderAgeDetectionLogs(req, res, next) {
     return incidentsService.getGenderAgeDetectionLogs(req, res, next);
   }
+  async getPersonPostureDetectionLogs(req, res, next) {
+    return incidentsService.getPersonPostureDetectionLogs(req, res, next);
+  }
+  async getCansStackDetectionLogs(req, res, next) {
+    return incidentsService.getCansStackDetectionLogs(req, res, next);
+  }
 
   async createIncidents(req, res, next) {
     /* 

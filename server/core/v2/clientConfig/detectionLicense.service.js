@@ -79,6 +79,15 @@ const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").tri
 
 const detectionName = (settingType) => DETECTION_TYPES[settingType] || settingType;
 
+// Types introduced after an account was provisioned do not have an allocation
+// row yet. They are backfilled once at server boot for licensed tenants so a
+// newly shipped detector is visible immediately; existing allocation rows are
+// never changed, including rows deliberately disabled by Super Admin.
+const NEW_DETECTION_TYPES = Object.freeze([
+  "personPostureDetectionSettings",
+  "cansStackDetectionSettings",
+]);
+
 export const CAMERA_LICENSE_MESSAGE =
   "You have exceeded your purchased camera license limit. Please deselect an existing camera to continue.";
 
@@ -416,6 +425,31 @@ export const reconcileAddedCameraLicenses = async () => {
     logger.error(`reconcileAddedCameraLicenses: ${err.message}`);
   }
   return { scanned, granted };
+};
+
+export const reconcileNewDetectionAllocations = async () => {
+  if (!isLicensingEnforced()) return { scanned: 0, created: 0 };
+  let scanned = 0;
+  let created = 0;
+  try {
+    const cursor = adminModel.find({ purchasedCameras: { $gt: 0 } }).select("_id user_id purchasedCameras").lean().cursor();
+    for await (const admin of cursor) {
+      scanned += 1;
+      const existing = await allocationModel.find({ adminId: admin._id, settingType: { $in: NEW_DETECTION_TYPES } }).select("settingType").lean();
+      const present = new Set(existing.map((row) => row.settingType));
+      const missing = NEW_DETECTION_TYPES.filter((settingType) => !present.has(settingType));
+      if (!missing.length) continue;
+      const result = await allocationModel.insertMany(
+        missing.map((settingType) => ({ adminId: admin._id, settingType, enabled: true, cameraAllocation: admin.purchasedCameras })),
+        { ordered: false },
+      );
+      created += result.length;
+      publishLicenseGranted(String(admin._id), admin.user_id);
+    }
+  } catch (error) {
+    logger.error(`reconcileNewDetectionAllocations: ${error.message}`);
+  }
+  return { scanned, created };
 };
 
 /**
@@ -1017,4 +1051,5 @@ export default {
   defaultCamerasForPlan,
   grantPlanDefaultCameras,
   reconcileAddedCameraLicenses,
+  reconcileNewDetectionAllocations,
 };

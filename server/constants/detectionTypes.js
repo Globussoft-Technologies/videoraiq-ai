@@ -8,6 +8,8 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
+  personPostureDetectionSettings: "Person Posture Detection",
+  cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
   machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
@@ -123,6 +125,8 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
+  personPostureDetectionSettings: { permissionKey: "personPostureLogs", logsConfigKey: "personPostureLogs" },
+  cansStackDetectionSettings: { permissionKey: "cansStackLogs", logsConfigKey: "cansStackLogs" },
   genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
   machineOpsDetectionSettings: { permissionKey: "machineOpsLogs", logsConfigKey: "machineOpsLogs" },
   emotionDetectionSettings: { permissionKey: "emotionLogs", logsConfigKey: "emotionLogs" },
@@ -179,6 +183,8 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
 export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles", "genderAgeCount"];
 
 export const TYPE_MAP = {
+  personPostureDetectionSettings: "personPostureDetection",
+  cansStackDetectionSettings: "cansStackDetection",
   genderAgeDetectionSettings: "genderAgeDetection",
   machineOpsDetectionSettings: "machineOpsDetection",
   emotionDetectionSettings: "emotionDetection",
@@ -242,6 +248,8 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 });
 
 export const DETECTION_MODES_MAP = {
+  personPostureDetectionSettings: ["personPostureDetectionSettings"],
+  cansStackDetectionSettings: ["cansStackDetectionSettings"],
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
   machineOpsDetectionSettings: ["machineOpsDetectionSettings"],
   emotionDetectionSettings: ["emotionDetectionSettings"],
@@ -312,6 +320,8 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
+  personPostureDetectionSettings: "personPostureDetectionSettings",
+  cansStackDetectionSettings: "cansStackDetectionSettings",
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
   machineOpsDetectionSettings: "machineOpsDetectionSettings",
   emotionDetectionSettings: "emotionDetectionSettings",
@@ -406,6 +416,8 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  * lives.
  */
 export const DS_LOGIC_BY_MODE = {
+  personPostureDetectionSettings: "personPostureDetectionSettings",
+  cansStackDetectionSettings: "cansStackDetectionSettings",
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
   machineOpsDetectionSettings: "machineOpsDetectionSettings",
   emotionDetectionSettings: "emotionDetectionSettings",
@@ -461,6 +473,8 @@ export const dsLogicNamesFor = (settingType) => {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.personPostureDetectionSettings.id" },
+  { path: "detections.cansStackDetectionSettings.id" },
   { path: "detections.genderAgeDetectionSettings.id" },
   { path: "detections.machineOpsDetectionSettings.id" },
   { path: "detections.uniformDetectionSettings.id" },

@@ -225,14 +225,18 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         matchingZoneConfig,
         detectionSettings,
       });
+      // Can Stack stores its optional schedule at detector level because it
+      // deliberately has no polygon zones. Zone-based detectors continue to
+      // use the matched zone schedule.
+      const telegramWindowConfig = matchingZoneConfig || detectionSettings?.schedule;
       const hasEvaluableWindow =
-        Boolean(matchingZoneConfig?.startTime) &&
-        Boolean(matchingZoneConfig?.endTime) &&
+        Boolean(telegramWindowConfig?.startTime) &&
+        Boolean(telegramWindowConfig?.endTime) &&
         Boolean(telegramIncident?.timeOfIncident) &&
         Boolean(adminTz);
       const windowOpen = vehicleChatIds !== null ? vehicleChatIds.length > 0 : hasEvaluableWindow
         ? isIncidentWithinZoneWindow(
-            matchingZoneConfig,
+            telegramWindowConfig,
             telegramIncident?.timeOfIncident,
             adminTz,
           )

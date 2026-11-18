@@ -976,7 +976,24 @@ const vehicleCheckInOutSchema = new Schema({
 const VehicleCheckInOutIncident = Incident.discriminator('vehicleCheckInOut', vehicleCheckInOutSchema);
 
 
+const PersonPostureDetectionIncident = Incident.discriminator('personPostureDetection', new Schema({
+  triggerNotification: { type: Boolean, default: true },
+  count: { type: Number, default: 1, min: 0 },
+  posture: { type: String, enum: ['sitting', 'standing'] },
+  confidence: { type: Number, min: 0, max: 1 },
+}));
+
+const CansStackDetectionIncident = Incident.discriminator('cansStackDetection', new Schema({
+  triggerNotification: { type: Boolean, default: true },
+  count: { type: Number, default: 1, min: 0 },
+  currentStatus: String,
+  layers: { type: Number, min: 1 },
+  observedLayers: { type: Number, min: 0 },
+}));
+
 export  {
+  PersonPostureDetectionIncident,
+  CansStackDetectionIncident,
   GenderAgeDetectionIncident,
   MachineOpsDetectionIncident,
   GenderAgeCountIncident,

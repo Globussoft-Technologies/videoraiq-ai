@@ -39,6 +39,8 @@ import { solderPanelCounts } from "../../../utils/solderPanelCounts.js";
 
 import {
   Incident,
+  PersonPostureDetectionIncident,
+  CansStackDetectionIncident,
   CountPersonIncident,
   CountVehiclesIncident,
   MotionIncident,
@@ -95,6 +97,8 @@ import {
 import { recordSolderPanel } from "./solderLine.service.js";
 import { findDoorRetry, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
 const modelMap = {
+  personPostureDetection: PersonPostureDetectionIncident,
+  cansStackDetection: CansStackDetectionIncident,
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
   motionDetection: MotionIncident,
@@ -435,6 +439,10 @@ class IncidentsService {
       if (emotionValidation.error) {
         return res.status(400).json(Response.validationFailResp(emotionValidation.error.message, "Validation Failed!"));
       }
+      const postureStackValidation = incidentsValidate.validatePostureOrStackIncident(req.body);
+      if (postureStackValidation.error) {
+        return res.status(400).json(Response.validationFailResp(postureStackValidation.error.message, 'Validation Failed!'));
+      }
       const hygieneValidation = incidentsValidate.validateHygieneIncident(req.body);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.validationFailResp(hygieneValidation.error.message, "Validation Failed!"));
@@ -581,7 +589,9 @@ class IncidentsService {
         }
       }
 
-      const currentTime = new Date();
+      const currentTime = ['personPostureDetection', 'cansStackDetection'].includes(incidentType) && req.body.timeOfIncident
+        ? new Date(req.body.timeOfIncident)
+        : new Date();
 
       // Check if the incidentType needs special update logic. Requires a
       // real channelId — live-demo incidents without one skip straight to
@@ -3566,10 +3576,12 @@ console.log(result,'result');
       status,
       resolved,
       reportStatus,
+      posture,
       search,
       sortField,
       sortOrder,
       tagStatus,
+      observedLayers,
     } = req.query;
 
     // Plates already claimed by a registered user, needed by the
@@ -3589,6 +3601,25 @@ console.log(result,'result');
       incidentType,
       ...extraMatch,
     };
+
+    if (incidentType === 'personPostureDetection' && posture) {
+      const postureValues = String(posture).split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
+      if (postureValues.some(value => !['sitting', 'standing'].includes(value))) {
+        return res.status(400).json({ error: 'Invalid posture filter.' });
+      }
+      if (postureValues.length) matchStage.posture = { $in: postureValues };
+    }
+
+    if (incidentType === 'cansStackDetection' && observedLayers !== undefined && observedLayers !== '') {
+      const layerValues = String(observedLayers)
+        .split(',')
+        .map(value => Number(value.trim()))
+        .filter(value => Number.isInteger(value) && value >= 0);
+      if (!layerValues.length) {
+        return res.status(400).json({ error: 'Invalid observed layers filter.' });
+      }
+      matchStage.observedLayers = { $in: layerValues };
+    }
 
     if (incidentType === 'genderAgeDetection' && typeof req.query.zone === 'string' && req.query.zone.trim()) {
       const selectedZone = req.query.zone.trim();
@@ -3918,6 +3949,8 @@ console.log(result,'result');
         high: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "high"] }, 1, 0] } },
         moderate: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "moderate"] }, 1, 0] } },
         low: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "low"] }, 1, 0] } },
+        sitting: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$posture", ""] } }, "sitting"] }, 1, 0] } },
+        standing: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$posture", ""] } }, "standing"] }, 1, 0] } },
         machineOn: { $sum: { $cond: [{ $eq: [{ $toUpper: { $ifNull: ["$machineState", ""] } }, "ON"] }, 1, 0] } },
         machineOff: { $sum: { $cond: [{ $eq: [{ $toUpper: { $ifNull: ["$machineState", ""] } }, "OFF"] }, 1, 0] } },
       },
@@ -3986,6 +4019,10 @@ console.log(result,'result');
           moderate: countResult[0]?.moderate || 0,
           low: countResult[0]?.low || 0,
         },
+        ...(incidentType === 'personPostureDetection' && { postureCounts: {
+          sitting: countResult[0]?.sitting || 0,
+          standing: countResult[0]?.standing || 0,
+        } }),
         ...(incidentType === 'machineOpsDetection' && { machineStateCounts: {
           on: countResult[0]?.machineOn || 0,
           off: countResult[0]?.machineOff || 0,
@@ -6100,6 +6137,47 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch uniform detection logs", 500));
+    }
+  }
+
+  async getPersonPostureDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('personPostureDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Person Posture Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.personPostureLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Person Posture Logs'));
+      }
+      return await this._fetchIncidentLogs({
+        req, res, incidentType: 'personPostureDetection',
+        searchFields: ['incidentName', 'description', 'posture', 'zone'],
+        postLookupSearch: true,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError('Failed to fetch person posture logs', 500));
+    }
+  }
+
+  async getCansStackDetectionLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('cansStackDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Cans Stack Detection is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.cansStackLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Cans Stack Logs'));
+      }
+      return await this._fetchIncidentLogs({
+        req, res, incidentType: 'cansStackDetection',
+        searchFields: ['incidentName', 'description', 'currentStatus', 'zone'],
+        postLookupSearch: true,
+        searchNumberFields: ['layers', 'observedLayers'],
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError('Failed to fetch can stack logs', 500));
     }
   }
 

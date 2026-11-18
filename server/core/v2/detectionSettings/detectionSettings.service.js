@@ -62,6 +62,8 @@ import Response from "../../../utils/response.js";
 import DetectionSettingsValidation from "./detectionSettings.validate.js";
 import { rejectAgentGatewayBypass } from "../agentActions/agentGateway.js";
 import {
+  PersonPostureDetectionSetting,
+  CansStackDetectionSetting,
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,
   MotionDetectionSetting,
@@ -134,6 +136,8 @@ import {
 } from "../clientConfig/detectionLicense.service.js";
 
 const modelMap = {
+  personPostureDetectionSettings: PersonPostureDetectionSetting,
+  cansStackDetectionSettings: CansStackDetectionSetting,
   countPersonsSettings: CountPersonsDetectionSetting,
   motionDetectionSettings: MotionDetectionSetting,
   genericObjectDetectionSettings: GenericObjectDetectionSetting,
@@ -502,6 +506,9 @@ class DetectionSettingService {
           .status(400)
           .json(Response.userFailResp("Validation Failed", error.message));
       }
+
+      const newDetectorValidation = DetectionSettingsValidation.validateNewDetectorSettings(value.settingType, value.settings);
+      if (newDetectorValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', newDetectorValidation.error.message));
 
       const thresholdValidation =
         DetectionSettingsValidation.validateConfidenceThresholds(
@@ -965,6 +972,8 @@ class DetectionSettingService {
       }
 
       if (value.settings && typeof value.settings === "object") {
+        const newDetectorValidation = DetectionSettingsValidation.validateNewDetectorSettings(settingType, value.settings);
+        if (newDetectorValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', newDetectorValidation.error.message));
         const thresholdValidation =
           DetectionSettingsValidation.validateConfidenceThresholds(
             settingType,

@@ -7,6 +7,8 @@
 */
 
 export const DETECTION_TYPES = {
+  personPostureDetectionSettings: "Person Posture Detection",
+  cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
   machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
@@ -54,6 +56,8 @@ export const DETECTION_TYPES = {
   boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
+  personPostureDetectionSettings: "Person Posture Detection",
+  cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
   machineOpsDetectionSettings: "Machine Operations Detection",
   emotionDetectionSettings: "Emotion Detection",
@@ -103,6 +107,8 @@ export const DETECTION_TYPES2 = {
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
+  personPostureDetectionSettings: "Detect sitting or standing in configured areas",
+  cansStackDetectionSettings: "Alert when stacked cans exceed the configured layers",
   genderAgeDetectionSettings: "Gender alerts and male/female counts by camera and zone",
   machineOpsDetectionSettings: "Machine ON/OFF state monitoring with paired machine and indicator zones",
   emotionDetectionSettings: "Facial emotion recognition and expression monitoring",
@@ -145,6 +151,8 @@ export const DETECTION_DESCRIPTIONS = {
 };
 
 export const TYPE_MAP = {
+  personPostureDetectionSettings: "personPostureDetection",
+  cansStackDetectionSettings: "cansStackDetection",
   emotionDetectionSettings: "emotionDetection",
   genderAgeDetectionSettings: "genderAgeDetection",
   machineOpsDetectionSettings: "machineOpsDetection",
@@ -187,6 +195,10 @@ export const TYPE_MAP = {
 };
 
 export const DETECTION_MODES_MAP = {
+  personPostureDetectionSettings: ["personPostureDetectionSettings"],
+  cansStackDetectionSettings: ["cansStackDetectionSettings"],
+  personPostureDetectionSettings: ["personPostureDetectionSettings"],
+  cansStackDetectionSettings: ["cansStackDetectionSettings"],
   emotionDetectionSettings: ["emotionDetectionSettings"],
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
   machineOpsDetectionSettings: ["machineOpsDetectionSettings"],
@@ -230,6 +242,8 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.personPostureDetectionSettings.id" },
+  { path: "detections.cansStackDetectionSettings.id" },
   { path: "detections.emotionDetectionSettings.id" },
   { path: "detections.genderAgeDetectionSettings.id" },
   { path: "detections.machineOpsDetectionSettings.id" },

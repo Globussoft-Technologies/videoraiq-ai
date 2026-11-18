@@ -25,7 +25,7 @@ import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import attendanceSwaggerRouter from './views/attendanceSwagger.routes.js';
 import { initSocket, getIO } from "./socket.js"; // <-- Socket.io setup
 import { syncDetectionCatalog } from "./core/v2/detectionCatalog/detectionCatalog.service.js";
-import { reconcileAddedCameraLicenses } from "./core/v2/clientConfig/detectionLicense.service.js";
+import { reconcileAddedCameraLicenses, reconcileNewDetectionAllocations } from "./core/v2/clientConfig/detectionLicense.service.js";
 import pythonService from "./services/python.service.js";
 import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
@@ -243,6 +243,9 @@ const startServer = async () => {
     // Fire-and-forget — a reconciliation failure must not stop the server.
     if (!isLocalXrayTest()) reconcileAddedCameraLicenses().catch((err) =>
       logger.error(`Camera licence reconciliation failed: ${err.message}`)
+    );
+    if (!isLocalXrayTest()) reconcileNewDetectionAllocations().catch((err) =>
+      logger.error(`Detection allocation reconciliation failed: ${err.message}`)
     );
 
     server.listen(PORT, isLocalXrayTest() ? "127.0.0.1" : undefined, () => {
