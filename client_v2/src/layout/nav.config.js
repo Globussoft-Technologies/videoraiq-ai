@@ -120,6 +120,8 @@ const stevinrockLogItems = [
   },
   { key: 'sack-loading-unloading', label: 'Sack Loading/Unloading Logs', path: 'logs/sack-loading-unloading', icon: PackageSearch, permissionKey: 'logs', permissionSubKey: 'sackLoadingLogs', logsConfigKey: 'sackLoadingLogs' },
   { key: 'blurred-camera', label: 'Camera Tampering Logs', path: 'logs/blurred-camera', icon: ScanEye, permissionKey: 'logs', permissionSubKey: 'blurredCameraLogs', logsConfigKey: 'blurredCameraLogs' },
+  { key: 'person-posture', label: 'Person Posture Logs', path: 'logs/person-posture', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personPostureLogs', logsConfigKey: 'personPostureLogs' },
+  { key: 'cans-stack', label: 'Cans Stack Logs', path: 'logs/cans-stack', icon: Package, permissionKey: 'logs', permissionSubKey: 'cansStackLogs', logsConfigKey: 'cansStackLogs' },
 ];
 
 /**
@@ -330,6 +332,8 @@ export const VIEW_META = {
   'box-packing-reports': { title: 'Box Packing Reports', sub: 'Packing activity, worker comparison and review summaries' },
   'box-packing-analytics': { title: 'Box Packing Analytics', sub: 'Packing throughput, review queue and cycle-time insights' },
   'blurred-camera': { title: 'Camera Tampering Logs', sub: 'Covered, blurred or tampered camera incidents' },
+  'person-posture': { title: 'Person Posture Logs', sub: 'Sitting and standing posture detection events' },
+  'cans-stack': { title: 'Cans Stack Logs', sub: 'Can stack layer detection events' },
   'door-detection': { title: 'Door Logs', sub: 'Door open/closed duration detections' },
   'solder-line': { title: 'Rayzon Energy · JB Soldering Line', sub: 'L3-JB-POTTING' },
   'hygiene-analytics': { title: 'Hygiene & Food Safety', sub: 'Risk trends, incident evidence and period reports' },

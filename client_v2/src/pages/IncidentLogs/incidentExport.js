@@ -26,7 +26,7 @@ const resolveIncidentImageUrl = (value) => {
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
 const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone } = params;
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone, posture, observedLayers } = params;
 
   const query = {
     endpoint: config.endpoint,
@@ -49,6 +49,8 @@ const fetchAllForExport = async (config, params) => {
     emotions: params.emotions,
     gender: params.gender,
     zone,
+    posture,
+    observedLayers,
   };
 
   const list = config.showDoorFields && doorStatus
@@ -98,6 +100,9 @@ const fetchAllForExport = async (config, params) => {
       alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
       description: item.description || '--',
+      posture: item.posture || '--',
+      zone: item.zone || '--',
+      observedLayers: item.observedLayers ?? '--',
       evidenceScore: evidenceScoreStr,
       stockMovement: item.stockMovement || '--',
       stockCountBefore: item.stockCountBefore ?? '--',
@@ -130,6 +135,10 @@ const buildExportColumns = (config) => {
     { key: 'channelName', label: 'Camera Name' }
   );
   if (config.showDescription) cols.push({ key: 'description', label: 'Description' });
+  if (config.showPostureFields) cols.push({ key: 'posture', label: 'Posture' });
+  if (config.showCansStackFields) cols.push(
+    { key: 'observedLayers', label: 'Observed Layers' },
+  );
   if (config.showEmotionFields) cols.push({ key: 'emotion', label: 'Emotion' });
   if (config.showGenderAgeFields) cols.push(
     { key: 'description', label: 'Description' }, { key: 'targetGender', label: 'Gender' }, { key: 'zone', label: 'Zone' },
@@ -376,6 +385,8 @@ const exportToGridPDF = async (config, params) => {
       ['Description', 'description'],
     );
     else if (config.showDescription) details.push(['Description', 'description']);
+    if (config.showPostureFields) details.push(['Posture', 'posture']);
+    if (config.showCansStackFields) details.push(['Observed Layers', 'observedLayers']);
     if (config.showEmotionFields) details.push(['Emotion', 'emotion']);
     if (config.showGenderAgeFields) details.push(['Gender', 'targetGender'], ['Zone', 'zone'], ['Description', 'description']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);

@@ -3,7 +3,7 @@ import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection?v=mach
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, Cpu, DoorOpen, FileText, Flame, Image, MapPin, Power, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, Cpu, DoorOpen, Eye, FileText, Flame, Image, MapPin, Power, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -270,6 +270,20 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
       header: sortHeader('Description', 'description'),
       cell: ({ row }) => <span className="block max-w-sm whitespace-normal break-words text-xs text-[var(--tx2)]">{row.original.description || '--'}</span>,
     });
+  }
+
+  if (config.showPostureFields) {
+    cols.push({
+      accessorKey: 'posture',
+      header: sortHeader('Posture', 'posture'),
+      cell: ({ row }) => <span className={`${styles.text} capitalize`}>{row.original.posture || '--'}</span>,
+    });
+  }
+
+  if (config.showCansStackFields) {
+    cols.push(
+      { accessorKey: 'observedLayers', header: sortHeader('Observed Layers', 'observedLayers'), cell: ({ row }) => <span className={styles.text}>{row.original.observedLayers ?? '--'}</span> },
+    );
   }
 
   if (config.showEmotionFields) {
@@ -639,10 +653,10 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
       </div>
     ) : config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
-        {config.showIncidentName !== false && !config.showDoorFields && (
+        {config.showIncidentName !== false && !config.showDoorFields && !config.hideIncidentCardLabel && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
         )}
-        {config.showSeverity !== false && config.showSeverityOnCard !== false && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
+        {config.showSeverity !== false && config.showSeverityOnCard !== false && !config.hideSeverityCardLabel && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
           <IncidentCardRow
             icon={AlertTriangle}
             label="Severity"
@@ -750,6 +764,14 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
             value={row.description || '--'}
             valueClassName="whitespace-pre-wrap break-words"
           />
+        )}
+        {config.showPostureFields && (
+          <IncidentCardRow icon={Activity} label="Posture" value={row.posture || '--'} valueClassName="capitalize" />
+        )}
+        {config.showCansStackFields && (
+          <>
+            <IncidentCardRow icon={Eye} label="Observed layers" value={row.observedLayers ?? '--'} />
+          </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />

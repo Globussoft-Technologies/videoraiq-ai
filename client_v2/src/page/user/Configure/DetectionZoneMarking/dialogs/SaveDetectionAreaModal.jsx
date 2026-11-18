@@ -1,7 +1,7 @@
 import WhatsAppRecipientSelect from '../components/WhatsAppRecipientSelect';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
@@ -17,6 +17,7 @@ import { emotionAlertGroupsError } from '../../../../../helpers/emotionDetection
 import { machineOpsSharedZones } from '../../../../../helpers/machineOpsDetection?v=shared-zones-2';
 import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
+import PostureSelect from '../components/PostureSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 
 function normalizeTelegramChannels(channels = []) {
@@ -33,6 +34,8 @@ function normalizeTelegramChannels(channels = []) {
 }
 
 export default function SaveDetectionAreaModal({
+  specialSettingType,
+  initialSpecialSettings,
   initialName,
   initialPriority,
   initialLaneName,
@@ -76,6 +79,10 @@ export default function SaveDetectionAreaModal({
   const [laneName, setLaneName] = useState(initialLaneName || '');
   const [doorAlertMode, setDoorAlertMode] = useState(initialDoorAlertMode);
   const [doorNotification, setDoorNotification] = useState(initialDoorNotification);
+  const isPosture = specialSettingType === 'personPostureDetectionSettings';
+  const isStack = specialSettingType === 'cansStackDetectionSettings';
+  const [layers, setLayers] = useState(initialSpecialSettings?.layers ?? 3);
+  const [triggerNotification, setTriggerNotification] = useState(initialSpecialSettings?.trigger_notification !== false);
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
   // Check-In / Check-Out keeps its detection-wide mode and shares the same
   // per-zone Telegram channels and alert schedule as the other area types.
@@ -111,6 +118,7 @@ export default function SaveDetectionAreaModal({
   const handleSubmit = () => {
     const nextErrors = {};
     if (!detectionName.trim()) nextErrors.detectionName = true;
+    if (isStack && (!Number.isInteger(Number(layers)) || Number(layers) < 1)) nextErrors.layers = true;
     if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
       if (isEmotion) {
@@ -169,6 +177,11 @@ export default function SaveDetectionAreaModal({
       zones: outZones,
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
       ...(isDoor ? { doorAlertMode, doorNotification } : {}),
+      ...((isPosture || isStack) ? { specialSettings: {
+        zone_name: outZones[0]?.name || '',
+        trigger_notification: triggerNotification,
+        ...(isPosture ? { trigger_on: outZones.every(zone => zone.trigger_on === outZones[0]?.trigger_on) ? outZones[0]?.trigger_on || 'both' : 'both' } : { layers: Number(layers) }),
+      } } : {}),
     });
   };
 
@@ -178,9 +191,9 @@ export default function SaveDetectionAreaModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        width: '100%', maxWidth: (isLineCrossing || isCheckInOut || isDoor) ? 520 : 440, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+        width: '100%', maxWidth: 560, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-        maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        maxHeight: 'calc(100vh - 72px)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '22px 22px 16px' }}>
           <div style={{ display: 'grid', gap: 10, minWidth: 0, flex: 1 }}>
@@ -205,7 +218,7 @@ export default function SaveDetectionAreaModal({
                   inside the banner — forcing one line overflows the dialog and gives
                   the whole thing a horizontal scrollbar. */}
               <div style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.35, fontWeight: 800, color: 'var(--tx)' }}>
-                Please select the Telegram channel and Time Range for Telegram alerts. Time zone is managed from the Settings page.
+                Select a Telegram channel and time range for Telegram alerts. Time zone is managed from Settings.
               </div>
             </div>
             )}
@@ -270,6 +283,24 @@ export default function SaveDetectionAreaModal({
                 saving={saving} />
             )}
 
+            {isStack && (
+              <div style={{ display: 'grid', gap: 14, border: '1px solid var(--bd)', borderRadius: 12, padding: 14, background: 'var(--bg2)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isPosture ? 'Posture rules' : isStack ? 'Cans Stack rules' : 'Alert rules'}</div>
+                <div style={{ display: 'grid', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>
+                  Maximum allowed layers
+                  <input type="number" min="1" step="1" value={layers} disabled={saving} onChange={e => { setLayers(e.target.value); setErrors(er => ({ ...er, layers: false })); }} style={{ width: '100%', boxSizing: 'border-box', height: 40, padding: '0 12px', background: 'var(--bg1solid)', color: 'var(--tx)', fontSize: 13, border: `1px solid ${errors.layers ? '#ef4444' : 'var(--bd)'}`, borderRadius: 9 }} />
+                  {errors.layers && <span style={{ color: '#ef4444' }}>Enter a positive whole number.</span>}
+                </div>
+                {!isPosture && !isStack && <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 12px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg1solid)', cursor: 'pointer' }}>
+                  <span style={{ display: 'grid', gap: 3 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)' }}>Send notification</span>
+                    <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Incidents are saved even when notifications are off.</span>
+                  </span>
+                  <input type="checkbox" checked={triggerNotification} onChange={event => setTriggerNotification(event.target.checked)} disabled={saving} aria-label="Send detection notifications" style={{ width: 16, height: 16, flex: '0 0 auto', accentColor: 'var(--blue)', cursor: 'pointer' }} />
+                </label>}
+              </div>
+            )}
+
             {/* Check-In / Check-Out: Line Name + Mode share one card, Line
                 Name on top since it names the whole detection. */}
             {isCheckInOut && (
@@ -331,6 +362,10 @@ export default function SaveDetectionAreaModal({
               {errors[`zone-${i}-name`] && (
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
+              </div>}
+              {isPosture && <div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Posture</div>
+                <PostureSelect value={z.trigger_on || initialSpecialSettings?.trigger_on || 'both'} onChange={value => updateZoneField(i, 'trigger_on', value)} disabled={saving} />
               </div>}
                   {isGenderAge && <TargetGenderSelect id={`save-zone-target-gender-${i}`} value={z.target_gender}
                 disabled={saving} onChange={value => updateZoneField(i, 'target_gender', value)} />}

@@ -158,12 +158,16 @@ const IncidentLogsPage = ({ config }) => {
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [exportingFormat, setExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
+  const [postureTotals, setPostureTotals] = useState({ sitting: 0, standing: 0 });
   const [machineStateTotals, setMachineStateTotals] = useState({ on: 0, off: 0 });
   const [packingStatusTotals, setPackingStatusTotals] = useState({ all: 0, completed: 0, review: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [boxTypeList, setBoxTypeList] = useState([]);
   const [stockDirection, setStockDirection] = useState('all');
+  const [postureFilter, setPostureFilter] = useState('');
+  const [observedLayersFilter, setObservedLayersFilter] = useState('');
+  const [observedLayerOptions, setObservedLayerOptions] = useState([]);
   const [stockSummary, setStockSummary] = useState({
     vehicles: 0,
     loadedBoxes: 0,
@@ -264,7 +268,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, machineState, doorStatus, vehicleNumber, boxType]);
+  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, machineState, doorStatus, vehicleNumber, boxType, postureFilter, observedLayersFilter]);
 
   useEffect(() => {
     if (zone) dispatch({ type: 'SET_ZONE', value: '' });
@@ -303,6 +307,8 @@ const IncidentLogsPage = ({ config }) => {
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
         boxType: config.showBoxTypeFilter ? boxType : undefined,
         direction: config.showStockCountingFields ? stockDirection : undefined,
+        posture: config.showPostureFilter ? postureFilter : undefined,
+        observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
       };
       const filteredDoorRows = config.showDoorFields && doorStatus
         ? await fetchDoorStatusLogs({ ...query, doorStatus })
@@ -315,6 +321,15 @@ const IncidentLogsPage = ({ config }) => {
       if (config.showEmotionFields) {
         setEmotionOptions(data?.emotionOptions || []);
         setEmotionCounts(data?.emotionCounts || []);
+      }
+      if (config.showPostureFilter) {
+        setPostureTotals(data?.postureCounts || { sitting: 0, standing: 0 });
+      }
+      if (config.showObservedLayersFilter) {
+        setObservedLayerOptions(previous => [...new Set([
+          ...previous,
+          ...list.map(item => item.observedLayers).filter(value => value != null && value !== ''),
+        ])].sort((a, b) => Number(a) - Number(b)));
       }
       if (config.showGenderAgeFields) {
         const nextSummary = data?.genderAgeSummary || null;
@@ -344,6 +359,10 @@ const IncidentLogsPage = ({ config }) => {
         createdAt: item.timeOfIncident || item.createdAt,
         incidentImageUrl: incidentImageUrl(item.Image),
         severity: item.severity || '--',
+        description: item.description || '--',
+        posture: item.posture || '--',
+        zone: item.zone || '--',
+        observedLayers: item.observedLayers,
         count: item.count,
         alertThreshold: item.alertThreshold,
         fireCount: item.fireCount,
@@ -405,7 +424,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -694,6 +713,13 @@ const IncidentLogsPage = ({ config }) => {
         { label: 'Machine OFF', value: offCount, color: 'var(--warn)' },
       ];
     }
+    if (config.showPostureFilter) {
+      return [
+        { label: 'Person Posture Logs', value: totalCount ?? 0, color: 'var(--blue)' },
+        { label: 'Sitting', value: postureTotals.sitting || 0, color: 'var(--violet)' },
+        { label: 'Standing', value: postureTotals.standing || 0, color: 'var(--ok)' },
+      ];
+    }
     if (config.showBoxPackingFields) {
       const boxes = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.boxNumber) || 0), 0), 0);
       const review = rows.filter((row) => /variance|review|pending/i.test(`${row.status || ''} ${row.confirmationReason || ''}`)).length;
@@ -718,7 +744,7 @@ const IncidentLogsPage = ({ config }) => {
       { label: config.showLightingFields || config.showHygieneFields || config.showDoorFields ? 'Medium' : 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, config.showMachineOpsFields, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, machineStateTotals, stockSummary, totalCount]);
+  }, [config.showStats, config.showPostureFilter, config.showMachineOpsFields, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, postureTotals, machineStateTotals, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({
@@ -741,8 +767,10 @@ const IncidentLogsPage = ({ config }) => {
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
+      posture: config.showPostureFilter ? postureFilter : undefined,
+      observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
     }),
-    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -823,7 +851,21 @@ const IncidentLogsPage = ({ config }) => {
         endDate={endDate}
         maxDate={maxDateDefault}
         datePickerVariant={config.datePickerVariant}
-        dateFilterActions={config.showGenderAgeFields ? (
+        dateFilterActions={config.showPostureFilter ? (
+          <div role="group" aria-label="Posture" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+            {[['', 'All'], ['sitting', 'Sitting'], ['standing', 'Standing']].map(([value, label]) => (
+              <button
+                key={value || 'all'}
+                type="button"
+                aria-pressed={postureFilter === value}
+                onClick={() => { setPostureFilter(value); dispatch({ type: 'SET_CURRENT_PAGE', value: 1 }); }}
+                className={`h-full cursor-pointer rounded-[7px] px-3 text-xs font-semibold transition-colors ${postureFilter === value ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : config.showGenderAgeFields ? (
           <GenderFilter value={gender} onChange={value => dispatch({ type: 'SET_GENDER', value })} />
         ) : config.showMachineOpsFields ? (
           <div role="group" aria-label="Machine state" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
@@ -975,6 +1017,10 @@ const IncidentLogsPage = ({ config }) => {
             value,
             label: value.replace(/\b\w/g, (letter) => letter.toUpperCase()),
           }))}
+          showObservedLayers={config.showObservedLayersFilter}
+          observedLayers={observedLayersFilter}
+          setObservedLayers={(value) => { setObservedLayersFilter(value); dispatch({ type: 'SET_CURRENT_PAGE', value: 1 }); }}
+          observedLayerOptions={observedLayerOptions}
         />
 
         <AutoRefreshComponent

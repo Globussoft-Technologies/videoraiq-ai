@@ -6,6 +6,7 @@ import HomeRedirect from './layout/HomeRedirect';
 import RequirePermission from './layout/RequirePermission';
 // import HygieneAnalytics from './pages/HygieneAnalytics/HygieneAnalytics';
 import { ADMIN_STORAGE_UI_ENABLED } from './lib/featureFlags';
+import { PERSON_POSTURE_CONFIG, CANS_STACK_CONFIG } from './pages/IncidentLogs/configs';
 
 const CommandCenter = lazy(() => import('./page/user/CommandCenter/CommandCenter'));
 const IncidentCenter = lazy(() => import('./page/user/Incidents/IncidentCenter'));
@@ -76,6 +77,7 @@ const EmotionLogs = lazy(() => import('./pages/EmotionLogs/EmotionLogs'));
 const GenderAgeLogs = lazy(() => import('./pages/GenderAgeLogs/GenderAgeLogs'));
 const MachineOpsLogs = lazy(() => import('./pages/MachineOpsLogs/MachineOpsLogs'));
 const SleepActivityLogs = lazy(() => import('./pages/SleepActivityLogs/SleepActivityLogs'));
+const IncidentLogsPage = lazy(() => import('./pages/IncidentLogs/IncidentLogsPage'));
 const MeasurementLogs = lazy(() => import('./pages/MeasurementLogs/MeasurementLogs'));
 const EmailMonitoringDashboard = lazy(() => import('./page/user/EmailMonitoring/EmailMonitoringDashboard'));
 const AssistantPage = lazy(() => import('./page/user/Assistant/AssistantPage'));
@@ -208,6 +210,8 @@ export const v2Routes = (
     <Route path="logs/stock-counting" element={guard('logs', 'stockCountingLogs', <StockCountingLogs />)} />
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
+    <Route path="logs/person-posture" element={guard('logs', 'personPostureLogs', <IncidentLogsPage config={PERSON_POSTURE_CONFIG} />)} />
+    <Route path="logs/cans-stack" element={guard('logs', 'cansStackLogs', <IncidentLogsPage config={CANS_STACK_CONFIG} />)} />
     <Route path="logs/door" element={guard('logs', 'doorDetectionLogs', <DoorDetectionLogs />)} />
     <Route path="logs/door-detection" element={<Navigate to="/logs/door" replace />} />
 

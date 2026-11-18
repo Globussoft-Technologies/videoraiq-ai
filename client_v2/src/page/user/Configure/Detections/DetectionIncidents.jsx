@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import moment from 'moment';
 import { SEVERITIES, SEVERITY_BY_KEY, INCIDENT_STATUS } from './detectionsData';
 import PresetDateRangePicker from '../../../../components/PresetDateRangePicker';
+import { mediaUrl } from '../../../../lib/format';
 
 const FILTERS = [{ key: 'all', label: 'All' }, ...SEVERITIES.map((s) => ({ key: s.key, label: s.label }))];
 
@@ -12,6 +13,8 @@ function IncidentRow({ incident }) {
   const source = [
     incident.camera,
     incident.site,
+    incident.zone,
+    incident.detail,
     incident.confidence == null ? null : `${incident.confidence}%`,
   ].filter(Boolean).join(' - ');
 
@@ -25,6 +28,17 @@ function IncidentRow({ incident }) {
         padding: '10px 13px 11px',
       }}
     >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {incident.image && (
+        <img
+          src={mediaUrl(incident.image)}
+          alt={incident.title || 'Incident image'}
+          loading="lazy"
+          style={{ width: 88, height: 62, flex: '0 0 auto', objectFit: 'contain', borderRadius: 6, background: 'var(--bg3)' }}
+          onError={(event) => { event.currentTarget.style.display = 'none'; }}
+        />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span
           style={{
@@ -91,6 +105,8 @@ function IncidentRow({ incident }) {
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color }} />
           {status.label}
         </span>
+      </div>
+      </div>
       </div>
     </div>
   );

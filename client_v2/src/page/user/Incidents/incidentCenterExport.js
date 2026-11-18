@@ -86,7 +86,7 @@ const fetchAllFilteredIncidents = async (filter) => {
 
 const mapRow = (item, index) => {
   const isDoorDetection = item?.incidentType === 'doorDetection';
-  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item?.incidentType);
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'cansStackDetection'].includes(item?.incidentType);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item?.incidentType);
   const violations = Array.isArray(item?.violations) ? item.violations.filter(Boolean) : [];
   return {
@@ -94,6 +94,8 @@ const mapRow = (item, index) => {
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     ...(isDescriptiveIncident ? { Description: text(item?.description) } : {}),
+    ...(item?.incidentType === 'cansStackDetection' ? { 'Observed Layers': text(item?.observedLayers) } : {}),
+    ...(item?.incidentType === 'personPostureDetection' ? { Posture: text(item?.posture) } : {}),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
     ...(isConditionIncident ? {
@@ -201,6 +203,7 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
     ...(rows.some((row) => Object.hasOwn(row, 'Description')) ? ['Description'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'Observed Layers')) ? ['Observed Layers'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Issues Detected')) ? ['Issues Detected', violationLabel, 'Zone Name'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
@@ -215,6 +218,7 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
     Description: 52,
+    'Observed Layers': 25,
     'Issues Detected': 18,
     [violationLabel]: 62,
     'Zone Name': 25,
@@ -350,9 +354,11 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
   const columns = 4;
   const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
   const imageHeight = cardWidth * 0.52;
-  const detailsFor = (row) => [
+  const detailsFor = (row) => {
+    const isCansStack = Object.hasOwn(row, 'Observed Layers');
+    return [
     ['Incident', 'Incident'],
-    ...(Object.hasOwn(row, 'Description') ? [['Description', 'Description']] : []),
+    ...(!isCansStack && Object.hasOwn(row, 'Description') ? [['Description', 'Description']] : []),
     ...(Object.hasOwn(row, 'Issues Detected') ? [
       ['Issues Detected', 'Issues Detected'],
       ['Zone Name', 'Zone Name'],
@@ -370,10 +376,11 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
     ['Status', 'Status'],
     ['Time', 'Time of Incident'],
     ...(showVehicleNumber ? [['Vehicle Number', 'Vehicle Number']] : []),
-  ];
+    ];
+  };
   const detailGap = rows.some((row) => Object.hasOwn(row, 'Box ID')) ? 3.7 : 4.3;
   const cardHeight = imageHeight + 6 + Math.max(...rows.map((row) => detailsFor(row).length)) * detailGap
-    + (rows.some((row) => Object.hasOwn(row, 'Violations') || Object.hasOwn(row, 'Description')) ? 20 : 4);
+    + (rows.some((row) => Object.hasOwn(row, 'Violations') || (Object.hasOwn(row, 'Description') && !Object.hasOwn(row, 'Observed Layers'))) ? 20 : 4);
   const firstPageY = 44;
   const nextPageY = 10;
   let x = margin;

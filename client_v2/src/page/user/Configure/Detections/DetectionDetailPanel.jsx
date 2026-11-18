@@ -18,7 +18,7 @@ import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
 import { fetchDepartments } from '../../Departments/Api';
 import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
-import { isAttendanceDetectionType } from '../DetectionZoneMarking/constants';
+import { isAttendanceDetectionType, isCansStackDetectionType } from '../DetectionZoneMarking/constants';
 import { departmentLabel, departmentTitle, departmentsIn, inDepartments } from '../../Administer/recipientDepartments';
 import MultiSelect from '../../../../components/MultiSelect';
 
@@ -1185,6 +1185,7 @@ export default function DetectionDetailPanel({
   const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
   const usesThresholds = thresholdKeys.length > 0;
   const isBlurredCameraDetection = model?.settingType === 'blurredCameraDetectionSettings';
+  const isCansStackDetection = isCansStackDetectionType(model?.settingType || model?.id);
   const thresholdsBlockedByInactive = !hideToggle && !model.active;
   const thresholdsBlockedByAccess = !canEdit;
   const resetThresholdActionDisabled = resetThresholdDisabled || thresholdsBlockedByAccess || thresholdsBlockedByInactive;
@@ -1652,7 +1653,7 @@ export default function DetectionDetailPanel({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-        {!isBlurredCameraDetection && <button
+        {!isBlurredCameraDetection && !isCansStackDetection && <button
           type="button"
           onClick={onEditZones}
           disabled={!canEdit}

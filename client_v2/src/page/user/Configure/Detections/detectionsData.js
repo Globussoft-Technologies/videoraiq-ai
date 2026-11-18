@@ -26,6 +26,8 @@ export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, 
 // older label returned by the API, so the UI does not depend on every backend
 // instance/cache being updated at exactly the same time.
 const DETECTION_LABEL_OVERRIDES = {
+  personPostureDetectionSettings: 'Person Posture Detection',
+  cansStackDetectionSettings: 'Cans Stack Detection',
   emotionDetectionSettings: 'Emotion Detection',
   genderAgeDetectionSettings: 'Gender & Age Detection',
   machineOpsDetectionSettings: 'Machine Operations Detection',
@@ -163,6 +165,8 @@ const CATEGORY_MATCHERS = [
 ];
 
 const DETECTION_CATEGORY_OVERRIDES = {
+  personPostureDetectionSettings: 'people',
+  cansStackDetectionSettings: 'industrial',
   emotionDetectionSettings: 'people',
   genderAgeDetectionSettings: 'people',
   machineOpsDetectionSettings: 'industrial',

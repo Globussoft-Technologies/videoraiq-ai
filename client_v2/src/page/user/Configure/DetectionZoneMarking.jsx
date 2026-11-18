@@ -19,6 +19,7 @@ import {
   FIRE_SMOKE_SETTING_TYPE,
   MIN_POINTS_TO_CLOSE,
   isAttendanceDetectionType,
+  isCansStackDetectionType,
   isStockCountingType,
   isVehicleCheckInOutType,
   DOOR_DEFAULT_THRESHOLD_SEC,
@@ -76,6 +77,7 @@ export default function DetectionZoneMarking({
   selectedSettingType = null,
   zoneSettingsOpen = false,
   onZoneSettingsClose,
+  hideZoneControls = false,
 }) {
   // Persisted zone/detection-setting deletion (per-zone trash, Reset
   // Detection UI) is gated on detectionSettings.delete â€” a write-only role
@@ -121,6 +123,7 @@ export default function DetectionZoneMarking({
   }, [selectedSettingType, camera?._id]);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
+  const isZoneFreeDetection = hideZoneControls || isCansStackDetectionType(activeType?.settingType || selectedSettingType);
   const isAttendanceDetection = isAttendanceDetectionType(activeType?.settingType || activeType?.label);
   // Line Crossing draws a single straight line (exactly 2 points), not a
   // closed area â€” V1 gives it its own toolbar/shape entirely (see
@@ -628,7 +631,7 @@ export default function DetectionZoneMarking({
     return nextErrors;
   };
 
-  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting }) => {
+  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting, specialSettings }) => {
     const doorSettings = isDoor
       ? {
           door_alert_mode: doorAlertMode || activeType.setting?.settings?.door_alert_mode || 'open',
@@ -674,6 +677,7 @@ export default function DetectionZoneMarking({
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       ...(Array.isArray(z.whatsappRecipientIds) ? { whatsappRecipientIds: z.whatsappRecipientIds } : {}),
       name: z.name.trim(),
+      ...(activeType.settingType === 'personPostureDetectionSettings' ? { trigger_on: z.trigger_on || activeType.setting?.settings?.trigger_on || 'both' } : {}),
       ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isLighting ? lightingZonePayload(z) : {}),
       ...(isEmotion ? emotionZoneSettings(z) : {}),
@@ -727,6 +731,7 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority ?? setting.settings?.levelOfImportance,
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...(specialSettings || {}),
           ...machineSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
@@ -763,6 +768,7 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority,
           referencePoints: { [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...(specialSettings || {}),
           ...machineSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
@@ -816,10 +822,10 @@ export default function DetectionZoneMarking({
     setShowSaveModal(true);
   };
 
-  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, doorNotification, lighting }) => {
+  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, doorNotification, lighting, specialSettings }) => {
     setSaving(true);
     try {
-      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, doorNotification, lighting });
+      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, doorNotification, lighting, specialSettings });
       if (isDoor) {
         setDoorAlertModeDraft(doorAlertMode);
         setDoorSeverityDraft(priority);
@@ -1080,10 +1086,10 @@ export default function DetectionZoneMarking({
       <div style={{ display: 'grid', gridTemplateColumns: embedded ? '1fr' : '1fr 320px', gap: 18, alignItems: 'start' }}>
         {/* Video + drawing tools */}
         <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          {!isZoneFreeDetection && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Pencil size={16} color="var(--blue)" strokeWidth={1.9} />
             <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Zone Marking</span>
-          </div>
+          </div>}
 
           <div style={{ display: 'grid', gridTemplateColumns: activeType?.configured ? '1fr 1fr' : '1fr', gap: 10, marginBottom: 14 }}>
             <div>
@@ -1130,7 +1136,7 @@ export default function DetectionZoneMarking({
             )}
           </div>
 
-          {activeType && (
+          {activeType && !isZoneFreeDetection && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: -6, marginBottom: 14, fontSize: 10.5, color: activeType.configured ? 'var(--ok)' : 'var(--tx3)' }}>
               {activeType.configured
                 ? <><CheckCircle2 size={12} /> Already configured for this camera</>
@@ -1140,16 +1146,16 @@ export default function DetectionZoneMarking({
 
           <div
             ref={stageRef}
-            onClick={handleStageClick}
-            onPointerDown={handleStagePointerDown}
-            onPointerMove={handleStagePointerMove}
-            onPointerUp={handleStagePointerUp}
-            onPointerLeave={handleStagePointerUp}
+            onClick={isZoneFreeDetection ? undefined : handleStageClick}
+            onPointerDown={isZoneFreeDetection ? undefined : handleStagePointerDown}
+            onPointerMove={isZoneFreeDetection ? undefined : handleStagePointerMove}
+            onPointerUp={isZoneFreeDetection ? undefined : handleStagePointerUp}
+            onPointerLeave={isZoneFreeDetection ? undefined : handleStagePointerUp}
             style={{
               position: 'relative', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', aspectRatio: isFullscreen ? 'auto' : '16/9',
               width: isFullscreen ? '100vw' : undefined, height: isFullscreen ? '100vh' : undefined,
               background: '#0a0e15',
-              cursor: (drawing || lineDrawing) ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
+              cursor: isZoneFreeDetection ? 'default' : (drawing || lineDrawing) ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
               border: '1px solid var(--bd)',
             }}
           >
@@ -1224,7 +1230,7 @@ export default function DetectionZoneMarking({
                 Crossing is always exactly 2 points, so the +/- stepper (which
                 adjusts a polygon's point cap) doesn't apply and is hidden. */}
             <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
-              {!isLineCrossing && !isBlurredCameraDetection && (
+              {!isZoneFreeDetection && !isLineCrossing && !isBlurredCameraDetection && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); decreaseMaxPoints(); }}
@@ -1259,7 +1265,7 @@ export default function DetectionZoneMarking({
                 shape renders in blue so it's visually distinct while drawing. Line Crossing draws
                 an open line (polyline, no fill) instead of a closed filled polygon â€” it's a
                 crossing line, not an area. */}
-            {isFullscreen && !isBlurredCameraDetection && (
+            {isFullscreen && !isZoneFreeDetection && !isBlurredCameraDetection && (
               <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 8 }}>
                 <button
                   type="button"
@@ -1368,6 +1374,7 @@ export default function DetectionZoneMarking({
               </div>
             )}
 
+            {!isZoneFreeDetection && <>
             <svg
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
@@ -1580,6 +1587,8 @@ export default function DetectionZoneMarking({
                 live, so the server must be told *which* frame was clicked, not
                 just where. X-ray reads `FRAG_CHANGED` off the player itself
                 rather than this page tracking fragments it has no use for. */}
+            </>}
+
             {XrayMode && (
               <Suspense fallback={null}>
                 <XrayMode
@@ -1596,7 +1605,7 @@ export default function DetectionZoneMarking({
             )}
           </div>
 
-          {!isBlurredCameraDetection && <ZoneToolbar
+          {!isZoneFreeDetection && !isBlurredCameraDetection && <ZoneToolbar
             activeType={activeType}
             isLineCrossing={isLineCrossing}
             isCheckInOut={hasAuxiliaryLine}
@@ -1622,7 +1631,7 @@ export default function DetectionZoneMarking({
             onClearAll={handleClearAllClick}
             onSave={handleOpenSaveModal}
           />}
-          {!isBlurredCameraDetection && hasUnsavedDrawing && (
+          {!isZoneFreeDetection && !isBlurredCameraDetection && hasUnsavedDrawing && (
             <div role="status" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', color: 'var(--tx3)', fontSize: 12 }}>
               <span>Unsaved drawing changes. Saved zone details remain unchanged until Save.</span>
               <button type="button" onClick={discardDrawingChanges} disabled={saving} style={{ border: '1px solid var(--bd)', borderRadius: 7, padding: '5px 9px', background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}>Discard Changes</button>
@@ -1653,7 +1662,7 @@ export default function DetectionZoneMarking({
               </div>
             </div>
 
-            {activeType && !isBlurredCameraDetection && (
+            {activeType && !isZoneFreeDetection && !isBlurredCameraDetection && (
               <ZoneSettingsPanel
                 zones={zones}
                 extraFields={extraFieldsFor(activeType.settingType)}
@@ -1676,6 +1685,7 @@ export default function DetectionZoneMarking({
                 isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
+                isPosture={activeType.settingType === 'personPostureDetectionSettings'}
                 doorAlertMode={doorAlertModeDraft}
                 onDoorAlertModeChange={setDoorAlertModeDraft}
                 doorNotification={doorNotificationDraft}
@@ -1692,7 +1702,7 @@ export default function DetectionZoneMarking({
               />
             )}
 
-            {activeType && !isBlurredCameraDetection && (
+            {activeType && !isZoneFreeDetection && !isBlurredCameraDetection && (
               <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
@@ -1758,7 +1768,7 @@ export default function DetectionZoneMarking({
         )}
       </div>
 
-      {embedded && zoneSettingsOpen && activeType && !isBlurredCameraDetection && createPortal(
+      {embedded && zoneSettingsOpen && activeType && !isZoneFreeDetection && !isBlurredCameraDetection && createPortal(
         <div
           onClick={onZoneSettingsClose}
           style={{
@@ -1819,6 +1829,7 @@ export default function DetectionZoneMarking({
                 isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
                 isDoor={isDoor}
+                isPosture={activeType.settingType === 'personPostureDetectionSettings'}
                 doorAlertMode={doorAlertModeDraft}
                 onDoorAlertModeChange={setDoorAlertModeDraft}
                 doorNotification={doorNotificationDraft}
@@ -1843,8 +1854,10 @@ export default function DetectionZoneMarking({
         document.body,
       )}
 
-      {showSaveModal && activeType && !isBlurredCameraDetection && (
+      {showSaveModal && activeType && !isZoneFreeDetection && !isBlurredCameraDetection && (
         <SaveDetectionAreaModal
+          specialSettingType={activeType.settingType}
+          initialSpecialSettings={activeType.setting?.settings}
           isLighting={isLighting}
           isEmotion={isEmotion}
           isGenderAge={isGenderAge}

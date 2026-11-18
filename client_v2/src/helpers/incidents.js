@@ -40,6 +40,35 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {},
   };
 };
 
+const SPECIAL_LOG_ENDPOINTS = {
+  personPostureDetection: 'person-posture-detection',
+  cansStackDetection: 'cans-stack-detection',
+};
+
+export const fetchDetectionLogs = async ({ incidentType, skip = 0, limit = 12, filter = {} } = {}) => {
+  const endpoint = SPECIAL_LOG_ENDPOINTS[incidentType];
+  if (!endpoint) return fetchIncidents({ skip, limit }, filter);
+  const token = getAccessToken();
+  const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+  const query = {
+    channelId: filter.channelId?.[0],
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+    severity: filter.severity?.[0],
+    posture: filter.posture,
+    observedLayers: filter.observedLayers,
+  };
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params.set(key, String(value));
+  });
+  const res = await axios.get(`${Api_url}/incidents/logs/${endpoint}?${params.toString()}`, {
+    headers: { 'x-access-token': token },
+  });
+  const payload = unwrap(res) || {};
+  const items = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload.items) ? payload.items : []);
+  return { items, totalCount: payload.totalCount ?? items.length, counts: payload.severityCounts || null };
+};
+
 // Fetches a single incident by id — used to deep-link a notification straight
 // to its alert, since the general feed may not include it (older, or filtered
 // out by the current severity/status/date tabs).

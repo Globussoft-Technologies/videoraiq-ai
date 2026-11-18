@@ -430,7 +430,13 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
     item.incidentType === 'guardSleepingDetection' ||
     /guard\s*sleeping|sleep\s*activity/i.test(item.incidentName || item.displayName || '');
   const isDoorDetection = item.incidentType === 'doorDetection';
-  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item.incidentType);
+  const isDescriptiveIncident = [
+    'sackLoadingUnloadingDetection',
+    'uniformDetection',
+    'machineOpsDetection',
+    'personPostureDetection',
+    'cansStackDetection',
+  ].includes(item.incidentType);
   const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
 
   function handleCardClick() {
@@ -756,11 +762,23 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               {incidentDescription && (
                 <div
                   title={incidentDescription}
-                  style={{ marginTop: 2, padding: '7px 0 2px', color: 'var(--tx)', fontSize: 11, lineHeight: 1.4, overflowWrap: 'anywhere' }}
+                  style={{ marginTop: 2, padding: '6px 0 5px', color: 'var(--tx)', fontSize: 11, lineHeight: 1.4, overflowWrap: 'anywhere' }}
                 >
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', color: 'var(--tx2)', fontWeight: 700 }}>{incidentDescription}</span>
+                    <span style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', color: 'var(--tx)', fontWeight: 600 }}>{incidentDescription}</span>
                   </span>
+                </div>
+              )}
+              {item.incidentType === 'personPostureDetection' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1, fontSize: 11.5, lineHeight: 1.2, width: '100%', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--tx2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', fontSize: 9.5 }}>Posture :</span>
+                  <span style={{ color: 'var(--tx)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', textTransform: 'capitalize' }}>{item.posture || '--'}</span>
+                </div>
+              )}
+              {item.incidentType === 'cansStackDetection' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 1, fontSize: 11.5, lineHeight: 1.2, width: '100%' }}>
+                  <span style={{ color: 'var(--tx2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', fontSize: 9.5 }}>Observed layers:</span>
+                  <span style={{ color: 'var(--tx)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{item.observedLayers ?? '--'}</span>
                 </div>
               )}
             </>

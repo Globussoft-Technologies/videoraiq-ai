@@ -46,15 +46,27 @@ export default function TelegramChannelMultiSelect({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const width = Math.max(rect.width, 260);
+    const estimatedMenuHeight = menuRef.current?.scrollHeight || 340;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const openAbove = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+    const availableHeight = Math.max(120, openAbove ? spaceAbove - 6 : spaceBelow - 6);
     setCoords({
-      top: rect.bottom + 6,
+      ...(openAbove ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
       left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
       width,
+      maxHeight: Math.min(estimatedMenuHeight, availableHeight),
     });
   };
 
   useLayoutEffect(() => {
-    if (open) placeMenu();
+    if (!open) return undefined;
+    placeMenu();
+    // The portal is mounted after the first measurement. Recalculate with the
+    // menu's real height so a menu opens below whenever the available space is
+    // sufficient, and only flips above when it actually needs to.
+    const frame = window.requestAnimationFrame(placeMenu);
+    return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
   useEffect(() => {
@@ -237,10 +249,13 @@ export default function TelegramChannelMultiSelect({
           ref={menuRef}
           style={{
             position: 'fixed',
-            top: coords.top,
+            ...(coords.top == null ? { bottom: coords.bottom } : { top: coords.top }),
             left: coords.left,
             width: coords.width,
-            zIndex: 1000,
+            maxHeight: coords.maxHeight,
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 1100,
             background: 'var(--bg1solid)',
             border: '1px solid var(--bd)',
             borderRadius: 10,
@@ -285,7 +300,7 @@ export default function TelegramChannelMultiSelect({
             </div>
           </div>
 
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          <div style={{ minHeight: 0, overflowY: 'auto' }}>
             {filteredOptions.length === 0 ? (
               <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--tx3)', textAlign: 'center' }}>
                 No results

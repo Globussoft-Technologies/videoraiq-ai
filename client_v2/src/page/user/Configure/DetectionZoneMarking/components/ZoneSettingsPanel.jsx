@@ -1,6 +1,7 @@
 import WhatsAppRecipientSelect from './WhatsAppRecipientSelect';
 import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
+import PostureSelect from './PostureSelect';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
 import ThresholdDurationInput from './ThresholdDurationInput';
@@ -40,6 +41,7 @@ export default function ZoneSettingsPanel({
   isGenderAge = false,
   isMachineOps = false,
   isDoor = false,
+  isPosture = false,
   doorAlertMode = 'open',
   onDoorAlertModeChange,
   doorNotification = true,
@@ -188,6 +190,10 @@ export default function ZoneSettingsPanel({
                     {errors[`zone-${i}-name`] && (
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
                     )}
+                  </div>}
+                  {isPosture && <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Posture</div>
+                    <PostureSelect value={z.trigger_on || 'both'} onChange={value => onUpdateField(i, 'trigger_on', value)} disabled={savingIndex !== null} />
                   </div>}
                   {isFireSmoke && (
                     <div>

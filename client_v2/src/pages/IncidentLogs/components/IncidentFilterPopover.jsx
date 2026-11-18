@@ -61,6 +61,10 @@ const IncidentFilterPopover = ({
   boxType = '',
   setBoxType,
   boxTypeOptions = [],
+  showObservedLayers = false,
+  observedLayers = '',
+  setObservedLayers,
+  observedLayerOptions = [],
   triggerClassName = '',
   dropdownsOutside = true,
 }) => {
@@ -76,9 +80,10 @@ const IncidentFilterPopover = ({
         showStatus && !!status,
         showVehicleNumber && !!vehicleNumber.trim(),
         showBoxType && !!boxType,
+        showObservedLayers && !!observedLayers,
       ].filter(Boolean)
         .length,
-    [showEmotion, emotions, showZoneFilter, zone, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType]
+    [showEmotion, emotions, showZoneFilter, zone, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType, showObservedLayers, observedLayers]
   );
   const emotionGroup = emotionGroupForFilter(emotions);
   const visibleEmotionOptions = emotionOptionsForFilter(emotionGroup, emotionOptions.map(option => option.label));
@@ -96,6 +101,7 @@ const IncidentFilterPopover = ({
       setVehicleNumberSearch?.('');
     }
     if (showBoxType) setBoxType('');
+    if (showObservedLayers) setObservedLayers('');
   };
 
   return (
@@ -200,6 +206,16 @@ const IncidentFilterPopover = ({
                 allLabel="All Box Types"
               />
             )}
+            {showObservedLayers && (
+              <InlineSelect
+                value={observedLayers}
+                onChange={setObservedLayers}
+                options={observedLayerOptions.map(value => ({ value: String(value), label: String(value) }))}
+                placeholder="Observed Layers"
+                allLabel="All Observed Layers"
+                inlineDropdown={!dropdownsOutside}
+              />
+            )}
             {showLightingCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={LIGHTING_CATEGORY_OPTIONS} placeholder="All lighting categories" searchable={false} className="w-full" />}
             {showHygieneCategory && <MultiSelect value={hygieneCategory} onChange={setHygieneCategory} options={HYGIENE_CATEGORY_OPTIONS.map(c => ({ id: c.id, label: c.label }))} placeholder="All hygiene categories" searchable={false} className="w-full" />}
             {showSeverity && multiSeverity && <MultiSelect options={SEVERITY_OPTIONS.map(o => ({ id: o.value, label: mediumSeverityLabel && o.value === 'moderate' ? 'Medium' : o.label }))} value={Array.isArray(severity) ? severity : severity ? [severity] : []} onChange={setSeverity} placeholder="All severities" searchable={false} className="w-full" />}
@@ -263,7 +279,7 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineD
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full h-9 px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
+        className="w-full h-9 px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg2)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2 transition-colors hover:border-[var(--brand)] hover:bg-[var(--bg3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
       >
         <span className={selected ? 'text-[var(--tx)]' : 'text-[var(--tx3)]'}>
           {selected ? selected.label : placeholder}
@@ -278,8 +294,8 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineD
           <button
             type="button"
             onClick={() => choose('')}
-            className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded ${
-              !value ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
+            className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded transition-colors ${
+              !value ? 'bg-[var(--violet)]/10 font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
             }`}
           >
             {allLabel}
@@ -289,8 +305,8 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineD
               key={opt.value}
               type="button"
               onClick={() => choose(opt.value)}
-              className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded flex items-center justify-between ${
-                value === opt.value ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
+              className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded flex items-center justify-between transition-colors ${
+                value === opt.value ? 'bg-[var(--violet)]/10 font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
               }`}
             >
               {opt.label}

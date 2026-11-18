@@ -73,6 +73,8 @@ export const fetchIncidentLogs = async ({
   vehicleNumber,
   boxType,
   direction,
+  posture,
+  observedLayers,
   hygieneCategory,
   lightingCategory,
   emotions,
@@ -106,6 +108,8 @@ export const fetchIncidentLogs = async ({
       ...(vehicleNumber?.trim() && { vehicleNumber: vehicleNumber.trim() }),
       ...(boxType?.trim() && { boxType: boxType.trim() }),
       ...(direction && direction !== 'all' && { direction }),
+      ...(posture && { posture }),
+      ...(observedLayers !== '' && observedLayers != null && { observedLayers }),
     },
     headers: getHeaders(),
   });

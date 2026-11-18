@@ -1,4 +1,5 @@
 export const DETECTION_FIELD_KEYS = [
+  'personPostureDetectionSettings', 'cansStackDetectionSettings',
   'genderAgeDetectionSettings',
   'machineOpsDetectionSettings',
   'emotionDetectionSettings',
@@ -30,6 +31,15 @@ export const DETECTION_FIELD_KEYS = [
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
 export const PERSON_FALL_SICK_SETTING_TYPE = 'personFallSickDetectionSettings';
 export const STOCK_COUNTING_SETTING_TYPE = 'loadingUnloadingStockCountingSettings';
+export const CANS_STACK_DETECTION_SETTING_TYPE = 'cansStackDetectionSettings';
+
+export function isCansStackDetectionType(value) {
+  const normalized = String(value || '')
+    .replace(/settings$/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+  return normalized === 'cansstackdetection';
+}
 
 export function isStockCountingType(value) {
   return [STOCK_COUNTING_SETTING_TYPE, 'sackLoadingUnloadingSettings'].includes(String(value || ''));

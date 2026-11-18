@@ -49,6 +49,7 @@ export function zonesFor(setting, cameraId, settingType) {
     ...(settingType === EMOTION_SETTING_TYPE ? emotionZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === GENDER_AGE_SETTING_TYPE ? genderAgeZoneSettings(configs[i], setting?.settings) : {}),
     name: configs[i]?.name || `${settingType === 'doorDetectionSettings' ? 'Door' : 'Zone'} ${i + 1}`,
+    trigger_on: configs[i]?.trigger_on || setting?.settings?.trigger_on || 'both',
     fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? (settingType === 'doorDetectionSettings' ? 300 : '0'),

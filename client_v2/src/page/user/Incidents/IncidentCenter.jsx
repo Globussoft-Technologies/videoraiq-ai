@@ -83,6 +83,12 @@ const INCIDENT_LIST_DETAILS = {
     { field: 'violation', label: 'Lighting Violations', width: 310 },
     { field: 'zone', label: 'Zone Name', width: 140 },
   ],
+  personPostureDetection: [
+    { field: 'posture', label: 'Posture', width: 120 },
+  ],
+  cansStackDetection: [
+    { field: 'observedLayers', label: 'Observed Layers', width: 140 },
+  ],
 };
 const incidentListDetailsFor = (types) => {
   const columns = new Map();
@@ -1434,7 +1440,7 @@ function IncidentListRow({
   const previewAt = item.timeOfIncident || null;
   const canPreview = Boolean(previewChannelId && previewAt);
   const incident = item.incidentName || detectionLabel(item.incidentType || item.displayName);
-  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item.incidentType);
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'cansStackDetection'].includes(item.incidentType);
   const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
   const camera = item.channelData?.customName || item.channelData?.name || '--';
   const nvr = item.nvrData?.nvrName || (typeof item.location === 'string' ? item.location : '') || '--';
@@ -1548,6 +1554,10 @@ function IncidentListRow({
               </span>
             ) : field === 'emotionGroup' || field === 'emotion' ? (
               <span>{item[field] || '--'}</span>
+            ) : field === 'posture' ? (
+              <span style={{ textTransform: 'capitalize' }}>{item.posture || '--'}</span>
+            ) : field === 'observedLayers' ? (
+              <span>{item.observedLayers ?? '--'}</span>
             ) : field === 'vehicleNumber' ? (
               <span>{item.vehicleNumber || '—'}</span>
             ) : isConditionIncident && field === 'issueCount' ? (

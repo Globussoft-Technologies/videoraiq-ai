@@ -10,14 +10,16 @@ import MultiSelect from '../../../../components/MultiSelect';
 import { createDetectionSetting, deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { useSocket } from '../../../../context/SocketContext';
 import { useAuth } from '../../../../context/AuthContext';
-import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
+import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchDetectionLogs, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
+import SpecialDetectionSettings from './SpecialDetectionSettings';
 import { snapshotForPreview } from '../DetectionZoneMarking/preview';
 import {
   ATTENDANCE_DETECTION_NAME,
   ATTENDANCE_DETECTION_SETTING_TYPE,
   isAttendanceDetectionType,
+  isCansStackDetectionType,
 } from '../DetectionZoneMarking/constants';
 import { DetectionSettingsCameraList } from '../DetectionSettings';
 import {
@@ -103,7 +105,11 @@ function incidentTypeForDetection(model, incidentFilterTypes = []) {
     return values.some((value) => candidateKeys.has(normalizeIncidentKey(value)));
   });
 
-  return match?.incidentType || '';
+  const knownTypes = {
+    personPostureDetectionSettings: 'personPostureDetection',
+    cansStackDetectionSettings: 'cansStackDetection',
+  };
+  return match?.incidentType || knownTypes[model.settingType || model.id] || '';
 }
 
 /** One chip style for every filter in the toolbar (category + state). */
@@ -411,7 +417,7 @@ function statusKey(item) {
 function confidenceOf(item) {
   const raw = item?.ConfidenceScoreInPercentage ?? item?.confidence ?? item?.accuracy ?? item?.score;
   const value = Number(raw);
-  return Number.isFinite(value) ? Math.round(value) : null;
+  return Number.isFinite(value) ? Math.round(value <= 1 ? value * 100 : value) : null;
 }
 
 function alertIncidentRows(items, selected, camera) {
@@ -424,6 +430,9 @@ function alertIncidentRows(items, selected, camera) {
     site: item.nvrData?.nvrName || item.nvrId?.nvrName || camera?.nvrId?.nvrName || 'NVR',
     confidence: confidenceOf(item),
     time: timeOfDay(item.timeOfIncident || item.createdAt),
+    image: item.Image || item.image || item.imageUrl || '',
+    zone: item.zone,
+    detail: [item.posture, item.observedLayers != null ? `${item.observedLayers} layers` : '', item.currentStatus].filter(Boolean).join(' · '),
   }));
 }
 
@@ -743,6 +752,7 @@ export default function Detections() {
   const selected = models.find((m) => m.id === selectedId);
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
+  const isCansStackDetection = isCansStackDetectionType(selectedSettingType);
   const selectedIncidentType = incidentTypeForDetection(selected, incidentFilterTypesApi.data);
   // The licence row for the detection currently in focus, so the banner can show
   // that detection's own camera allocation alongside the account-wide licence.
@@ -816,7 +826,7 @@ export default function Detections() {
     if (!append) setIncidentError(null);
 
     try {
-      const result = await fetchIncidents({ skip, limit: INCIDENT_PAGE_SIZE }, incidentFilter);
+      const result = await fetchDetectionLogs({ incidentType: selectedIncidentType, skip, limit: INCIDENT_PAGE_SIZE, filter: incidentFilter });
       if (requestId !== incidentRequestIdRef.current) return;
 
       const nextItems = Array.isArray(result.items) ? result.items : [];
@@ -1164,6 +1174,40 @@ export default function Detections() {
           throw new Error('Camera Tampering Detection settings could not be created.');
         }
 
+        existingEntry = { id: createdSetting, enabled: false };
+        hasExistingSetting = true;
+        setZoneCamera((prev) => prev ? {
+          ...prev,
+          detections: {
+            ...(prev.detections || {}),
+            [detectionType]: existingEntry,
+          },
+        } : prev);
+      }
+
+      // Can-stack detection is full-frame and has no polygon-zone setup. If a
+      // user enables it before opening the layer editor, create the minimal
+      // setting with the documented default and continue with the toggle.
+      if (enable && !hasExistingSetting && isCansStackDetectionType(detectionType)) {
+        const nvrId = nvrIdOf(zoneCamera.nvrId);
+        if (!nvrId) throw new Error('Unable to determine the NVR for this camera.');
+        const createResponse = await createDetectionSetting({
+          name: 'Cans Stack Detection',
+          settingType: 'cansStackDetectionSettings',
+          NVRId: String(nvrId),
+          channelId: [zoneCamera._id],
+          enabled: true,
+          settings: { layers: 3, trigger_notification: true },
+          alerts: [],
+        });
+        const createdSetting =
+          createResponse?.savedDetectionSettings?.saved?.[0]?.detection ||
+          createResponse?.saved?.[0]?.detection ||
+          createResponse?.data?.body?.data?.savedDetectionSettings?.saved?.[0]?.detection ||
+          createResponse?.detectionSetting ||
+          createResponse?.data?.body ||
+          createResponse;
+        if (!createdSetting?._id) throw new Error('Cans Stack detection settings could not be created.');
         existingEntry = { id: createdSetting, enabled: false };
         hasExistingSetting = true;
         setZoneCamera((prev) => prev ? {
@@ -2024,9 +2068,33 @@ export default function Detections() {
                       camera={zoneCamera}
                       embedded
                       selectedSettingType={selectedSettingType}
+                      hideZoneControls={isCansStackDetection}
                       onSaved={canEditDetections ? refreshZoneCamera : undefined}
                       zoneSettingsOpen={zoneSettingsOpen}
                       onZoneSettingsClose={() => setZoneSettingsOpen(false)}
+                    />
+                  ) : null}
+                  {zoneCamera && isCansStackDetection ? (
+                    <SpecialDetectionSettings
+                      settingType={selectedSettingType}
+                      setting={settingFromEntry(selectedDetectionEntry)}
+                      camera={zoneCamera}
+                      onSaved={(savedSetting) => {
+                        if (savedSetting?._id) setZoneCamera(previous => previous ? {
+                          ...previous,
+                          detections: {
+                            ...(previous.detections || {}),
+                            cansStackDetectionSettings: {
+                              ...(previous.detections?.cansStackDetectionSettings || {}),
+                              id: savedSetting,
+                              enabled: previous.detections?.cansStackDetectionSettings?.enabled ?? true,
+                            },
+                          },
+                        } : previous);
+                        void refreshZoneCamera();
+                      }}
+                      onDelete={() => { if (canEditDetections) setShowResetConfirm(true); }}
+                      canEdit={canEditDetections}
                     />
                   ) : null}
                 </div>
@@ -2103,14 +2171,16 @@ export default function Detections() {
 
       <ConfirmDialog
         open={showResetConfirm}
-        title="Reset Detection UI"
+        title={isCansStackDetection ? 'Delete Cans Stack configuration' : 'Reset Detection UI'}
         busy={resettingSetting}
         busyLabel="Resetting..."
-        confirmLabel="Reset Setting"
+        confirmLabel={isCansStackDetection ? 'Delete configuration' : 'Reset Setting'}
         onCancel={() => setShowResetConfirm(false)}
         onConfirm={handleResetSetting}
       >
-        <strong>Warning:</strong> This will reset the selected detection settings to their default values. This action cannot be undone.
+        {isCansStackDetection
+          ? <>This will delete the Cans Stack configuration for <strong>{cameraLabel(zoneCamera)}</strong>. You can create it again later.</>
+          : <><strong>Warning:</strong> This will reset the selected detection settings to their default values. This action cannot be undone.</>}
       </ConfirmDialog>
       <ConfirmDialog
         open={showResetThresholdConfirm}
