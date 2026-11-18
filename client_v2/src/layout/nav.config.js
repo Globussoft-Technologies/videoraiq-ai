@@ -323,6 +323,7 @@ export const VIEW_META = {
   'lighting-visibility-site-conditions': { title: 'Lighting / Visibility / Site Conditions Logs', sub: 'Poor visibility, road surface damage and weather-related site hazards' },
   'messy-area': { title: 'Messy Area Logs', sub: 'Spill, dirty and messy-area detections' },
   'stock-counting': { title: 'Loading/Unloading Stock Logs', sub: 'Stock movement and before/after counts' },
+  'sack-loading-unloading': { title: 'Sack Loading/Unloading Logs', sub: 'Sack and cotton box movement records' },
   'stock-counting-analytics': { title: 'Loading/Unloading Analytics', sub: 'AI-powered stock movement trends and insights' },
   'box-packing': { title: 'Box Packing', sub: 'Completed packing activity, box counts and confirmation evidence' },
   'box-packing-alerts': { title: 'Box Packing Alert Logs', sub: 'Packing alerts, count variance and confirmation evidence' },

@@ -9,7 +9,7 @@ import 'react-loading-skeleton/dist/skeleton.css';
  * The header row always renders (even with no rows), so switching to
  * table/row view always shows the column headings.
  */
-function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassName = '', recentlyViewedId = null, recentlyViewedPulse = 0 }) {
+function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassName = '', recentlyViewedId = null, recentlyViewedPulse = 0, autoExpandRowKey = null, autoExpandPulse = 0 }) {
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const table = useReactTable({
     data,
@@ -17,13 +17,30 @@ function ProfilesTable({ data, columns, loading, renderExpandedRow, headerClassN
     getCoreRowModel: getCoreRowModel(),
   });
 
-  useEffect(() => {
-    setExpandedRows(new Set());
-  }, [data]);
-
   const expandable = typeof renderExpandedRow === 'function';
   const rowKey = (row) =>
     row.original?.aggregationKey || row.original?._id || row.original?.id || row.id;
+
+  // Polling replaces the data array even when the same vehicles remain visible.
+  // Keep their expanded event details open while removing rows that left the page.
+  const visibleRowKeys = table.getRowModel().rows.map(rowKey).join('\u0000');
+  useEffect(() => {
+    const visible = new Set(visibleRowKeys.split('\u0000'));
+    setExpandedRows((current) => {
+      const next = new Set([...current].filter((key) => visible.has(String(key))));
+      return next.size === current.size ? current : next;
+    });
+  }, [visibleRowKeys]);
+
+  useEffect(() => {
+    if (!autoExpandRowKey || !autoExpandPulse) return;
+    setExpandedRows((current) => {
+      if (current.has(autoExpandRowKey)) return current;
+      const next = new Set(current);
+      next.add(autoExpandRowKey);
+      return next;
+    });
+  }, [autoExpandRowKey, autoExpandPulse]);
 
   const toggleExpanded = (key) => {
     setExpandedRows((current) => {

@@ -62,7 +62,7 @@ const IncidentFilterPopover = ({
   setBoxType,
   boxTypeOptions = [],
   triggerClassName = '',
-  dropdownsOutside = false,
+  dropdownsOutside = true,
 }) => {
   const activeFiltersCount = useMemo(
     () =>
@@ -210,6 +210,7 @@ const IncidentFilterPopover = ({
                 options={SEVERITY_OPTIONS.map(o => ({ ...o, label: mediumSeverityLabel && o.value === 'moderate' ? 'Medium' : o.label }))}
                 placeholder="Severity"
                 allLabel="All Severities"
+                inlineDropdown={!dropdownsOutside}
               />
             )}
             {showStatus && (
@@ -219,6 +220,7 @@ const IncidentFilterPopover = ({
                 options={STATUS_OPTIONS}
                 placeholder="Status"
                 allLabel="All Statuses"
+                inlineDropdown={!dropdownsOutside}
               />
             )}
           </div>

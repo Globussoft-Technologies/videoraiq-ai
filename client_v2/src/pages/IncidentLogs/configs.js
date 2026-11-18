@@ -365,7 +365,8 @@ export const UNIFORM_CONFIG = {
   endpoint: '/incidents/logs/uniform-detection', title: 'Uniform Detection Logs',
   fileName: 'uniform_detection_logs', sheetName: 'Uniform Detection Logs', storagePrefix: 'uniform_detection',
   permissionKey: 'uniformLogs', accessDenied: "You don't have permission to view Uniform Detection Logs.",
-  showIncidentName: false, showStatus: false, showSeverity: true, showSeverityFilter: true,
+  showIncidentName: false, showStatus: false, showSeverity: true, showSeverityFilter: true, showSeverityOnCard: false, showDescription: true,
+  statsLabel: 'Total Uniform Logs',
   sortable: true, gridVariant: 'details', enableViewExports: true, datePickerVariant: 'preset',
   timeLabel: 'Time of Incident',
 };
@@ -384,8 +385,8 @@ export const MACHINE_OPS_CONFIG = {
   endpoint: '/incidents/logs/machine-ops-detection', title: 'Machine Operations Logs',
   fileName: 'machine_operations_logs', sheetName: 'Machine Operations Logs', storagePrefix: 'machine_ops',
   permissionKey: 'machineOpsLogs', accessDenied: "You don't have permission to view Machine Operations Logs.",
-  showMachineOpsFields: true, showStatus: false, showSeverity: false, showSeverityFilter: false,
-  showStats: false, sortable: true, enableViewExports: true, timeLabel: 'Time of Incident', datePickerVariant: 'preset',
+  showMachineOpsFields: true, showStatus: false, showMachineStateFilter: true, showSeverity: true, showSeverityFilter: true,
+  showStats: true, sortable: true, enableViewExports: true, timeLabel: 'Time of Incident', datePickerVariant: 'preset',
 };
 
 export const EMOTION_CONFIG = {

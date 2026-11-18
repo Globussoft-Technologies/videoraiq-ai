@@ -3,7 +3,7 @@ import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection?v=mach
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, DoorOpen, Flame, Image, MapPin, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, Cpu, DoorOpen, FileText, Flame, Image, MapPin, Power, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -118,6 +118,15 @@ const IncidentCardRow = ({ icon: Icon, label, value, valueClassName = '', valueS
   </div>
 );
 
+const MACHINE_OPS_CARD_ICONS = {
+  nvrName: Server,
+  channelName: Video,
+  machineName: Cpu,
+  machineState: Power,
+  description: FileText,
+  timeOfIncident: Clock,
+};
+
 const LightingCardMetaRow = ({ icon: Icon, label, value }) => (
   <div className="flex min-w-0 items-start gap-2 text-[11px] leading-snug">
     <Icon className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--tx3)]" aria-hidden="true" />
@@ -168,7 +177,7 @@ const MachineOpsSnapshot = ({ row, onPreview, grid = false }) => {
   const className = `${grid ? 'w-full aspect-video' : 'w-11 h-9 rounded-[6px]'} overflow-hidden bg-[var(--bg2)] flex items-center justify-center shrink-0`;
   if (!row.incidentImageUrl) return <div className={className} title="No snapshot"><Image className="h-5 w-5 text-[var(--tx3)]" /></div>;
   return <button type="button" className={`${className} cursor-pointer`} title="View snapshot" aria-label="View machine snapshot"
-    onClick={event => { event.stopPropagation(); onPreview(row.incidentImageUrl, `incident:${row._id || row.id}`); }}>
+    onClick={event => { event.stopPropagation(); onPreview(row.incidentImageUrl, `incident:${row._id || row.aggregationKey || row.id}`); }}>
     <ImageWithLoader src={row.incidentImageUrl} alt={row.machineName || 'Machine snapshot'} className="w-full h-full" imgClassName="w-full h-full object-cover" />
   </button>;
 };
@@ -176,10 +185,18 @@ const MachineOpsSnapshot = ({ row, onPreview, grid = false }) => {
 export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, recentlyViewedId }) => {
   const sortable = config.sortable !== false;
   const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
-  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.map(({ key, label, sortField: field }) => ({ accessorKey: key, header: key === 'snap' ? label : sortHeader(label, field),
+  if (config.showMachineOpsFields) {
+    const machineColumns = MACHINE_OPS_LOG_FIELDS.map(({ key, label, sortField: field }) => ({ accessorKey: key, header: key === 'snap' ? label : sortHeader(label, field),
     cell: ({ row }) => key === 'snap' ? <MachineOpsSnapshot row={row.original} onPreview={onPreview} />
       : <span className="block max-w-sm whitespace-pre-wrap break-words text-xs text-[var(--tx2)]">{key === 'timeOfIncident' ? formatTime(row.original.timeOfIncident) : row.original[key] || '--'}</span>,
-  }));
+    }));
+    if (config.showSeverity !== false) machineColumns.push({
+      accessorKey: 'severity',
+      header: sortHeader('Severity', 'severity'),
+      cell: ({ row }) => <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${severityClass(row.original.severity)}`}>{severityLabel(row.original.severity)}</span>,
+    });
+    return machineColumns;
+  }
   const cols = [
     {
       accessorKey: 'snap',
@@ -189,7 +206,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
         return url ? (
           <button
             onClick={() => onPreview(url, `incident:${row.original._id || row.original.aggregationKey || row.original.id}`)}
-            className={`w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block ${recentlyViewedId != null && recentlyViewedId === (row.original._id || row.original.aggregationKey || row.original.id) ? 'log-card-flash' : ''}`}
+            className={`w-11 h-9 rounded-[6px] overflow-hidden border border-[var(--bd)] cursor-pointer hover:border-[var(--bd2)] transition-colors block ${recentlyViewedId != null && recentlyViewedId === (row.original.aggregationKey || row.original._id || row.original.id) ? 'log-card-flash' : ''}`}
             title="View image"
             aria-label="View incident image"
           >
@@ -246,6 +263,14 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
       cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
     },
   );
+
+  if (config.showDescription) {
+    cols.push({
+      accessorKey: 'description',
+      header: sortHeader('Description', 'description'),
+      cell: ({ row }) => <span className="block max-w-sm whitespace-normal break-words text-xs text-[var(--tx2)]">{row.original.description || '--'}</span>,
+    });
+  }
 
   if (config.showEmotionFields) {
     cols.push({ accessorKey: 'emotionGroup', header: sortHeader('Emotion Group', 'emotionGroup'), cell: ({ row }) => <span className={styles.text}>{row.original.emotionGroup || '--'}</span> });
@@ -486,13 +511,23 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
 
 export const renderIncidentCard = (row, config, { onPreview }) => {
   if (config.showMachineOpsFields) return <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden h-full w-full min-w-0">
-    <MachineOpsSnapshot row={row} onPreview={onPreview} grid />
-    <dl className="p-3 space-y-2">
-      {MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => <div key={key} className="grid grid-cols-[100px_minmax(0,1fr)] gap-2 text-xs">
-        <dt className="text-[var(--tx3)]">{label}</dt>
-        <dd className="m-0 whitespace-pre-wrap break-words text-[var(--tx)]">{key === 'timeOfIncident' ? formatTime(row.timeOfIncident) : row[key] || '--'}</dd>
-      </div>)}
-    </dl>
+    <div className="relative">
+      <MachineOpsSnapshot row={row} onPreview={onPreview} grid />
+      {config.showSeverity !== false && <span className="absolute top-2 right-2 z-20 rounded-[5px] px-[7px] py-[3px] text-[10px] font-semibold capitalize text-white shadow-sm" style={{ background: severityBg(row.severity) }}>{severityLabel(row.severity)}</span>}
+    </div>
+    <div className="space-y-2.5 p-3.5">
+      {MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => {
+        const Icon = MACHINE_OPS_CARD_ICONS[key] || Activity;
+        const value = key === 'timeOfIncident' ? formatTime(row.timeOfIncident) : row[key] || '--';
+        return <IncidentCardRow
+          key={key}
+          icon={Icon}
+          label={label}
+          value={value}
+          valueClassName={key === 'description' ? 'whitespace-pre-wrap break-words' : ''}
+        />;
+      })}
+    </div>
   </div>;
   return (
   <div className={`bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0 ${(config.showLightingFields || config.showHygieneFields) ? 'flex flex-col' : ''}`}>
@@ -607,7 +642,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
         {config.showIncidentName !== false && !config.showDoorFields && (
           <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
         )}
-        {config.showSeverity !== false && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
+        {config.showSeverity !== false && config.showSeverityOnCard !== false && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
           <IncidentCardRow
             icon={AlertTriangle}
             label="Severity"
@@ -708,6 +743,14 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
           <IncidentCardRow icon={Activity} label="Description" value={row.description || '--'}
             valueStyle={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
         </>}
+        {config.showDescription && (
+          <IncidentCardRow
+            icon={FileText}
+            label="Description"
+            value={row.description || '--'}
+            valueClassName="whitespace-pre-wrap break-words"
+          />
+        )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
         <IncidentCardRow icon={Clock} label={config.timeLabel || (config.showDoorFields ? 'Time of Incident' : 'Time')} value={formatTime(row.createdAt)} />

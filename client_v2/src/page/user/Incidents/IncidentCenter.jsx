@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { nowInConfiguredTimezone } from '../../../utils/timezone';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw, LayoutGrid, List, FileText, FileSpreadsheet, Loader2, ImageOff, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import DraggableZoomControls from '../../../components/DraggableZoomControls';
@@ -21,6 +21,7 @@ import IncidentCard, { apiMarkResolved, apiReport, formatDoorStatus, ReportModal
 import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentSummary from './IncidentSummary';
 import IncidentReportMessage from './IncidentReportMessage';
+import IncidentPreviewModal from './IncidentPreviewModal';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
@@ -105,11 +106,11 @@ const incidentListDetailsFor = (types) => {
   }));
 };
 const incidentListColumns = (details) => [
-  '34px', '94px', 'minmax(190px,1.5fr)', 'minmax(150px,1fr)',
+  '34px', '94px', 'minmax(190px,1.5fr)', 'minmax(220px,1.35fr)', 'minmax(150px,1fr)',
   ...details.map(({ width }) => `${width}px`),
-  '90px', '100px', '135px', '160px',
+  '90px', '100px', '135px', '90px', '160px',
 ].join(' ');
-const incidentListMinWidth = (details) => 1080 + details.reduce((total, { width }) => total + width + 12, 0);
+const incidentListMinWidth = (details) => 1390 + details.reduce((total, { width }) => total + width + 12, 0);
 const DELETE_BATCH_SIZE = 250;
 
 const formatDoorDuration = (seconds) => {
@@ -1424,10 +1425,17 @@ function IncidentListRow({
   listColumns, listMinWidth, recentlyViewed,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
   const id = item._id || item.id;
   const image = item.Image ? mediaUrl(item.Image) : '';
+  const previewChannel = item.channelData || null;
+  const previewChannelId = previewChannel?._id || item.channelId || null;
+  const previewAt = item.timeOfIncident || null;
+  const canPreview = Boolean(previewChannelId && previewAt);
   const incident = item.incidentName || detectionLabel(item.incidentType || item.displayName);
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item.incidentType);
+  const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
   const camera = item.channelData?.customName || item.channelData?.name || '--';
   const nvr = item.nvrData?.nvrName || (typeof item.location === 'string' ? item.location : '') || '--';
   const severity = String(item.severity || 'low').toLowerCase();
@@ -1467,6 +1475,15 @@ function IncidentListRow({
   return (
     <>
       {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
+      {previewOpen && (
+        <IncidentPreviewModal
+          item={item}
+          channel={previewChannel}
+          channelId={previewChannelId}
+          at={previewAt}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
       <div
         role="row"
         data-incident-card-id={item._id || item.id}
@@ -1508,6 +1525,10 @@ function IncidentListRow({
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           <IncidentReportMessage item={item} compact />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
+        </div>
+
+        <div role="cell" style={{ minWidth: 0, color: incidentDescription ? 'var(--tx2)' : 'var(--tx3)', fontSize: 11.5, lineHeight: 1.45, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden', overflowWrap: 'anywhere' }} title={incidentDescription || undefined}>
+          {incidentDescription || '—'}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1558,6 +1579,20 @@ function IncidentListRow({
 
         <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
         <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident) || '--'}</div>
+
+        <div role="cell" style={{ display: 'flex', justifyContent: 'center' }}>
+          {canPreview && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); setPreviewOpen(true); }}
+              title={`Play the recorded moment — ${shortDateTime(item.timeOfIncident)}`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid var(--bd2)', background: 'transparent', color: 'var(--blue)', borderRadius: 7, padding: '5px 8px', fontSize: 10.5, fontWeight: 650, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              <PlayCircle size={13} />
+              Preview
+            </button>
+          )}
+        </div>
 
         <div role="cell" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
@@ -3040,11 +3075,13 @@ export default function IncidentCenter() {
                 <span role="columnheader" aria-label="Select incident" />
                 <span role="columnheader">Image</span>
                 {sortHeader('Incident', 'incident')}
+                <span role="columnheader">Description</span>
                 {sortHeader('Camera / NVR', 'camera')}
                 {detailColumns.map(({ field, label }) => <Fragment key={field}>{sortHeader(label, field)}</Fragment>)}
                 {sortHeader('Severity', 'severity')}
                 {sortHeader('Status', 'status')}
                 {sortHeader('Time of Incident', 'time')}
+                <span role="columnheader" style={{ textAlign: 'center' }}>Preview</span>
                 <span role="columnheader" style={{ textAlign: 'right' }}>Actions</span>
               </div>
               {sortedListItems.map((item) => (

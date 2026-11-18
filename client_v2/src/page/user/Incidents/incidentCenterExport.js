@@ -86,12 +86,14 @@ const fetchAllFilteredIncidents = async (filter) => {
 
 const mapRow = (item, index) => {
   const isDoorDetection = item?.incidentType === 'doorDetection';
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item?.incidentType);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item?.incidentType);
   const violations = Array.isArray(item?.violations) ? item.violations.filter(Boolean) : [];
   return {
     'Sl No': index + 1,
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
+    ...(isDescriptiveIncident ? { Description: text(item?.description) } : {}),
     NVR: text(item?.nvrData?.nvrName),
     Camera: text(item?.channelData?.customName || item?.channelData?.name),
     ...(isConditionIncident ? {
@@ -132,6 +134,11 @@ const exportExcel = (rows, showVehicleNumber, violationLabel) => {
   exportRows.forEach((row, index) => {
     if (violationsColumn >= 0) {
       const address = XLSX.utils.encode_cell({ r: index + 1, c: violationsColumn });
+      if (worksheet[address]) worksheet[address].s = { alignment: { wrapText: true, vertical: 'top' } };
+    }
+    const descriptionColumn = columns.indexOf('Description');
+    if (descriptionColumn >= 0) {
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: descriptionColumn });
       if (worksheet[address]) worksheet[address].s = { alignment: { wrapText: true, vertical: 'top' } };
     }
     const url = row.Image;
@@ -193,6 +200,7 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
 
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
+    ...(rows.some((row) => Object.hasOwn(row, 'Description')) ? ['Description'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Issues Detected')) ? ['Issues Detected', violationLabel, 'Zone Name'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
@@ -206,6 +214,7 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
     Incident: showVehicleNumber ? 48 : 60,
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
+    Description: 52,
     'Issues Detected': 18,
     [violationLabel]: 62,
     'Zone Name': 25,
@@ -343,6 +352,7 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
   const imageHeight = cardWidth * 0.52;
   const detailsFor = (row) => [
     ['Incident', 'Incident'],
+    ...(Object.hasOwn(row, 'Description') ? [['Description', 'Description']] : []),
     ...(Object.hasOwn(row, 'Issues Detected') ? [
       ['Issues Detected', 'Issues Detected'],
       ['Zone Name', 'Zone Name'],
@@ -363,7 +373,7 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
   ];
   const detailGap = rows.some((row) => Object.hasOwn(row, 'Box ID')) ? 3.7 : 4.3;
   const cardHeight = imageHeight + 6 + Math.max(...rows.map((row) => detailsFor(row).length)) * detailGap
-    + (rows.some((row) => Object.hasOwn(row, 'Violations')) ? 20 : 4);
+    + (rows.some((row) => Object.hasOwn(row, 'Violations') || Object.hasOwn(row, 'Description')) ? 20 : 4);
   const firstPageY = 44;
   const nextPageY = 10;
   let x = margin;
@@ -410,7 +420,7 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
       doc.setTextColor(5, 24, 55);
       doc.text(label.toUpperCase(), x + 3.5, textY);
 
-      if (key === 'Violations') {
+      if (key === 'Violations' || key === 'Description') {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.3);
         doc.setTextColor(26, 42, 103);

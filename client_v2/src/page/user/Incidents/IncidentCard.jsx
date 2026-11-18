@@ -430,6 +430,8 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
     item.incidentType === 'guardSleepingDetection' ||
     /guard\s*sleeping|sleep\s*activity/i.test(item.incidentName || item.displayName || '');
   const isDoorDetection = item.incidentType === 'doorDetection';
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection'].includes(item.incidentType);
+  const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
 
   function handleCardClick() {
     if (deleteMode) { onToggleDelete?.(); return; }
@@ -751,6 +753,16 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                   </span>
                 )}
               </div>
+              {incidentDescription && (
+                <div
+                  title={incidentDescription}
+                  style={{ marginTop: 2, padding: '7px 0 2px', color: 'var(--tx)', fontSize: 11, lineHeight: 1.4, overflowWrap: 'anywhere' }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', color: 'var(--tx2)', fontWeight: 700 }}>{incidentDescription}</span>
+                  </span>
+                </div>
+              )}
             </>
           )}
            {isDoorDetection && (
@@ -783,7 +795,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
           <IncidentReportMessage item={item} compact />
           {isConditionIncident && <div style={{ display: 'flex', gap: 6, minWidth: 0, fontSize: 11, color: 'var(--tx2)' }}><span style={{ fontWeight: 700, flexShrink: 0 }}>Zone Name:</span><span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{item.zoneName || item.zone || '--'}</span></div>}
           </>}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, ...(isConditionIncident || item.incidentType === 'boxPackingDetection' ? { marginTop: isConditionIncident ? 'auto' : 0, paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isMachineOps ? 'flex-end' : 'space-between', gap: 8, minWidth: 0, ...(isConditionIncident || item.incidentType === 'boxPackingDetection' ? { marginTop: isConditionIncident ? 'auto' : 0, paddingTop: 8, borderTop: '1px solid var(--bd)' } : {}) }}>
             {!isMachineOps && <>
             {isCarModel ? (
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>

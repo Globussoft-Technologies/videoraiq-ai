@@ -117,7 +117,11 @@ const fetchAllForExport = async (config, params) => {
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
 // only present for log types that carry a current-status value.
 const buildExportColumns = (config) => {
-  if (config.showMachineOpsFields) return MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
+  if (config.showMachineOpsFields) {
+    const machineColumns = MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
+    if (config.showSeverity !== false) machineColumns.push({ key: 'severity', label: 'Severity' });
+    return machineColumns;
+  }
   const cols = [];
   if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });
@@ -125,6 +129,7 @@ const buildExportColumns = (config) => {
     { key: 'nvrName', label: 'NVR Name' },
     { key: 'channelName', label: 'Camera Name' }
   );
+  if (config.showDescription) cols.push({ key: 'description', label: 'Description' });
   if (config.showEmotionFields) cols.push({ key: 'emotion', label: 'Emotion' });
   if (config.showGenderAgeFields) cols.push(
     { key: 'description', label: 'Description' }, { key: 'targetGender', label: 'Gender' }, { key: 'zone', label: 'Zone' },
@@ -364,7 +369,13 @@ const exportToGridPDF = async (config, params) => {
     const rowGap = 5.2;
     const bodyTopGap = 5.4;
     const details = [];
-    if (config.showIncidentName !== false && !config.showDoorFields) details.push(['Incident', 'incidentName']);
+    if (config.showIncidentName !== false && !config.showDoorFields && !config.showMachineOpsFields) details.push(['Incident', 'incidentName']);
+    if (config.showMachineOpsFields) details.push(
+      ['Machine Name', 'machineName'],
+      ['Machine State', 'machineState'],
+      ['Description', 'description'],
+    );
+    else if (config.showDescription) details.push(['Description', 'description']);
     if (config.showEmotionFields) details.push(['Emotion', 'emotion']);
     if (config.showGenderAgeFields) details.push(['Gender', 'targetGender'], ['Zone', 'zone'], ['Description', 'description']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);

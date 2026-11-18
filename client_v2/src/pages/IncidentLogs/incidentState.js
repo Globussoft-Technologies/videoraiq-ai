@@ -34,6 +34,7 @@ export const initialState = {
   zone: '',
   severity: '',
   status: '', // ON / OFF (conveyor only)
+  machineState: '', // ON / OFF (machine operations only)
   doorStatus: '', // all / open / closed / resolved (door detection only)
   vehicleNumber: '',
   boxType: '',
@@ -84,6 +85,8 @@ export function reducer(state, action) {
       return { ...state, zone: action.value, currentPage: 1 };
     case 'SET_STATUS':
       return { ...state, status: action.value };
+    case 'SET_MACHINE_STATE':
+      return { ...state, machineState: action.value };
     case 'SET_DOOR_STATUS':
       return { ...state, doorStatus: action.value };
     case 'SET_VEHICLE_NUMBER':
@@ -95,7 +98,7 @@ export function reducer(state, action) {
       return { ...state, limit: action.value, currentPage: 1 };
 
     case 'RESET_FILTERS':
-      return { ...state, nvrIds: [], channelIds: [], gender: '', zone: '', severity: '', status: '', doorStatus: '', vehicleNumber: '', boxType: '' };
+      return { ...state, nvrIds: [], channelIds: [], gender: '', zone: '', severity: '', status: '', machineState: '', doorStatus: '', vehicleNumber: '', boxType: '' };
 
     default:
       return state;

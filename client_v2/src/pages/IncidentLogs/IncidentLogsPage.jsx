@@ -7,7 +7,7 @@ import GenderFilter from './components/GenderFilter';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
-import { LayoutGrid, List, Loader2, Truck } from 'lucide-react';
+import { LayoutGrid, List, Loader2, Cog, Power, PowerOff, Truck } from 'lucide-react';
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
@@ -121,6 +121,7 @@ const IncidentLogsPage = ({ config }) => {
     gender,
     zone,
     status,
+    machineState,
     doorStatus,
     vehicleNumber,
     boxType,
@@ -148,6 +149,7 @@ const IncidentLogsPage = ({ config }) => {
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [recentlyViewedId, setRecentlyViewedId] = useState(null);
+  const [recentlyViewedEventKey, setRecentlyViewedEventKey] = useState(null);
   const [recentlyViewedIndex, setRecentlyViewedIndex] = useState(null);
   const [recentlyViewedPulse, setRecentlyViewedPulse] = useState(0);
   const pendingPreviewPage = useRef(null);
@@ -156,6 +158,7 @@ const IncidentLogsPage = ({ config }) => {
   const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [exportingFormat, setExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
+  const [machineStateTotals, setMachineStateTotals] = useState({ on: 0, off: 0 });
   const [packingStatusTotals, setPackingStatusTotals] = useState({ all: 0, completed: 0, review: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
@@ -261,7 +264,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, doorStatus, vehicleNumber, boxType]);
+  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, machineState, doorStatus, vehicleNumber, boxType]);
 
   useEffect(() => {
     if (zone) dispatch({ type: 'SET_ZONE', value: '' });
@@ -294,6 +297,7 @@ const IncidentLogsPage = ({ config }) => {
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
         status: config.showStatus ? status : undefined,
+        machineState: config.showMachineStateFilter ? machineState : undefined,
         doorStatus: config.showDoorFields ? doorStatus : undefined,
         search: searchInput,
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
@@ -385,6 +389,9 @@ const IncidentLogsPage = ({ config }) => {
           : data?.severityCounts;
         if (counts) setSeverityTotals(counts);
       }
+      if (config.showMachineOpsFields) {
+        setMachineStateTotals(data?.machineStateCounts || { on: 0, off: 0 });
+      }
       if (config.showBoxPackingStatusFilter) {
         if (data?.boxStatusCounts) setPackingStatusTotals(data.boxStatusCounts);
       }
@@ -393,12 +400,12 @@ const IncidentLogsPage = ({ config }) => {
       console.log(`Error fetching ${config.title}:`, err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
-      if (requestId === fetchRequestId.current) {
+      if (!background && requestId === fetchRequestId.current) {
         dispatch({ type: 'SET_LOADING', value: false });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, stockDirection, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -430,7 +437,7 @@ const IncidentLogsPage = ({ config }) => {
         items.push({
           previewKey: `incident:${row._id || row.aggregationKey || row.id}`,
           incidentImageUrl: row.incidentImageUrl,
-          rowId: row._id || row.aggregationKey || row.id,
+          rowId: row.aggregationKey || row._id || row.id,
           rowOffset,
         });
       }
@@ -441,7 +448,7 @@ const IncidentLogsPage = ({ config }) => {
             items.push({
               previewKey: stockEventPreviewKey(row, event, index),
               incidentImageUrl: eventImageUrl,
-              rowId: row._id || row.aggregationKey || row.id,
+              rowId: row.aggregationKey || row._id || row.id,
               rowOffset,
             });
           }
@@ -453,6 +460,7 @@ const IncidentLogsPage = ({ config }) => {
 
   const rememberPreview = useCallback((entry) => {
     setRecentlyViewedId(entry.rowId);
+    setRecentlyViewedEventKey(entry.previewKey.startsWith('stock-event:') ? entry.previewKey : null);
     setRecentlyViewedIndex((currentPage - 1) * limit + entry.rowOffset);
   }, [currentPage, limit]);
 
@@ -472,9 +480,14 @@ const IncidentLogsPage = ({ config }) => {
     (url, previewKey) => {
       if (!url) return;
       const index = previewNavigationEnabled
-        ? previewRows.findIndex((row) => (
-          previewKey ? row.previewKey === previewKey : row.incidentImageUrl === url
-        ))
+        ? (() => {
+          const keyedIndex = previewKey
+            ? previewRows.findIndex((row) => row.previewKey === previewKey)
+            : -1;
+          return keyedIndex >= 0
+            ? keyedIndex
+            : previewRows.findIndex((row) => row.incidentImageUrl === url);
+        })()
         : -1;
       if (index >= 0) rememberPreview(previewRows[index]);
       setPreviewIndex(index);
@@ -522,7 +535,8 @@ const IncidentLogsPage = ({ config }) => {
                 return (
                   <div
                     key={event?._id || event?.eventId || `${row?.aggregationKey || row?._id}-${index}`}
-                    className="grid min-h-[78px] grid-cols-[20px_82px_60px_125px_minmax(320px,1fr)_110px] items-center gap-x-3 px-4 py-2.5 transition-colors hover:bg-[var(--bg2)] sm:grid-cols-[24px_92px_68px_145px_minmax(360px,1fr)_110px]"
+                    data-recent-log-event={stockEventPreviewKey(row, event, index)}
+                    className={`grid min-h-[78px] grid-cols-[20px_82px_60px_125px_minmax(320px,1fr)_110px] items-center gap-x-3 px-4 py-2.5 transition-colors hover:bg-[var(--bg2)] sm:grid-cols-[24px_92px_68px_145px_minmax(360px,1fr)_110px] ${!previewImage && recentlyViewedPulse && recentlyViewedEventKey === stockEventPreviewKey(row, event, index) ? 'log-row-flash' : ''}`}
                   >
                     <div className="relative flex h-full min-h-[64px] items-center justify-center">
                       <span className="relative z-20 h-2 w-2 rounded-full bg-[var(--blue)]" />
@@ -606,7 +620,7 @@ const IncidentLogsPage = ({ config }) => {
         </div>
       );
     },
-    [openPreview, config.showSackFields]
+    [openPreview, config.showSackFields, previewImage, recentlyViewedPulse, recentlyViewedEventKey]
   );
 
   const pageCount = Math.max(1, Math.ceil(totalCount / limit));
@@ -670,6 +684,16 @@ const IncidentLogsPage = ({ config }) => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     if (config.showStats === false) return [];
+    if (config.showMachineOpsFields) {
+      const total = totalCount ?? 0;
+      const onCount = machineStateTotals.on;
+      const offCount = machineStateTotals.off;
+      return [
+        { label: 'Total Machine Logs', value: total, color: 'var(--blue)' },
+        { label: 'Machine ON', value: onCount, color: 'var(--ok)' },
+        { label: 'Machine OFF', value: offCount, color: 'var(--warn)' },
+      ];
+    }
     if (config.showBoxPackingFields) {
       const boxes = rows.reduce((sum, row) => sum + packingZones(row.zones).reduce((zoneSum, zone) => zoneSum + (Number(zone.boxNumber) || 0), 0), 0);
       const review = rows.filter((row) => /variance|review|pending/i.test(`${row.status || ''} ${row.confirmationReason || ''}`)).length;
@@ -694,7 +718,7 @@ const IncidentLogsPage = ({ config }) => {
       { label: config.showLightingFields || config.showHygieneFields || config.showDoorFields ? 'Medium' : 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, stockSummary, totalCount]);
+  }, [config.showStats, config.showMachineOpsFields, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, machineStateTotals, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({
@@ -711,13 +735,14 @@ const IncidentLogsPage = ({ config }) => {
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
       status: config.showStatus ? status : undefined,
+      machineState: config.showMachineStateFilter ? machineState : undefined,
       doorStatus: config.showDoorFields ? doorStatus : undefined,
       searchInput,
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
     }),
-    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
+    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -777,6 +802,10 @@ const IncidentLogsPage = ({ config }) => {
         columns={columns}
         gridCard={config.tableOnly ? undefined : gridCard}
         recentlyViewedId={previewImage ? null : recentlyViewedId}
+        recentlyViewedEventKey={!previewImage ? recentlyViewedEventKey : null}
+        highlightRowId={recentlyViewedEventKey ? null : recentlyViewedId}
+        autoExpandRowKey={!previewImage && recentlyViewedEventKey ? recentlyViewedId : null}
+        autoExpandPulse={recentlyViewedPulse}
         recentlyViewedIndex={recentlyViewedIndex}
         recentlyViewedPulse={recentlyViewedPulse}
         viewMode={config.tableOnly ? 'table' : viewMode}
@@ -796,6 +825,28 @@ const IncidentLogsPage = ({ config }) => {
         datePickerVariant={config.datePickerVariant}
         dateFilterActions={config.showGenderAgeFields ? (
           <GenderFilter value={gender} onChange={value => dispatch({ type: 'SET_GENDER', value })} />
+        ) : config.showMachineOpsFields ? (
+          <div role="group" aria-label="Machine state" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+            {[
+              ['', 'All', Cog],
+              ['ON', 'ON', Power],
+              ['OFF', 'OFF', PowerOff],
+            ].map(([value, label, Icon]) => {
+              const active = (machineState || '') === value;
+              return (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => dispatch({ type: 'SET_MACHINE_STATE', value })}
+                  className={`h-full cursor-pointer rounded-[7px] px-3 text-xs font-semibold transition-colors flex items-center gap-1.5 ${active ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         ) : config.showDoorFields ? (
           <div role="group" aria-label="Door status" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
             {[['', 'All'], ['open', 'Open'], ['closed', 'Closed'], ['resolved', 'Resolved']].map(([value, label]) => (

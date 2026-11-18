@@ -46,6 +46,10 @@ const ReusableTablePage = ({
   from,
   gridCard,
   recentlyViewedId,
+  recentlyViewedEventKey,
+  highlightRowId,
+  autoExpandRowKey,
+  autoExpandPulse = 0,
   recentlyViewedIndex,
   recentlyViewedPulse = 0,
   viewMode,
@@ -152,16 +156,24 @@ const ReusableTablePage = ({
     if (recentlyViewedId == null || !recentlyViewedPulse) return;
     const scrollKey = `${recentlyViewedId}:${recentlyViewedPulse}`;
     if (lastPreviewScroll.current === scrollKey) return;
+    let secondFrame;
     const frame = requestAnimationFrame(() => {
-      const selector = showGrid ? '[data-recent-log-card]' : '[data-recent-log-row]';
-      const target = [...document.querySelectorAll(selector)]
-        .find((node) => (showGrid ? node.dataset.recentLogCard : node.dataset.recentLogRow) === String(recentlyViewedId));
-      if (!target) return;
-      lastPreviewScroll.current = scrollKey;
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      secondFrame = requestAnimationFrame(() => {
+        const eventTarget = recentlyViewedEventKey && [...document.querySelectorAll('[data-recent-log-event]')]
+          .find((node) => node.dataset.recentLogEvent === recentlyViewedEventKey);
+        const selector = showGrid ? '[data-recent-log-card]' : '[data-recent-log-row]';
+        const target = eventTarget || [...document.querySelectorAll(selector)]
+          .find((node) => (showGrid ? node.dataset.recentLogCard : node.dataset.recentLogRow) === String(recentlyViewedId));
+        if (!target) return;
+        lastPreviewScroll.current = scrollKey;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     });
-    return () => cancelAnimationFrame(frame);
-  }, [showGrid, recentlyViewedId, recentlyViewedPulse, paginated]);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (secondFrame) cancelAnimationFrame(secondFrame);
+    };
+  }, [showGrid, recentlyViewedId, recentlyViewedEventKey, recentlyViewedPulse, paginated]);
 
   useEffect(() => {
     onPaginatedDataChange?.(paginated);
@@ -295,8 +307,10 @@ const ReusableTablePage = ({
                   data={paginated}
                   columns={columns}
                   loading={false}
-                  recentlyViewedId={recentlyViewedId}
+                  recentlyViewedId={highlightRowId === undefined ? recentlyViewedId : highlightRowId}
                   recentlyViewedPulse={recentlyViewedPulse}
+                  autoExpandRowKey={autoExpandRowKey}
+                  autoExpandPulse={autoExpandPulse}
                   renderExpandedRow={renderExpandedRow}
                   headerClassName={tableHeaderClassName}
                 />

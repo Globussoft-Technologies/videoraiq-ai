@@ -3562,6 +3562,8 @@ console.log(result,'result');
       channelId,
       channelIds,
       severity,
+      machineState,
+      status,
       resolved,
       reportStatus,
       search,
@@ -3699,6 +3701,10 @@ console.log(result,'result');
     }
 
     if (severity) matchStage.severity = severity;
+    const requestedMachineState = machineState || (incidentType === 'machineOpsDetection' ? status : undefined);
+    if (incidentType === 'machineOpsDetection' && requestedMachineState && ['ON', 'OFF'].includes(String(requestedMachineState).toUpperCase())) {
+      matchStage.machineState = String(requestedMachineState).toUpperCase();
+    }
     if (resolved !== undefined) matchStage.resolved = resolved === "true";
     if (reportStatus !== undefined) {
       const isReported = reportStatus === "true";
@@ -3912,6 +3918,8 @@ console.log(result,'result');
         high: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "high"] }, 1, 0] } },
         moderate: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "moderate"] }, 1, 0] } },
         low: { $sum: { $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "low"] }, 1, 0] } },
+        machineOn: { $sum: { $cond: [{ $eq: [{ $toUpper: { $ifNull: ["$machineState", ""] } }, "ON"] }, 1, 0] } },
+        machineOff: { $sum: { $cond: [{ $eq: [{ $toUpper: { $ifNull: ["$machineState", ""] } }, "OFF"] }, 1, 0] } },
       },
     };
     let countResult;
@@ -3978,6 +3986,10 @@ console.log(result,'result');
           moderate: countResult[0]?.moderate || 0,
           low: countResult[0]?.low || 0,
         },
+        ...(incidentType === 'machineOpsDetection' && { machineStateCounts: {
+          on: countResult[0]?.machineOn || 0,
+          off: countResult[0]?.machineOff || 0,
+        } }),
         ...(boxStatusCounts && { boxStatusCounts }),
         ...(emotionOptions && { emotionOptions }),
         ...(emotionCounts && { emotionCounts }),
@@ -6038,7 +6050,11 @@ console.log(result,'result');
         const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
         if (!(logs?.machineOpsLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Machine Operations Logs'));
       }
-      return await this._fetchIncidentLogs({ req, res, incidentType: 'machineOpsDetection',
+      const requestedMachineState = String(req.query?.machineState || req.query?.status || '').toUpperCase();
+      const extraMatch = ['ON', 'OFF'].includes(requestedMachineState)
+        ? { machineState: requestedMachineState }
+        : {};
+      return await this._fetchIncidentLogs({ req, res, incidentType: 'machineOpsDetection', extraMatch,
         searchFields: ['machineName', 'machineState', 'description', 'incidentName'], postLookupSearch: true });
     } catch (error) { next(new AppError('Failed to fetch machine operations logs', 500)); }
   }

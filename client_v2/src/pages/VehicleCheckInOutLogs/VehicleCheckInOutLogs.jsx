@@ -694,7 +694,7 @@ const VehicleCheckInOutLogs = () => {
                     <tr
                       data-vehicle-log-key={row.vehicleKey}
                       onClick={() => toggleRow(row)}
-                      className={`border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer ${!previewImage && recentSlotKey?.startsWith(`${row.vehicleKey}:`) && recentPulse ? 'log-card-flash' : ''}`}
+                      className={`border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer ${!previewImage && recentSlotKey === `${row.vehicleKey}:row` && recentPulse ? 'log-row-flash' : ''}`}
                     >
                       {canEdit && <td className={td} onClick={event => event.stopPropagation()}>
                         <input type="checkbox" aria-label={`Select ${row.vehicleNumber || 'vehicle'}`} disabled={!row.custody || loading || checkingOut}
@@ -762,7 +762,8 @@ const VehicleCheckInOutLogs = () => {
                                 {crossingsOf(row).map((sub) => (
                                   <div
                                     key={sub._id}
-                                    className="flex flex-wrap items-center gap-4 px-4 py-2.5"
+                                    data-crossing-preview-key={`${row.vehicleKey}:${sub._id}`}
+                                    className={`flex flex-wrap items-center gap-4 px-4 py-2.5 ${!previewImage && recentSlotKey === `${row.vehicleKey}:${sub._id}` && recentPulse ? 'log-row-flash' : ''}`}
                                   >
                                     <DirectionChip checkin={sub.checkin} />
                                     {sub.manualCheckout?.by && <span className="text-[11px] text-[var(--violet)]"
@@ -965,7 +966,22 @@ const VehicleCheckInOutLogs = () => {
           hasNext={previewIndex < previewImages.length - 1 || page < totalPages}
           onPrevious={() => movePreview(-1)}
           onNext={() => movePreview(1)}
-          onClose={() => { pendingPreviewPage.current = null; setPreviewIndex(-1); setActivePreviewImage(null); setRecentPulse((pulse) => pulse + 1); }}
+          onClose={() => {
+            const slot = previewSlots[previewIndex];
+            pendingPreviewPage.current = null;
+            setPreviewIndex(-1);
+            setActivePreviewImage(null);
+            if (slot) {
+              setRecentSlotKey(slot.key);
+              if (slot.key !== `${slot.rowKey}:row`) setExpanded((previous) => ({ ...previous, [slot.rowKey]: true }));
+              setRecentPulse((pulse) => pulse + 1);
+              requestAnimationFrame(() => {
+                const target = [...document.querySelectorAll('[data-crossing-preview-key]')]
+                  .find((node) => node.dataset.crossingPreviewKey === slot.key);
+                target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              });
+            }
+          }}
         />
       )}
     </div>
