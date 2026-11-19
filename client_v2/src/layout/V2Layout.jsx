@@ -34,6 +34,7 @@ const LiveDemo = lazy(() => import('../pages/LiveDemo/LiveDemo'));
 const LOG_PAGE_BY_INCIDENT_TYPE = {
   countPersons: '/logs/person-count',
   lineCrossing: '/logs/line-crossing',
+  personSittingOnCan: '/logs/person-sitting-on-can',
 };
 
 // Where clicking a bell-tray notification takes the user.

@@ -25,6 +25,7 @@ const MultiSelect = ({
   maxHeight = 'max-h-[220px]',
   inlineDropdown = false,
   msg = 'No options',
+  searchPlaceholder = 'Search...',
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -117,7 +118,7 @@ const MultiSelect = ({
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search..."
+                  placeholder={searchPlaceholder}
                   className="w-full h-8 pl-8 pr-2 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-xs focus:outline-none focus:border-[var(--brand)]"
                 />
               </div>

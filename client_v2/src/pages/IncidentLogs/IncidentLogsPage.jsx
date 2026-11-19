@@ -132,6 +132,7 @@ const IncidentLogsPage = ({ config }) => {
     doorStatus,
     vehicleNumber,
     boxType,
+    peopleCount,
     limit,
   } = state;
 
@@ -275,7 +276,7 @@ const IncidentLogsPage = ({ config }) => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, machineState, doorStatus, vehicleNumber, boxType, postureFilter, observedLayersFilter]);
+  }, [gender, zone, emotions, hygieneCategory, nvrIds, channelIds, severity, status, machineState, doorStatus, vehicleNumber, boxType, peopleCount, postureFilter, observedLayersFilter]);
 
   useEffect(() => {
     if (zone) dispatch({ type: 'SET_ZONE', value: '' });
@@ -303,7 +304,7 @@ const IncidentLogsPage = ({ config }) => {
         channelIds,
         emotions: config.showEmotionFields ? emotions : undefined,
         gender: config.showGenderAgeFields ? gender : undefined,
-        zone: config.showGenderAgeFields ? zone : undefined,
+        zone: (config.showGenderAgeFields || config.showZoneFilter) ? zone : undefined,
         hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
         lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -316,6 +317,7 @@ const IncidentLogsPage = ({ config }) => {
         direction: config.showStockCountingFields ? stockDirection : undefined,
         posture: config.showPostureFilter ? postureFilter : undefined,
         observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
+        peopleCount: config.showPeopleCountFilter ? peopleCount : undefined,
       };
       const filteredDoorRows = config.showDoorFields && doorStatus
         ? await fetchDoorStatusLogs({ ...query, doorStatus })
@@ -338,12 +340,12 @@ const IncidentLogsPage = ({ config }) => {
           ...list.map(item => item.observedLayers).filter(value => value != null && value !== ''),
         ])].sort((a, b) => Number(a) - Number(b)));
       }
-      if (config.showGenderAgeFields) {
+      if (config.showGenderAgeFields || config.showZoneFilter) {
         const nextSummary = data?.genderAgeSummary || null;
-        setGenderAgeSummary(nextSummary);
-        if (!zone && nextSummary?.zones) {
-          setGenderZoneOptions([...new Set(nextSummary.zones.map(item => item.zone).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
-        }
+        if (config.showGenderAgeFields) setGenderAgeSummary(nextSummary);
+        const responseZones = nextSummary?.zones?.map(item => item.zone) || [];
+        const rowZones = list.map(item => item.zone).filter(Boolean);
+        if (!zone) setGenderZoneOptions(previous => [...new Set([...previous, ...responseZones, ...rowZones])].sort((a, b) => a.localeCompare(b)));
       }
 
       // Box Packing is currently being validated with local sample records.
@@ -431,7 +433,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -763,7 +765,7 @@ const IncidentLogsPage = ({ config }) => {
       channelIds,
       emotions: config.showEmotionFields ? emotions : undefined,
       gender: config.showGenderAgeFields ? gender : undefined,
-      zone: config.showGenderAgeFields ? zone : undefined,
+      zone: (config.showGenderAgeFields || config.showZoneFilter) ? zone : undefined,
       hygieneCategory: config.showHygieneFields ? hygieneCategory : undefined,
       lightingCategory: config.showLightingFields ? hygieneCategory : undefined,
         severity: config.showStockCountingFields ? undefined : severity,
@@ -776,8 +778,9 @@ const IncidentLogsPage = ({ config }) => {
       direction: config.showStockCountingFields ? stockDirection : undefined,
       posture: config.showPostureFilter ? postureFilter : undefined,
       observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
+      peopleCount: config.showPeopleCountFilter ? peopleCount : undefined,
     }),
-    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]
+    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -989,10 +992,12 @@ const IncidentLogsPage = ({ config }) => {
         <IncidentFilterPopover
           dropdownsOutside={config.filterDropdownsOutside}
           showEmotion={config.showEmotionFields}
-          showZoneFilter={config.showGenderAgeFields}
+          showZoneFilter={config.showGenderAgeFields || config.showZoneFilter}
           zone={zone}
           setZone={value => dispatch({ type: 'SET_ZONE', value })}
           zoneOptions={genderZoneOptions}
+          zoneFilterPlaceholder={config.showSittingOnCanZone ? 'All zone names' : 'All zones'}
+          zoneSearchPlaceholder={config.showSittingOnCanZone ? 'Search zone names...' : 'Search zones...'}
           emotions={emotions}
           setEmotions={setEmotions}
           emotionOptions={[...new Set([...emotionOptions, ...emotions])].map(value => ({ id: value, label: value }))}
@@ -1031,6 +1036,9 @@ const IncidentLogsPage = ({ config }) => {
           observedLayers={observedLayersFilter}
           setObservedLayers={(value) => { setObservedLayersFilter(value); dispatch({ type: 'SET_CURRENT_PAGE', value: 1 }); }}
           observedLayerOptions={observedLayerOptions}
+          showPeopleCount={config.showPeopleCountFilter}
+          peopleCount={peopleCount}
+          setPeopleCount={(value) => { dispatch({ type: 'SET_PEOPLE_COUNT', value }); dispatch({ type: 'SET_CURRENT_PAGE', value: 1 }); }}
         />
 
         <AutoRefreshComponent

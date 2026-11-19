@@ -75,6 +75,7 @@ export const fetchIncidentLogs = async ({
   direction,
   posture,
   observedLayers,
+  peopleCount,
   hygieneCategory,
   lightingCategory,
   emotions,
@@ -110,6 +111,7 @@ export const fetchIncidentLogs = async ({
       ...(direction && direction !== 'all' && { direction }),
       ...(posture && { posture }),
       ...(observedLayers !== '' && observedLayers != null && { observedLayers }),
+      ...(peopleCount !== '' && peopleCount != null && { peopleCount }),
     },
     headers: getHeaders(),
   });

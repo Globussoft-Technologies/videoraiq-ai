@@ -38,6 +38,7 @@ export const initialState = {
   doorStatus: '', // all / open / closed / resolved (door detection only)
   vehicleNumber: '',
   boxType: '',
+  peopleCount: '',
 
   // pagination
   limit: 12,
@@ -93,12 +94,14 @@ export function reducer(state, action) {
       return { ...state, vehicleNumber: action.value };
     case 'SET_BOX_TYPE':
       return { ...state, boxType: action.value };
+    case 'SET_PEOPLE_COUNT':
+      return { ...state, peopleCount: action.value };
 
     case 'SET_LIMIT':
       return { ...state, limit: action.value, currentPage: 1 };
 
     case 'RESET_FILTERS':
-      return { ...state, nvrIds: [], channelIds: [], gender: '', zone: '', severity: '', status: '', machineState: '', doorStatus: '', vehicleNumber: '', boxType: '' };
+      return { ...state, nvrIds: [], channelIds: [], gender: '', zone: '', severity: '', status: '', machineState: '', doorStatus: '', vehicleNumber: '', boxType: '', peopleCount: '' };
 
     default:
       return state;

@@ -435,6 +435,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
     'uniformDetection',
     'machineOpsDetection',
     'personPostureDetection',
+    'personSittingOnCan',
     'cansStackDetection',
   ].includes(item.incidentType);
   const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';

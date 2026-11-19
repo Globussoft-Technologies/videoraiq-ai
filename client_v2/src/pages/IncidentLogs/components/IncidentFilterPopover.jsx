@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Filter, RotateCcw, ChevronDown, Check } from 'lucide-react';
+import { Filter, RotateCcw, ChevronDown, Check, Search } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/pages/AttendanceLogs/components/Popover';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
 import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect';
@@ -30,6 +30,8 @@ const IncidentFilterPopover = ({
   zone = '',
   setZone,
   zoneOptions = [],
+  zoneFilterPlaceholder = 'All zones',
+  zoneSearchPlaceholder = 'Search zones...',
   emotions = [],
   setEmotions,
   emotionOptions = [],
@@ -65,6 +67,9 @@ const IncidentFilterPopover = ({
   observedLayers = '',
   setObservedLayers,
   observedLayerOptions = [],
+  showPeopleCount = false,
+  peopleCount = '',
+  setPeopleCount,
   triggerClassName = '',
   dropdownsOutside = true,
 }) => {
@@ -81,9 +86,10 @@ const IncidentFilterPopover = ({
         showVehicleNumber && !!vehicleNumber.trim(),
         showBoxType && !!boxType,
         showObservedLayers && !!observedLayers,
+        showPeopleCount && peopleCount !== '',
       ].filter(Boolean)
         .length,
-    [showEmotion, emotions, showZoneFilter, zone, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType, showObservedLayers, observedLayers]
+    [showEmotion, emotions, showZoneFilter, zone, showHygieneCategory, showLightingCategory, hygieneCategory, nvrIds, channelIds, severity, showSeverity, showStatus, status, showVehicleNumber, vehicleNumber, showBoxType, boxType, showObservedLayers, observedLayers, showPeopleCount, peopleCount]
   );
   const emotionGroup = emotionGroupForFilter(emotions);
   const visibleEmotionOptions = emotionOptionsForFilter(emotionGroup, emotionOptions.map(option => option.label));
@@ -102,6 +108,7 @@ const IncidentFilterPopover = ({
     }
     if (showBoxType) setBoxType('');
     if (showObservedLayers) setObservedLayers('');
+    if (showPeopleCount) setPeopleCount('');
   };
 
   return (
@@ -142,6 +149,7 @@ const IncidentFilterPopover = ({
                 if (value.length === 0) setChannelIds([]);
               }}
               placeholder="Select NVR"
+              searchPlaceholder="Search NVR..."
               searchable
               className="w-full"
               maxHeight="max-h-40"
@@ -153,6 +161,7 @@ const IncidentFilterPopover = ({
               value={channelIds}
               onChange={setChannelIds}
               placeholder="Select Camera"
+              searchPlaceholder="Search camera..."
               searchable
               className="w-full"
               maxHeight="max-h-40"
@@ -164,8 +173,9 @@ const IncidentFilterPopover = ({
               options={zoneOptions.map(zoneName => ({ id: zoneName, label: zoneName }))}
               value={zone ? [zone] : []}
               onChange={values => setZone(values.at(-1) || '')}
-              placeholder="All zones"
-              searchable={false}
+              placeholder={zoneFilterPlaceholder}
+              searchable
+              searchPlaceholder={zoneSearchPlaceholder}
               className="w-full"
               maxHeight="max-h-36"
               inlineDropdown
@@ -213,6 +223,20 @@ const IncidentFilterPopover = ({
                 options={observedLayerOptions.map(value => ({ value: String(value), label: String(value) }))}
                 placeholder="Observed Layers"
                 allLabel="All Observed Layers"
+                searchable
+                searchPlaceholder="Search observed layers..."
+                inlineDropdown={!dropdownsOutside}
+              />
+            )}
+            {showPeopleCount && (
+              <InlineSelect
+                value={peopleCount}
+                onChange={setPeopleCount}
+                options={[1, 2, 3].map(value => ({ value: String(value), label: `${value} ${value === 1 ? 'person' : 'people'}` }))}
+                placeholder="People detected"
+                allLabel="All people counts"
+                searchable
+                searchPlaceholder="Search people detected..."
                 inlineDropdown={!dropdownsOutside}
               />
             )}
@@ -256,10 +280,14 @@ const IncidentFilterPopover = ({
  * `mousedown` before the option's `onClick` fired. Keeping it inline keeps it
  * within the filter's contentRef so selecting actually dispatches.
  */
-const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineDropdown = false }) => {
+const InlineSelect = ({ value, onChange, options, placeholder, allLabel, searchable = false, searchPlaceholder = 'Search...', inlineDropdown = false }) => {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = useRef(null);
   const selected = options.find((o) => o.value === value);
+  const filteredOptions = searchable && query.trim()
+    ? options.filter((option) => String(option.label || '').toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
 
   useEffect(() => {
     const onClick = (e) => {
@@ -271,6 +299,7 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineD
 
   const choose = (v) => {
     onChange(v);
+    setQuery('');
     setOpen(false);
   };
 
@@ -290,29 +319,45 @@ const InlineSelect = ({ value, onChange, options, placeholder, allLabel, inlineD
       </button>
 
       {open && (
-        <div className={`${inlineDropdown ? 'relative' : 'absolute'} z-[95] mt-1 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg p-1`}>
+        <div className={`${inlineDropdown ? 'relative' : 'absolute'} z-[95] mt-2 w-full rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-2 space-y-2`}>
           <button
             type="button"
             onClick={() => choose('')}
-            className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded transition-colors ${
+            className={`w-full text-left px-3 py-2 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded-lg transition-colors ${
               !value ? 'bg-[var(--violet)]/10 font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
             }`}
           >
             {allLabel}
           </button>
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => choose(opt.value)}
-              className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded flex items-center justify-between transition-colors ${
-                value === opt.value ? 'bg-[var(--violet)]/10 font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
-              }`}
-            >
-              {opt.label}
-              {value === opt.value && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
-            </button>
-          ))}
+          {searchable && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--tx3)] pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full h-9 pl-9 pr-3 border border-[var(--bd)] rounded-lg text-xs bg-[var(--bg2)] text-[var(--tx)] placeholder:text-[var(--tx3)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/25 focus:border-[var(--brand)]"
+              />
+            </div>
+          )}
+          <div className="max-h-48 overflow-y-auto customscrollbar space-y-0.5 border-t border-[var(--bd)] pt-1">
+            {filteredOptions.length ? filteredOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => choose(opt.value)}
+                className={`w-full text-left px-3 py-2 text-xs cursor-pointer hover:bg-[var(--bg3)] rounded-lg flex items-center justify-between transition-colors ${
+                  value === opt.value ? 'bg-[var(--violet)]/10 font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
+                }`}
+              >
+                {opt.label}
+                {value === opt.value && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+              </button>
+            )) : (
+              <div className="px-3 py-2 text-xs text-[var(--tx3)]">No matching options</div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -80,6 +80,7 @@ export default function SaveDetectionAreaModal({
   const [doorAlertMode, setDoorAlertMode] = useState(initialDoorAlertMode);
   const [doorNotification, setDoorNotification] = useState(initialDoorNotification);
   const isPosture = specialSettingType === 'personPostureDetectionSettings';
+  const isSittingOnCan = specialSettingType === 'personSittingOnCanDetectionSettings';
   const isStack = specialSettingType === 'cansStackDetectionSettings';
   const [layers, setLayers] = useState(initialSpecialSettings?.layers ?? 3);
   const [triggerNotification, setTriggerNotification] = useState(initialSpecialSettings?.trigger_notification !== false);
@@ -177,10 +178,11 @@ export default function SaveDetectionAreaModal({
       zones: outZones,
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
       ...(isDoor ? { doorAlertMode, doorNotification } : {}),
-      ...((isPosture || isStack) ? { specialSettings: {
+      ...((isPosture || isStack || isSittingOnCan) ? { specialSettings: {
         zone_name: outZones[0]?.name || '',
         trigger_notification: triggerNotification,
-        ...(isPosture ? { trigger_on: outZones.every(zone => zone.trigger_on === outZones[0]?.trigger_on) ? outZones[0]?.trigger_on || 'both' : 'both' } : { layers: Number(layers) }),
+        ...(isPosture ? { trigger_on: outZones.every(zone => zone.trigger_on === outZones[0]?.trigger_on) ? outZones[0]?.trigger_on || 'both' : 'both' } : {}),
+        ...(isStack ? { layers: Number(layers) } : {}),
       } } : {}),
     });
   };
@@ -285,19 +287,12 @@ export default function SaveDetectionAreaModal({
 
             {isStack && (
               <div style={{ display: 'grid', gap: 14, border: '1px solid var(--bd)', borderRadius: 12, padding: 14, background: 'var(--bg2)' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{isPosture ? 'Posture rules' : isStack ? 'Cans Stack rules' : 'Alert rules'}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>Cans Stack rules</div>
                 <div style={{ display: 'grid', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>
                   Maximum allowed layers
                   <input type="number" min="1" step="1" value={layers} disabled={saving} onChange={e => { setLayers(e.target.value); setErrors(er => ({ ...er, layers: false })); }} style={{ width: '100%', boxSizing: 'border-box', height: 40, padding: '0 12px', background: 'var(--bg1solid)', color: 'var(--tx)', fontSize: 13, border: `1px solid ${errors.layers ? '#ef4444' : 'var(--bd)'}`, borderRadius: 9 }} />
                   {errors.layers && <span style={{ color: '#ef4444' }}>Enter a positive whole number.</span>}
                 </div>
-                {!isPosture && !isStack && <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 12px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg1solid)', cursor: 'pointer' }}>
-                  <span style={{ display: 'grid', gap: 3 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)' }}>Send notification</span>
-                    <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Incidents are saved even when notifications are off.</span>
-                  </span>
-                  <input type="checkbox" checked={triggerNotification} onChange={event => setTriggerNotification(event.target.checked)} disabled={saving} aria-label="Send detection notifications" style={{ width: 16, height: 16, flex: '0 0 auto', accentColor: 'var(--blue)', cursor: 'pointer' }} />
-                </label>}
               </div>
             )}
 

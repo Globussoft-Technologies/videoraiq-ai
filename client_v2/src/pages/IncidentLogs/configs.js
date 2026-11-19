@@ -187,6 +187,36 @@ export const PERSON_POSTURE_CONFIG = {
   datePickerVariant: 'preset',
 };
 
+export const PERSON_SITTING_ON_CAN_CONFIG = {
+  endpoint: '/incidents/logs/person-sitting-on-can',
+  title: 'Person Sitting On Can Logs',
+  fileName: 'person_sitting_on_can_logs',
+  sheetName: 'Person Sitting On Can Logs',
+  storagePrefix: 'person_sitting_on_can',
+  permissionKey: 'personSittingOnCanLogs',
+  accessDenied: "You don't have permission to view Person Sitting On Can Logs.",
+  statsLabel: 'Total Person Sitting On Can',
+  // Keep the list focused on the shared incident fields. The detector name,
+  // detection status and notification are intentionally omitted; zone and
+  // detected people count are useful in both the table and detail card.
+  showIncidentName: false,
+  showDescription: true,
+  showStatus: false,
+  showSittingOnCanFields: false,
+  showSittingOnCanCount: true,
+  showSittingOnCanZone: true,
+  showZoneFilter: true,
+  showPeopleCountFilter: true,
+  showSeverity: true,
+  hideIncidentCardLabel: true,
+  hideSeverityCardLabel: true,
+  showSeverityFilter: true,
+  sortable: true,
+  gridVariant: 'details',
+  enableViewExports: true,
+  datePickerVariant: 'preset',
+};
+
 export const CANS_STACK_CONFIG = {
   endpoint: '/incidents/logs/cans-stack-detection',
   title: 'Cans Stack Detection Logs',

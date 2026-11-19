@@ -286,6 +286,21 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
     );
   }
 
+  if (config.showSittingOnCanFields) {
+    cols.push(
+      { accessorKey: 'zone', header: sortHeader('Zone Name', 'zone'), cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> },
+      { accessorKey: 'count', header: sortHeader('People Detected', 'count'), cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span> },
+      { accessorKey: 'currentStatus', header: 'Detection Status', cell: ({ row }) => <span className={styles.text}>{row.original.currentStatus || '--'}</span> },
+    );
+  } else {
+    if (config.showSittingOnCanZone) {
+      cols.push({ accessorKey: 'zone', header: sortHeader('Zone Name', 'zone'), cell: ({ row }) => <span className={styles.text}>{row.original.zone || '--'}</span> });
+    }
+    if (config.showSittingOnCanCount) {
+      cols.push({ accessorKey: 'count', header: sortHeader('People Detected', 'count'), cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span> });
+    }
+  }
+
   if (config.showEmotionFields) {
     cols.push({ accessorKey: 'emotionGroup', header: sortHeader('Emotion Group', 'emotionGroup'), cell: ({ row }) => <span className={styles.text}>{row.original.emotionGroup || '--'}</span> });
     cols.push({ accessorKey: 'emotion', header: sortHeader('Emotion', 'emotion'), cell: ({ row }) => <span className={styles.text}>{row.original.emotion || '--'}</span> });
@@ -772,6 +787,20 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
           <>
             <IncidentCardRow icon={Eye} label="Observed layers" value={row.observedLayers ?? '--'} />
           </>
+        )}
+        {config.showSittingOnCanFields && (
+          <>
+            <IncidentCardRow icon={MapPin} label="Zone Name" value={row.zone || '--'} />
+            <IncidentCardRow icon={Users} label="People detected" value={row.count ?? '--'} />
+            <IncidentCardRow icon={Activity} label="Detection status" value={row.currentStatus || '--'} />
+            <IncidentCardRow icon={ShieldAlert} label="Notification" value={row.triggerNotification === false ? 'Off' : 'On'} />
+          </>
+        )}
+        {!config.showSittingOnCanFields && config.showSittingOnCanZone && (
+          <IncidentCardRow icon={MapPin} label="Zone Name" value={row.zone || '--'} />
+        )}
+        {!config.showSittingOnCanFields && config.showSittingOnCanCount && (
+          <IncidentCardRow icon={Users} label="People detected" value={row.count ?? '--'} />
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />

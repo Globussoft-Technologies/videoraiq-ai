@@ -42,6 +42,7 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {},
 
 const SPECIAL_LOG_ENDPOINTS = {
   personPostureDetection: 'person-posture-detection',
+  personSittingOnCan: 'person-sitting-on-can',
   cansStackDetection: 'cans-stack-detection',
 };
 

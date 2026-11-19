@@ -86,7 +86,7 @@ const fetchAllFilteredIncidents = async (filter) => {
 
 const mapRow = (item, index) => {
   const isDoorDetection = item?.incidentType === 'doorDetection';
-  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'cansStackDetection'].includes(item?.incidentType);
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item?.incidentType);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item?.incidentType);
   const violations = Array.isArray(item?.violations) ? item.violations.filter(Boolean) : [];
   return {
@@ -94,6 +94,10 @@ const mapRow = (item, index) => {
     Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
     Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
     ...(isDescriptiveIncident ? { Description: text(item?.description) } : {}),
+    ...(item?.incidentType === 'personSittingOnCan' ? {
+      'Zone Name': text(item?.zoneName || item?.zone),
+      'People Detected': text(item?.count),
+    } : {}),
     ...(item?.incidentType === 'cansStackDetection' ? { 'Observed Layers': text(item?.observedLayers) } : {}),
     ...(item?.incidentType === 'personPostureDetection' ? { Posture: text(item?.posture) } : {}),
     NVR: text(item?.nvrData?.nvrName),
@@ -203,8 +207,10 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
   const columns = [
     'Sl No', 'Incident', 'NVR', 'Camera',
     ...(rows.some((row) => Object.hasOwn(row, 'Description')) ? ['Description'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'Zone Name')) ? ['Zone Name'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'People Detected')) ? ['People Detected'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Observed Layers')) ? ['Observed Layers'] : []),
-    ...(rows.some((row) => Object.hasOwn(row, 'Issues Detected')) ? ['Issues Detected', violationLabel, 'Zone Name'] : []),
+    ...(rows.some((row) => Object.hasOwn(row, 'Issues Detected')) ? ['Issues Detected', violationLabel] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Door Name')) ? ['Door Name', 'Door Status', 'Door Duration'] : []),
     ...(rows.some((row) => Object.hasOwn(row, 'Box ID')) ? PACKING_INCIDENT_EXPORT_COLUMNS : []),
     'Severity', 'Status', 'Time of Incident',
@@ -218,6 +224,7 @@ const exportListPdf = async (rows, showVehicleNumber, violationLabel) => {
     NVR: showVehicleNumber ? 30 : 34,
     Camera: showVehicleNumber ? 31 : 35,
     Description: 52,
+    'People Detected': 24,
     'Observed Layers': 25,
     'Issues Detected': 18,
     [violationLabel]: 62,
@@ -359,9 +366,10 @@ const exportGridPdf = async (rows, showVehicleNumber, violationLabel) => {
     return [
     ['Incident', 'Incident'],
     ...(!isCansStack && Object.hasOwn(row, 'Description') ? [['Description', 'Description']] : []),
+    ...(Object.hasOwn(row, 'Zone Name') ? [['Zone Name', 'Zone Name']] : []),
+    ...(Object.hasOwn(row, 'People Detected') ? [['People Detected', 'People Detected']] : []),
     ...(Object.hasOwn(row, 'Issues Detected') ? [
       ['Issues Detected', 'Issues Detected'],
-      ['Zone Name', 'Zone Name'],
       [violationLabel, 'Violations'],
     ] : []),
     ['NVR', 'NVR'],

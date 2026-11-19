@@ -14,6 +14,21 @@ import { boxSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
 
+const exportSeverityLabel = (severity) => (
+  String(severity || '--').toLowerCase() === 'moderate' ? 'Medium' : severity || '--'
+);
+
+const exportSeverityColor = (severity) => {
+  switch (String(severity || '').toLowerCase()) {
+    case 'low': return [34, 197, 94];
+    case 'moderate':
+    case 'medium': return [245, 158, 11];
+    case 'high':
+    case 'critical': return [255, 77, 77];
+    default: return [75, 85, 99];
+  }
+};
+
 const resolveIncidentImageUrl = (value) => {
   if (!value) return '';
   const image = String(value).trim();
@@ -26,7 +41,7 @@ const resolveIncidentImageUrl = (value) => {
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
 const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone, posture, observedLayers } = params;
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone, posture, observedLayers, peopleCount } = params;
 
   const query = {
     endpoint: config.endpoint,
@@ -51,6 +66,7 @@ const fetchAllForExport = async (config, params) => {
     zone,
     posture,
     observedLayers,
+    peopleCount,
   };
 
   const list = config.showDoorFields && doorStatus
@@ -139,6 +155,16 @@ const buildExportColumns = (config) => {
   if (config.showCansStackFields) cols.push(
     { key: 'observedLayers', label: 'Observed Layers' },
   );
+  if (config.showSittingOnCanFields) cols.push(
+    { key: 'zone', label: 'Zone Name' },
+    { key: 'count', label: 'People Detected' },
+    { key: 'currentStatus', label: 'Detection Status' },
+    { key: 'triggerNotification', label: 'Notification Enabled' },
+  );
+  else {
+    if (config.showSittingOnCanZone) cols.push({ key: 'zone', label: 'Zone Name' });
+    if (config.showSittingOnCanCount) cols.push({ key: 'count', label: 'People Detected' });
+  }
   if (config.showEmotionFields) cols.push({ key: 'emotion', label: 'Emotion' });
   if (config.showGenderAgeFields) cols.push(
     { key: 'description', label: 'Description' }, { key: 'targetGender', label: 'Gender' }, { key: 'zone', label: 'Zone' },
@@ -387,10 +413,15 @@ const exportToGridPDF = async (config, params) => {
     else if (config.showDescription) details.push(['Description', 'description']);
     if (config.showPostureFields) details.push(['Posture', 'posture']);
     if (config.showCansStackFields) details.push(['Observed Layers', 'observedLayers']);
+    if (config.showSittingOnCanZone) details.push(['Zone Name', 'zone']);
+    if (config.showSittingOnCanCount) details.push(['People Detected', 'count']);
     if (config.showEmotionFields) details.push(['Emotion', 'emotion']);
     if (config.showGenderAgeFields) details.push(['Gender', 'targetGender'], ['Zone', 'zone'], ['Description', 'description']);
     if (config.showStatus) details.push(['Status', 'currentStatus']);
-    if (config.showSeverity !== false && !config.showDoorFields) details.push(['Severity', 'severity']);
+    // A grid export is a card layout too. When the card hides the severity
+    // detail row, keep severity visible in the same place as the UI card: as a
+    // badge over the image (drawn below).
+    if (config.showSeverity !== false && !config.showDoorFields && !config.hideSeverityCardLabel) details.push(['Severity', 'severity']);
     if (config.showFireSmokeFields) {
       details.push(['Fire Objects', 'fireCount'], ['Smoke Objects', 'smokeCount']);
     }
@@ -484,6 +515,20 @@ const exportToGridPDF = async (config, params) => {
       }
       if (row.incidentImageUrl) {
         doc.link(x, y, cardWidth, imageHeight, { url: row.incidentImageUrl });
+      }
+
+      if (config.showSeverity !== false && config.hideSeverityCardLabel) {
+        const [red, green, blue] = exportSeverityColor(row.severity);
+        const label = String(exportSeverityLabel(row.severity)).toUpperCase();
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.5);
+        const badgeWidth = doc.getTextWidth(label) + 6;
+        const badgeX = x + cardWidth - badgeWidth - 3;
+        const badgeY = y + 3;
+        doc.setFillColor(red, green, blue);
+        doc.roundedRect(badgeX, badgeY, badgeWidth, 5.5, 1.2, 1.2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text(label, badgeX + badgeWidth / 2, badgeY + 3.8, { align: 'center' });
       }
 
       const labelX = x + 3.5;

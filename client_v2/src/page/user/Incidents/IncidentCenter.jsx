@@ -86,11 +86,40 @@ const INCIDENT_LIST_DETAILS = {
   personPostureDetection: [
     { field: 'posture', label: 'Posture', width: 120 },
   ],
+  // Sitting-on-can incidents expose both zone and detected people count in list view.
+  personSittingOnCan: [
+    { field: 'zone', label: 'Zone Name', width: 140 },
+    { field: 'count', label: 'People Detected', width: 130 },
+  ],
   cansStackDetection: [
     { field: 'observedLayers', label: 'Observed Layers', width: 140 },
   ],
 };
-const incidentListDetailsFor = (types) => {
+const incidentListColumnValue = (item, field) => {
+  if (!item) return undefined;
+  if (field === 'zone') return item.zoneName || item.zone;
+  if (field === 'presenceSec') return item.durationSec;
+  if (field === 'done') return formatDoorStatus(item);
+  if (field === 'issueCount') {
+    if (Number.isInteger(item.violationCount) && item.violationCount >= 0) return item.violationCount;
+    return Array.isArray(item.violations) && item.violations.length ? item.violations.length : undefined;
+  }
+  if (field === 'violation') {
+    if (Array.isArray(item.violations) && item.violations.length) return item.violations;
+    if (Array.isArray(item.selectedCategories) && item.selectedCategories.length) return item.selectedCategories;
+    return item.description;
+  }
+  if (field === 'completedBy' || field === 'startTime' || field === 'endTime' || field === 'packingTime') {
+    return packingIncidentDetails(item)?.[field];
+  }
+  return item[field];
+};
+const hasIncidentListValue = (value) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value === null || value === undefined) return false;
+  return String(value).trim() !== '' && String(value).trim() !== '--';
+};
+const incidentListDetailsFor = (types, items = null) => {
   const columns = new Map();
   types.forEach((type) => {
     const details = INCIDENT_LIST_DETAILS[type]
@@ -105,18 +134,23 @@ const incidentListDetailsFor = (types) => {
       }
     });
   });
-  return [...columns.values()].map(({ field, labels, width }) => ({
+  const details = [...columns.values()].map(({ field, labels, width }) => ({
     field,
     label: field === 'violation' && labels.length > 1 ? 'Hygiene Violations / Lighting Violations' : labels.join(' / '),
     width: labels.length > 1 ? Math.max(width, 190) : width,
   }));
+  return Array.isArray(items) && items.length
+    ? details.filter(({ field }) => items.some((item) => hasIncidentListValue(incidentListColumnValue(item, field))))
+    : details;
 };
-const incidentListColumns = (details) => [
-  '34px', '94px', 'minmax(190px,1.5fr)', 'minmax(220px,1.35fr)', 'minmax(150px,1fr)',
+const incidentListColumns = (details, showDescription = true) => [
+  '34px', '94px', 'minmax(190px,1.5fr)', ...(showDescription ? ['minmax(220px,1.35fr)'] : []), 'minmax(150px,1fr)',
   ...details.map(({ width }) => `${width}px`),
   '90px', '100px', '135px', '90px', '160px',
 ].join(' ');
-const incidentListMinWidth = (details) => 1390 + details.reduce((total, { width }) => total + width + 12, 0);
+const incidentListMinWidth = (details, showDescription = true) => (
+  1390 - (showDescription ? 0 : 220) + details.reduce((total, { width }) => total + width + 12, 0)
+);
 const DELETE_BATCH_SIZE = 250;
 
 const formatDoorDuration = (seconds) => {
@@ -1428,7 +1462,7 @@ const LIST_SEVERITY_COLORS = {
 function IncidentListRow({
   item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
   hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, detailColumns,
-  listColumns, listMinWidth, recentlyViewed,
+  showDescriptionColumn, listColumns, listMinWidth, recentlyViewed,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1440,7 +1474,7 @@ function IncidentListRow({
   const previewAt = item.timeOfIncident || null;
   const canPreview = Boolean(previewChannelId && previewAt);
   const incident = item.incidentName || detectionLabel(item.incidentType || item.displayName);
-  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'cansStackDetection'].includes(item.incidentType);
+  const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item.incidentType);
   const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
   const camera = item.channelData?.customName || item.channelData?.name || '--';
   const nvr = item.nvrData?.nvrName || (typeof item.location === 'string' ? item.location : '') || '--';
@@ -1533,9 +1567,11 @@ function IncidentListRow({
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
         </div>
 
-        <div role="cell" style={{ minWidth: 0, color: incidentDescription ? 'var(--tx2)' : 'var(--tx3)', fontSize: 11.5, lineHeight: 1.45, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden', overflowWrap: 'anywhere' }} title={incidentDescription || undefined}>
-          {incidentDescription || '—'}
-        </div>
+        {showDescriptionColumn && (
+          <div role="cell" style={{ minWidth: 0, color: incidentDescription ? 'var(--tx2)' : 'var(--tx3)', fontSize: 11.5, lineHeight: 1.45, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden', overflowWrap: 'anywhere' }} title={incidentDescription || undefined}>
+            {incidentDescription || '—'}
+          </div>
+        )}
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span title={camera} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera}</span>
@@ -1558,6 +1594,10 @@ function IncidentListRow({
               <span style={{ textTransform: 'capitalize' }}>{item.posture || '--'}</span>
             ) : field === 'observedLayers' ? (
               <span>{item.observedLayers ?? '--'}</span>
+            ) : field === 'zone' ? (
+              <span>{item.zoneName || item.zone || '--'}</span>
+            ) : field === 'count' ? (
+              <span>{item.count ?? '--'}</span>
             ) : field === 'vehicleNumber' ? (
               <span>{item.vehicleNumber || '—'}</span>
             ) : isConditionIncident && field === 'issueCount' ? (
@@ -1887,9 +1927,13 @@ export default function IncidentCenter() {
     return <span role="columnheader"><button type="button" onClick={() => toggleListSort(field)} title={`Sort visible page by ${label}`} aria-label={`Sort by ${label}${active ? `, ${listSort.direction}ending` : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'none', color: active ? 'var(--blue)' : 'var(--tx)', font: 'inherit', fontWeight: 900, letterSpacing: 'inherit', textTransform: 'inherit', cursor: 'pointer', textAlign: 'left' }}>{label}<SortIcon size={12} strokeWidth={1.9} style={{ opacity: active ? 1 : 0.6, flexShrink: 0 }} /></button></span>;
   };
   const visibleTypes = detTypes.size ? [...detTypes] : [...new Set(items.map((item) => item.incidentType))];
-  const detailColumns = incidentListDetailsFor(visibleTypes);
-  const listColumns = incidentListColumns(detailColumns);
-  const listMinWidth = incidentListMinWidth(detailColumns);
+  const detailColumns = incidentListDetailsFor(visibleTypes, items);
+  const showDescriptionColumn = items.some((item) => (
+    ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item?.incidentType)
+    && String(item?.description || '').trim()
+  ));
+  const listColumns = incidentListColumns(detailColumns, showDescriptionColumn);
+  const listMinWidth = incidentListMinWidth(detailColumns, showDescriptionColumn);
   // Preserve the selected incident's identity when resolving removes it from
   // the active feed. The grid still refreshes normally behind the viewer.
   const lightboxItemIndex = lightboxIncident
@@ -3085,7 +3129,7 @@ export default function IncidentCenter() {
                 <span role="columnheader" aria-label="Select incident" />
                 <span role="columnheader">Image</span>
                 {sortHeader('Incident', 'incident')}
-                <span role="columnheader">Description</span>
+                {showDescriptionColumn && <span role="columnheader">Description</span>}
                 {sortHeader('Camera / NVR', 'camera')}
                 {detailColumns.map(({ field, label }) => <Fragment key={field}>{sortHeader(label, field)}</Fragment>)}
                 {sortHeader('Severity', 'severity')}
@@ -3112,6 +3156,7 @@ export default function IncidentCenter() {
                   selectedForDelete={selectedForDelete.includes(item._id || item.id)}
                   onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
                   detailColumns={detailColumns}
+                  showDescriptionColumn={showDescriptionColumn}
                   listColumns={listColumns}
                   listMinWidth={listMinWidth}
                 />

@@ -133,7 +133,7 @@ const ImagePreviewModal = ({
     <DraggableZoomControls
       className={
         fullscreen
-          ? `absolute top-4 ${zoomControlsPosition === 'left' ? 'left-4' : 'right-16'} z-40 flex items-center gap-1 rounded-lg border border-white/20 bg-white/95 p-1 shadow-lg`
+          ? `absolute top-4 ${zoomControlsPosition === 'left' ? 'left-4' : 'right-16'} z-40 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg backdrop-blur-sm`
           : `absolute top-5 ${zoomControlsPosition === 'left' ? 'left-5' : 'right-5'} z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg`
       }
       resetKey={fullscreen}

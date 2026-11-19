@@ -106,6 +106,7 @@ function incidentTypeForDetection(model, incidentFilterTypes = []) {
   });
 
   const knownTypes = {
+    personSittingOnCanDetectionSettings: 'personSittingOnCan',
     personPostureDetectionSettings: 'personPostureDetection',
     cansStackDetectionSettings: 'cansStackDetection',
   };

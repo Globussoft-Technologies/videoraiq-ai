@@ -1,4 +1,5 @@
 export const DETECTION_FIELD_KEYS = [
+  'personSittingOnCanDetectionSettings',
   'personPostureDetectionSettings', 'cansStackDetectionSettings',
   'genderAgeDetectionSettings',
   'machineOpsDetectionSettings',

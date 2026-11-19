@@ -6,7 +6,7 @@ import HomeRedirect from './layout/HomeRedirect';
 import RequirePermission from './layout/RequirePermission';
 // import HygieneAnalytics from './pages/HygieneAnalytics/HygieneAnalytics';
 import { ADMIN_STORAGE_UI_ENABLED } from './lib/featureFlags';
-import { PERSON_POSTURE_CONFIG, CANS_STACK_CONFIG } from './pages/IncidentLogs/configs';
+import { PERSON_POSTURE_CONFIG, PERSON_SITTING_ON_CAN_CONFIG, CANS_STACK_CONFIG } from './pages/IncidentLogs/configs';
 
 const CommandCenter = lazy(() => import('./page/user/CommandCenter/CommandCenter'));
 const IncidentCenter = lazy(() => import('./page/user/Incidents/IncidentCenter'));
@@ -211,6 +211,7 @@ export const v2Routes = (
     <Route path="logs/stock-counting/analytics" element={guard('logs', 'stockCountingLogs', <StockCountingAnalytics />)} />
     <Route path="logs/blurred-camera" element={guard('logs', 'blurredCameraLogs', <BlurredCameraLogs />)} />
     <Route path="logs/person-posture" element={guard('logs', 'personPostureLogs', <IncidentLogsPage config={PERSON_POSTURE_CONFIG} />)} />
+    <Route path="logs/person-sitting-on-can" element={guard('logs', 'personSittingOnCanLogs', <IncidentLogsPage config={PERSON_SITTING_ON_CAN_CONFIG} />)} />
     <Route path="logs/cans-stack" element={guard('logs', 'cansStackLogs', <IncidentLogsPage config={CANS_STACK_CONFIG} />)} />
     <Route path="logs/door" element={guard('logs', 'doorDetectionLogs', <DoorDetectionLogs />)} />
     <Route path="logs/door-detection" element={<Navigate to="/logs/door" replace />} />
