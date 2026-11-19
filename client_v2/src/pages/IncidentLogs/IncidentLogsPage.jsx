@@ -168,6 +168,7 @@ const IncidentLogsPage = ({ config }) => {
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
   const [postureTotals, setPostureTotals] = useState({ sitting: 0, standing: 0 });
   const [machineStateTotals, setMachineStateTotals] = useState({ on: 0, off: 0 });
+  const [machineTotalCount, setMachineTotalCount] = useState(0);
   const [packingStatusTotals, setPackingStatusTotals] = useState({ all: 0, completed: 0, review: 0 });
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
@@ -418,6 +419,7 @@ const IncidentLogsPage = ({ config }) => {
         if (counts) setSeverityTotals(counts);
       }
       if (config.showMachineOpsFields) {
+        setMachineTotalCount(data?.machineTotalCount ?? data?.totalCount ?? 0);
         setMachineStateTotals(data?.machineStateCounts || { on: 0, off: 0 });
       }
       if (config.showBoxPackingStatusFilter) {
@@ -713,7 +715,7 @@ const IncidentLogsPage = ({ config }) => {
   const stats = useMemo(() => {
     if (config.showStats === false) return [];
     if (config.showMachineOpsFields) {
-      const total = totalCount ?? 0;
+      const total = machineTotalCount;
       const onCount = machineStateTotals.on;
       const offCount = machineStateTotals.off;
       return [
@@ -753,7 +755,7 @@ const IncidentLogsPage = ({ config }) => {
       { label: config.showLightingFields || config.showHygieneFields || config.showDoorFields ? 'Medium' : 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
       { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [config.showStats, config.showPostureFilter, config.showMachineOpsFields, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, postureTotals, machineStateTotals, stockSummary, totalCount]);
+  }, [config.showStats, config.showPostureFilter, config.showMachineOpsFields, config.showStockCountingFields, config.showSackFields, config.showLightingFields, config.showHygieneFields, config.showDoorFields, config.statsLabel, severityTotals, postureTotals, machineStateTotals, machineTotalCount, stockSummary, totalCount]);
 
   const exportParams = useMemo(
     () => ({

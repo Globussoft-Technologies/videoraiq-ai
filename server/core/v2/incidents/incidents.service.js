@@ -4010,6 +4010,18 @@ console.log(result,'result');
       ]);
     }
 
+    // The list count follows machineState; KPI counts follow the other filters.
+    // Reuse the list summary when no state is selected.
+    let machineSummary = countResult[0];
+    if (incidentType === 'machineOpsDetection' && matchStage.machineState) {
+      const summaryMatch = { ...matchStage };
+      delete summaryMatch.machineState;
+      const summaryPipeline = canPageBeforeLookups
+        ? [{ $match: summaryMatch }, summaryStage]
+        : [{ $match: summaryMatch }, ...basePipeline.slice(1), summaryStage];
+      [machineSummary] = await Incident.aggregate(summaryPipeline);
+    }
+
     if (attachVehicleOwners) {
       await attachTaggedUsers(logs, data?.adminId);
     }
@@ -4049,9 +4061,9 @@ console.log(result,'result');
           standing: countResult[0]?.standing || 0,
         } }),
         ...(incidentType === 'machineOpsDetection' && { machineStateCounts: {
-          on: countResult[0]?.machineOn || 0,
-          off: countResult[0]?.machineOff || 0,
-        } }),
+          on: machineSummary?.machineOn || 0,
+          off: machineSummary?.machineOff || 0,
+        }, machineTotalCount: machineSummary?.totalCount || 0 }),
         ...(boxStatusCounts && { boxStatusCounts }),
         ...(emotionOptions && { emotionOptions }),
         ...(emotionCounts && { emotionCounts }),

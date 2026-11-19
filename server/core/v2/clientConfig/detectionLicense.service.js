@@ -79,19 +79,12 @@ const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").tri
 
 const detectionName = (settingType) => DETECTION_TYPES[settingType] || settingType;
 
-// Types introduced after an account was provisioned do not have an allocation
-// row yet. They are backfilled once at server boot for licensed tenants so a
-// newly shipped detector is visible immediately; existing allocation rows are
-// never changed, including rows deliberately disabled by Super Admin.
-const NEW_DETECTION_TYPES = Object.freeze([
-  "personPostureDetectionSettings",
-  "cansStackDetectionSettings",
-]);
-
 // These detectors are opt-in products. Their allocation must come from an
 // explicit Super Admin action; plan/camera reconciliation must never make them
 // visible merely because the client received a general camera licence.
 const SUPERADMIN_ONLY_DETECTION_TYPES = new Set([
+  "personPostureDetectionSettings",
+  "cansStackDetectionSettings",
   "personSittingOnCanDetectionSettings",
 ]);
 
@@ -298,16 +291,9 @@ const publishLicenseGranted = (adminId, userId) => {
  * later sets the client to 0 (to block them) must not have that undone on the
  * next login.
  *
- * Also backfills ClientDetectionAllocation for EVERY detection type, at the
- * same granted count — not only the ones already running. Whether a detection
- * happens to be switched on right now is irrelevant to what this client is
- * entitled to configure: a pre-existing customer with a 10-camera licence gets
- * every detection type available across those 10 cameras, exactly as if the
- * superadmin had licensed all of them, and a brand-new client gets to try any
- * detection type on their starting allowance rather than only ones that are
- * (by definition, for a client with zero cameras) impossible to have running
- * yet. Only creates rows that do not already exist; never touches one the
- * superadmin (or an earlier grant) already set.
+ * Also backfills standard detection allocations at the granted camera count.
+ * Opt-in detections require an explicit Super Admin grant. Existing allocation
+ * rows are never changed, including rows deliberately disabled by Super Admin.
  *
  * Live clients are notified over the socket immediately (see
  * `publishLicenseGranted`) — the caller does not need a fresh login for this
@@ -365,7 +351,7 @@ export const grantPlanDefaultCameras = async (admin, subscriptions) => {
     publishLicenseGranted(String(admin._id), admin.user_id);
 
     logger.info(
-      `[LICENSE] granted ${cameras} default camera(s) + full detection allocation to admin=${admin._id}` +
+      `[LICENSE] granted ${cameras} default camera(s) + standard detection allocations to admin=${admin._id}` +
         (added > 0
           ? ` (matches ${added} camera(s) already added)`
           : ` from plan(s) ${Object.keys(subscriptions || {}).join(", ")}`),
@@ -433,31 +419,6 @@ export const reconcileAddedCameraLicenses = async () => {
     logger.error(`reconcileAddedCameraLicenses: ${err.message}`);
   }
   return { scanned, granted };
-};
-
-export const reconcileNewDetectionAllocations = async () => {
-  if (!isLicensingEnforced()) return { scanned: 0, created: 0 };
-  let scanned = 0;
-  let created = 0;
-  try {
-    const cursor = adminModel.find({ purchasedCameras: { $gt: 0 } }).select("_id user_id purchasedCameras").lean().cursor();
-    for await (const admin of cursor) {
-      scanned += 1;
-      const existing = await allocationModel.find({ adminId: admin._id, settingType: { $in: NEW_DETECTION_TYPES } }).select("settingType").lean();
-      const present = new Set(existing.map((row) => row.settingType));
-      const missing = NEW_DETECTION_TYPES.filter((settingType) => !present.has(settingType));
-      if (!missing.length) continue;
-      const result = await allocationModel.insertMany(
-        missing.map((settingType) => ({ adminId: admin._id, settingType, enabled: true, cameraAllocation: admin.purchasedCameras })),
-        { ordered: false },
-      );
-      created += result.length;
-      publishLicenseGranted(String(admin._id), admin.user_id);
-    }
-  } catch (error) {
-    logger.error(`reconcileNewDetectionAllocations: ${error.message}`);
-  }
-  return { scanned, created };
 };
 
 /**
@@ -1059,5 +1020,4 @@ export default {
   defaultCamerasForPlan,
   grantPlanDefaultCameras,
   reconcileAddedCameraLicenses,
-  reconcileNewDetectionAllocations,
 };

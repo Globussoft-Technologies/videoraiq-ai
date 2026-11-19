@@ -24,6 +24,7 @@ import { BRAND_NAME } from '../lib/branding';
 import { isMobileEmbedded } from '@/utils/mobileEmbed';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
+const agentLauncherEnabled = import.meta.env.VITE_AGENT_LAUNCHER_ENABLED === 'true';
 const LiveDemo = lazy(() => import('../pages/LiveDemo/LiveDemo'));
 
 // Incident types the Alerts feed deliberately leaves out: it only lists
@@ -401,7 +402,7 @@ function Shell() {
     
       </main>
       {!embedded && <AppTour />}
-      {/* {!embedded && <AgentLauncher />} */}
+      {!embedded && agentLauncherEnabled && <AgentLauncher />}
     </div>
   );
 }
