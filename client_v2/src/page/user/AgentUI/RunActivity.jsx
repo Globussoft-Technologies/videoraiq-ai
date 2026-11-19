@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import Robot from './Robot';
 import { agentApi } from './agentApi';
 
 const labels = {
@@ -40,11 +41,10 @@ function parseBatch(batch) {
     try { return [{ ...JSON.parse(data), cursor: Number(id) }]; } catch { return []; }
   });
 }
-export default function RunActivity({ runId, active, status }) {
+export default function RunActivity({ runId, active, status, children }) {
   const [open, setOpen] = useState(active);
-  const [showAll, setShowAll] = useState(false);
   const [events, setEvents] = useState([]);
-  useEffect(() => setOpen(active), [active, runId]);
+  useEffect(() => { setOpen(active); setEvents([]); }, [runId, active]);
   useEffect(() => {
     if (!active || !runId) return undefined;
     let stopped = false;
@@ -76,13 +76,27 @@ export default function RunActivity({ runId, active, status }) {
     list.push({ id: event.cursor, callId, label, state: event.kind === 'tool_started' ? 'active' : event.kind === 'tool_completed' && event.payload?.errorCode ? 'error' : 'done' });
     return list;
   }, []);
-  const visibleSteps = active && !showAll ? steps.slice(-6) : steps;
   const activeLabel = status === 'verification_pending' ? 'Verifying the change'
     : [...steps].reverse().find((item) => item.state === 'active')?.label
       || (status === 'queued' ? 'Preparing your request' : 'Analyzing your request');
   return <div className={`agent-run-activity ${active ? 'agent-run-activity-live' : ''}`}>
-    {active ? <div className="agent-run-activity-heading"><span className="agent-run-activity-pulse" /><span>{activeLabel}…</span>{steps.length > 0 && <span className="agent-run-activity-count">{steps.length} {steps.length === 1 ? 'step' : 'steps'}</span>}{runId && <button type="button" className="agent-run-activity-toggle" aria-label={open ? 'Collapse activity' : 'Expand activity'} aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>}</div>
+    {active ? <div className="agent-run-activity-heading">
+      <Robot compact />
+      <div className="agent-run-summary">
+        <strong title={activeLabel}>{activeLabel}…</strong>
+        <span className="agent-run-track" aria-hidden="true"><span className="agent-run-wave" /></span>
+      </div>
+      {steps.length > 0 && <button type="button" className="agent-run-details" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+        {open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+      </button>}
+    </div>
       : <button type="button" onClick={() => setOpen((value) => !value)}>{open ? 'Hide activity' : 'Show activity'}</button>}
-    {open && steps.length > 0 && <><ol>{visibleSteps.map((item) => <li key={item.id} className={item.state}>{item.label}{item.detail && <span> · {item.detail}</span>}</li>)}</ol>{active && steps.length > 6 && <button className="agent-run-activity-more" type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show recent steps' : `Show all activity (${steps.length})`}</button>}</>}
+    {children && <div className="agent-run-activity-actions">{children}</div>}
+    {open && steps.length > 0 && <ol>
+      {steps.map((item) => <li key={item.id} className={item.state} aria-current={item.state === 'active' ? 'step' : undefined}>
+        {item.label}{item.detail && <span> · {item.detail}</span>}
+      </li>)}
+    </ol>}
   </div>;
 }

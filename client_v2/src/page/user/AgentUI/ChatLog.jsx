@@ -1,4 +1,4 @@
-import { ArrowDown, Check, Copy, Edit3 } from 'lucide-react';
+import { ArrowDown, Check, Copy, Edit3, LoaderCircle, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import AgentMarkdown from './AgentMarkdown';
 import AgentReport from './AgentReport';
@@ -6,6 +6,27 @@ import RunActivity from './RunActivity';
 import ProposalCard from './ProposalCard';
 import ZoneSnapshot from './ZoneSnapshot';
 import ActionResult from './ActionResult';
+import AgentExport from './AgentExport';
+
+function StopRunButton({ onStop }) {
+  const pending = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  const stop = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    setStopping(true);
+    try {
+      await onStop();
+    } finally {
+      pending.current = false;
+      setStopping(false);
+    }
+  };
+  return <button type="button" className="agent-stop-run" onClick={stop} disabled={stopping} aria-busy={stopping}>
+    {stopping ? <LoaderCircle className="agent-download-spinner" size={14} aria-hidden="true" /> : <Square size={12} fill="currentColor" aria-hidden="true" />}
+    <span>{stopping ? 'Stopping…' : 'Stop'}</span>
+  </button>;
+}
 
 function Question({ message, onSend, sending }) {
   const [editing, setEditing] = useState(false);
@@ -111,14 +132,17 @@ export default function ChatLog({ messages, sending, onSend, onRecover, onStop, 
   return <div className="agent-log-shell"><section ref={logRef} className="agent-log flex flex-col" aria-live="polite" onScroll={updateScroll}>
     {messages.map((message) => message.role === 'user' ? <Question key={message.id} message={message} onSend={onSend} sending={sending} /> : <div className={`agent-message-group ai ${['queued', 'running', 'verification_pending'].includes(message.status) ? 'agent-message-working' : ''}`} key={message.id}>
       {messageTime(message.at) && <div className="agent-response-meta"><time dateTime={message.at}>{messageTime(message.at)}</time></div>}
-      {((!message.report && !message.actionResult && message.text) || (message.runId && ['queued', 'running', 'verification_pending'].includes(message.status)) || message.errorCode || (message.status === 'approval_required' && message.proposal) || message.attachments?.length > 0) && <div className={`agent-message ai ${message.error ? 'error' : ''}`}>
-        {message.runId && ['queued', 'running', 'verification_pending'].includes(message.status) && <RunActivity runId={message.runId} active status={message.status} />}
+      {((!message.report && !message.actionResult && message.text) || ['queued', 'running', 'verification_pending'].includes(message.status) || message.errorCode || (message.status === 'approval_required' && message.proposal) || message.attachments?.length > 0) && <div className={`agent-message ai ${message.error ? 'error' : ''}`}>
+        {['queued', 'running', 'verification_pending'].includes(message.status) && <RunActivity runId={message.runId} active status={message.status}>
+          {message.runId && onStop && !message.proposal && message.status !== 'verification_pending' && <StopRunButton onStop={() => onStop(message.runId)} />}
+        </RunActivity>}
         {!message.report && !message.actionResult && message.text ? <MessageText text={message.text} role={message.role} entityNames={entityNames} theme={theme} /> : null}
         {message.errorCode && <div className={`agent-report-warning ${message.errorCode === 'CANCELLED' ? 'cancelled' : ''}`} role="alert">{message.errorMessage || ({ MODEL_UNCONFIGURED: "The agent's AI model is not configured on the server.", RUN_TIMEOUT: 'The request took longer than its time budget. Progress was saved, so it can be recovered.', RUN_FAILED: 'The request failed unexpectedly. Progress was saved, so it can be recovered.', CANCELLED: 'The request was cancelled.' })[message.errorCode] || 'The request could not be completed.'} <code>{message.errorCode}</code></div>}
         {message.status === 'approval_required' && message.proposal && <ProposalCard proposal={message.proposal} entityNames={entityNames} onReview={onReview} onNewChat={onNewChat} />}
         {message.attachments?.length > 0 && <div className="agent-message-attachments">{message.attachments.map((attachment, index) => <div key={attachment.attachmentId || index}>{attachment.url && /^image\//.test(attachment.mimeType || attachment.type || '') ? <img src={attachment.url} alt={attachment.fileName || 'Attached image'} /> : <span>{attachment.fileName || attachment.name || 'Attachment'}</span>}</div>)}</div>}
       </div>}
-      {message.report && <AgentReport report={message.report} sources={message.sources} actionResult={message.actionResult} entityNames={entityNames} theme={theme} />}
+      {message.report && <AgentReport report={message.report} sources={message.sources} actionResult={message.actionResult} entityNames={entityNames} theme={theme} exportUi={message.ui} />}
+      {message.ui && <AgentExport ui={message.ui} exportText={message.report?.answer || message.text || ''} />}
       {message.missingProposal && <div className="agent-report-warning" role="alert">No approval proposal was returned. The zone was not created and the detection was not enabled. Check the camera in Detection Settings before trying again.</div>}
       {!message.report && message.actionResult && <div className="agent-action-response">
         {message.text && <div className="agent-action-answer"><MessageText text={message.text} role={message.role} entityNames={entityNames} theme={theme} /></div>}
@@ -128,8 +152,10 @@ export default function ChatLog({ messages, sending, onSend, onRecover, onStop, 
       </div>}
       {(message.report || !message.actionResult) && message.zonePreviewActionId && ['completed', 'verification_pending'].includes(message.status) && <ZoneSnapshot actionId={message.zonePreviewActionId} />}
       {(message.report || !message.actionResult) && message.zoneSnapshots?.length > 0 && <div className="agent-zone-gallery">{message.zoneSnapshots.map((snapshot) => <ZoneSnapshot key={snapshot.url} src={snapshot.url} label={snapshot.label} />)}</div>}
-      {message.runId && (['recoverable', 'verification_pending'].includes(message.status) || (['queued', 'running', 'recoverable'].includes(message.status) && !message.proposal)) && <div className="agent-run-controls">{['recoverable', 'verification_pending'].includes(message.status) && <button type="button" onClick={() => onRecover?.(message.runId)}>{message.status === 'recoverable' ? 'Recover' : 'Poll backend'}</button>}{['queued', 'running', 'recoverable'].includes(message.status) && !message.proposal && <button type="button" onClick={() => onStop?.(message.runId)}>Stop</button>}</div>}
+      {message.runId && ['recoverable', 'verification_pending'].includes(message.status) && <div className="agent-run-controls">
+        <button type="button" onClick={() => onRecover?.(message.runId)}>{message.status === 'recoverable' ? 'Recover' : 'Poll backend'}</button>
+        {onStop && message.status === 'recoverable' && !message.proposal && <StopRunButton onStop={() => onStop(message.runId)} />}
+      </div>}
     </div>)}
-    {sending && !messages.some((message) => message.role === 'assistant' && ['queued', 'running', 'verification_pending'].includes(message.status)) && <div className="agent-message-group ai agent-message-working" role="status"><div className="agent-message ai"><RunActivity active status="queued" /></div></div>}
   </section>{showScrollDown && <button type="button" className="agent-log-jump" onClick={scrollToLatest} aria-label="Jump to latest message" title="Jump to latest message"><ArrowDown size={17} strokeWidth={2.2} /></button>}</div>;
 }

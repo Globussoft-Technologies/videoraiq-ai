@@ -354,7 +354,12 @@ const IncidentLogsPage = ({ config }) => {
       // the endpoint returns an empty page so the UI can be reviewed before
       // the detection service has generated incidents.
 
-      const mapped = list.map((item) => ({
+      const mapped = list.map((item) => {
+        const nvrId = item.nvrId?._id || item.nvrId?.id || item.nvrId || item.nvrData?._id || item.nvrData?.id;
+        const channelId = item.channelId?._id || item.channelId?.id || item.channelId || item.cameraId || item.channelData?._id || item.channelData?.id;
+        const nvr = nvrList.find((entry) => String(entry?._id || entry?.id) === String(nvrId));
+        const camera = cameraList.find((entry) => String(entry?._id || entry?.id) === String(channelId));
+        return ({
         ...item,
         ...(config.showBoxPackingFields ? packingExportValues(item) : {}),
         id: item._id,
@@ -362,10 +367,10 @@ const IncidentLogsPage = ({ config }) => {
         incidentName: item.incidentName || '--',
         ...(config.showGenderAgeFields ? { zone: item.zone || (item.zoneIdx != null ? `Zone ${Number(item.zoneIdx) + 1}` : '--') } : {}),
         currentStatus: item.currentStatus || '--',
-        nvrName: item.nvrData?.nvrName || '--',
-        channelName: item.channelData?.name || '--',
-        nvrId: item.nvrId || item.nvrData?._id || '',
-        channelId: item.channelId || item.channelData?._id || '',
+        nvrName: item.nvrData?.nvrName || item.nvrData?.name || item.nvrName || item.nvr?.nvrName || item.nvr?.name || nvr?.nvrName || nvr?.name || '--',
+        channelName: item.channelData?.customName || item.channelData?.name || item.channelData?.cameraName || item.channelName || item.cameraName || item.camera?.name || camera?.customName || camera?.name || '--',
+        nvrId,
+        channelId,
         createdAt: item.timeOfIncident || item.createdAt,
         incidentImageUrl: incidentImageUrl(item.Image),
         severity: item.severity || '--',
@@ -394,7 +399,8 @@ const IncidentLogsPage = ({ config }) => {
         sessionCount: item.sessionCount,
         defaultCountApplied: item.defaultCountApplied,
         truckPresent: item.truckPresent,
-      }));
+      });
+      });
 
       loadedRowsPage.current = currentPage;
       dispatch({ type: 'SET_ROWS', value: mapped });
@@ -435,7 +441,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput, nvrList, cameraList]);
 
   useEffect(() => {
     fetchLogs();

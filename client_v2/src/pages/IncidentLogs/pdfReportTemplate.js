@@ -12,6 +12,14 @@ const imageToDataUrl = async (url) => {
   });
 };
 
+// A multi-page chatbot export can draw the same header hundreds of times.
+// Reuse the single fetched logo instead of issuing one request per page.
+let logoDataUrlPromise;
+const cachedLogoDataUrl = () => {
+  if (!logoDataUrlPromise) logoDataUrlPromise = imageToDataUrl(logoUrl).catch(() => null);
+  return logoDataUrlPromise;
+};
+
 /** The report chrome used by every list-view log PDF. */
 export const drawReportHeader = async (doc, { title, subtitle, generatedAt = moment().format('DD/MM/YYYY hh:mm A') }) => {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -23,7 +31,8 @@ export const drawReportHeader = async (doc, { title, subtitle, generatedAt = mom
   doc.triangle(8, 7, 92, 7, 8, 37, 'F');
 
   try {
-    const logoDataUrl = await imageToDataUrl(logoUrl);
+    const logoDataUrl = await cachedLogoDataUrl();
+    if (!logoDataUrl) throw new Error('Report logo unavailable');
     doc.addImage(logoDataUrl, 'PNG', 17, 17, 50, 11);
   } catch {
     doc.setTextColor(255, 255, 255);

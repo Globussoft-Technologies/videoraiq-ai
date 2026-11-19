@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy } from 'lucide-react';
 import AgentMarkdown from './AgentMarkdown';
 import ActionResult from './ActionResult';
+import { resolveAgentExportMeta } from './AgentExport';
 
 const words = (value) => String(value || '').replace(/_/g, ' ');
 const actionIdPattern = /\bAction(?:\s+ID)?\s*[:#]?\s*(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|[0-9a-f]{24})\b/gi;
@@ -15,7 +16,7 @@ function readableAnswer(answer, actionResult, entityNames) {
   return String(answer || '').replace(actionIdPattern, label)
     .replace(rawIdPattern, (id) => entityNames.get(id.toLowerCase()) || 'record');
 }
-export default function AgentReport({ report, sources = [], actionResult, entityNames = new Map(), theme }) {
+export default function AgentReport({ report, sources = [], actionResult, entityNames = new Map(), theme, exportUi }) {
   const answerRef = useRef(null);
   const [copyState, setCopyState] = useState('Copy');
   const copy = async () => {
@@ -49,8 +50,45 @@ export default function AgentReport({ report, sources = [], actionResult, entity
     || sources.length
     || actionResult,
   );
+  // Agent responses may provide the resolved period as `time_range`, an ISO
+  // `time_window`, or only in the human-readable answer. Keep all three paths
+  // on the local exporter so we do not fall back to an older static file whose
+  // rows have no NVR/camera join.
+  const answerRange = String(report.answer || '').match(/(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s*(?:[\u2013\u2014-]|to|â€“)\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i);
+  const windowRange = String(report.time_window || report.timeWindow || '').match(/(\d{4}-\d{2}-\d{2})\s*(?:to|[\u2013\u2014-]|â€“)\s*(\d{4}-\d{2}-\d{2})/i);
+  const exportMeta = resolveAgentExportMeta({
+    resource: exportUi?.resource,
+    title: exportUi?.title,
+    text: report.answer,
+  });
+  const exportContext = exportMeta && report.time_range ? {
+    startDate: report.time_range.start || report.time_range[0],
+    endDate: report.time_range.end || report.time_range[1],
+    timezone: report.time_range.timezone || exportUi?.timezone || 'Asia/Kolkata',
+    resource: exportMeta.resource,
+    incidentType: exportMeta.incidentType,
+    title: exportMeta.title,
+    filters: exportUi?.filters,
+  } : exportMeta && windowRange ? {
+    startDate: windowRange[1],
+    endDate: windowRange[2],
+    timezone: report.timezone || exportUi?.timezone || 'Asia/Kolkata',
+    resource: exportMeta.resource,
+    incidentType: exportMeta.incidentType,
+    title: exportMeta.title,
+    filters: exportUi?.filters,
+  } : exportMeta && answerRange ? {
+    startDate: new Date(answerRange[1]).toISOString(),
+    endDate: new Date(answerRange[2]).toISOString(),
+    timezone: exportUi?.timezone || 'Asia/Kolkata',
+    resource: exportMeta.resource,
+    incidentType: exportMeta.incidentType,
+    title: exportMeta.title,
+    filters: exportUi?.filters,
+  } : null;
+  if (exportContext) exportContext.reportCacheKey = report;
   return <div className="agent-report">
-    <div className="agent-report-answer-card"><div ref={answerRef}><AgentMarkdown text={readableAnswer(report.answer, actionResult, entityNames)} theme={theme} /></div>
+    <div className="agent-report-answer-card"><div ref={answerRef}><AgentMarkdown text={readableAnswer(report.answer, actionResult, entityNames)} theme={theme} exportContext={exportContext} /></div>
     {report.clarification && <div className="agent-report-callout"><strong>Need a little more detail</strong><p>{report.clarification}</p></div>}
     {hasStructuredEvidence && report.coverage && report.coverage !== 'unknown' && <div className="agent-report-chips">
       <span className={`coverage ${report.coverage}`}>{words(report.coverage)} coverage</span>

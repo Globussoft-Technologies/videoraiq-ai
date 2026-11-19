@@ -10,8 +10,13 @@ const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
  */
 export function mediaUrl(path) {
   if (!path) return '';
-  if (/^(https?:)?\/\//i.test(path) || /^data:/i.test(path)) return path;
-  return `${INCIDENT_URL}${path}`;
+  const value = String(path).trim();
+  if (/^(https?:)?\/\//i.test(value) || /^(?:data|blob):/i.test(value)) return value;
+  const base = String(INCIDENT_URL || '').replace(/\/+$/, '');
+  // Incident records store paths beginning with `/uploads/...`. Keep that
+  // storage prefix intact because the v2 media route is mounted beneath its
+  // own `/uploads` endpoint (the working URL is `/api/v2/uploads/uploads/...`).
+  return `${base}/${value.replace(/^\/+/, '')}`;
 }
 
 /** "5 min ago" style relative time. */

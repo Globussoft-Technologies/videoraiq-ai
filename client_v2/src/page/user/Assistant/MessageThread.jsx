@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { isNvrWorkflowPrompt, isNvrConfirmationPrompt } from './nvrWorkflowUi.js';
-import { AlertTriangle, Check, Copy, Download, Eye, FileSpreadsheet, FileText, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Download, Eye, FileSpreadsheet, FileText, LoaderCircle, Sparkles, X } from 'lucide-react';
 import { detectionLabel } from '../../../lib/format';
 import { api, unwrap } from '@/helpers/client';
 import { runAssistantLogExport } from './assistantLogExport';
@@ -384,14 +384,14 @@ function workflowUiForMessage(msg) {
 function ExportCard({ ui }) {
   // Export metadata is persisted with autoDownload disabled. Treat that
   // rehydrated state as completed so a refresh does not lose the final status.
-  const [status, setStatus] = useState(ui?.autoDownload === false ? 'Downloaded successfully' : 'Preparing download…');
+  const [status, setStatus] = useState(ui?.autoDownload === false ? 'Downloaded successfully' : 'Preparing download...');
   const started = useRef(false);
 
   useEffect(() => {
     if (!ui || !['export', 'multi_export'].includes(ui.type) || !ui.autoDownload || started.current) return;
     started.current = true;
     const download = async () => {
-      setStatus('Preparing download…');
+      setStatus('Preparing download...');
       try {
         const results = [];
         const exports = ui.type === 'multi_export' ? (ui.exports || []) : [ui];
@@ -410,8 +410,9 @@ function ExportCard({ ui }) {
   }, [ui]);
 
   if (!ui || !['export', 'multi_export'].includes(ui.type)) return null;
-  return <div style={{ marginTop: 9, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12, fontWeight: 600 }}>
-    {status}
+  const downloading = status === 'Preparing download...' || status === 'Downloading...';
+  return <div style={{ marginTop: 9, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12, fontWeight: 600 }} role="status" aria-live="polite">
+    {downloading && <LoaderCircle className="agent-download-spinner" size={13} />}{status}
   </div>;
 }
 

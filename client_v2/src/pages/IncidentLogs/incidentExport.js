@@ -7,12 +7,14 @@ import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-import { fetchDoorStatusLogs, fetchIncidentLogs } from './Api';
+import { fetchDoorStatusLogs, fetchIncidentLogs, getDetectionChannels, getNVRs, getchannels } from './Api';
 import { formatDoorDuration, formatStatus } from './incidentColumns';
 import { doorDurationLabel, doorStatusLabel, isDoorResolved } from './doorIncident';
 import { boxSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingExportValues } from './boxPacking';
 import { drawReportHeader, reportSubtitle, reportTableOptions } from './pdfReportTemplate';
+import { mediaUrl } from '@/lib/format';
+import { fetchIncidents } from '@/helpers/incidents';
 
 const exportSeverityLabel = (severity) => (
   String(severity || '--').toLowerCase() === 'moderate' ? 'Medium' : severity || '--'
@@ -29,19 +31,107 @@ const exportSeverityColor = (severity) => {
   }
 };
 
+// API references are serialized IDs or populated documents with an _id.
+const idKey = (value) => {
+  const id = value?._id ?? value;
+  return typeof id === 'string' ? id.trim().toLowerCase() : '';
+};
+
+const responseList = (response, keys = []) => {
+  const body = response?.data?.body?.data;
+  const nested = body?.data;
+  const candidates = [
+    body,
+    nested,
+    nested?.data,
+    nested?.channels,
+    nested?.cameras,
+    nested?.result,
+    nested?.items,
+    body?.result,
+    body?.items,
+    ...keys.map((key) => body?.[key]),
+    response?.data?.data,
+  ];
+  return candidates.find(Array.isArray) || [];
+};
+
+const flattenChannels = (items) => items.flatMap((item) => {
+  if (!Array.isArray(item?.channels)) return [item];
+  return item.channels.map((channel) => ({
+    ...channel,
+    nvrId: channel?.nvrId || item?.nvrId || item?._id,
+    nvrName: channel?.nvrName || item?.nvrName || item?.name,
+  }));
+});
+
+// Incident foreign keys reference the catalog documents' MongoDB _id.
+const nvrIdOf = (row) => idKey(row?.nvrId);
+const channelIdOf = (row) => idKey(row?.channelId);
+
+const usableDeviceName = (value) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && !['--', '-', 'n/a', 'na', 'unknown', 'undefined', 'null'].includes(text.toLowerCase()) ? text : '';
+};
+
+const nvrNameOf = (row) => [
+  row?.nvrData?.nvrName, row?.nvrId?.nvrName, row?.nvrName,
+].map(usableDeviceName).find(Boolean) || '';
+
+const channelNameOf = (row) => [
+  row?.channelData?.customName, row?.channelData?.name,
+  row?.channelId?.customName, row?.channelId?.name, row?.channelName, row?.cameraName,
+].map(usableDeviceName).find(Boolean) || '';
+
+const enrichDeviceNames = async (rows) => {
+  const needsNvr = rows.some((row) => nvrIdOf(row) && !nvrNameOf(row));
+  const needsCamera = rows.some((row) => channelIdOf(row) && !channelNameOf(row));
+  if (!needsNvr && !needsCamera) return rows;
+  const nvrIds = [...new Set(rows.map(nvrIdOf).filter(Boolean))];
+  const [nvrResponse, initialChannelResponse] = await Promise.all([
+    needsNvr ? getNVRs().catch(() => null) : null,
+    needsCamera ? getchannels(nvrIds.length ? { nvrIds } : {}).catch(() => null) : null,
+  ]);
+  let channels = flattenChannels(responseList(initialChannelResponse, ['channels', 'cameras']));
+  if (needsCamera && !channels.length) {
+    const fallback = await getDetectionChannels({ limit: 10000 }).catch(() => null);
+    channels = flattenChannels(responseList(fallback, ['channels', 'cameras']));
+  }
+
+  const nvrNames = new Map();
+  for (const channel of channels) {
+    const id = idKey(channel.nvrId);
+    const name = usableDeviceName(channel.nvrName);
+    if (id && name) nvrNames.set(id, name);
+  }
+  for (const nvr of responseList(nvrResponse, ['nvrs', 'nvrList'])) {
+    const id = idKey(nvr._id);
+    const name = usableDeviceName(nvr.nvrName);
+    if (id && name) nvrNames.set(id, name);
+  }
+  const channelNames = new Map();
+  for (const channel of channels) {
+    const id = idKey(channel._id);
+    const name = usableDeviceName(channel.customName) || usableDeviceName(channel.name);
+    if (id && name) channelNames.set(id, name);
+  }
+  return rows.map((row) => ({
+    ...row,
+    nvrName: nvrNameOf(row) || nvrNames.get(nvrIdOf(row)),
+    channelName: channelNameOf(row) || channelNames.get(channelIdOf(row)),
+  }));
+};
+
 const resolveIncidentImageUrl = (value) => {
-  if (!value) return '';
-  const image = String(value).trim();
-  if (/^(https?:|data:|blob:)/i.test(image)) return image;
-  return `${import.meta.env.VITE_INCIDENT_URL || ''}${image}`;
+  return mediaUrl(value);
 };
 
 /**
  * Fetch the full (unpaginated) result set for export using the current filters,
  * mapped to the export row shape. Mirrors the V1 EmployeeLogs export.
  */
-const fetchAllForExport = async (config, params) => {
-  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone, posture, observedLayers, peopleCount } = params;
+const loadExportRows = async (config, params) => {
+  const { startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, doorStatus, searchInput, vehicleNumber, zone, posture, observedLayers, peopleCount, boxType, gender } = params;
 
   const query = {
     endpoint: config.endpoint,
@@ -67,12 +157,51 @@ const fetchAllForExport = async (config, params) => {
     posture,
     observedLayers,
     peopleCount,
+    boxType,
   };
 
-  const list = config.showDoorFields && doorStatus
-    ? await fetchDoorStatusLogs({ ...query, doorStatus })
-    : (await fetchIncidentLogs(query))?.data?.body?.data?.data || [];
+  // Gender logs are also present in the main incident feed, whose aggregation
+  // always joins NVR and channel documents. Prefer that shape for this report;
+  // older deployments of the gender-specific endpoint can return only the raw
+  // ids, which is why the previous export showed `--` for both device fields.
+  let list = [];
+  if (config.showGenderAgeFields) {
+    try {
+      const generic = await fetchIncidents(
+        { skip: 0, limit: 10000 },
+        {
+          incidentTypeFilter: ['genderAgeDetection'],
+          statusFilter: ['new', 'resolved', 'reported'],
+          startDate,
+          endDate,
+          ...(gender ? { gender } : {}),
+          ...(zone ? { zone } : {}),
+          ...(nvrIds?.length === 1 ? { nvrId: nvrIds[0] } : {}),
+          ...(channelIds?.length === 1 ? { channelId: channelIds[0] } : {}),
+        },
+      );
+      list = generic?.items || [];
+      if (gender) list = list.filter((item) => String(item?.targetGender || '').toLowerCase() === String(gender).toLowerCase());
+      if (zone) {
+        const selectedZone = String(zone).trim().toLowerCase();
+        list = list.filter((item) => String(item?.zone || item?.zoneName || '').trim().toLowerCase() === selectedZone || `zone ${Number(item?.zoneIdx) + 1}` === selectedZone);
+      }
+    } catch {
+      list = [];
+    }
+  }
+  if (!list.length) {
+    list = config.showDoorFields && doorStatus
+      ? await fetchDoorStatusLogs({ ...query, doorStatus })
+      : (await fetchIncidentLogs(query))?.data?.body?.data?.data || [];
+  }
+  list = await enrichDeviceNames(list);
+  const timezone = params.timezone || params.region || getConfiguredTimezone();
   return list.map((item) => {
+    const incidentDateValue = item.timeOfIncident || item.createdAt;
+    const incidentDate = incidentDateValue ? moment.utc(incidentDateValue).tz(timezone) : null;
+    const targetGender = item.targetGender || item.gender || item.detectedGender || '--';
+    const zoneName = item.zone || item.zoneName || (item.zoneIdx != null ? `Zone ${Number(item.zoneIdx) + 1}` : '--');
     let evidenceScoreStr = '--';
     if (item.evidenceScore != null) {
       const n = Number(item.evidenceScore);
@@ -90,25 +219,27 @@ const fetchAllForExport = async (config, params) => {
         ].filter(Boolean).join(' - ')).join('\n') || item.description || '--',
       } : {}),
       emotion: item.emotion || '--',
-      ...(config.showGenderAgeFields ? { targetGender: item.targetGender || '--', zone: item.zone || '--' } : {}),
+      ...(config.showGenderAgeFields ? { targetGender, zone: zoneName } : {}),
       ...(config.showMachineOpsFields ? { machineName: item.machineName || '--', machineState: item.machineState || '--' } : {}),
-      incidentName: item.incidentName || '--',
-      currentStatus: formatStatus(item.currentStatus || '--', config),
-      nvrName: item.nvrData?.nvrName || '--',
-      channelName: item.channelData?.name || '--',
+      incidentName: item.incidentName || item.eventName || (targetGender !== '--' ? `${targetGender} Detected` : '--'),
+      currentStatus: formatStatus(item.currentStatus || item.status || (item.resolved ? 'Resolved' : 'New'), config),
+      nvrName: nvrNameOf(item) || '--',
+      channelName: channelNameOf(item) || '--',
       door: item.zoneName || item.zone || '--',
       doorStatus: doorStatusLabel(item),
       doorOpenDuration: `${doorDurationLabel(item)}: ${formatDoorDuration(item.durationSec)}`,
       doorDuration: formatDoorDuration(item.durationSec),
       doorDurationLabel: doorDurationLabel(item),
       doorPeriod: item.stateSince
-        ? `${moment.utc(item.stateSince).tz(getConfiguredTimezone()).format('hh:mm A')}${isDoorResolved(item) && (item.timeOfIncident || item.createdAt) ? ` - ${moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('hh:mm A')}` : ''}`
+        ? `${moment.utc(item.stateSince).tz(timezone).format('hh:mm A')}${isDoorResolved(item) && incidentDate ? ` - ${incidentDate.format('hh:mm A')}` : ''}`
         : '--',
       doorAlerts: item.alertCount == null ? '--' : isDoorResolved(item) ? `${item.alertCount} alerts raised` : `Alert ${item.alertCount}`,
-      createdAt: item.timeOfIncident || item.createdAt
-        ? moment.utc(item.timeOfIncident || item.createdAt).tz(getConfiguredTimezone()).format('DD/MM/YYYY hh:mm A')
+      createdAt: incidentDate
+        ? incidentDate.format('DD/MM/YYYY hh:mm A')
         : '--',
-      severity: (config.showLightingFields || config.showHygieneFields || config.showDoorFields) && String(item.severity || '').toLowerCase() === 'moderate' ? 'Medium' : item.severity || '--',
+      incidentDate: incidentDate?.isValid() ? incidentDate.format('DD MMM YYYY') : '--',
+      incidentTime: incidentDate?.isValid() ? incidentDate.format('hh:mm:ss A') : '--',
+      severity: (config.showLightingFields || config.showHygieneFields || config.showDoorFields) && String(item.severity || item.riskLevel || '').toLowerCase() === 'moderate' ? 'Medium' : item.severity || item.riskLevel || item.alertSeverity || '--',
       incidentImageUrl: resolveIncidentImageUrl(item.Image),
       fireCount: item.fireCount ?? '--',
       smokeCount: item.smokeCount ?? '--',
@@ -117,7 +248,7 @@ const fetchAllForExport = async (config, params) => {
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
       description: item.description || '--',
       posture: item.posture || '--',
-      zone: item.zone || '--',
+      zone: zoneName,
       observedLayers: item.observedLayers ?? '--',
       evidenceScore: evidenceScoreStr,
       stockMovement: item.stockMovement || '--',
@@ -135,6 +266,26 @@ const fetchAllForExport = async (config, params) => {
   });
 };
 
+// The links in one Agent report share the same prepared data across formats.
+const preparedReports = new WeakMap();
+const fetchAllForExport = (config, { reportCacheKey, ...params }) => {
+  if (!reportCacheKey) return loadExportRows(config, params);
+  const signature = JSON.stringify([config.endpoint, params]);
+  const cached = preparedReports.get(reportCacheKey);
+  if (cached?.signature === signature && Date.now() < cached.expiresAt) return cached.rows;
+
+  const entry = { signature, expiresAt: Infinity };
+  entry.rows = loadExportRows(config, params).then((rows) => {
+    entry.expiresAt = Date.now() + (rows.length ? 60_000 : 0);
+    return rows;
+  }).catch((error) => {
+    if (preparedReports.get(reportCacheKey) === entry) preparedReports.delete(reportCacheKey);
+    throw error;
+  });
+  preparedReports.set(reportCacheKey, entry);
+  return entry.rows;
+};
+
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
 // only present for log types that carry a current-status value.
 const buildExportColumns = (config) => {
@@ -142,6 +293,22 @@ const buildExportColumns = (config) => {
     const machineColumns = MACHINE_OPS_LOG_FIELDS.filter(field => field.key !== 'snap').map(({ key, label }) => ({ key: key === 'timeOfIncident' ? 'createdAt' : key, label }));
     if (config.showSeverity !== false) machineColumns.push({ key: 'severity', label: 'Severity' });
     return machineColumns;
+  }
+  // Keep Gender & Age exports aligned with the compact report used by the
+  // reference workbook: split date/time fields, a readable incident label,
+  // and a friendly image-link column. CSV uses this same column order.
+  if (config.showGenderAgeFields) {
+    return [
+      { key: 'incidentDate', label: 'Date' },
+      { key: 'incidentTime', label: 'Time' },
+      { key: 'incidentName', label: 'Incident' },
+      { key: 'nvrName', label: 'NVR Name' },
+      { key: 'channelName', label: 'Camera Name' },
+      { key: 'zone', label: 'Zone' },
+      { key: 'severity', label: 'Severity' },
+      { key: 'currentStatus', label: 'Status' },
+      { key: 'targetGender', label: 'Gender' },
+    ];
   }
   const cols = [];
   if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
@@ -256,7 +423,7 @@ const exportToPDF = async (config, params) => {
     });
 
     const cols = buildExportColumns(config);
-    const headers = ['#', ...cols.map((c) => c.label), 'Image'];
+    const headers = [config.showGenderAgeFields ? 'S No' : '#', ...cols.map((c) => c.label), 'Image'];
     const imageColIndex = headers.length - 1;
     const violationsColIndex = cols.findIndex((column) => column.key === 'violations') + 1;
     const tableRows = allLogs.map((row, i) => [i + 1, ...cols.map((c) => row[c.key]), '']);
@@ -592,46 +759,83 @@ const exportToExcel = async (config, params) => {
     }
 
     const cols = buildExportColumns(config);
-    const data = allLogs.map((row, i) => {
-      const rec = { '#': i + 1 };
-      cols.forEach((c) => {
-        rec[c.label] = row[c.key];
-      });
-      rec.Image = '';
-      return rec;
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    worksheet['!cols'] = [{ wch: 6 }, ...cols.map((column) => ({ wch: column.key === 'violations' ? 70 : column.key === 'nvrName' ? 34 : column.key === 'createdAt' ? 23 : 20 })), { wch: 16 }];
-    const imageColIndex = cols.length + 1; // after '#' + all cols
+    const reportTitle = config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs');
+    const headers = [config.showGenderAgeFields ? 'S No' : '#', ...cols.map((column) => column.label), 'Image'];
+    const timezone = params.timezone || params.region || getConfiguredTimezone();
+    const startDate = params.startDate;
+    const endDate = params.endDate;
+    const period = startDate && endDate
+      ? `${moment(startDate).format('DD MMM YYYY')} - ${moment(endDate).format('DD MMM YYYY')}`
+      : 'All dates';
+    const rows = [
+      [`VideoraIQ • ${reportTitle}`],
+      ['Period', period],
+      ['Timezone', timezone],
+      ['Records', `${allLogs.length} incidents`],
+      ['Generated', moment().format('DD MMM YYYY hh:mm A')],
+      [],
+      headers,
+      ...allLogs.map((row, index) => [
+        index + 1,
+        ...cols.map((column) => row[column.key] ?? ''),
+        row.incidentImageUrl ? 'View Image' : '',
+      ]),
+    ];
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const headerRow = 6;
+    const imageColIndex = headers.length - 1;
     const statusColIndex = cols.findIndex((column) => column.key === 'doorStatus') + 1;
     const violationsColIndex = cols.findIndex((column) => column.key === 'violations') + 1;
+    const widthFor = (column) => {
+      if (!column) return 8;
+      if (column.key === 'violations') return 54;
+      if (column.key === 'nvrName') return 24;
+      if (column.key === 'channelName') return 28;
+      if (column.key === 'createdAt') return 24;
+      if (column.key === 'description') return 38;
+      return Math.min(28, Math.max(14, String(column.label || '').length + 4));
+    };
+    worksheet['!cols'] = [8, ...cols.map(widthFor), 16].map((wch) => ({ wch }));
+    worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
+    worksheet['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+    worksheet['!autofilter'] = { ref: `A${headerRow + 1}:${XLSX.utils.encode_col(headers.length - 1)}${rows.length}` };
+    worksheet['!rows'] = [{ hpt: 26 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 8 }, { hpt: 22 }];
 
-    allLogs.forEach((row, i) => {
+    const titleStyle = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 16 }, fill: { patternType: 'solid', fgColor: { rgb: '4F81BD' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+    const headerStyle = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 }, fill: { patternType: 'solid', fgColor: { rgb: '1F4E78' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: { bottom: { style: 'thin', color: { rgb: 'FFFFFF' } } } };
+    for (let column = 0; column < headers.length; column += 1) {
+      const titleCell = worksheet[XLSX.utils.encode_cell({ r: 0, c: column })];
+      if (titleCell) titleCell.s = titleStyle;
+      const headerCell = worksheet[XLSX.utils.encode_cell({ r: headerRow, c: column })];
+      if (headerCell) headerCell.s = headerStyle;
+    }
+    allLogs.forEach((row, index) => {
+      const excelRow = headerRow + 1 + index;
+      for (let column = 0; column < headers.length; column += 1) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: excelRow, c: column })];
+        if (cell) cell.s = { fill: { patternType: 'solid', fgColor: { rgb: index % 2 ? 'F7F9FC' : 'FFFFFF' } }, alignment: { vertical: 'top', wrapText: true }, border: { bottom: { style: 'hair', color: { rgb: 'D9E2F3' } } } };
+      }
       if (violationsColIndex > 0) {
-        const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: violationsColIndex });
-        if (worksheet[cellRef]) worksheet[cellRef].s = { alignment: { wrapText: true, vertical: 'top' } };
+        const cell = worksheet[XLSX.utils.encode_cell({ r: excelRow, c: violationsColIndex })];
+        if (cell) cell.s = { alignment: { wrapText: true, vertical: 'top' } };
       }
       if (config.showDoorFields && statusColIndex > 0) {
-        const statusCellRef = XLSX.utils.encode_cell({ r: i + 1, c: statusColIndex });
-        const statusCell = worksheet[statusCellRef];
+        const statusCell = worksheet[XLSX.utils.encode_cell({ r: excelRow, c: statusColIndex })];
         if (statusCell) {
           const isOpen = String(row.doorStatus || '').toLowerCase() === 'open';
           const resolved = String(row.doorStatus || '').toLowerCase() === 'resolved';
-          statusCell.s = {
-            fill: { patternType: 'solid', fgColor: { rgb: resolved ? 'EDE9FE' : isOpen ? 'FEE2E2' : 'DCFCE7' } },
-            font: { bold: true, color: { rgb: resolved ? '7C3AED' : isOpen ? 'DC2626' : '16A34A' } },
-            alignment: { horizontal: 'center', vertical: 'center' },
-          };
+          statusCell.s = { fill: { patternType: 'solid', fgColor: { rgb: resolved ? 'EDE9FE' : isOpen ? 'FEE2E2' : 'DCFCE7' } }, font: { bold: true, color: { rgb: resolved ? '7C3AED' : isOpen ? 'DC2626' : '16A34A' } }, alignment: { horizontal: 'center', vertical: 'center' } };
         }
       }
       if (row.incidentImageUrl) {
-        const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: imageColIndex });
+        const cellRef = XLSX.utils.encode_cell({ r: excelRow, c: imageColIndex });
+        const target = String(row.incidentImageUrl).replace(/"/g, '""');
         worksheet[cellRef] = {
           t: 's',
           v: 'View Image',
+          f: `HYPERLINK("${target}","View Image")`,
           l: { Target: row.incidentImageUrl, Tooltip: 'Open incident image' },
-          s: { font: { color: { rgb: '0563C1' }, underline: true } },
+          s: { font: { color: { rgb: '0563C1' }, underline: true }, alignment: { horizontal: 'center' } },
         };
       }
     });
@@ -644,9 +848,62 @@ const exportToExcel = async (config, params) => {
   }
 };
 
+const exportToCsv = async (config, params) => {
+  try {
+    const allLogs = await fetchAllForExport(config, params);
+    if (!allLogs.length) {
+      toast.error('No data to export');
+      return;
+    }
+    const cols = buildExportColumns(config);
+    const reportTitle = config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs');
+    const headers = [config.showGenderAgeFields ? 'S No' : '#', ...cols.map((column) => column.label), 'Image'];
+    const timezone = params.timezone || params.region || getConfiguredTimezone();
+    const period = params.startDate && params.endDate
+      ? `${moment(params.startDate).format('DD MMM YYYY')} - ${moment(params.endDate).format('DD MMM YYYY')}`
+      : 'All dates';
+    const escapeCsv = (value) => {
+      const text = String(value ?? '');
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const imageLinkFormula = (url) => url
+      ? `=HYPERLINK("${String(url).replace(/"/g, '""')}","View Image")`
+      : '';
+    const metadata = [
+      [`VideoraIQ • ${reportTitle}`],
+      ['Period', period],
+      ['Timezone', timezone],
+      ['Records', `${allLogs.length} incidents`],
+      ['Generated', moment().format('DD MMM YYYY hh:mm A')],
+      [],
+    ];
+    const lines = [
+      ...metadata.map((row) => row.map(escapeCsv).join(',')),
+      headers.map(escapeCsv).join(','),
+      ...allLogs.map((row, index) => [
+        index + 1,
+        ...cols.map((column) => row[column.key] ?? ''),
+        imageLinkFormula(row.incidentImageUrl),
+      ].map(escapeCsv).join(',')),
+    ];
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${config.fileName || 'incident_logs'}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    toast.error('Failed to export CSV');
+  }
+};
+
 /** Entry point used by the page's Export buttons. */
 export const handleIncidentExport = async (format, config, params) => {
   if (format === 'excel') await exportToExcel(config, params);
   if (format === 'pdf') await exportToPDF(config, params);
+  if (format === 'csv') await exportToCsv(config, params);
   if (format === 'pdf-grid') await exportToGridPDF(config, params);
 };

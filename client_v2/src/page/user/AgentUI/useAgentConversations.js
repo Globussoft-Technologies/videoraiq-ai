@@ -27,8 +27,10 @@ function publicError(error) {
   return 'The agent is unavailable. Try again later.';
 }
 
-function runMessages(run) {
+function runMessages(run, autoDownloadRunId = null) {
   const id = run.id || run.run_id;
+  // Match the optimistic message keys so refreshing the result preserves both bubbles.
+  const messageKey = run.request_id || run.requestId || id;
   const at = timestamp(run.created_at || run.createdAt);
   const report = run.result?.report;
   const answer = report?.answer || run.result?.message || '';
@@ -44,6 +46,10 @@ function runMessages(run) {
     cancelled: 'Cancelled. Nothing was changed.',
   }[run.status];
   const actionResult = run.result?.action_result;
+  const exportUi = run.result?.ui || run.result?.data?.ui || run.result?.result?.ui;
+  const ui = exportUi && ['export', 'multi_export'].includes(exportUi.type)
+    ? { ...exportUi, autoDownload: autoDownloadRunId === id }
+    : exportUi;
   const zoneAction = run.actions?.find((action) => action.kind === 'zone' && action.status !== 'cancelled');
   const zonePreviewActionId = zoneAction?.actionId || zoneAction?.action_id
     || (actionResult?.kind === 'zone' ? actionResult.actionId || actionResult.action_id : null)
@@ -54,12 +60,12 @@ function runMessages(run) {
     .map((target) => [target.label || target.cameraName || target.channelId, target.message || target.result?.message || target.errorCode || target.result?.errorCode].filter(Boolean).join(': '));
   const text = [answer, statusText, ...failures].filter(Boolean).join('\n\n');
   return [
-    { id: `${id}-user`, role: 'user', text: run.message || '', at },
-...(text || report || actionResult || locks.has(run.status) || run.result?.errorCode ? [{ id: `${id}-agent`, role: 'assistant', text: errorText ? '' : text, at, report, sources: run.result?.sources || [], proposal: run.result?.proposal, actionResult, zonePreviewActionId, status: run.status, missingProposal, runId: id, errorCode: run.result?.errorCode, errorMessage: errorText, error: run.status === 'failed', recoverableRunId: run.status === 'recoverable' ? id : null }] : []),
+    { id: `${messageKey}-user`, role: 'user', text: run.message || '', at },
+...(text || report || actionResult || ui || locks.has(run.status) || run.result?.errorCode ? [{ id: `${messageKey}-agent`, role: 'assistant', text: errorText ? '' : text, at, report, sources: run.result?.sources || [], proposal: run.result?.proposal, actionResult, ui, zonePreviewActionId, status: run.status, missingProposal, runId: id, errorCode: run.result?.errorCode, errorMessage: errorText, error: run.status === 'failed', recoverableRunId: run.status === 'recoverable' ? id : null }] : []),
   ];
 }
 
-const toMessages = (conversation) => (conversation?.runs || []).flatMap(runMessages);
+const toMessages = (conversation, autoDownloadRunId = null) => (conversation?.runs || []).flatMap((run) => runMessages(run, autoDownloadRunId));
 const toConversation = (item) => ({
   id: item.id || item.conversation_id,
   title: item.runs?.[0]?.message?.slice(0, 50) || item.first_message?.slice?.(0, 50) || 'New chat',
@@ -213,27 +219,27 @@ export function useAgentConversations() {
       if (document.hidden) { await new Promise((resolve) => setTimeout(resolve, 5000)); continue; }
       try {
         const run = await agentApi.run(runId);
-        showMessages(conversationId, (messageCache.current.get(conversationId) || []).map((entry) => entry.runId === runId ? { ...entry, status: run.status, proposal: run.result?.proposal || entry.proposal, actionResult: run.result?.action_result || entry.actionResult } : entry));
-        if (selected.current === conversationId) setLockReason({ queued: 'The agent is working…', running: 'The agent is working…', verification_pending: 'Verifying the last change…' }[run.status] || '');
         if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+        if (running(run.status) || run.status === 'verification_pending') {
+          showMessages(conversationId, (messageCache.current.get(conversationId) || []).map((entry) => entry.runId === runId ? { ...entry, status: run.status, proposal: run.result?.proposal || entry.proposal, actionResult: run.result?.action_result || entry.actionResult } : entry));
+          if (selected.current === conversationId) setLockReason(run.status === 'verification_pending' ? 'Verifying the last change…' : 'The agent is working…');
+        }
         if (run.status === 'approval_required') {
-          syncApproval(conversationId, run, detailCache.current.get(conversationId)?.timezone);
+          const detail = await agentApi.get(conversationId);
+          if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+          detailCache.current.set(conversationId, detail);
+          showMessages(conversationId, toMessages(detail));
+          syncApproval(conversationId, run, detail.timezone);
           pendingRuns.current.delete(conversationId);
           showSending(conversationId);
           if (selected.current === conversationId) setLockReason('Approve or cancel the pending proposal to continue');
-          agentApi.get(conversationId).then((detail) => {
-            if (!mountedRef.current) return;
-            detailCache.current.set(conversationId, detail);
-            showMessages(conversationId, toMessages(detail));
-            syncApproval(conversationId, run, detail.timezone);
-          }).catch(() => {});
           return;
         }
         if (!running(run.status) && run.status !== 'verification_pending') {
           const detail = await agentApi.get(conversationId);
           if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
           detailCache.current.set(conversationId, detail);
-          const next = toMessages(detail);
+          const next = toMessages(detail, runId);
           showMessages(conversationId, next);
           syncApproval(conversationId, run, detail.timezone);
           setConversations((current) => current.map((item) => item.id === conversationId ? { ...item, messageCount: next.length } : item));
@@ -425,11 +431,17 @@ export function useAgentConversations() {
       sendingChats.current.delete(chatKey);
       sendingChats.current.add(id);
       showSending(id);
-      showMessages(id, [...(messageCache.current.get(id) || toMessages(detailCache.current.get(id))), { id: `${key}-user`, role: 'user', text: message, at: new Date().toISOString(), uncertain: true }]);
+      const at = new Date().toISOString();
+      showMessages(id, [
+        ...(messageCache.current.get(id) || toMessages(detailCache.current.get(id))),
+        { id: `${key}-user`, role: 'user', text: message, at, uncertain: true },
+        { id: `${key}-agent`, role: 'assistant', text: '', status: 'queued', at },
+      ]);
       let accepted;
       try { accepted = await agentApi.send(id, message, key); }
       catch (error) {
         if (error.response && error.response.status < 500 && error.response.status !== 504) throw error;
+        showMessages(id, (messageCache.current.get(id) || []).filter((entry) => entry.id !== `${key}-agent`));
         uncertainRef.current = { conversationId: id, message, requestId: key };
         setUncertain(uncertainRef.current);
         showSending(id);
@@ -441,12 +453,12 @@ export function useAgentConversations() {
         const now = new Date().toISOString();
         return [{ ...existing, id, title: existing?.title && existing.title !== 'New chat' ? existing.title : message.slice(0, 50), preview: message, messageCount: (existing?.messageCount ?? 0) + 1, createdAt: existing?.createdAt || now, updatedAt: now, lastActivityAt: now }, ...current.filter((item) => item.id !== id)];
       });
-      showMessages(id, [...(messageCache.current.get(id) || []).filter((entry) => entry.id !== `${key}-agent`), { id: `${key}-agent`, role: 'assistant', text: '', status: 'queued', runId: accepted.run_id, at: new Date().toISOString() }]);
+      showMessages(id, (messageCache.current.get(id) || []).map((entry) => entry.id === `${key}-agent` ? { ...entry, runId: accepted.run_id } : entry));
       follow(accepted.run_id, id);
       return accepted;
     } catch (error) {
       const message = publicError(error);
-      if (id) showMessages(id, [...(messageCache.current.get(id) || []).filter((entry) => entry.id !== `${key}-user`), { id: `${key}-error`, role: 'assistant', text: message, at: new Date().toISOString(), error: true }]);
+      if (id) showMessages(id, [...(messageCache.current.get(id) || []).filter((entry) => entry.id !== `${key}-user` && entry.id !== `${key}-agent`), { id: `${key}-error`, role: 'assistant', text: message, at: new Date().toISOString(), error: true }]);
       throw new Error(message);
     } finally {
       sendingChats.current.delete(chatKey);

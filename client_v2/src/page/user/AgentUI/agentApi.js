@@ -16,6 +16,14 @@ export const agentApi = {
   recover: (id) => api.post(endpoint(`/runs/${encodeURIComponent(id)}/recover`)).then(data),
   decision: (id, proposal) => api.post(endpoint(`/actions/${encodeURIComponent(id)}/decision`), proposal).then(data),
   preview: (id) => api.get(endpoint(`/actions/${encodeURIComponent(id)}/preview`), { responseType: 'blob' }).then(data),
+  reportFile: (reportId, fileName, { onProgress } = {}) => api.get(endpoint(`/reports/${encodeURIComponent(reportId)}/${encodeURIComponent(fileName)}`), {
+    responseType: 'blob',
+    onDownloadProgress: (event) => onProgress?.({
+      phase: 'downloading',
+      loadedBytes: event.loaded,
+      totalBytes: event.total || 0,
+    }),
+  }).then((response) => response.data),
   capabilities: (signal) => api.get(endpoint('/capabilities'), { signal }).then(data),
   events: (id, after, signal) => api.get(endpoint(`/runs/${encodeURIComponent(id)}/events`), {
     params: { after }, responseType: 'text', headers: { Accept: 'text/event-stream' }, signal,
