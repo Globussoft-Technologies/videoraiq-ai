@@ -4,12 +4,13 @@
  * that injects `req.verified.userData` (the decoded JWT), the only thing the
  * routes read from it.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { connectMongo, disconnectMongo, clearCollections } from "../integration/dbSetup.js";
 import pushTokensRoutes from "../../core/v2/pushTokens/pushTokens.routes.js";
 import PushToken from "../../core/v2/pushTokens/pushTokens.model.js";
+import logger from "../../utils/logger.js";
 
 const appAs = (userData) => {
   const app = express();
@@ -32,6 +33,26 @@ afterAll(disconnectMongo);
 beforeEach(clearCollections);
 
 describe("POST /api/v2/push-tokens/register", () => {
+  it("logs a successful iOS registration without its FCM token", async () => {
+    const log = vi.spyOn(logger, "info");
+    try {
+      const res = await request(admin).post("/api/v2/push-tokens/register").send({ token: TOKEN, platform: "ios" });
+      expect(res.status).toBe(200);
+      expect(log).toHaveBeenCalledWith("[PUSH] token registered", { adminId: "admin-A", platform: "ios" });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN);
+    } finally { log.mockRestore(); }
+  });
+  it.each(["register", "unregister"])("keeps database errors in %s from exposing the device token", async operation => {
+    const modelMethod = operation === "register" ? "findOneAndUpdate" : "deleteOne";
+    const failure = vi.spyOn(PushToken, modelMethod).mockRejectedValueOnce(Object.assign(new Error(`Database failure with ${TOKEN}`), { code: 11000 }));
+    const log = vi.spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      const res = await request(admin).post(`/api/v2/push-tokens/${operation}`).send({ token: TOKEN, platform: "ios" });
+      expect(res.status).toBe(500);
+      expect(JSON.stringify([res.body, log.mock.calls])).not.toContain(TOKEN);
+      expect(log).toHaveBeenCalledWith(`[PUSH] ${operation} token failed`, expect.objectContaining({ code: 11000 }));
+    } finally { failure.mockRestore(); log.mockRestore(); }
+  });
   it.each(["android", "ios", "web"])("stores a %s token under the caller's tenant", async (platform) => {
     const res = await request(admin).post("/api/v2/push-tokens/register").send({ token: TOKEN, platform });
     expect(res.status).toBe(200);

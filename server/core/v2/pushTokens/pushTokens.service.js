@@ -28,10 +28,11 @@ class PushTokensService {
         },
         { upsert: true, setDefaultsOnInsert: true },
       );
+      logger.info("[PUSH] token registered", { adminId: String(adminId), platform: value.platform });
       return res.status(200).json(Response.userSuccessResp("Push token registered", { platform: value.platform }));
     } catch (err) {
-      logger.error(`[PUSH] register token failed: ${err.message}`);
-      return res.status(500).json(Response.errorResp("Failed to register push token", err.message));
+      logger.error("[PUSH] register token failed", { code: err.code || "PUSH_TOKEN_REGISTER_FAILED", name: err.name });
+      return res.status(500).json(Response.errorResp("Failed to register push token"));
     }
   }
 
@@ -45,8 +46,8 @@ class PushTokensService {
       await PushToken.deleteOne({ token: value, adminId: String(adminId) });
       return res.status(200).json(Response.userSuccessResp("Push token removed", {}));
     } catch (err) {
-      logger.error(`[PUSH] unregister token failed: ${err.message}`);
-      return res.status(500).json(Response.errorResp("Failed to remove push token", err.message));
+      logger.error("[PUSH] unregister token failed", { code: err.code || "PUSH_TOKEN_UNREGISTER_FAILED", name: err.name });
+      return res.status(500).json(Response.errorResp("Failed to remove push token"));
     }
   }
 }

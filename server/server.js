@@ -20,6 +20,7 @@ import sanitizeInput from "./middlewares/xssSanitizer.js";
 import globalErrorHandler from "./middlewares/errorMiddleware.js";
 import routes from "./routes/index.js";
 import { connectDB } from "./utils/database.js";
+import { initializePushMessaging } from "./services/push.service.js";
 import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import attendanceSwaggerRouter from './views/attendanceSwagger.routes.js';
@@ -196,6 +197,7 @@ app.use(globalErrorHandler);
 const startServer = async () => {
   try {
     await connectDB();
+    initializePushMessaging();
 
     // Publish this backend's DETECTION_TYPES into the shared catalog collection
     // so server-superadmin lists exactly what we support instead of its own

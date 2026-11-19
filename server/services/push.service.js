@@ -38,7 +38,7 @@ function getMessagingOrNull() {
     (config.has("Firebase.serviceAccountPath") ? config.get("Firebase.serviceAccountPath") : "");
 
   if (!path) {
-    logger.warn("[PUSH] Firebase not configured (Firebase.serviceAccountPath) — incident push notifications disabled");
+    logger.warn("[PUSH] Firebase not configured (FIREBASE_SERVICE_ACCOUNT_PATH or Firebase.serviceAccountPath) — incident push notifications disabled");
     messaging = null;
     return messaging;
   }
@@ -48,10 +48,14 @@ function getMessagingOrNull() {
     messaging = getMessaging(initializeApp({ credential: cert(serviceAccount) }, "push"));
     logger.info(`[PUSH] Firebase messaging ready (project ${serviceAccount.project_id})`);
   } catch (error) {
-    logger.error(`[PUSH] Firebase init failed, push disabled: ${error.message}`);
+    logger.error("[PUSH] Firebase init failed, push disabled; check the service-account path and JSON", { code: error.code || "FIREBASE_INIT_FAILED", name: error.name });
     messaging = null;
   }
   return messaging;
+}
+
+export function initializePushMessaging() {
+  return getMessagingOrNull() !== null;
 }
 
 // "loiteringDetection" -> "Loitering Detection" (same idea as the web toast's
@@ -143,13 +147,27 @@ export function buildIncidentMessage(incident, timezone = "Asia/Kolkata", nvr = 
  */
 export async function sendIncidentPush({ admin, incident }) {
   const adminId = admin?._id;
+  const context = { incidentId: String(incident?._id ?? ""), adminId: adminId ? String(adminId) : null };
   try {
-    if (!adminId || admin.pushAlertsEnabled === false) return;
+    if (!adminId) {
+      logger.warn("[PUSH] incident skipped", { ...context, reason: "missing_admin" });
+      return;
+    }
+    if (admin.pushAlertsEnabled === false) {
+      logger.info("[PUSH] incident skipped", { ...context, reason: "admin_push_disabled" });
+      return;
+    }
     const fcm = getMessagingOrNull();
-    if (!fcm) return;
+    if (!fcm) {
+      logger.warn("[PUSH] incident skipped", { ...context, reason: "firebase_unavailable" });
+      return;
+    }
 
-    const rows = await PushToken.find({ adminId: String(adminId) }).select("token").lean();
-    if (!rows.length) return;
+    const rows = await PushToken.find({ adminId: String(adminId) }).select("token platform").lean();
+    if (!rows.length) {
+      logger.info("[PUSH] incident skipped", { ...context, reason: "no_registered_tokens" });
+      return;
+    }
 
     // NVR name + site for the body; a failed lookup just leaves them out.
     const nvr = incident?.nvrId
@@ -166,13 +184,13 @@ export async function sendIncidentPush({ admin, incident }) {
       result.responses.forEach((r, idx) => {
         if (r.success) return;
         if (STALE_TOKEN_ERRORS.has(r.error?.code)) stale.push(tokens[idx]);
-        else logger.warn(`[PUSH] send failed (${r.error?.code}): ${r.error?.message}`);
+        logger.warn(`[PUSH] send failed (${r.error?.code || "unknown"})`, { ...context, platform: rows[i + idx]?.platform || "unknown", stale: STALE_TOKEN_ERRORS.has(r.error?.code) });
       });
     }
 
     if (stale.length) await PushToken.deleteMany({ token: { $in: stale } });
     logger.info(`[PUSH] incident ${message.data.incidentId} -> ${delivered}/${rows.length} devices, ${stale.length} stale removed`);
   } catch (error) {
-    logger.error(`[PUSH] incident push failed for admin ${adminId}: ${error.message}`);
+    logger.error("[PUSH] incident push failed", { ...context, code: error.code || "PUSH_FAILED", name: error.name });
   }
 }
