@@ -166,6 +166,31 @@ router.post('/actions/:aid/decision', checkIds, (req, res) => {
   return forward(req, res, 'POST', `/agent/actions/${req.params.aid}/decision`, { decision, proposalVersion, digest });
 });
 router.get('/capabilities', (req, res) => forward(req, res, 'GET', '/agent/capabilities'));
+router.get('/reports/:reportId/:fileName', async (req, res) => {
+  const reportId = String(req.params.reportId || '');
+  const fileName = String(req.params.fileName || '');
+  if (!/^[a-f0-9]{32}$/i.test(reportId) || !/^[a-z0-9][a-z0-9._-]{0,120}\.(pdf|xlsx|csv)$/i.test(fileName)) {
+    return error(res, 404, 'ROUTE_NOT_ALLOWED', 'Invalid report path.');
+  }
+  try {
+    const send = () => fetch(`${res.locals.agentChat.baseUrl}/agent/reports/${reportId}/${encodeURIComponent(fileName)}`, {
+      headers: { ...gatewayHeaders(), Authorization: `Bearer ${res.locals.agentChat.session}` },
+      signal: AbortSignal.timeout(timeout('DETECTION_AGENT_TIMEOUT_MS', 25_000)),
+    });
+    let upstream = await send();
+    if (upstream.status === 401) {
+      res.locals.agentChat.session = await agentSession(res.locals.agentChat.token, res.locals.agentChat.baseUrl, true);
+      upstream = await send();
+    }
+    if (!upstream.ok) return agentError(res, upstream);
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const headers = { 'Cache-Control': 'no-store', 'Content-Type': contentType };
+    const disposition = upstream.headers.get('content-disposition');
+    if (disposition) headers['Content-Disposition'] = disposition;
+    headers['X-Content-Type-Options'] = 'nosniff';
+    return res.status(200).set(headers).send(Buffer.from(await upstream.arrayBuffer()));
+  } catch { return error(res, 502, 'AGENT_UNAVAILABLE', 'The report is unavailable.'); }
+});
 router.get('/actions/:aid/preview', checkIds, async (req, res) => {
   try {
     const send = () => fetch(`${res.locals.agentChat.baseUrl}/agent/actions/${req.params.aid}/preview`, {
