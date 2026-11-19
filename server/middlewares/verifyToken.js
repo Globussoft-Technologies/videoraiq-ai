@@ -19,7 +19,7 @@ let jwtSecret = config.get("jwt.secretKey");
 
 const AGENT_READ_POST = [
   /^\/api\/v2\/(?:attendance\/(?:get|user-logs)|accessLogs\/(?:getAccessLogs|getUserSessionReport)|authorizedChannels\/(?:fetchChannels|getChannels|locations)|authorizedUsers\/fetch|dashboard\/headerStats|incidents\/?|users\/fetch|roles\/get|locations\/fetch|departments\/get|recipients\/fetch|agent-data\/analytics\/query|channel\/playback-url)\/?$/,
-  /^\/api\/v2\/(?:incidents\/logs\/(?:vehicle-check-in-out|guard-sleeping)|attendance\/export)\/?$/,
+  /^\/api\/v2\/(?:incidents\/logs\/(?:vehicle-check-in-out|guard-sleeping|desk-absence)|attendance\/export)\/?$/,
 ];
 const AGENT_READ_GET = [
   /^\/api\/v2\/admin\/(?:allowed-detections|timezone)\/?$/,
@@ -34,6 +34,7 @@ const AGENT_READ_GET = [
   /^\/api\/v2\/detection-settings(?:\/[^/]+(?:\/schedule(?:\/[^/]+)?)?)?\/?$/,
   /^\/api\/v2\/incidents\/(?:getIncident|logs\/[^/]+(?:\/[^/]+){0,2})\/?$/,
   /^\/api\/v2\/permissions\/user-permissions\/?$/,
+  /^\/api\/v2\/recipients\/fetch\/?$/,
   /^\/api\/v2\/shifts(?:\/[^/]+)?\/?$/,
   /^\/api\/v2\/uploads\/[^?]+$/,
 ];
