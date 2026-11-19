@@ -39,6 +39,13 @@ import {
 
 const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
 
+const limitSearchCharacters = (value, limit) => {
+  const characters = typeof Intl.Segmenter === 'function'
+    ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value), ({ segment }) => segment)
+    : Array.from(value);
+  return characters.slice(0, limit).join('');
+};
+
 const incidentImageUrl = (value) => {
   if (!value) return null;
   const image = String(value).trim();
@@ -846,7 +853,10 @@ const IncidentLogsPage = ({ config }) => {
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
         searchKeys={config.showBoxPackingFields ? ['boxId', 'completedBy', 'packingZone', 'endTimeSource', 'detectedVia', 'confirmationReason', 'nvrName', 'channelName', 'createdAt'] : ['incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
         searchQuery={searchInput}
-        onSearchChange={(v) => dispatch({ type: 'SET_SEARCH_INPUT', value: v })}
+        onSearchChange={(v) => dispatch({
+          type: 'SET_SEARCH_INPUT',
+          value: config.showGenderAgeFields ? limitSearchCharacters(v, 50) : v,
+        })}
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}

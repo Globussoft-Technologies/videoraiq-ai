@@ -7,6 +7,7 @@ import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { updateIncidentReportStatus, updateIncidentResolved } from '../../../helpers/monitoring';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import ConfirmationModal from '../../../components/DeleteConfirmation';
 
 function btnStyle(variant) {
   const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
@@ -201,6 +202,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [resolveTarget, setResolveTarget] = useState(null);
   const [resolvedIncidentId, setResolvedIncidentId] = useState(null);
 
   const imgSrc = incident?.Image ? mediaUrl(incident.Image) : null;
@@ -219,11 +221,12 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       : { label: 'New', color: 'var(--crit)' };
 
   async function resolveIncident() {
-    if (!activeIncidentId || activeResolved) return;
+    if (!resolveTarget || busy) return;
     setBusy(true);
     try {
-      await updateIncidentResolved({ incidentId: activeIncidentId, incidentType: incident?.incidentType, resolved: true });
-      setResolvedIncidentId(activeIncidentId);
+      await updateIncidentResolved({ incidentId: resolveTarget.id, incidentType: resolveTarget.incidentType, resolved: true });
+      setResolvedIncidentId(resolveTarget.id);
+      setResolveTarget(null);
       toast.success('Incident resolved');
       onChanged?.();
     } catch (e) {
@@ -255,7 +258,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
                   {incident?.channelData?.name || 'No snapshot'}
                 </div>
               )}
-              <div style={{ position: 'absolute', top: 9, left: 10 }}>
+              <div style={{ position: 'absolute', top: 25, left: 10 }}>
                 <Badge color={sev.color} solid>{det}</Badge>
               </div>
               <div style={{ position: 'absolute', top: 9, right: 10 }}>
@@ -309,7 +312,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
               </div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div
-                  onClick={busy || activeResolved ? undefined : resolveIncident}
+                  onClick={busy || activeResolved ? undefined : () => setResolveTarget({ id: activeIncidentId, incidentType: incident?.incidentType, name: incident?.incidentName || det })}
                   aria-disabled={busy || activeResolved}
                   style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 8, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
                 >
@@ -335,6 +338,17 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
           onSuccess={onChanged}
         />
       )}
+      <ConfirmationModal
+        open={!!resolveTarget}
+        title="Resolve incident?"
+        message={resolveTarget && <>Mark <strong>{resolveTarget.name}</strong> as resolved?</>}
+        confirmLabel="Resolve incident"
+        cancelLabel="Cancel"
+        onClose={() => !busy && setResolveTarget(null)}
+        onConfirm={resolveIncident}
+        loading={busy}
+        confirmClass="bg-[var(--blue)] text-white hover:opacity-90 shadow-sm shadow-[var(--blue)]/20"
+      />
     </Panel>
   );
 }

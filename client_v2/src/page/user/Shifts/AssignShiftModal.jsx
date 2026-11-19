@@ -28,6 +28,12 @@ import {
 
 const labelClass = 'text-xs text-[var(--tx2)] mb-1 ml-1 block';
 const EMPLOYEE_PAGE_SIZE = 5000;
+const ALL_LOCATIONS = '__all_locations__';
+const ALL_DEPARTMENTS = '__all_departments__';
+
+const selectScope = (values, allOption, previous) => values.includes(allOption)
+  ? previous.includes(allOption) ? values.filter((value) => value !== allOption) : [allOption]
+  : values;
 
 /** Small labelled switch — the modal needs three and there is no shared one. */
 const Toggle = ({ checked, onChange, label, hint }) => (
@@ -108,10 +114,13 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   const [matchingEmployeesLoading, setMatchingEmployeesLoading] = useState(false);
 
   const individual = mode === 'individual';
+  const scopeSelected = locations.length > 0 && departmentIds.length > 0;
+  const selectedLocations = useMemo(() => locations.filter((location) => location !== ALL_LOCATIONS), [locations]);
+  const selectedDepartments = useMemo(() => departmentIds.filter((department) => department !== ALL_DEPARTMENTS), [departmentIds]);
   const todayDate = moment().format('YYYY-MM-DD');
   const hasFilter = individual
     ? employeeIds.length > 0
-    : locations.length > 0 || departmentIds.length > 0;
+    : selectedLocations.length > 0 || selectedDepartments.length > 0;
   const dated = individual && Boolean(effectiveFrom);
   const startDateInvalid = dated && effectiveFrom < todayDate;
   const dateRangeInvalid = dated && effectiveTo && effectiveTo < effectiveFrom;
@@ -125,15 +134,15 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     Boolean(selectedShiftId) &&
     !startDateInvalid &&
     !dateRangeInvalid &&
-    (hasFilter || removedEmployeeIds.length > 0 || (!individual && allEmployees));
+    (individual ? hasFilter || removedEmployeeIds.length > 0 : scopeSelected && (hasFilter || allEmployees));
 
   const filters = useMemo(
     () =>
       individual
         ? { employeeIds, overwriteExisting: true, includeSuspended: true }
         : {
-            ...(locations.length ? { locations } : {}),
-            ...(departmentIds.length ? { departmentIds } : {}),
+            ...(selectedLocations.length ? { locations: selectedLocations } : {}),
+            ...(selectedDepartments.length ? { departmentIds: selectedDepartments } : {}),
             allEmployees,
             overwriteExisting,
             includeSuspended,
@@ -141,8 +150,8 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     [
       individual,
       employeeIds,
-      locations,
-      departmentIds,
+      selectedLocations,
+      selectedDepartments,
       allEmployees,
       overwriteExisting,
       includeSuspended,
@@ -332,6 +341,10 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   ]);
 
   const runPreview = useCallback(async () => {
+    if (!individual && !scopeSelected) {
+      setPreview(null);
+      return;
+    }
     setPreviewing(true);
     try {
       const res = await previewAssignment({ ...filters, limit: 8 });
@@ -341,7 +354,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     } finally {
       setPreviewing(false);
     }
-  }, [filters]);
+  }, [filters, individual, scopeSelected]);
 
   useEffect(() => {
     if (!open || individual || !showMatchingEmployees) return undefined;
@@ -666,10 +679,10 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                     Location
                   </label>
                   <MultiSelect
-                    options={locationOptions}
+                    options={[{ id: ALL_LOCATIONS, label: 'All locations' }, ...locationOptions]}
                     value={locations}
-                    onChange={setLocations}
-                    placeholder="All locations"
+                    onChange={(values) => setLocations(selectScope(values, ALL_LOCATIONS, locations))}
+                    placeholder="Select location"
                     searchPlaceholder="Search locations…"
                     msg="No locations"
                     tint="#22d3ee"
@@ -681,10 +694,10 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                     Department
                   </label>
                   <MultiSelect
-                    options={departmentOptions}
+                    options={[{ id: ALL_DEPARTMENTS, label: 'All departments' }, ...departmentOptions]}
                     value={departmentIds}
-                    onChange={setDepartmentIds}
-                    placeholder="All departments"
+                    onChange={(values) => setDepartmentIds(selectScope(values, ALL_DEPARTMENTS, departmentIds))}
+                    placeholder="Select department"
                     searchPlaceholder="Search departments…"
                     msg="No departments"
                     tint="#a855f7"
@@ -699,12 +712,12 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
               )}
 
               <div className="space-y-2">
-                {!hasFilter && (
+                {scopeSelected && !hasFilter && (
                   <Toggle
                     checked={allEmployees}
                     onChange={setAllEmployees}
                     label="Assign to every employee"
-                    hint="Required while no location or department is selected."
+                    hint="Required when All locations and All departments are selected."
                   />
                 )}
                 <Toggle
@@ -798,6 +811,12 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                   </div>
                 )}
               </>
+            )}
+
+            {!individual && !scopeSelected && (
+              <div className="text-[11px] text-[var(--tx3)] mt-2">
+                Select a location and department to preview matching employees.
+              </div>
             )}
 
             {!previewing && preview?.matched === 0 && (

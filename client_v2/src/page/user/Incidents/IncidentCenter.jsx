@@ -1716,7 +1716,7 @@ export default function IncidentCenter() {
   const [statusSet,  setStatusSet]  = useState(() => new Set(initialStatusFilter ? [initialStatusFilter] : []));
   const [dateFrom,   setDateFrom]   = useState(() => initialAllTime ? '' : initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
   const [dateTo,     setDateTo]     = useState(() => initialAllTime ? '' : initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
-  const [nvrIds,     setNvrIds]     = useState([]);
+  const [nvrIds,     setNvrIds]     = useState(() => location.state?.nvrId ? [location.state.nvrId] : []);
   const [channelIds, setChannelIds] = useState([]);
   const [deptIds,    setDeptIds]    = useState([]);
   const [locIds,     setLocIds]     = useState([]);

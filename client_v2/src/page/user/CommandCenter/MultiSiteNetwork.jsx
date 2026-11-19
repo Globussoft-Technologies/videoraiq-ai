@@ -405,6 +405,7 @@ export default function MultiSiteNetwork({
           </svg>
 
           {nodes.map((node) => {
+            const openNvrIncidents = () => navigate('/incidents', { state: { nvrId: node.id, allTime: true } });
             const openLeft = node.x >= 45;
             const labelLeft = node.x <= 74;
             // Only scroll once there's enough to actually need it — under that,
@@ -479,13 +480,13 @@ export default function MultiSiteNetwork({
               />
               <div
                 className="vq-msn-node-label"
-                onClick={() => navigate('/incidents')}
+                onClick={openNvrIncidents}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    navigate('/incidents');
+                    openNvrIncidents();
                   }
                 }}
                 style={{
