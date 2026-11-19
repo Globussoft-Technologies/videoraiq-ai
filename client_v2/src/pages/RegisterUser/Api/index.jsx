@@ -8,6 +8,17 @@ const authHeaders = (extra = {}) => ({
   ...extra,
 });
 
+// An invitation has its own lifetime and may belong to a different account
+// from the browser session. Keep the link token on the request.
+const registrationRequest = (linkToken, headers = {}) => linkToken
+  ? {
+      headers: { ...headers, 'x-access-token': linkToken },
+      skipAuthRefresh: true,
+      skipSessionRedirect: true,
+      dropdownCache: false,
+    }
+  : { headers: authHeaders(headers) };
+
 /* ─────────────── Authorized users (employees) ─────────────── */
 
 /** Paginated employee list with optional location/department/verification filters. */
@@ -30,10 +41,8 @@ export const authorizedUsers = async (skip = 0, limit = 10, search = '', data = 
  * Create an authorized user with profile images. `payload` is FormData;
  * Content-Type is intentionally omitted so the browser sets the multipart boundary.
  */
-export const createAuthorizedUser = async (payload, token) => {
-  const response = await axios.post(`${Api_url}/authorizedUsers/create`, payload, {
-    headers: { 'x-access-token': token || getAccessToken() },
-  });
+export const createAuthorizedUser = async (payload, linkToken) => {
+  const response = await axios.post(`${Api_url}/authorizedUsers/create`, payload, registrationRequest(linkToken));
   return response.data;
 };
 
@@ -116,9 +125,7 @@ export const terminateRegistrationLink = async () => {
 
 /** Confirm that a public registration token is still active and has not been revoked. */
 export const validateRegistrationLink = async (token) => {
-  const response = await axios.get(`${Api_url}/auth/registration-link/validate`, {
-    headers: { 'x-access-token': token },
-  });
+  const response = await axios.get(`${Api_url}/auth/registration-link/validate`, registrationRequest(token));
   return response?.data;
 };
 
@@ -133,7 +140,7 @@ export const fetchDepartments = async (skip = 0, limit = 100, search = '', token
   return axios.post(
     `${Api_url}/departments/get`,
     { skip, limit, search },
-    { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
+    registrationRequest(token, { 'Content-Type': 'application/json' })
   );
 };
 
@@ -144,7 +151,7 @@ export const getEmployeeLocations = async (token) => {
   return axios.post(
     `${Api_url}/locations/employee-location?skip=0&limit=1000`,
     {},
-    { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
+    registrationRequest(token, { 'Content-Type': 'application/json' })
   );
 };
 
@@ -160,7 +167,7 @@ export const getFilterDepartments = async (data = {}) => {
 export const isEmailExist = async (email, token) => {
   return axios.get(`${Api_url}/users/isEmailExist/`, {
     params: { email },
-    headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() },
+    ...registrationRequest(token, { 'Content-Type': 'application/json' }),
   });
 };
 

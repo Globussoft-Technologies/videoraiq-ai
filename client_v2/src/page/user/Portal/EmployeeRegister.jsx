@@ -96,6 +96,7 @@ export default function EmployeeRegister() {
 
     return decrypted;
   }, []);
+  const linkToken = hasRegistrationLink ? AUTH_TOKEN : undefined;
 
   // Seed details + step synchronously from any saved draft so a restored tab
   // never flashes the blank form before repainting with the saved values.
@@ -233,7 +234,7 @@ export default function EmployeeRegister() {
 
     const loadDepartments = async () => {
       try {
-        const res = await fetchDepartments(0, 100, "", AUTH_TOKEN);
+        const res = await fetchDepartments(0, 100, "", linkToken);
         if (!metadataActive) return;
         const body = res?.data?.body;
         if (body?.status === "success") {
@@ -249,7 +250,7 @@ export default function EmployeeRegister() {
 
     const loadLocations = async () => {
       try {
-        const res = await getEmployeeLocations(AUTH_TOKEN);
+        const res = await getEmployeeLocations(linkToken);
         if (!metadataActive) return;
         const locs = res?.data?.body?.data?.locations || [];
         setLocations(locs.map((l) => l.locationName).filter(Boolean));
@@ -263,7 +264,7 @@ export default function EmployeeRegister() {
     loadLocations();
 
     return () => { metadataActive = false; };
-  }, [AUTH_TOKEN], ["departments","locations"]);
+  }, [AUTH_TOKEN, linkToken], ["departments","locations"]);
 
   const validateDetails = () => {
     const errs = {};
@@ -282,7 +283,7 @@ export default function EmployeeRegister() {
     // Block advancing if the email is already registered (same as the client flow).
     if (form.email.trim()) {
       try {
-        const res = await isEmailExist(form.email, AUTH_TOKEN);
+        const res = await isEmailExist(form.email, linkToken);
         if (res?.data?.body?.data?.exists === true) {
           toast.error("Email already exists");
           return;
@@ -369,7 +370,7 @@ export default function EmployeeRegister() {
 
     try {
       setIsSubmitting(true);
-      const data = await createAuthorizedUser(formData, AUTH_TOKEN);
+      const data = await createAuthorizedUser(formData, linkToken);
       if (data?.body?.status !== "success") {
         // `message` carries the specific reason (e.g. "no face detected" / "already
         // registered"); `error` is a generic fallback label like "Authorized user
@@ -396,7 +397,7 @@ export default function EmployeeRegister() {
 
   const registerAnother = async () => {
     try {
-      await validateRegistrationLink(AUTH_TOKEN);
+      if (linkToken) await validateRegistrationLink(linkToken);
       setRegistered(false);
     } catch (err) {
       if ([401, 403].includes(err?.response?.status)) setTokenExpired(true);
