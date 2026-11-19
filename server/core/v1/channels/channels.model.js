@@ -127,6 +127,7 @@ const detectionFields = {
   deskSolarShoulderDetectionSettings: detectionSettingSchema,
   boxPackingDetectionSettings: detectionSettingSchema,
   personPostureDetectionSettings: detectionSettingSchema,
+  personSittingOnCanDetectionSettings: detectionSettingSchema,
   cansStackDetectionSettings: detectionSettingSchema,
   emotionDetectionSettings: detectionSettingSchema,
   genderAgeDetectionSettings: detectionSettingSchema,

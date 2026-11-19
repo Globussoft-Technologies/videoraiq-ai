@@ -88,6 +88,13 @@ const NEW_DETECTION_TYPES = Object.freeze([
   "cansStackDetectionSettings",
 ]);
 
+// These detectors are opt-in products. Their allocation must come from an
+// explicit Super Admin action; plan/camera reconciliation must never make them
+// visible merely because the client received a general camera licence.
+const SUPERADMIN_ONLY_DETECTION_TYPES = new Set([
+  "personSittingOnCanDetectionSettings",
+]);
+
 export const CAMERA_LICENSE_MESSAGE =
   "You have exceeded your purchased camera license limit. Please deselect an existing camera to continue.";
 
@@ -326,7 +333,8 @@ export const grantPlanDefaultCameras = async (admin, subscriptions) => {
       { $set: { purchasedCameras: cameras, planCamerasGranted: true } },
     );
 
-    const allTypes = Object.keys(DETECTION_TYPES);
+    const allTypes = Object.keys(DETECTION_TYPES)
+      .filter((settingType) => !SUPERADMIN_ONLY_DETECTION_TYPES.has(settingType));
     try {
       const existingRows = await allocationModel
         .find({ adminId: admin._id, settingType: { $in: allTypes } })

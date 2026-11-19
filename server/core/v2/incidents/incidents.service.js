@@ -39,6 +39,7 @@ import { solderPanelCounts } from "../../../utils/solderPanelCounts.js";
 
 import {
   Incident,
+  PersonSittingOnCanIncident,
   PersonPostureDetectionIncident,
   CansStackDetectionIncident,
   CountPersonIncident,
@@ -97,6 +98,7 @@ import {
 import { recordSolderPanel } from "./solderLine.service.js";
 import { findDoorRetry, normalizeDoorPost } from "../../v1/incidents/doorIncident.js";
 const modelMap = {
+  personSittingOnCan: PersonSittingOnCanIncident,
   personPostureDetection: PersonPostureDetectionIncident,
   cansStackDetection: CansStackDetectionIncident,
   countPersons: CountPersonIncident,
@@ -443,6 +445,10 @@ class IncidentsService {
       if (postureStackValidation.error) {
         return res.status(400).json(Response.validationFailResp(postureStackValidation.error.message, 'Validation Failed!'));
       }
+      const sittingOnCanValidation = incidentsValidate.validatePersonSittingOnCanIncident(req.body);
+      if (sittingOnCanValidation.error) {
+        return res.status(400).json(Response.validationFailResp(sittingOnCanValidation.error.message, 'Validation Failed!'));
+      }
       const hygieneValidation = incidentsValidate.validateHygieneIncident(req.body);
       if (hygieneValidation.error) {
         return res.status(400).json(Response.validationFailResp(hygieneValidation.error.message, "Validation Failed!"));
@@ -486,9 +492,16 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
-      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection", "sackLoadingUnloadingDetection"].includes(incidentType) &&
+      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection", "sackLoadingUnloadingDetection", "personSittingOnCan"].includes(incidentType) &&
         (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
         return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
+      }
+      if (incidentType === 'personSittingOnCan') {
+        const allowed = await getAllowedDetectionTypes({ adminId, userId });
+        const configured = channel?.detections?.personSittingOnCanDetectionSettings;
+        if (!allowed.has('personSittingOnCanDetectionSettings') || configured?.enabled !== true || !configured?.id) {
+          return res.status(403).json(Response.accessDeniedResp('Person Sitting On Can is not active on this camera'));
+        }
       }
       // Count posts are snapshots, never alerts. They may omit channelId and
       // timeOfIncident; cameraId identifies the channel and receipt time is used.
@@ -589,7 +602,7 @@ class IncidentsService {
         }
       }
 
-      const currentTime = ['personPostureDetection', 'cansStackDetection'].includes(incidentType) && req.body.timeOfIncident
+      const currentTime = ['personPostureDetection', 'cansStackDetection', 'personSittingOnCan'].includes(incidentType) && req.body.timeOfIncident
         ? new Date(req.body.timeOfIncident)
         : new Date();
 
@@ -3582,6 +3595,7 @@ console.log(result,'result');
       sortOrder,
       tagStatus,
       observedLayers,
+      peopleCount,
     } = req.query;
 
     // Plates already claimed by a registered user, needed by the
@@ -3621,10 +3635,21 @@ console.log(result,'result');
       matchStage.observedLayers = { $in: layerValues };
     }
 
-    if (incidentType === 'genderAgeDetection' && typeof req.query.zone === 'string' && req.query.zone.trim()) {
+    if (incidentType === 'personSittingOnCan' && peopleCount !== undefined && peopleCount !== '') {
+      const countValues = String(peopleCount)
+        .split(',')
+        .map(value => Number(value.trim()))
+        .filter(value => Number.isInteger(value) && value >= 1 && value <= 3);
+      if (!countValues.length) {
+        return res.status(400).json({ error: 'Invalid people count filter.' });
+      }
+      matchStage.count = { $in: countValues };
+    }
+
+    if (['genderAgeDetection', 'personSittingOnCan'].includes(incidentType) && typeof req.query.zone === 'string' && req.query.zone.trim()) {
       const selectedZone = req.query.zone.trim();
       const indexedZone = /^Zone\s+(\d+)$/i.exec(selectedZone);
-      if (indexedZone) {
+      if (incidentType === 'genderAgeDetection' && indexedZone) {
         matchStage.$and = [...(matchStage.$and || []), {
           $or: [
             { zone: selectedZone },
@@ -3704,7 +3729,7 @@ console.log(result,'result');
       !['', 'Male', 'Female'].includes(req.query.gender)) {
       return res.status(400).json(Response.userFailResp('Gender must be Male or Female.'));
     }
-    if (incidentType === 'genderAgeDetection' && req.query.zone !== undefined && typeof req.query.zone !== 'string') {
+    if (['genderAgeDetection', 'personSittingOnCan'].includes(incidentType) && req.query.zone !== undefined && typeof req.query.zone !== 'string') {
       return res.status(400).json(Response.userFailResp('Zone must be a string.'));
     }
     const genderAgeSummary = includeGenderAgeSummary ? await getGenderAgeSummary(matchStage) : null;
@@ -6157,6 +6182,27 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError('Failed to fetch person posture logs', 500));
+    }
+  }
+
+  async getPersonSittingOnCanLogs(req, res, next) {
+    try {
+      const user = req.verified?.userData;
+      const allowed = await getAllowedDetectionTypes({ adminId: user?.adminId, userId: user?.user_id });
+      if (!allowed.has('personSittingOnCanDetectionSettings')) return res.status(403).json(Response.accessDeniedResp('Person Sitting On Can is not enabled for your account'));
+      if (user?.memberId) {
+        const logs = req.verified.permissionConfig?.[0]?.permissionConfig?.logs;
+        if (!(logs?.personSittingOnCanLogs?.view ?? logs?.global?.view ?? logs?.view ?? false)) return res.status(403).json(Response.accessDeniedResp('You do not have permission to view Person Sitting On Can Logs'));
+      }
+      return await this._fetchIncidentLogs({
+        req, res, incidentType: 'personSittingOnCan',
+        searchFields: ['incidentName', 'description', 'zone', 'currentStatus'],
+        postLookupSearch: true,
+        searchNumberFields: ['count'],
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError('Failed to fetch Person Sitting On Can logs', 500));
     }
   }
 

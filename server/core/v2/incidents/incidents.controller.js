@@ -1,5 +1,8 @@
 import incidentsService from "./incidents.service.js";
 class IncidentsController {
+  async getPersonSittingOnCanLogs(req, res, next) {
+    return incidentsService.getPersonSittingOnCanLogs(req, res, next);
+  }
   async getEmotionDetectionLogs(req, res, next) {
     return incidentsService.getEmotionDetectionLogs(req, res, next);
   }

@@ -1,5 +1,5 @@
 import { sackDetector } from "./sackLoading.js";
-import { postureDetectorPayload, cansStackDetectorPayload } from './postureCanStackPayload.js';
+import { postureDetectorPayload, cansStackDetectorPayload, personSittingOnCanDetectorPayload } from './postureCanStackPayload.js';
 import { buildUniformDetector } from "./uniformDetection.js";
 import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../constants/emotionDetection.js";
 import Admin from '../core/v1/admin/admin.model.js';
@@ -670,6 +670,10 @@ class PythonService {
 
       // 🔹 Convert detection_modes → detectors
       const detectors = [];
+
+      if (detection_modes?.includes("personSittingOnCanDetectionSettings")) {
+        detectors.push(personSittingOnCanDetectorPayload({ zones, zoneConfigs: zone_configs, settings: confidence_thresholds, severity }));
+      }
 
       if (detection_modes?.includes("personPostureDetectionSettings")) {
         detectors.push(postureDetectorPayload({ zones, zoneConfigs: zone_configs, settings: confidence_thresholds, severity }));

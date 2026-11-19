@@ -8,6 +8,7 @@ import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 */
 
 export const DETECTION_TYPES = {
+  personSittingOnCanDetectionSettings: "Person Sitting On Can",
   personPostureDetectionSettings: "Person Posture Detection",
   cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
@@ -125,6 +126,7 @@ export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
  * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
  */
 export const DETECTION_LOG_METADATA = Object.freeze({
+  personSittingOnCanDetectionSettings: { permissionKey: "personSittingOnCanLogs", logsConfigKey: "personSittingOnCanLogs" },
   personPostureDetectionSettings: { permissionKey: "personPostureLogs", logsConfigKey: "personPostureLogs" },
   cansStackDetectionSettings: { permissionKey: "cansStackLogs", logsConfigKey: "cansStackLogs" },
   genderAgeDetectionSettings: { permissionKey: "genderAgeLogs", logsConfigKey: "genderAgeLogs" },
@@ -183,6 +185,7 @@ export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
 export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles", "genderAgeCount"];
 
 export const TYPE_MAP = {
+  personSittingOnCanDetectionSettings: "personSittingOnCan",
   personPostureDetectionSettings: "personPostureDetection",
   cansStackDetectionSettings: "cansStackDetection",
   genderAgeDetectionSettings: "genderAgeDetection",
@@ -248,6 +251,7 @@ export const INCIDENT_TYPE_ALIASES = Object.freeze({
 });
 
 export const DETECTION_MODES_MAP = {
+  personSittingOnCanDetectionSettings: ["personSittingOnCanDetectionSettings"],
   personPostureDetectionSettings: ["personPostureDetectionSettings"],
   cansStackDetectionSettings: ["cansStackDetectionSettings"],
   genderAgeDetectionSettings: ["genderAgeDetectionSettings"],
@@ -320,6 +324,7 @@ export const DETECTION_MODES_MAP = {
  * syncDsDetectorNames() will stop reporting it as unmapped.
  */
 export const DS_DETECTOR_BY_MODE = {
+  personSittingOnCanDetectionSettings: "personSittingOnCanDetectionSettings",
   personPostureDetectionSettings: "personPostureDetectionSettings",
   cansStackDetectionSettings: "cansStackDetectionSettings",
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
@@ -416,6 +421,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
  * lives.
  */
 export const DS_LOGIC_BY_MODE = {
+  personSittingOnCanDetectionSettings: "personSittingOnCanDetectionSettings",
   personPostureDetectionSettings: "personPostureDetectionSettings",
   cansStackDetectionSettings: "cansStackDetectionSettings",
   genderAgeDetectionSettings: "genderAgeDetectionSettings",
@@ -473,6 +479,7 @@ export const dsLogicNamesFor = (settingType) => {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.personSittingOnCanDetectionSettings.id" },
   { path: "detections.personPostureDetectionSettings.id" },
   { path: "detections.cansStackDetectionSettings.id" },
   { path: "detections.genderAgeDetectionSettings.id" },

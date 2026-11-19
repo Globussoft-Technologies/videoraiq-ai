@@ -7,6 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
+  personSittingOnCanDetectionSettings: "Person Sitting On Can",
   personPostureDetectionSettings: "Person Posture Detection",
   cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
@@ -56,6 +57,7 @@ export const DETECTION_TYPES = {
   boxPackingDetectionSettings: "Box Packing Detection",
 }
 export const DETECTION_TYPES2 = {
+  personSittingOnCanDetectionSettings: "Person Sitting On Can",
   personPostureDetectionSettings: "Person Posture Detection",
   cansStackDetectionSettings: "Cans Stack Detection",
   genderAgeDetectionSettings: "Gender & Age Detection",
@@ -107,6 +109,7 @@ export const DETECTION_TYPES2 = {
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
 export const DETECTION_DESCRIPTIONS = {
+  personSittingOnCanDetectionSettings: "Detect people sitting on cans inside configured zones",
   personPostureDetectionSettings: "Detect sitting or standing in configured areas",
   cansStackDetectionSettings: "Alert when stacked cans exceed the configured layers",
   genderAgeDetectionSettings: "Gender alerts and male/female counts by camera and zone",
@@ -151,6 +154,7 @@ export const DETECTION_DESCRIPTIONS = {
 };
 
 export const TYPE_MAP = {
+  personSittingOnCanDetectionSettings: "personSittingOnCan",
   personPostureDetectionSettings: "personPostureDetection",
   cansStackDetectionSettings: "cansStackDetection",
   emotionDetectionSettings: "emotionDetection",
@@ -195,6 +199,7 @@ export const TYPE_MAP = {
 };
 
 export const DETECTION_MODES_MAP = {
+  personSittingOnCanDetectionSettings: ["personSittingOnCanDetectionSettings"],
   personPostureDetectionSettings: ["personPostureDetectionSettings"],
   cansStackDetectionSettings: ["cansStackDetectionSettings"],
   personPostureDetectionSettings: ["personPostureDetectionSettings"],
@@ -242,6 +247,7 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
 };
 
 export const toPopulateDetections = [
+  { path: "detections.personSittingOnCanDetectionSettings.id" },
   { path: "detections.personPostureDetectionSettings.id" },
   { path: "detections.cansStackDetectionSettings.id" },
   { path: "detections.emotionDetectionSettings.id" },

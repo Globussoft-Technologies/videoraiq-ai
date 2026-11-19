@@ -1767,6 +1767,18 @@ const PersonPostureDetectionSetting = DetectionSetting.discriminator(
   }) }),
 );
 
+const PersonSittingOnCanDetectionSetting = DetectionSetting.discriminator(
+  "personSittingOnCanDetectionSettings",
+  new mongoose.Schema({ settings: new mongoose.Schema({
+    ...zoneConfigsField,
+    referencePoints: Object,
+    videoResolution: [Number],
+    levelOfImportance: { type: String, enum: ["low", "moderate", "high"], default: "high" },
+    zone_name: String,
+    trigger_notification: { type: Boolean, default: true },
+  }) }),
+);
+
 const CansStackDetectionSetting = DetectionSetting.discriminator(
   "cansStackDetectionSettings",
   new mongoose.Schema({ settings: new mongoose.Schema({
@@ -1787,6 +1799,7 @@ const CansStackDetectionSetting = DetectionSetting.discriminator(
 );
 
 export {
+  PersonSittingOnCanDetectionSetting,
   PersonPostureDetectionSetting,
   CansStackDetectionSetting,
   GenderAgeDetectionSetting,

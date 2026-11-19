@@ -19,6 +19,7 @@ router.get("/logs/machine-ops-detection", viewAccessCheck, incidentsController.g
 router.get("/logs/gender-age-detection", viewAccessCheck, incidentsController.getGenderAgeDetectionLogs);
 router.get("/logs/emotion-detection", viewAccessCheck, incidentsController.getEmotionDetectionLogs);
 router.get("/logs/person-posture-detection", viewAccessCheck, incidentsController.getPersonPostureDetectionLogs);
+router.get("/logs/person-sitting-on-can", viewAccessCheck, incidentsController.getPersonSittingOnCanLogs);
 router.get("/logs/cans-stack-detection", viewAccessCheck, incidentsController.getCansStackDetectionLogs);
 router.get('/hygiene-analytics', viewAccessCheck, getHygieneAnalytics);
 router.get('/logs/hygiene-sanitation-food-safety-detection/filters', viewAccessCheck, getHygieneLogFilters);

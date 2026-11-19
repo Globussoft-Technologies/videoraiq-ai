@@ -2,6 +2,25 @@ import Joi from "joi";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validatePersonSittingOnCanIncident(body) {
+    if (body?.incidentType !== 'personSittingOnCan') return { error: null };
+    const objectId = Joi.string().hex().length(24);
+    return Joi.object({
+      incidentType: Joi.string().valid('personSittingOnCan').required(),
+      incidentName: Joi.string().valid('Person Sitting On Can').required(),
+      timeOfIncident: Joi.string().isoDate().required(),
+      Image: Joi.string().allow('').required(),
+      zone: Joi.string().allow(''),
+      severity: Joi.string().valid('info', 'low', 'moderate', 'high').default('high'),
+      description: Joi.string().required(),
+      cameraId: objectId.required(), nvrId: objectId.required(), channelId: objectId.required(),
+      userId: Joi.string().required(), adminId: objectId.required(),
+      type: Joi.string().valid('gauge').required(),
+      triggerNotification: Joi.boolean().default(true),
+      currentStatus: Joi.string().valid('DETECTED').required(),
+      count: Joi.number().integer().min(1).max(3).required(),
+    }).unknown(true).validate(body, { convert: false });
+  }
   validatePostureOrStackIncident(body) {
     if (!['personPostureDetection', 'cansStackDetection'].includes(body?.incidentType)) return { error: null };
     const shared = {

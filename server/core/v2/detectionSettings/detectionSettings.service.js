@@ -63,6 +63,7 @@ import DetectionSettingsValidation from "./detectionSettings.validate.js";
 import { rejectAgentGatewayBypass } from "../agentActions/agentGateway.js";
 import {
   PersonPostureDetectionSetting,
+  PersonSittingOnCanDetectionSetting,
   CansStackDetectionSetting,
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,
@@ -137,6 +138,7 @@ import {
 
 const modelMap = {
   personPostureDetectionSettings: PersonPostureDetectionSetting,
+  personSittingOnCanDetectionSettings: PersonSittingOnCanDetectionSetting,
   cansStackDetectionSettings: CansStackDetectionSetting,
   countPersonsSettings: CountPersonsDetectionSetting,
   motionDetectionSettings: MotionDetectionSetting,

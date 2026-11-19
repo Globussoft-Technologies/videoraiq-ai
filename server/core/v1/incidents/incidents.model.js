@@ -991,7 +991,15 @@ const CansStackDetectionIncident = Incident.discriminator('cansStackDetection', 
   observedLayers: { type: Number, min: 0 },
 }));
 
+const PersonSittingOnCanIncident = Incident.discriminator('personSittingOnCan', new Schema({
+  adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+  triggerNotification: { type: Boolean, default: true },
+  currentStatus: { type: String, enum: ['DETECTED'], default: 'DETECTED' },
+  count: { type: Number, required: true, min: 1, max: 3 },
+}));
+
 export  {
+  PersonSittingOnCanIncident,
   PersonPostureDetectionIncident,
   CansStackDetectionIncident,
   GenderAgeDetectionIncident,

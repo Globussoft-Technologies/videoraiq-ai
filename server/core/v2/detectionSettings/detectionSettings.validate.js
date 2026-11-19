@@ -132,6 +132,13 @@ const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
   validateNewDetectorSettings(settingType, settings = {}) {
+    if (settingType === 'personSittingOnCanDetectionSettings') {
+      return Joi.object({
+        zone_name: Joi.string().trim().allow(''),
+        trigger_notification: Joi.boolean(),
+        levelOfImportance: Joi.string().valid('low', 'moderate', 'high'),
+      }).unknown(true).validate(settings, { convert: false });
+    }
     if (settingType === 'personPostureDetectionSettings') {
       return Joi.object({
         trigger_on: Joi.string().valid('sitting', 'standing', 'both'),

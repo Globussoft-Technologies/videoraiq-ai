@@ -10,6 +10,16 @@ export function postureDetectorPayload({ zones, zoneConfigs, settings, severity 
   };
 }
 
+export function personSittingOnCanDetectorPayload({ zones, zoneConfigs, settings, severity }) {
+  return {
+    name: 'personSittingOnCanDetectionSettings',
+    zones: zones || [],
+    zone_name: settings?.zone_name || zoneConfigs?.[0]?.name || '',
+    severity: severity || settings?.levelOfImportance || 'high',
+    trigger_notification: settings?.trigger_notification !== false,
+  };
+}
+
 export function cansStackDetectorPayload({ zoneConfigs, settings, severity }) {
   return {
     name: 'cansStackDetectionSettings',
