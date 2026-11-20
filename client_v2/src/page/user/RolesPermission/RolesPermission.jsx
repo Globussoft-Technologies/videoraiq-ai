@@ -10,6 +10,7 @@ import AccessDenied from '../../../components/AccessDenied';
 import PageLoader from '../../../components/PageLoader';
 import HScrollHint from '../../../components/HScrollHint';
 import { limitedTextError } from '@/utils/limitedText';
+import { NAV_GROUPS, LOGS_GROUP_LABEL } from '../../../layout/nav.config';
 import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig, syncDefaultRoles } from '../../../api/administer';
 
 const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
@@ -32,7 +33,7 @@ const PERMISSION_MODULES = [
 // server/core/v1/permission/permissions.config.js's completeConfig.logs) —
 // updatePermissions() 400s on any subKey not already present there, so this
 // list must stay a superset match of that seed, not just of nav.config.js.
-const LOG_SUBMODULES = [
+const LOG_PERMISSION_KEYS = [
   'global', 'accessLogs', 'attendanceLogs', 'taggedUsersLogs', 'detectedUsersLogs',
   'personCountLogs', 'deskLogs', 'ANPRLogs',
   // 'productivityLogs',
@@ -51,7 +52,18 @@ const LOG_SUBMODULES = [
   'equipmentOilLeakageLogs', 'vehicleFuelOilLeakageLogs',
   'wasteDisposalLogs', 'animalEntryLogs', 'messyAreaLogs',
   'boxPackingLogs',
+  'hygieneSanitationFoodSafetyLogs', 'lightingVisibilitySiteConditionsLogs',
+  'personPostureLogs', 'cansStackLogs', 'doorDetectionLogs',
 ];
+const NAV_LOG_ITEMS = NAV_GROUPS.find(group => group.label === LOGS_GROUP_LABEL)?.items || [];
+const LOG_SUBMODULES = [...new Set([
+  ...LOG_PERMISSION_KEYS,
+  ...NAV_LOG_ITEMS.filter(item => item.permissionKey === 'logs').map(item => item.permissionSubKey).filter(Boolean),
+])];
+const NAV_LOG_LABELS = Object.fromEntries(
+  NAV_LOG_ITEMS.filter(item => item.permissionKey === 'logs' && item.permissionSubKey)
+    .map(item => [item.permissionSubKey, item.label]),
+);
 
 const MODULE_LABELS = {
   NVR: 'Cameras & NVRs', channels: 'Channels', LIVE: 'Live Wall', dashboard: 'Command Center',
@@ -88,6 +100,10 @@ const MODULE_LABELS = {
   deskSolarShoulderLogs: 'Solder Line (Solar Line QC)',
   oilLeakageLogs: 'Oil Leakage Logs',
   equipmentOilLeakageLogs: 'Equipment Oil Leakage Logs',
+  hygieneSanitationFoodSafetyLogs: 'Hygiene & Food Safety Logs',
+  lightingVisibilitySiteConditionsLogs: 'Lighting / Visibility / Site Conditions Logs',
+  personPostureLogs: 'Person Posture Logs', cansStackLogs: 'Cans Stack Logs',
+  doorDetectionLogs: 'Door Logs',
   vehicleFuelOilLeakageLogs: 'Vehicle Fuel/Oil Leakage Logs',
   wrongLocationLogs: 'Gunny Bags/Materials Wrong Location Logs',
   wasteDisposalLogs: 'Sand, Dust, Waste & Scrap Disposal Logs',

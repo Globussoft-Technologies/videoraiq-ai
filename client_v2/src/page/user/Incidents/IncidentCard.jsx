@@ -646,7 +646,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             )}
             <button
               onClick={e => { e.stopPropagation(); setReportOpen(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, background: reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 10, fontWeight: 600, padding: '3px 8px', cursor: 'pointer', transition: 'background .15s' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, background: reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,.7)', borderRadius: 5, boxShadow: '0 2px 6px rgba(0,0,0,.35)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', transition: 'background .15s' }}
               onMouseEnter={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.95)' : 'rgba(59,130,246,.95)'}
               onMouseLeave={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)'}
             >

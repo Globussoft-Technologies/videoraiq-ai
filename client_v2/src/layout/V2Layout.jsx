@@ -24,6 +24,7 @@ import MobilePageLoader from '@/components/MobilePageLoader';
 import { hasLiveDemoPlan } from '../utils/jwt';
 import { BRAND_NAME } from '../lib/branding';
 import { isMobileEmbedded } from '@/utils/mobileEmbed';
+import { usePermissions } from '../context/PermissionContext';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 const agentLauncherEnabled = import.meta.env.VITE_AGENT_LAUNCHER_ENABLED === 'true';
@@ -113,6 +114,8 @@ function currentViewKey(pathname) {
 
 function Shell() {
   const embedded = isMobileEmbedded();
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewAlerts = !permissionsLoading && permissions?.alerts?.view === true;
   // Mounted on the shell rather than only on the scheduling page, so a DS
   // start/stop that fails is visible wherever the user happens to be. The
   // hook toasts each transition as it arrives over the socket, including the
@@ -208,8 +211,11 @@ function Shell() {
   const hidePlayback = shouldHidePlayback(nvrInventory?.nvrs);
 
   // Notifications + alerts badge from the recent alert feed.
-  const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000, enabled: !embedded });
-  const recentAlerts = crit?.recentAlerts || EMPTY_ALERTS;
+  const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000, enabled: !embedded && canViewAlerts });
+  const recentAlerts = canViewAlerts
+    ? (crit?.recentAlerts || EMPTY_ALERTS).filter((alert) =>
+        LOG_PAGE_BY_INCIDENT_TYPE[alert.incidentType] || (alert.Image && alert.Image !== 'https://'))
+    : EMPTY_ALERTS;
   const [readIds, setReadIds] = useState(loadReadIds);
   const notifications = useMemo(() => recentAlerts.map((a, i) => ({
     id: a._id || i,

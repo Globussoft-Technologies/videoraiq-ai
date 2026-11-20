@@ -5,6 +5,7 @@ import { router } from '@/App';
 import { Bell, Trash2, X } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { usePermissions } from './PermissionContext';
 import { timeOfDay } from '../lib/format';
 import getAccessToken from '@/utils/getAccessToken';
 import { registerWebPush, webPushActive } from '@/utils/webPush';
@@ -268,6 +269,8 @@ export function DetectionNotificationProvider({ children }) {
   const labels = useDetectionLabels();
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewAlerts = !permissionsLoading && permissions?.alerts?.view === true;
   const shownDetections = useRef(new Set());
   const permissionAsked = useRef(false);
   // The alert stack's source of truth — added to on every detection, trimmed
@@ -289,6 +292,10 @@ export function DetectionNotificationProvider({ children }) {
   }, [dismissAlert]);
 
   useEffect(() => {
+    if (!canViewAlerts) {
+      setAlerts([]);
+      return undefined;
+    }
     if (!socket || !user?.adminId) return undefined;
 
     const handleDetection = (data) => {
@@ -351,8 +358,8 @@ export function DetectionNotificationProvider({ children }) {
   // Incident push for when no tab is open — follows the same Settings ▸
   // Desktop notifications switch as the socket-driven desktop notification.
   useEffect(() => {
-    if (user?.adminId && desktopNotificationsEnabled()) registerWebPush(getAccessToken());
-  }, [user?.adminId]);
+    if (user?.adminId && canViewAlerts && desktopNotificationsEnabled()) registerWebPush(getAccessToken());
+  }, [user?.adminId, canViewAlerts]);
 
   return (
     <>
