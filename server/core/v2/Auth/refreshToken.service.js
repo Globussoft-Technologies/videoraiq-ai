@@ -11,7 +11,11 @@ import { sendSessionRevoked } from '../../../socket.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const cookieName = () => `vq_refresh_${config.get('APP_ENV')}`;
-const accessSeconds = () => Math.min(3600, Math.max(60, Number(process.env.AUTH_ACCESS_TOKEN_SECONDS) || 900));
+const configuredAccessSeconds = () => config.has('AUTH_ACCESS_TOKEN_SECONDS')
+  ? config.get('AUTH_ACCESS_TOKEN_SECONDS')
+  : process.env.AUTH_ACCESS_TOKEN_SECONDS;
+const accessSeconds = () => Math.min(3600, Math.max(60, Number(configuredAccessSeconds()) || 900));
+
 const lifetime = remember => (remember ? 30 : 7) * 86400000;
 const cookieOptions = req => ({
   httpOnly: true,
