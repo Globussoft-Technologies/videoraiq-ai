@@ -13,6 +13,7 @@ const ResetPassword = lazy(() => import('@/page/user/Users/ResetPassword'));
 const EmployeeLogin = lazy(() => import('@/page/user/Portal/EmployeeLogin'));
 const EmployeeRegister = lazy(() => import('@/page/user/Portal/EmployeeRegister'));
 const VerifyRecipient = lazy(() => import('@/page/user/Administer/VerifyRecipient'));
+const InventoryImagePage = lazy(() => import('@/page/user/AgentUI/InventoryImagePage'));
 
 function LoginRoute() {
   return <LoginForm />;
@@ -46,6 +47,7 @@ export const router = createBrowserRouter(
           </IsAuth>
         }
       >
+        <Route path="/agent/camera-inventory/:inventoryId/images/:fileName" element={<InventoryImagePage />} />
         {v2Routes}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

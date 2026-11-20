@@ -9,11 +9,16 @@ const names = {
   reset_detection_thresholds: 'Detection thresholds', reset_detection_settings: 'Detection settings',
 };
 const readable = (key) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
-const value = (item, entityNames) => {
+const value = (item, entityNames, path = '') => {
   if (item == null) return 'None';
   if (typeof item === 'boolean') return item ? 'On' : 'Off';
-  if (typeof item === 'string') return entityNames.get(item.toLowerCase()) || (/^(?:[0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f-]{27,36})$/i.test(item) ? 'Name unavailable' : item);
-  if (Array.isArray(item)) return item.map((part) => value(part, entityNames)).join(', ');
+  if (typeof item === 'string') {
+    if (!/^(?:[0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f-]{27,36})$/i.test(item)) return item;
+    const label = entityNames.get(item.toLowerCase());
+    if (label) return label;
+    return /nvr/i.test(path) ? 'NVR ID: ' + item : /camera|channel/i.test(path) ? 'Camera ID: ' + item : 'Record ID: ' + item;
+  }
+  if (Array.isArray(item)) return item.map((part) => value(part, entityNames, path)).join(', ');
   return 'Details available after review';
 };
 function changes(before, after, entityNames, path = '') {
@@ -21,7 +26,7 @@ function changes(before, after, entityNames, path = '') {
   if (before && after && !Array.isArray(before) && !Array.isArray(after) && typeof before === 'object' && typeof after === 'object') {
     return [...new Set([...Object.keys(before), ...Object.keys(after)])].flatMap((key) => changes(before[key], after[key], entityNames, path ? `${path}.${key}` : key));
   }
-  return [`${readable(path || 'Value')}: ${value(before, entityNames)} → ${value(after, entityNames)}`];
+  return [`${readable(path || 'Value')}: ${value(before, entityNames, path)} → ${value(after, entityNames, path)}`];
 }
 export function targetLines(proposal, target, entityNames) {
   if (proposal.kind === 'admin' || proposal.operation?.startsWith('create_')) {
@@ -32,7 +37,8 @@ export function targetLines(proposal, target, entityNames) {
     });
     return [`Add ${readable(target.entity || proposal.operation.replace('create_', ''))}: ${target.label || value(target.after, entityNames)}`, ...linked];
   }
-  const camera = target.before?.cameraName || target.cameraName || entityNames.get(String(target.channelId || '').toLowerCase()) || 'camera name unavailable';
+  const cameraId = target.channelId || target.cameraId || target.camera_id;
+  const camera = target.before?.cameraName || target.cameraName || entityNames.get(String(cameraId || '').toLowerCase()) || (cameraId ? 'Camera ID: ' + cameraId : 'camera name unavailable');
   const detector = proposal.impact?.detection || readable(target.detectionType || names[proposal.operation] || 'Detection');
   const prefix = `${detector} on ${camera}`;
   if (proposal.operation === 'camera_detection_toggle' || proposal.operation === 'camera_processing_toggle') return [`${prefix}: ${value(target.before?.enabled, entityNames)} → ${value(target.after?.enabled, entityNames)}`];

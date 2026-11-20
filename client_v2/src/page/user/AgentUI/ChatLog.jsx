@@ -1,6 +1,7 @@
 import { ArrowDown, Check, Copy, Edit3, LoaderCircle, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import AgentMarkdown from './AgentMarkdown';
+import { isLabeledIdentifier } from './isLabeledIdentifier';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import AgentMarkdown, { normalizeRecordWraps } from './AgentMarkdown';
 import AgentReport from './AgentReport';
 import RunActivity from './RunActivity';
 import ProposalCard from './ProposalCard';
@@ -8,9 +9,10 @@ import ZoneSnapshot from './ZoneSnapshot';
 import ActionResult from './ActionResult';
 import AgentExport from './AgentExport';
 
-function StopRunButton({ onStop }) {
+function StopRunButton({ onStop, waiting }) {
   const pending = useRef(false);
-  const [stopping, setStopping] = useState(false);
+  const [submitting, setStopping] = useState(false);
+  const stopping = submitting || waiting;
   const stop = async () => {
     if (pending.current) return;
     pending.current = true;
@@ -74,14 +76,72 @@ function Question({ message, onSend, sending }) {
   </div>;
 }
 
+function appendKnownIdsToIdentifierPhrases(text, entityNames) {
+  const entries = [...entityNames.entries()]
+    .filter(([, label]) => String(label || '').trim())
+    .sort((left, right) => String(right[1]).length - String(left[1]).length);
+  if (!entries.length) return text;
+  return String(text || '').replace(
+    /\b((?:channel|camera|nvr)s?\s+id\s*[:#]?\s+)([^,.;\n)]+?)(?=[,.;\n)]|$)/gi,
+    (match, prefix, rawLabel) => {
+      const label = rawLabel.trim().replace(/^[*_\x60]+|[*_\x60]+$/g, '');
+      const entry = entries.find(([, name]) => String(name).trim().toLowerCase() === label.toLowerCase());
+      return entry ? prefix + '\x60' + entry[0] + '\x60' : match;
+    },
+  );
+}
+
+function appendKnownIdsToIdentifierLists(text, entityNames) {
+  const entries = [...entityNames.entries()]
+    .filter(([, label]) => String(label || '').trim())
+    .sort((left, right) => String(right[1]).length - String(left[1]).length);
+  if (!entries.length || !/\b(?:channel|camera|nvr|record|device)s?\s+ids?\b/i.test(text)) return text;
+  let inIdentifierList = false;
+  return String(text || '').split('\n').map((line) => {
+    if (/\b(?:channel|camera|nvr|record|device)s?\s+ids?\b/i.test(line)) {
+      inIdentifierList = true;
+      return line;
+    }
+    if (!inIdentifierList) return line;
+    const item = /^(\s*(?:[-*+]|\d+\.)\s+)([^:\n]+):\s*(?:\x60)?([^\x60\n]+)(?:\x60)?\s*$/.exec(line);
+    if (!item) {
+      if (line.trim() && !/^\s*(?:[-*+]|\d+\.)\s+/.test(line)) inIdentifierList = false;
+      return line;
+    }
+    const displayLabel = item[2].trim();
+    const valueLabel = item[3].trim().replace(/^[*_]+|[*_]+$/g, '');
+    const entry = entries.find(([, name]) => [displayLabel, valueLabel].some((candidate) => String(name).trim().toLowerCase() === candidate.toLowerCase()));
+    if (!entry) return line;
+    return item[1] + displayLabel + ': ' + String.fromCharCode(96) + entry[0] + String.fromCharCode(96);
+  }).join('\n');
+}
+
 function resolveDeviceNames(text, entityNames) {
   const raw = String(text || '');
   const ids = [...raw.matchAll(/\b[0-9a-f]{24}\b/gi)];
-  if (!ids.length) return raw;
-  const allResolved = ids.every(([id]) => entityNames.get(id.toLowerCase()));
-  const fallback = /\bNVRs?\b/i.test(raw) && !/\bcameras?\b/i.test(raw) ? 'NVR name unavailable'
-    : /\bcameras?\b/i.test(raw) && !/\bNVRs?\b/i.test(raw) ? 'Camera name unavailable' : 'Device name unavailable';
-  let display = raw.replace(/`?\b([0-9a-f]{24})\b`?/gi, (_match, id) => entityNames.get(id.toLowerCase()) || fallback);
+  const identifierList = /\b(?:channel|camera|nvr|record|device)s?\s+ids?\b/i.test(raw);
+  const allResolved = ids.length > 0 && ids.every(([id]) => entityNames.get(id.toLowerCase()));
+  const idFallback = (id, offset) => {
+    const lineStart = raw.lastIndexOf('\n', offset) + 1;
+    const lineEnd = raw.indexOf('\n', offset);
+    const line = raw.slice(lineStart, lineEnd < 0 ? raw.length : lineEnd);
+    if (/\bnvrs?\b/i.test(line)) return 'NVR ID: ' + id;
+    if (/\bcameras?\b/i.test(line)) return 'Camera ID: ' + id;
+    if (/\brecord|incident|source\b/i.test(line)) return 'Record ID: ' + id;
+    return 'Record ID: ' + id;
+  };
+  let display = raw.replace(/`?\b([0-9a-f]{24})\b`?/gi, (_match, id, offset) => {
+    if (isLabeledIdentifier(raw, offset)) return _match;
+    const lineStart = raw.lastIndexOf('\n', offset) + 1;
+    const lineEnd = raw.indexOf('\n', offset);
+    const line = raw.slice(lineStart, lineEnd < 0 ? raw.length : lineEnd);
+    const name = entityNames.get(id.toLowerCase());
+    if (identifierList && /^\s*(?:[-*+]|\d+\.)\s+[^:\n]+:\s*(?:\x60)?[0-9a-f]{24}(?:\x60)?\s*$/i.test(line)) return id;
+    if (/\b(?:channel|camera|nvr)s?\s+id\b/i.test(line)) return _match;
+    return name || idFallback(id, offset);
+  });
+  display = appendKnownIdsToIdentifierPhrases(display, entityNames);
+  display = appendKnownIdsToIdentifierLists(display, entityNames);
   if (allResolved) {
     display = display.replace(/\s*\(by their record IDs\)/gi, '');
     display = display.replace(/The system currently exposes the NVRs by their IDs rather than descriptive names\.\s*/gi, '');
@@ -92,7 +152,7 @@ function resolveDeviceNames(text, entityNames) {
 function MessageText({ text, role, entityNames, theme }) {
   if (role === 'user') return <span>{text}</span>;
   const withoutActionIds = String(text || '').replace(/\bAction(?:\s+ID)?\s*[:#]?\s*(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|[0-9a-f]{24})\b/gi, 'Change');
-  return <AgentMarkdown text={resolveDeviceNames(withoutActionIds, entityNames)} theme={theme} />;
+  return <AgentMarkdown text={resolveDeviceNames(normalizeRecordWraps(withoutActionIds), entityNames)} theme={theme} />;
 }
 
 function messageTime(value) {
@@ -109,11 +169,11 @@ export default function ChatLog({ messages, sending, onSend, onRecover, onStop, 
   const updateScroll = () => {
     const log = logRef.current;
     if (!log) return;
-  const away = log.scrollHeight - log.scrollTop - log.clientHeight > 300;
+    const away = log.scrollHeight - log.scrollTop - log.clientHeight > 300;
     stickToBottom.current = !away;
     setShowScrollDown(away);
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const log = logRef.current;
     if (!log) return;
     const userCount = messages.filter((message) => message.role === 'user').length;
@@ -133,8 +193,8 @@ export default function ChatLog({ messages, sending, onSend, onRecover, onStop, 
     {messages.map((message) => message.role === 'user' ? <Question key={message.id} message={message} onSend={onSend} sending={sending} /> : <div className={`agent-message-group ai ${['queued', 'running', 'verification_pending'].includes(message.status) ? 'agent-message-working' : ''}`} key={message.id}>
       {messageTime(message.at) && <div className="agent-response-meta"><time dateTime={message.at}>{messageTime(message.at)}</time></div>}
       {((!message.report && !message.actionResult && message.text) || ['queued', 'running', 'verification_pending'].includes(message.status) || message.errorCode || (message.status === 'approval_required' && message.proposal) || message.attachments?.length > 0) && <div className={`agent-message ai ${message.error ? 'error' : ''}`}>
-        {['queued', 'running', 'verification_pending'].includes(message.status) && <RunActivity runId={message.runId} active status={message.status}>
-          {message.runId && onStop && !message.proposal && message.status !== 'verification_pending' && <StopRunButton onStop={() => onStop(message.runId)} />}
+        {['queued', 'running', 'verification_pending'].includes(message.status) && <RunActivity runId={message.runId} active status={message.status} reconnecting={message.reconnecting} stopping={message.stopping}>
+          {message.runId && onStop && !message.proposal && message.status !== 'verification_pending' && <StopRunButton waiting={message.stopping} onStop={() => onStop(message.runId)} />}
         </RunActivity>}
         {!message.report && !message.actionResult && message.text ? <MessageText text={message.text} role={message.role} entityNames={entityNames} theme={theme} /> : null}
         {message.errorCode && <div className={`agent-report-warning ${message.errorCode === 'CANCELLED' ? 'cancelled' : ''}`} role="alert">{message.errorMessage || ({ MODEL_UNCONFIGURED: "The agent's AI model is not configured on the server.", RUN_TIMEOUT: 'The request took longer than its time budget. Progress was saved, so it can be recovered.', RUN_FAILED: 'The request failed unexpectedly. Progress was saved, so it can be recovered.', CANCELLED: 'The request was cancelled.' })[message.errorCode] || 'The request could not be completed.'} <code>{message.errorCode}</code></div>}

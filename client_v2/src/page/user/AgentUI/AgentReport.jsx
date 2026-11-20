@@ -1,20 +1,48 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy } from 'lucide-react';
-import AgentMarkdown from './AgentMarkdown';
+import AgentMarkdown, { normalizeRecordWraps } from './AgentMarkdown';
 import ActionResult from './ActionResult';
+import { isLabeledIdentifier } from './isLabeledIdentifier';
 import { resolveAgentExportMeta } from './AgentExport';
 
 const words = (value) => String(value || '').replace(/_/g, ' ');
 const actionIdPattern = /\bAction(?:\s+ID)?\s*[:#]?\s*(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|[0-9a-f]{24})\b/gi;
 const rawIdPattern = /\b(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|[0-9a-f]{24})\b/gi;
+const identifierListPattern = /\b(?:channel|camera|nvr|record|device)s?\s+ids?\b/i;
+function readableId(id, text, offset) {
+  const lineStart = text.lastIndexOf('\n', offset) + 1;
+  const lineEnd = text.indexOf('\n', offset);
+  const line = text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd);
+  if (/\bSource\s*:/i.test(line)) return id;
+  if (/\bnvrs?\b/i.test(line)) return 'NVR ID: ' + id;
+  if (/\bcameras?\b/i.test(line)) return 'Camera ID: ' + id;
+  return 'Record ID: ' + id;
+}
+function identifierLine(text, offset) {
+  const lineStart = text.lastIndexOf('\n', offset) + 1;
+  const lineEnd = text.indexOf('\n', offset);
+  return text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd);
+}
+function isIdentifierListRow(text, offset) {
+  return identifierListPattern.test(text)
+    && /^\s*(?:[-*+]|\d+\.)\s+[^:\n]+:\s*(?:\x60)?[0-9a-f]{24}(?:\x60)?\s*$/i.test(identifierLine(text, offset));
+}
 function readableAnswer(answer, actionResult, entityNames) {
   const operation = String(actionResult?.operation || '');
   const subject = operation.includes('location') ? 'Location' : operation.includes('camera') ? 'Camera' : operation.includes('zone') ? 'Detection zone' : 'Change';
   const target = (actionResult?.normalized_target_results || actionResult?.targets || [])[0];
   const name = target?.label || target?.locationName || target?.cameraName || target?.name;
   const label = name ? `${subject} ${name}` : `${subject} change`;
-  return String(answer || '').replace(actionIdPattern, label)
-    .replace(rawIdPattern, (id) => entityNames.get(id.toLowerCase()) || 'record');
+  return normalizeRecordWraps(answer).replace(actionIdPattern, label)
+    .replace(rawIdPattern, (id, offset, text) => {
+      if (isLabeledIdentifier(text, offset)) return id;
+      const line = identifierLine(text, offset);
+      if (isIdentifierListRow(text, offset)) return id;
+      const name = entityNames.get(id.toLowerCase());
+      return /\b(?:channel|camera|nvr)s?\s+id\b/i.test(line)
+        ? id
+        : name || readableId(id, text, offset);
+    });
 }
 export default function AgentReport({ report, sources = [], actionResult, entityNames = new Map(), theme, exportUi }) {
   const answerRef = useRef(null);

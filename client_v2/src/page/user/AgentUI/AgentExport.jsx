@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle } from 'lucide-react';
-import { runAssistantLogExport } from '@/page/user/Assistant/assistantLogExport';
+import { assistantExportParams, runAssistantLogExport } from '@/page/user/Assistant/assistantLogExport';
 import { fetchIncidents } from '@/helpers/incidents';
-import { yieldToBrowser } from './downloadUtils.js';
+import { getSleepActivityLogs } from '@/pages/SleepActivityLogs/Api';
+import { mediaUrl } from '@/lib/format';
+import moment from 'moment-timezone';
+import * as XLSX from 'xlsx-js-style';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { drawSplitReportHeader } from './splitReportHeader.js';
+import { exportAgentCrowdPdf } from './agentCrowdPdf.js';
+import { saveBlob, yieldToBrowser } from './downloadUtils.js';
 
 const formatsFor = (item) => {
   const formats = Array.isArray(item?.formats) ? item.formats : [item?.format];
@@ -11,7 +19,184 @@ const formatsFor = (item) => {
 
 const reportDate = (value) => String(value || '').slice(0, 10);
 
+const SLEEP_REPORT_COLORS = {
+  blue: '7092EA',
+  purple: '9C68E0',
+  navy: '293579',
+  ink: [32, 38, 68],
+};
+
+async function exportAgentLog(ui, format, options) {
+  if (ui.resource === 'crowd_detection_logs' && format === 'pdf') {
+    if (!ui.records?.length) {
+      const range = ui.dateRange?.resolved || ui.dateRange || {};
+      return downloadAgentReport({ ...range, ...ui }, format, options);
+    }
+    const result = exportAgentCrowdPdf(ui);
+    options?.onProgress?.({ phase: 'complete', progress: 1 });
+    return result;
+  }
+  if (ui.resource !== 'sleep_activity_logs' || !['csv', 'xlsx', 'pdf'].includes(format)) {
+    return runAssistantLogExport(ui, format, options);
+  }
+  const params = assistantExportParams(ui);
+  const response = await getSleepActivityLogs({ ...params, skip: 0, limit: 10000 });
+  const rows = response?.data?.body?.data?.data || [];
+  if (!rows.length) throw new Error('No matching sleep activity records were found.');
+
+  const headers = ['S No', 'Date', 'Time', 'Status', 'Camera', 'NVR', 'Zone', 'Severity', 'Alert Status', 'Image'];
+  const title = 'Sleep Detection Report';
+  const period = [params.startDate, params.endDate].filter(Boolean).map((date) => moment(reportDate(date), 'YYYY-MM-DD').format('DD MMM YYYY')).join(' – ');
+  const records = rows.map((row, index) => {
+    const time = moment.utc(row.timeOfIncident || row.createdAt || null).tz(params.timezone);
+    const image = mediaUrl(row.Image || row.image || row.imageUrl);
+    return {
+      image: /^https?:\/\/[^\s"\u0000-\u001f]+$/i.test(image) ? image : '',
+      cells: [
+        index + 1,
+        time.isValid() ? time.format('DD MMM YYYY') : '',
+        time.isValid() ? time.format('hh:mm:ss A') : '',
+        row.isSleeping === true ? 'Sleeping' : 'Awake',
+        row.channelData?.customName || row.channelData?.name || '',
+        row.nvrData?.nvrName || '',
+        row.zoneName || row.zone || '',
+        row.severity || '',
+        row.resolved === true ? 'Resolved' : row.report?.status === true ? 'Reported' : row.currentStatus || (row.resolved === false ? 'New' : ''),
+      ],
+    };
+  });
+  const table = records.map(({ cells, image }) => [...cells, image ? 'View Image' : '']);
+  const summary = `${params.timezone} | ${records.length} records`;
+  if (format === 'xlsx') {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['VideoraIQ', '', '', '', '', '', '', '', title, ''],
+      ['Smart Surveillance Powered by AI', '', '', '', '', '', '', '', 'Detection Report', ''],
+      [period, summary],
+      headers,
+      ...table,
+    ]);
+    sheet['!merges'] = [
+      XLSX.utils.decode_range('A1:H1'),
+      XLSX.utils.decode_range('I1:J1'),
+      XLSX.utils.decode_range('A2:H2'),
+      XLSX.utils.decode_range('I2:J2'),
+    ];
+    sheet['!rows'] = [{ hpt: 24 }, { hpt: 16 }, { hpt: 18 }, { hpt: 22 }];
+    sheet['!cols'] = [8, 16, 15, 13, 28, 22, 30, 14, 16, 16].map((wch) => ({ wch }));
+    sheet['!autofilter'] = { ref: `A4:J${records.length + 4}` };
+    for (let col = 0; col < 8; col += 1) {
+      sheet[XLSX.utils.encode_cell({ r: 0, c: col })].s = {
+        fill: { fgColor: { rgb: SLEEP_REPORT_COLORS.blue } },
+        font: { name: 'Arial', bold: true, color: { rgb: 'FFFFFF' }, sz: 16 },
+        alignment: { horizontal: 'left', vertical: 'center' },
+      };
+      sheet[XLSX.utils.encode_cell({ r: 1, c: col })].s = {
+        fill: { fgColor: { rgb: SLEEP_REPORT_COLORS.blue } },
+        font: { name: 'Arial', color: { rgb: 'EAF0FF' }, sz: 8 },
+        alignment: { horizontal: 'left', vertical: 'center' },
+      };
+    }
+    for (let col = 8; col < 10; col += 1) {
+      sheet[XLSX.utils.encode_cell({ r: 0, c: col })].s = {
+        fill: { fgColor: { rgb: SLEEP_REPORT_COLORS.purple } },
+        font: { name: 'Arial', bold: true, color: { rgb: 'FFFFFF' }, sz: 14 },
+        alignment: { horizontal: 'right', vertical: 'center' },
+      };
+      sheet[XLSX.utils.encode_cell({ r: 1, c: col })].s = {
+        fill: { fgColor: { rgb: SLEEP_REPORT_COLORS.purple } },
+        font: { name: 'Arial', color: { rgb: 'F7F0FF' }, sz: 8 },
+        alignment: { horizontal: 'right', vertical: 'center' },
+      };
+    }
+    [0, 1].forEach((col) => {
+      sheet[XLSX.utils.encode_cell({ r: 2, c: col })].s = {
+        font: { name: 'Arial', bold: col === 0, color: { rgb: '202644' }, sz: col === 0 ? 11 : 8 },
+        alignment: { vertical: 'center' },
+      };
+    });
+    headers.forEach((_, col) => {
+      sheet[XLSX.utils.encode_cell({ r: 3, c: col })].s = {
+        fill: { fgColor: { rgb: SLEEP_REPORT_COLORS.navy } },
+        font: { name: 'Arial', bold: true, color: { rgb: 'FFFFFF' }, sz: 8 },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      };
+    });
+    records.forEach(({ image }, index) => {
+      if (!image) return;
+      const cell = sheet[`J${index + 5}`];
+      cell.l = { Target: image };
+      cell.s = { font: { name: 'Arial', underline: true, color: { rgb: '365FC7' }, sz: 8 } };
+    });
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Sleep Detection');
+    XLSX.writeFile(book, 'sleep_activity_logs.xlsx');
+  } else if (format === 'pdf') {
+    const doc = new jsPDF('landscape');
+    autoTable(doc, {
+      head: [headers], body: table, startY: 46, margin: { top: 46, left: 10, right: 10 },
+      styles: {
+        font: 'helvetica',
+        fontSize: 7.3,
+        fontStyle: 'normal',
+        cellPadding: { top: 2.1, right: 2.5, bottom: 2.1, left: 2.5 },
+        lineColor: [218, 225, 236],
+        lineWidth: 0.1,
+        textColor: SLEEP_REPORT_COLORS.ink,
+        overflow: 'linebreak',
+        valign: 'middle',
+        minCellHeight: 7,
+      },
+      headStyles: {
+        fillColor: [41, 53, 121],
+        textColor: [255, 255, 255],
+        font: 'helvetica',
+        fontStyle: 'bold',
+        fontSize: 7.1,
+        cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
+        minCellHeight: 8,
+        halign: 'center',
+      },
+      alternateRowStyles: { fillColor: [239, 242, 252] },
+      willDrawPage: () => {
+        drawSplitReportHeader(doc, { title });
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text(period.replace('–', '-'), 10, 35);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(summary, 10, 41);
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 9) data.cell.styles.textColor = [54, 95, 199];
+      },
+      didDrawCell: (data) => {
+        const image = records[data.row.index]?.image;
+        if (data.section === 'body' && data.column.index === 9 && image) {
+          const { x, y, width, height } = data.cell;
+          doc.link(x, y, width, height, { url: image });
+        }
+      },
+    });
+    doc.save('sleep_activity_logs.pdf');
+  } else {
+    const quoteCsv = (text) => `"${text.replace(/"/g, '""')}"`;
+    const escape = (value) => {
+      const text = String(value ?? '');
+      const safe = /^\s*[=+@-]/.test(text) ? `'${text}` : text;
+      return quoteCsv(safe);
+    };
+    const lines = [
+      headers.map(escape).join(','),
+      ...records.map(({ cells, image }) => cells.map(escape)
+        .concat(quoteCsv(image ? `=HYPERLINK("${image}","View Image")` : '')).join(',')),
+    ];
+    saveBlob(new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'sleep_activity_logs.csv');
+  }
+  options?.onProgress?.({ phase: 'complete', progress: 1 });
+}
+
 const AGENT_EXPORT_TYPES = [
+  { resource: 'sleep_activity_logs', incidentType: 'guardSleeping', title: 'Sleep Activity Logs', pattern: /guard\s*sleep(?:ing)?|sleep[ _-]*(?:activity|detection|logs)/i },
   { resource: 'crowd_detection_logs', incidentType: 'crowdDetection', title: 'Crowd Detection Report', pattern: /crowd\s*detect/i },
   { resource: 'gender_age_logs', incidentType: 'genderAgeDetection', title: 'Gender & Age Logs', pattern: /gender\s*(?:and|&)\s*age|gender[_ -]?age/i },
   { resource: 'fire_smoke_logs', incidentType: 'fireSmokeDetection', title: 'Fire & Smoke Logs', pattern: /fire\s*(?:and|&)\s*smoke|fire[_ -]?smoke/i },
@@ -61,7 +246,7 @@ export async function downloadAgentReport({ startDate, endDate, timezone = 'Asia
   // used by the reference exports. Do not substitute the generic incidents
   // feed here, because it omits those display fields.
   if (selected.resource !== 'crowd_detection_logs') {
-    return runAssistantLogExport({
+    return exportAgentLog({
       resource: selected.resource,
       startDate,
       endDate,
@@ -69,7 +254,7 @@ export async function downloadAgentReport({ startDate, endDate, timezone = 'Asia
       reportCacheKey,
       title: title || selected.title,
       dateRange: { startDate, endDate, timezone },
-      filters: { ...filters, incidentTypeFilter: [incidentType || selected.incidentType] },
+      filters: { ...(selected.resource === 'sleep_activity_logs' ? { isSleeping: true } : {}), ...filters, incidentTypeFilter: [incidentType || selected.incidentType] },
     }, format, { onProgress: reportProgress });
   }
   const rows = [];
@@ -93,7 +278,7 @@ export async function downloadAgentReport({ startDate, endDate, timezone = 'Asia
   }
   const exportRows = format === 'pdf' ? rows.slice(0, 3000) : rows;
   if (!exportRows.length) throw new Error('No matching incidents were found.');
-  return runAssistantLogExport({
+  return exportAgentLog({
     resource: selected.resource,
     records: exportRows,
     totalRecords,
@@ -131,7 +316,7 @@ export default function AgentExport({ ui, exportText = '' }) {
       for (let index = 0; index < targets.length; index += 1) {
         const { item, format } = targets[index];
         setStatus(`Preparing ${format === 'xlsx' ? 'Excel' : format.toUpperCase()}...`);
-        results.push(await runAssistantLogExport(item, format));
+        results.push(await exportAgentLog(item, format));
       }
       if (!results.length) throw new Error('No export format was returned.');
       setStatus('Downloaded successfully');

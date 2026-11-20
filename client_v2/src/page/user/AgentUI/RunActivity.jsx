@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import Robot from './Robot';
 import { agentApi } from './agentApi';
@@ -17,14 +17,16 @@ const labels = {
   get_detection_zone: 'Reading the detection zone', configure_detection_zone: 'Drawing a detection zone',
   edit_detection_zone: 'Editing the detection zone', reset_detection_thresholds: 'Preparing threshold reset',
   reset_detection_settings: 'Preparing settings reset', submit_report: 'Writing the report',
-  request_more_tools: 'Loading more tools',
+  request_more_tools: 'Loading more tools', save_investigation: 'Saving the investigation',
+  prepare_add_alert_recipients: 'Preparing alert recipients',
 };
+const humanize = (value) => String(value).replaceAll('_', ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 const toolLabel = (tool) => labels[tool] || (tool?.startsWith('prepare_add_') ? `Preparing new ${tool.slice(12).replaceAll('_', ' ')}` : String(tool || 'Tool').replaceAll('_', ' '));
 function step(event) {
   const p = event.payload || {};
   if (event.kind === 'progress') return p.attempt > 1 ? 'Resumed from checkpoint' : 'Started';
-  if (event.kind === 'routed') return p.request_type ? `Understood request · ${p.request_type}` : null;
-  if (event.kind === 'model_call') return `Reasoning${p.seconds ? ` · ${p.seconds}s` : ''}`;
+  if (event.kind === 'routed') return p.request_type ? `Understood request · ${humanize(p.request_type)}` : null;
+  if (event.kind === 'model_call') return 'Reasoning';
   if (event.kind === 'tool_started') return toolLabel(p.tool);
   if (event.kind === 'tool_completed') return toolLabel(p.tool);
   if (event.kind === 'more_tools') return 'Loading more tools';
@@ -41,12 +43,38 @@ function parseBatch(batch) {
     try { return [{ ...JSON.parse(data), cursor: Number(id) }]; } catch { return []; }
   });
 }
-export default function RunActivity({ runId, active, status, children }) {
+
+function stepsFromEvents(events) {
+  const steps = [];
+  const open = new Map();
+  for (const event of events) {
+    const label = step(event);
+    if (!label) continue;
+    const { call_id: callId, errorCode, seconds, detector } = event.payload || {};
+    const completed = event.kind === 'tool_completed';
+    const started = event.kind === 'tool_started';
+    const failed = (completed && errorCode) || event.kind === 'budget_report_refused';
+    const detail = completed ? errorCode
+      : event.kind === 'model_call' && Number.isFinite(seconds) ? seconds.toFixed(1) + 's'
+      : event.kind === 'routed' && detector ? humanize(detector) : undefined;
+    const index = callId == null ? undefined : open.get(String(callId));
+    if (completed && index !== undefined) {
+      steps[index] = { ...steps[index], state: failed ? 'error' : 'done', detail };
+      open.delete(String(callId));
+      continue;
+    }
+    if (started && callId != null) open.set(String(callId), steps.length);
+    steps.push({ id: event.cursor, label, detail, state: started ? 'active' : failed ? 'error' : 'done' });
+  }
+  return steps;
+}
+export default function RunActivity({ runId, active, status, reconnecting, stopping, children }) {
   const [open, setOpen] = useState(active);
   const [events, setEvents] = useState([]);
   useEffect(() => { setOpen(active); setEvents([]); }, [runId, active]);
   useEffect(() => {
     if (!active || !runId) return undefined;
+    const controller = new AbortController();
     let stopped = false;
     let cursor = 0;
     let timer;
@@ -55,7 +83,8 @@ export default function RunActivity({ runId, active, status, children }) {
       try {
         let batch;
         do {
-          batch = parseBatch(await agentApi.events(runId, cursor));
+          batch = parseBatch(await agentApi.events(runId, cursor, controller.signal))
+            .filter((event) => event.cursor > cursor);
           if (stopped) return;
           if (batch.length) { cursor = batch.at(-1).cursor; setEvents((previous) => [...previous, ...batch]); }
         } while (batch.length === 200 && !stopped);
@@ -63,21 +92,15 @@ export default function RunActivity({ runId, active, status, children }) {
       if (!stopped && active) timer = window.setTimeout(poll, 1500);
     };
     poll();
-    return () => { stopped = true; window.clearTimeout(timer); };
+    return () => { stopped = true; controller.abort(); window.clearTimeout(timer); };
   }, [runId, active]);
-  const steps = events.reduce((list, event) => {
-    const label = step(event);
-    if (!label) return list;
-    const callId = event.payload?.call_id;
-    if (event.kind === 'tool_completed' && callId) {
-      const started = list.find((item) => item.callId === callId);
-      if (started) { started.label = label; started.state = event.payload?.errorCode ? 'error' : 'done'; started.detail = event.payload?.errorCode || ''; return list; }
-    }
-    list.push({ id: event.cursor, callId, label, state: event.kind === 'tool_started' ? 'active' : event.kind === 'tool_completed' && event.payload?.errorCode ? 'error' : 'done' });
-    return list;
-  }, []);
-  const activeLabel = status === 'verification_pending' ? 'Verifying the change'
+  const steps = useMemo(() => stepsFromEvents(events), [events]);
+  const latest = events.at(-1);
+  const activeLabel = reconnecting ? 'Reconnecting to check run status'
+    : stopping ? 'Stopping request'
+    : status === 'verification_pending' ? 'Verifying the change'
     : [...steps].reverse().find((item) => item.state === 'active')?.label
+      || (latest?.kind === 'tool_completed' ? 'Processing results' : step(latest || {}))
       || (status === 'queued' ? 'Preparing your request' : 'Analyzing your request');
   return <div className={`agent-run-activity ${active ? 'agent-run-activity-live' : ''}`}>
     {active ? <div className="agent-run-activity-heading">

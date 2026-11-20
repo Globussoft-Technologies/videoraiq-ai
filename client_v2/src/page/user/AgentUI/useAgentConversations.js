@@ -32,6 +32,12 @@ function runMessages(run, autoDownloadRunId = null) {
   // Match the optimistic message keys so refreshing the result preserves both bubbles.
   const messageKey = run.request_id || run.requestId || id;
   const at = timestamp(run.created_at || run.createdAt);
+  if (run.status === 'cancelled') {
+    return [
+      { id: `${messageKey}-user`, role: 'user', text: run.message || '', at },
+      { id: `${messageKey}-agent`, role: 'assistant', at, runId: id, status: 'cancelled', text: 'Request stopped.' },
+    ];
+  }
   const report = run.result?.report;
   const answer = report?.answer || run.result?.message || '';
   const missingProposal = run.status === 'completed'
@@ -43,7 +49,6 @@ function runMessages(run, autoDownloadRunId = null) {
     verification_pending: 'Applied. Not confirmed yet: check the camera in the dashboard.',
     recoverable: 'The request was interrupted. You can recover it from the saved progress.',
     failed: 'Could not complete this request.',
-    cancelled: 'Cancelled. Nothing was changed.',
   }[run.status];
   const actionResult = run.result?.action_result;
   const exportUi = run.result?.ui || run.result?.data?.ui || run.result?.result?.ui;
@@ -76,9 +81,9 @@ const toConversation = (item) => ({
   lastActivityAt: timestamp(item.updated_at || item.updatedAt || item.created_at),
 });
 
-export function useAgentConversations() {
+export function useAgentConversations({ restoreChat = true, initialChatId, loadHistory = true } = {}) {
   const [conversations, setConversations] = useState([]);
-  const [activeId, setActiveId] = useState(() => { try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; } });
+  const [activeId, setActiveId] = useState(() => { try { return initialChatId || (restoreChat ? localStorage.getItem(ACTIVE_KEY) : null); } catch { return null; } });
   const [messages, setMessages] = useState([]);
   const [sending, setSending] = useState(false);
   const [lockReason, setLockReason] = useState('');
@@ -215,18 +220,47 @@ export function useAgentConversations() {
     if (pendingRuns.current.has(conversationId)) return;
     pendingRuns.current.set(conversationId, runId);
     showSending(conversationId);
+    let consecutiveFailures = 0;
+    const reconnecting = (value) => {
+      const messages = messageCache.current.get(conversationId) || [];
+      if (!messages.some((entry) => entry.runId === runId && Boolean(entry.reconnecting) !== value)) return;
+      showMessages(conversationId, messages.map((entry) => entry.runId === runId ? { ...entry, reconnecting: value } : entry));
+    };
     while (mountedRef.current && pendingRuns.current.get(conversationId) === runId) {
       if (document.hidden) { await new Promise((resolve) => setTimeout(resolve, 5000)); continue; }
       try {
         const run = await agentApi.run(runId);
         if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+        if (run.status === 'cancelled') {
+          const cached = detailCache.current.get(conversationId);
+          if (cached?.runs) {
+            detailCache.current.set(conversationId, {
+              ...cached,
+              runs: cached.runs.map((entry) => (entry.id || entry.run_id) === runId ? { ...entry, ...run } : entry),
+            });
+          }
+          const messages = messageCache.current.get(conversationId) || [];
+          showMessages(conversationId, messages.map((entry) => entry.runId === runId
+            ? { id: entry.id, role: 'assistant', at: entry.at, runId, status: 'cancelled', text: 'Request stopped.' }
+            : entry));
+          syncApproval(conversationId, run, cached?.timezone);
+          pendingRuns.current.delete(conversationId);
+          if (selected.current === conversationId) setLockReason('');
+          showSending(conversationId);
+          return;
+        }
         if (running(run.status) || run.status === 'verification_pending') {
+          reconnecting(false);
           showMessages(conversationId, (messageCache.current.get(conversationId) || []).map((entry) => entry.runId === runId ? { ...entry, status: run.status, proposal: run.result?.proposal || entry.proposal, actionResult: run.result?.action_result || entry.actionResult } : entry));
           if (selected.current === conversationId) setLockReason(run.status === 'verification_pending' ? 'Verifying the last change…' : 'The agent is working…');
         }
         if (run.status === 'approval_required') {
           const detail = await agentApi.get(conversationId);
           if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+          if (!detail.runs?.some((entry) => (entry.id || entry.run_id) === runId && entry.status === run.status)) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
           detailCache.current.set(conversationId, detail);
           showMessages(conversationId, toMessages(detail));
           syncApproval(conversationId, run, detail.timezone);
@@ -238,6 +272,10 @@ export function useAgentConversations() {
         if (!running(run.status) && run.status !== 'verification_pending') {
           const detail = await agentApi.get(conversationId);
           if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+          if (!detail.runs?.some((entry) => (entry.id || entry.run_id) === runId && entry.status === run.status)) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
           detailCache.current.set(conversationId, detail);
           const next = toMessages(detail, runId);
           showMessages(conversationId, next);
@@ -249,10 +287,13 @@ export function useAgentConversations() {
           refreshList().catch(() => {});
           return;
         }
-      } catch (error) {
-        if (selected.current === conversationId) setThreadError(publicError(error));
+        consecutiveFailures = 0;
+      } catch {
+        if (!mountedRef.current || pendingRuns.current.get(conversationId) !== runId) return;
+        consecutiveFailures += 1;
+        reconnecting(true);
       }
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000 * 2 ** Math.min(consecutiveFailures, 3)));
     }
   }
 
@@ -261,20 +302,21 @@ export function useAgentConversations() {
     mountedRef.current = true;
     if (selected.current) selectChat(selected.current);
     const loadingRevision = watch.current;
-    refreshList().then((items) => {
+    if (!loadHistory) setHistoryLoading(false);
+    else refreshList().then((items) => {
       if (!mounted || watch.current !== loadingRevision) return;
       if (selected.current && !items.some((item) => item.id === selected.current)) {
         selected.current = null;
         setActiveId(null);
         setMessages([]);
       }
-      if (!selected.current && items[0]) selectChat(items[0].id);
+      if (restoreChat && !selected.current && items[0]) selectChat(items[0].id);
     }).catch((error) => { if (mounted) setHistoryError(publicError(error)); })
       .finally(() => { if (mounted) setHistoryLoading(false); });
     return () => { mounted = false; mountedRef.current = false; pendingRuns.current.clear(); ++watch.current; ++listRevision.current; };
-  }, [refreshList, selectChat]);
+  }, [loadHistory, refreshList, restoreChat, selectChat]);
 
-  useEffect(() => { try { if (activeId) localStorage.setItem(ACTIVE_KEY, activeId); else localStorage.removeItem(ACTIVE_KEY); } catch { /* Optional preference. */ } }, [activeId]);
+  useEffect(() => { try { if (activeId) localStorage.setItem(ACTIVE_KEY, activeId); else if (restoreChat) localStorage.removeItem(ACTIVE_KEY); } catch { /* Optional preference. */ } }, [activeId, restoreChat]);
 
   const newChat = useCallback(async () => {
     selected.current = null;
@@ -377,9 +419,19 @@ export function useAgentConversations() {
   }, []);
   const stop = useCallback(async (runId) => {
     const id = selected.current;
-    await agentApi.cancel(runId);
-    if (id) selectChat(id);
-  }, [selectChat]);
+    const markStopping = (stopping) => {
+      const messages = messageCache.current.get(id) || [];
+      showMessages(id, messages.map((entry) => entry.runId === runId ? { ...entry, stopping } : entry));
+    };
+    markStopping(true);
+    try {
+      await agentApi.cancel(runId);
+      if (mountedRef.current && id) follow(runId, id);
+    } catch (error) {
+      if (mountedRef.current) markStopping(false);
+      throw new Error(publicError(error));
+    }
+  }, []);
 
   const retryUncertain = useCallback(async () => {
     const pending = uncertainRef.current;

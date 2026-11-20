@@ -49,6 +49,7 @@ export default function AgentLauncher() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [initialChatId, setInitialChatId] = useState(null);
   const [look, setLook] = useState({ x: 0, y: 0 });
   const [labelVisible, setLabelVisible] = useState(false);
   const [labelPlacement, setLabelPlacement] = useState('left');
@@ -58,9 +59,15 @@ export default function AgentLauncher() {
   const panel = useDraggablePosition('videora_agent_panel_position', { right: 16, bottom: 16 });
 
   useLayoutEffect(() => {
+    if (location.pathname === '/agent' || location.state?.agentOpenCompact === false) setInitialChatId(null);
     if (location.state?.agentOpenCompact === true) setOpen(true);
     if (location.state?.agentOpenCompact === false) setOpen(false);
-  }, [location.key, location.state]);
+    if (location.state?.agentOpenCompact === true && location.state.agentCompactChatId !== undefined) {
+      const { agentCompactChatId, ...state } = location.state;
+      setInitialChatId(agentCompactChatId);
+      navigate(location.pathname + location.search + location.hash, { replace: true, state });
+    }
+  }, [location, navigate]);
   useEffect(() => () => window.clearTimeout(labelTimer.current), []);
   useLayoutEffect(() => {
     if (!labelVisible || !launcherRef.current) return;
@@ -87,8 +94,8 @@ export default function AgentLauncher() {
   if (location.pathname === '/agent') return null;
 
   return <>
-    {open && <AgentUI mode="compact" panelPosition={panel.position} onPanelPointerDown={panel.onPointerDown} onClose={() => setOpen(false)} onExpand={() => {
-      navigate('/agent', { state: { agentReturnTo: `${location.pathname}${location.search}${location.hash}` } });
+    {open && <AgentUI key={initialChatId || 'new'} mode="compact" initialChatId={initialChatId} panelPosition={panel.position} onPanelPointerDown={panel.onPointerDown} onClose={() => { setOpen(false); setInitialChatId(null); }} onExpand={(chatId) => {
+      navigate('/agent', { state: { agentReturnTo: `${location.pathname}${location.search}${location.hash}`, agentExpandedChatId: chatId } });
     }} />}
     {!open && <div ref={launcherRef} className={`vai-lw vai-label-${labelPlacement} ${labelVisible ? 'vai-label-visible' : ''}`} style={launcher.position} onPointerEnter={showLabel} onPointerLeave={hideLabel} onFocus={showLabel} onBlur={hideLabel} onPointerDown={launcher.onPointerDown}>
       <span className="vai-lab">Ask <em>VIDEORA</em> AI</span>

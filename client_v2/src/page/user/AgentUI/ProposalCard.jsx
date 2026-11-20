@@ -10,7 +10,8 @@ export default function ProposalCard({ proposal, onReview, onNewChat, entityName
   const expired = !Number.isFinite(expiry) || remaining === 0;
   const targets = proposal.targets || [];
   return <div className="agent-proposal-card"><strong>⚠ {expired ? 'Proposal expired · nothing has changed yet' : 'Waiting for your approval · nothing has changed yet'}</strong><span>{expired ? 'Expired' : `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')} left`}</span><h3>{words(proposal.operation)} · {targets.length} targets</h3><ul>{targets.slice(0, 5).map((target, index) => {
-    const camera = target.cameraName || target.before?.cameraName || entityNames.get(String(target.channelId || '').toLowerCase()) || 'Camera name unavailable';
+    const cameraId = target.channelId || target.cameraId || target.camera_id;
+    const camera = target.cameraName || target.before?.cameraName || entityNames.get(String(cameraId || '').toLowerCase()) || (cameraId ? 'Camera ID: ' + cameraId : 'Camera name unavailable');
     const detector = words(target.detectionType || proposal.impact?.detection || 'Detection');
     const lines = targetLines(proposal, target, entityNames);
     const admin = proposal.kind === 'admin' || proposal.operation?.startsWith('create_');

@@ -29,13 +29,17 @@ export default function AgentUI(props) {
   return <LiveAgentUI {...props} />;
 }
 
-function LiveAgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelPointerDown }) {
+function LiveAgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelPointerDown, initialChatId }) {
   const navigate = useNavigate();
   const location = useLocation();
   const compact = mode === 'compact';
-  const { conversations, activeId, messages, sending, lockReason, uncertain, retryUncertain, discardUncertain, historyLoading, historyError: historyApiError, threadLoading, threadError, newChat, selectChat, deleteChat, renameChat, send, approval, hasPendingApproval, decisionError, dismissApproval, reopenApproval, decide, recover, stop } = useAgentConversations();
+  const expandedSelection = compact ? undefined : location.state?.agentExpandedChatId;
+  const { conversations, activeId, messages, sending, lockReason, uncertain, retryUncertain, discardUncertain, historyLoading, historyError: historyApiError, threadLoading, threadError, newChat, selectChat, deleteChat, renameChat, send, approval, hasPendingApproval, decisionError, dismissApproval, reopenApproval, decide, recover, stop } = useAgentConversations({ loadHistory: !compact, restoreChat: !compact && expandedSelection === undefined, initialChatId: compact ? initialChatId : expandedSelection });
   const { channels, cameras, detections, incidents, cameraBars, detectionBars, analyticsReady } = useAgentDashboardMetrics();
-  const needsDeviceNames = hasPendingApproval || messages.some((message) => message.role === 'assistant' && /\b[0-9a-f]{24}\b/i.test(message.text));
+  const needsDeviceNames = hasPendingApproval || messages.some((message) => message.role === 'assistant' && (
+    /\b[0-9a-f]{24}\b/i.test(message.text)
+    || /\b(?:channel|camera|nvr|record|device)s?\s+ids?\b/i.test(message.text)
+  ));
   const { data: nvrInventory } = useApi(() => getNvrs(0, 500), [], { enabled: needsDeviceNames });
   const needsAdminNames = Boolean(approval?.proposals?.some((proposal) => proposal.kind === 'admin'));
   const { data: adminNames } = useApi(async () => {
@@ -44,12 +48,22 @@ function LiveAgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelP
   }, [], { enabled: needsAdminNames });
   const entityNames = useMemo(() => {
     const names = new Map();
+    const idValue = (value) => {
+      if (!value) return '';
+      if (typeof value === 'object') return value._id || value.id || value.channelId || value.nvrId || '';
+      return value;
+    };
     const add = (id, name) => {
       const label = String(name || '').trim();
-      if (id && label && !/^[0-9a-f]{24}$/i.test(label)) names.set(String(id).toLowerCase(), label);
+      const normalizedId = idValue(id);
+      if (normalizedId && label && !/^[0-9a-f]{24}$/i.test(label)) names.set(String(normalizedId).toLowerCase(), label);
     };
-    (nvrInventory?.nvrs || []).forEach((nvr) => add(nvr._id || nvr.id, nvr.nvrName || nvr.name));
-    channels.forEach((channel) => add(channel._id || channel.id, channel.customName || channel.name));
+    (nvrInventory?.nvrs || []).forEach((nvr) => add(nvr._id || nvr.id || nvr.nvrId, nvr.nvrName || nvr.name || nvr.label));
+    channels.forEach((channel) => {
+      add(channel._id || channel.id || channel.channelId || channel.cameraId || channel.localChannelId || channel.dbId, channel.customName || channel.name || channel.channelName || channel.aliasName || channel.label);
+      const nvr = channel.nvrId || channel.nvr || channel.nvrData;
+      if (nvr && typeof nvr === 'object') add(nvr._id || nvr.id || nvr.nvrId, nvr.nvrName || nvr.name || nvr.label);
+    });
     (adminNames?.roles || []).forEach((role) => add(role._id || role.id, role.roleName || role.name));
     (adminNames?.departments || []).forEach((department) => add(department._id || department.id, department.departmentName || department.name));
     (adminNames?.locations || []).forEach((place) => add(place._id || place.id, place.locationName || place.name));
@@ -110,8 +124,8 @@ function LiveAgentUI({ mode = 'full', onClose, onExpand, panelPosition, onPanelP
   const ask = (question, options) => send(question, options);
   const closeAgent = () => { if (onClose) onClose(); else navigate(location.state?.agentReturnTo || '/dashboard', { state: { agentOpenCompact: false } }); };
   const toggleExpand = () => {
-    if (compact) { onExpand?.(); return; }
-    navigate(location.state?.agentReturnTo || '/dashboard', { state: { agentOpenCompact: true } });
+    if (compact) { onExpand?.(activeId); return; }
+    navigate(location.state?.agentReturnTo || '/dashboard', { state: { agentOpenCompact: true, agentCompactChatId: activeId } });
   };
 
   useEffect(() => {

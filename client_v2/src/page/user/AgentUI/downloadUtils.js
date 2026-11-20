@@ -13,7 +13,7 @@ export function saveBlob(blob, fileName) {
 export function yieldToBrowser() {
   return new Promise((resolve) => {
     if (typeof window !== 'undefined' && window.requestAnimationFrame) {
-      window.requestAnimationFrame(() => resolve());
+      window.requestAnimationFrame(() => setTimeout(resolve, 0));
     } else {
       setTimeout(resolve, 0);
     }

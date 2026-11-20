@@ -25,6 +25,21 @@ export const agentApi = {
     }),
   }).then((response) => response.data),
   capabilities: (signal) => api.get(endpoint('/capabilities'), { signal }).then(data),
+  cameraInventory: (id, signal) => api.get(endpoint('/camera-inventory/' + encodeURIComponent(id)), { signal }).then(data),
+  cameraInventoryExportLinks: async (id) => {
+    const response = await api.post(endpoint('/camera-inventory/' + encodeURIComponent(id) + '/export-links'));
+    const { grant, images } = response.data;
+    const keyPattern = /^[a-f0-9]{32}$/i;
+    return new Map(Object.entries(images || {}).flatMap(([file, key]) => {
+      if (typeof grant !== 'string' || !keyPattern.test(grant) || typeof key !== 'string' || !keyPattern.test(key)) return [];
+      const url = new URL(api.getUri({ url: endpoint('/export-image/' + grant + '/' + key) }), window.location.origin);
+      return /^https?:$/.test(url.protocol) && !url.username && !url.password ? [[file, url.href]] : [];
+    }));
+  },
+  cameraInventoryImage: (id, fileName, signal) => api.get(
+    endpoint('/camera-inventory/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(fileName)),
+    { responseType: 'blob', signal, timeout: 15_000 },
+  ).then(data),
   events: (id, after, signal) => api.get(endpoint(`/runs/${encodeURIComponent(id)}/events`), {
     params: { after }, responseType: 'text', headers: { Accept: 'text/event-stream' }, signal,
   }).then(data),
