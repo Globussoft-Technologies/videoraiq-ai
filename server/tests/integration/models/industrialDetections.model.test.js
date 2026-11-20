@@ -63,6 +63,7 @@ it("persists loading/unloading stock movement details", async () => {
     vehicleSessionId: "a8dc38d2-1e95-44fe-98e1-bb1f51bf3902",
     vehicleNumber: "MH12AB1234",
     direction: "loading",
+    incidentMode: "rollerLoadingUnloadingSettings",
     lineCrossingDirection: "entry",
     boxType: "brown",
     boxCount: 5,
@@ -78,6 +79,7 @@ it("persists loading/unloading stock movement details", async () => {
   expect(incident.eventId).toBe("1da2b7b7-9609-4ac6-aa3b-81d7c8a79287");
   expect(incident.vehicleNumber).toBe("MH12AB1234");
   expect(incident.direction).toBe("loading");
+  expect(incident.incidentMode).toBe("rollerLoadingUnloadingSettings");
   expect(incident.boxType).toBe("brown");
   expect(incident.boxCount).toBe(5);
   expect(incident.classificationConfidence).toBe(0.93);
@@ -96,6 +98,7 @@ it("accepts a stock-counting incident without optional box metadata", async () =
   });
 
   expect(incident.boxCount).toBeUndefined();
+  expect(incident.incidentMode).toBeUndefined();
   expect(incident.boxType).toBeUndefined();
   expect(incident.defaultCountApplied).toBeUndefined();
   expect(incident.truckPresent).toBeUndefined();

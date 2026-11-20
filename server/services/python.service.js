@@ -19,6 +19,7 @@ import {
   DETECTION_MODES_MAP,
   DS_DETECTOR_BY_MODE,
   INDUSTRIAL_SETTING_TYPES,
+  ROLLER_STOCK_SETTING_MODE,
   dsDetectorsForModes,
 } from "../constants/detectionTypes.js";
 import { DetectionSetting } from "../core/v1/detectionSettings/detectionSettings.model.js";
@@ -183,6 +184,8 @@ const appendIndustrialDetectors = (
             ?? stockSettings.activity_mode ?? stockSettings.mode;
           detectors.push({
             name,
+            ...(stockSettings.settingMode === ROLLER_STOCK_SETTING_MODE || stockSettings.settingMode === null
+              ? { settingMode: stockSettings.settingMode } : {}),
             activity_mode: ["loading", "unloading", "all"].includes(activityMode)
               ? activityMode
               : "all",

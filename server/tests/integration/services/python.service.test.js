@@ -339,7 +339,7 @@ describe("PythonService.startNewDetection", () => {
     ]);
   });
 
-  it("sends the stock activity mode without line fields", async () => {
+  it.each(["rollerLoadingUnloadingSettings", null])("sends stock settingMode %s without line fields", async (settingMode) => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 
     await PythonService.startNewDetection({
@@ -351,6 +351,7 @@ describe("PythonService.startNewDetection", () => {
       zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
       zone_configs: [{ name: "Loading/Unloading Bay", activity_mode: "unloading" }],
       confidence_thresholds: {
+        settingMode,
         line_coordinates: [[400, 70], [400, 575]],
         inside_reference_point: [600, 320],
         trigger_notification: false,
@@ -359,6 +360,7 @@ describe("PythonService.startNewDetection", () => {
 
     expect(axios.post.mock.calls[0][1].detectors[0]).toEqual({
       name: "loadingUnloadingStockCountingSettings",
+      settingMode,
       activity_mode: "unloading",
       zones: [[[60, 70], [740, 70], [740, 575], [60, 575]]],
       zone_configs: [{ name: "Loading/Unloading Bay" }],

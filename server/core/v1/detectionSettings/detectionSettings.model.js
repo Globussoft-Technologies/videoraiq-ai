@@ -4,6 +4,7 @@ import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../../../consta
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
+  ROLLER_STOCK_SETTING_MODE,
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
 const baseOptions = { discriminatorKey: "settingType", timestamps: true };
@@ -1223,7 +1224,11 @@ const LoadingUnloadingStockCountingDetectionSchema = new mongoose.Schema({
 });
 const LoadingUnloadingStockCountingSetting = DetectionSetting.discriminator(
   "loadingUnloadingStockCountingSettings",
-  new mongoose.Schema({ settings: LoadingUnloadingStockCountingDetectionSchema }),
+  new mongoose.Schema({
+    settings: LoadingUnloadingStockCountingDetectionSchema.clone().add({
+      settingMode: { type: String, enum: [ROLLER_STOCK_SETTING_MODE] },
+    }),
+  }),
 );
 
 const SackLoadingUnloadingSetting = DetectionSetting.discriminator(

@@ -631,7 +631,7 @@ export default function DetectionZoneMarking({
     return nextErrors;
   };
 
-  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting, specialSettings }) => {
+  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting, specialSettings, settingMode }) => {
     const doorSettings = isDoor
       ? {
           door_alert_mode: doorAlertMode || activeType.setting?.settings?.door_alert_mode || 'open',
@@ -697,6 +697,10 @@ export default function DetectionZoneMarking({
     }));
     const savedDetectionName = isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : detectionName;
     const savedSettingType = isAttendanceDetection ? ATTENDANCE_DETECTION_SETTING_TYPE : activeType.settingType;
+    const stockModeSettings = isStockCounting && !isSackLoading
+      ? settingMode ? { settingMode }
+        : settingMode === '' && activeType.setting?.settings?.settingMode ? { settingMode: null } : {}
+      : {};
     if (activeType.settingId) {
       const setting = activeType.setting;
       const storedSettings = { ...(setting.settings || {}) };
@@ -733,6 +737,7 @@ export default function DetectionZoneMarking({
           zone_configs: zoneConfigs,
           ...(specialSettings || {}),
           ...machineSettings,
+          ...stockModeSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
@@ -770,6 +775,7 @@ export default function DetectionZoneMarking({
           zone_configs: zoneConfigs,
           ...(specialSettings || {}),
           ...machineSettings,
+          ...stockModeSettings,
           telegramChatIds: fallbackTelegramChatIds,
           telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
@@ -822,10 +828,10 @@ export default function DetectionZoneMarking({
     setShowSaveModal(true);
   };
 
-  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, doorNotification, lighting, specialSettings }) => {
+  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName, doorAlertMode, doorNotification, lighting, specialSettings, settingMode }) => {
     setSaving(true);
     try {
-      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, doorNotification, lighting, specialSettings });
+      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName, doorAlertMode, doorNotification, lighting, specialSettings, settingMode });
       if (isDoor) {
         setDoorAlertModeDraft(doorAlertMode);
         setDoorSeverityDraft(priority);

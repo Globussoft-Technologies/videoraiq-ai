@@ -351,10 +351,14 @@ const normalizeTelegramSettings = (settings = {}) => {
 
 const applyNormalizedTelegramSettings = (target, incomingSettings = {}) => {
   const normalizedSettings = normalizeTelegramSettings(incomingSettings);
-  target.settings = {
+  const settings = {
     ...(target.settings?.toObject?.() || target.settings || {}),
     ...normalizedSettings,
   };
+  if (target.settingType === "loadingUnloadingStockCountingSettings" && settings.settingMode === null) {
+    delete settings.settingMode;
+  }
+  target.settings = settings;
 
   target.markModified("settings");
   target.markModified("settings.telegramChatIds");
@@ -1151,7 +1155,9 @@ class DetectionSettingService {
           const zone_configs =
             detectionSetting?.settings?.zone_configs || [];
           const zoneName = detectionSetting?.settings?.zoneName || [];
-          const confidence_thresholds = detectionSetting?.settings || {};
+          const confidence_thresholds = settingType === "loadingUnloadingStockCountingSettings" && value.settings?.settingMode === null
+            ? { ...(detectionSetting.settings?.toObject?.() || detectionSetting.settings || {}), settingMode: null }
+            : detectionSetting?.settings || {};
           const line_crossing_settings = detectionSetting?.settings || {};
           const mobile_phone_confidence = detectionSetting?.settings || {};
           const vehicle_check_in_out_settings = detectionSetting?.settings || {};

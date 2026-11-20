@@ -3,6 +3,7 @@ import { invalidateApiCache } from "../../../services/apiCache.service.js";
 
 import mongoose from 'mongoose';
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
+import { ROLLER_STOCK_SETTING_MODE } from "../../../constants/detectionTypes.js";
 import { AgentIncidentLifecycle, AgentEventGroup, AgentEvidence } from '../../v2/agentData/agentData.model.js';
 
 const { Schema, model } = mongoose;
@@ -756,7 +757,9 @@ const LoadingUnloadingStockCountingDetectionSchema = new Schema({
 });
 const LoadingUnloadingStockCountingIncident = Incident.discriminator(
   "loadingUnloadingStockCountingDetection",
-  LoadingUnloadingStockCountingDetectionSchema,
+  LoadingUnloadingStockCountingDetectionSchema.clone().add({
+    incidentMode: { type: String, enum: [ROLLER_STOCK_SETTING_MODE] },
+  }),
 );
 
 const SackLoadingUnloadingSchema = LoadingUnloadingStockCountingDetectionSchema.clone();

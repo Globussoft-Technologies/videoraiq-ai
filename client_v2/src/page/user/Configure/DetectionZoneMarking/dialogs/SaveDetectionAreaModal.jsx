@@ -1,14 +1,14 @@
 import WhatsAppRecipientSelect from '../components/WhatsAppRecipientSelect';
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import DoorAlertDurationInput from '../components/DoorAlertDurationInput';
 import DoorAlertRules from '../components/DoorAlertRules';
-import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC } from '../constants';
+import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC, ROLLER_STOCK_SETTING_MODE } from '../constants';
 import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
@@ -19,6 +19,7 @@ import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import PostureSelect from '../components/PostureSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
+import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -65,6 +66,13 @@ export default function SaveDetectionAreaModal({
 }) {
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
+  const showStockMode = isStockCounting && !isSackLoading;
+  const [settingMode, setSettingMode] = useState(
+    initialSpecialSettings?.settingMode === ROLLER_STOCK_SETTING_MODE ? ROLLER_STOCK_SETTING_MODE : '',
+  );
+  const modeId = useId();
+  const modeTrigger = useRef(null);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [zoneDrafts, setZoneDrafts] = useState(() => (isMachineOps ? machineOpsSharedZones(zones) : zones).map(zone => ({
     ...zone,
     ...(isLighting ? lightingZoneSettings(zone, initialLightingSettings) : {}),
@@ -176,6 +184,7 @@ export default function SaveDetectionAreaModal({
       detectionName: detectionName.trim(),
       priority,
       zones: outZones,
+      ...(showStockMode ? { settingMode } : {}),
       ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
       ...(isDoor ? { doorAlertMode, doorNotification } : {}),
       ...((isPosture || isStack || isSittingOnCan) ? { specialSettings: {
@@ -278,6 +287,65 @@ export default function SaveDetectionAreaModal({
                   </div>
                 )}
               </div>
+
+            {showStockMode && (
+              <div style={{ display: 'flex', alignItems: 'end', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <label htmlFor={modeId} style={{ display: 'block', marginBottom: 6, fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>
+                    Mode <span style={{ color: 'var(--tx3)', fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <Popover open={modeMenuOpen && !saving} onOpenChange={setModeMenuOpen} className="block w-full">
+                    <PopoverTrigger asChild>
+                      <button ref={modeTrigger} id={modeId} type="button" disabled={saving}
+                        aria-haspopup="listbox" aria-expanded={modeMenuOpen && !saving}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          width: '100%', height: 40, padding: '0 12px', borderRadius: 12,
+                          background: settingMode || modeMenuOpen ? 'color-mix(in srgb, var(--blue) 10%, var(--bg1solid))' : 'var(--bg2)',
+                          border: `1px solid ${modeMenuOpen ? 'var(--blue)' : 'var(--bd)'}`,
+                          fontSize: 13, color: 'var(--tx)', cursor: saving ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {settingMode ? 'Roller' : 'Select mode'}
+                        <ChevronDown size={15} style={{ color: 'var(--blue)', transform: modeMenuOpen ? 'rotate(180deg)' : undefined }} />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent sideOffset={4} className="z-[10030] p-1.5">
+                      <div role="listbox" aria-label="Mode" style={{ width: `min(${modeTrigger.current?.offsetWidth - 14 || 240}px, calc(100vw - 30px))` }}>
+                        <button type="button" role="option" aria-selected={Boolean(settingMode)} autoFocus
+                          onKeyDown={(event) => { if (event.key === 'Escape') modeTrigger.current?.focus(); }}
+                          onClick={() => {
+                            setSettingMode(ROLLER_STOCK_SETTING_MODE);
+                            setModeMenuOpen(false);
+                            modeTrigger.current?.focus();
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            width: '100%', padding: '9px 10px', borderRadius: 8, border: 0,
+                            background: 'color-mix(in srgb, var(--blue) 16%, var(--bg1solid))',
+                            color: 'var(--tx)', fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                          }}
+                        >
+                          Roller {settingMode && <Check size={14} style={{ color: 'var(--blue)' }} />}
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {settingMode && (
+                  <button type="button" disabled={saving} onClick={() => setSettingMode('')}
+                    aria-label="Clear mode"
+                    style={{
+                      height: 40, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)',
+                      border: '1px solid var(--bd)', color: 'var(--tx2)', fontSize: 12,
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
 
             {isDoor && (
               <DoorAlertRules mode={doorAlertMode} onModeChange={setDoorAlertMode}

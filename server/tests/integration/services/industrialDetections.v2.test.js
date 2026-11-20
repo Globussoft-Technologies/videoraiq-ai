@@ -442,7 +442,9 @@ describe("v2 industrial detection incidents and logs", () => {
             ...(settingType === 'machineOpsDetectionSettings' ? { machines: [{ machine_id: 'laser-cutter-1', name: 'Laser Cutter 1',
               machine_zone: [[0, 0], [0.5, 0], [0.5, 1]], indicator_zone: [[0.1, 0.1], [0.2, 0.1], [0.2, 0.2]],
             }] } : {}),
-            ...(settingType === "loadingUnloadingStockCountingSettings" ? { mode: "loading" } : {}),
+            ...(settingType === "loadingUnloadingStockCountingSettings" ? {
+              mode: "loading", settingMode: "rollerLoadingUnloadingSettings",
+            } : {}),
           },
         },
       });
@@ -552,6 +554,14 @@ describe("v2 industrial detection incidents and logs", () => {
       if (settingType === "loadingUnloadingStockCountingSettings") {
         const savedSetting = await SettingModel.findOne({ settingType });
         expect(savedSetting.settings.mode).toBe("loading");
+        expect(savedSetting.settings.settingMode).toBe("rollerLoadingUnloadingSettings");
+        const clearMode = serviceCtx({
+          user_id: admin.user_id, adminId: admin._id, params: { id: String(savedSetting._id) },
+          body: { settings: { settingMode: null } },
+        });
+        await DetectionSettingsService.updateDetectionSettings(clearMode.req, clearMode.res, clearMode.next);
+        expect(payload(clearMode.res).status).toBe("success");
+        expect((await SettingModel.findById(savedSetting._id).lean()).settings.settingMode).toBeUndefined();
 
         const retryContext = serviceCtx({
           user_id: admin.user_id,

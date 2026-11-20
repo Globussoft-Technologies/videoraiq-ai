@@ -2,6 +2,7 @@ import Joi from "joi";
 import { EMOTION_ALERT_GROUPS } from "../../../constants/emotionDetection.js";
 import { validateUniformSettings } from "../../../services/uniformDetection.js";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
+import { ROLLER_STOCK_SETTING_MODE } from "../../../constants/detectionTypes.js";
 import {
   WEEKDAYS as weekdays,
   findScheduleConflict,
@@ -132,6 +133,11 @@ const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
 
 class DetectionSettingsValidation {
   validateNewDetectorSettings(settingType, settings = {}) {
+    if (settingType === "loadingUnloadingStockCountingSettings") {
+      return Joi.object({
+        settingMode: Joi.string().valid(ROLLER_STOCK_SETTING_MODE).allow(null),
+      }).unknown(true).validate(settings, { convert: false });
+    }
     if (settingType === 'personSittingOnCanDetectionSettings') {
       return Joi.object({
         zone_name: Joi.string().trim().allow(''),

@@ -1,4 +1,5 @@
 import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
+export const ROLLER_STOCK_SETTING_MODE = "rollerLoadingUnloadingSettings";
 /* Update constants when new settings is added - DETECTION_TYPES, TYPE_MAP, Example payloads
  detection settings model
  detection settings service - createDetectionSettings, getDetectionExamples
