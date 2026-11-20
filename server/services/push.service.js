@@ -4,6 +4,10 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import logger from "../utils/logger.js";
 import PushToken from "../core/v2/pushTokens/pushTokens.model.js";
+import User from "../core/v2/authorizedUsers/authorizedUsers.model.js";
+import Role from "../core/v2/roles/roles.model.js";
+import Permission from "../core/v2/permission/permissions.model.js";
+import AuthorizedChannels from "../core/v2/cameraRestrictions/authorizedChannels.model.js";
 import NVR from "../core/v2/NVR/nvr.model.js";
 import { buildIncidentImageUrl } from "../messagingService/message.helper.js";
 
@@ -163,9 +167,31 @@ export async function sendIncidentPush({ admin, incident }) {
       return;
     }
 
-    const rows = await PushToken.find({ adminId: String(adminId) }).select("token platform").lean();
-    if (!rows.length) {
+    const registered = await PushToken.find({ adminId: String(adminId) }).select("token platform userId").lean();
+    if (!registered.length) {
       logger.info("[PUSH] incident skipped", { ...context, reason: "no_registered_tokens" });
+      return;
+    }
+    const memberIds = registered.map((row) => row.userId).filter((id) => /^[a-f\d]{24}$/i.test(id || ""));
+    const members = memberIds.length ? await User.find({ _id: { $in: memberIds }, adminId }).select("roleIds").lean() : [];
+    const roles = members.length ? await Role.find({ _id: { $in: members.map((member) => member.roleIds) }, adminId }).select("permissionId").lean() : [];
+    const permissions = roles.length ? await Permission.find({ _id: { $in: roles.map((role) => role.permissionId) }, adminId }).select("permissionConfig.alerts.view").lean() : [];
+    const access = memberIds.length ? await AuthorizedChannels.find({ userId: { $in: memberIds }, adminId }).select("userId channels").lean() : [];
+    const roleById = new Map(roles.map((role) => [String(role._id), role]));
+    const permissionById = new Map(permissions.map((permission) => [String(permission._id), permission]));
+    const accessByMember = new Map(access.map((entry) => [String(entry.userId), entry]));
+    const allowedMembers = new Set(members.filter((member) => {
+      const role = roleById.get(String(member.roleIds));
+      const permission = permissionById.get(String(role?.permissionId));
+      const channels = accessByMember.get(String(member._id))?.channels || [];
+      return permission?.permissionConfig?.alerts?.view === true
+        && channels.some((channel) => String(channel) === String(incident?.channelId));
+    }).map((member) => String(member._id)));
+    const rows = registered.filter((row) =>
+      String(row.userId) === String(admin.user_id) || allowedMembers.has(String(row.userId))
+    );
+    if (!rows.length) {
+      logger.info("[PUSH] incident skipped", { ...context, reason: "no_authorized_tokens" });
       return;
     }
 

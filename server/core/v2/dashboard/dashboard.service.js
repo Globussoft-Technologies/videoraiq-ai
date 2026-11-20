@@ -569,6 +569,11 @@ class DashboardService {
           const filter = {
             userId: data?.user_id.toString(),
           };
+          if (data?.memberId) {
+            const canViewAlerts = req?.verified?.permissionConfig?.[0]?.permissionConfig?.alerts?.view === true;
+            const allowedChannels = req?.verified?.authorizedChannel?.channels || [];
+            filter.channelId = { $in: canViewAlerts ? allowedChannels : [] };
+          }
 
           if (nvrId) {
             const nvrIds = Array.isArray(nvrId)

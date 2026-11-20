@@ -197,7 +197,7 @@ class RolesServices{
 
     async update(req, res) {
         const result = req.verified;
-        const { language, orgId, firstName, _id, profilePic, lastName, adminId, creatorId, permission } = result.userData;
+        const { language, orgId, firstName, _id, profilePic, lastName, adminId, memberId, creatorId, permission } = result.userData;
         const userData = result?.userData?.userData
         try {
             let isAdminExist = await adminModel.findOne({ _id: adminId });
@@ -209,17 +209,18 @@ class RolesServices{
             let roleWithPermission;
             let permissionEditAccess = true;
             let roleEditAccess = true;
-            if(adminId===undefined){
+            if(memberId){
                 roleWithPermission = req.verified?.permissionConfig;
-                const permissionConfig = roleWithPermission[0]?.permissionConfig;
-                permissionEditAccess = permissionConfig?.['permission']?.edit;
-                roleEditAccess = permissionConfig?.['roles'].edit;
+                const permissionConfig = roleWithPermission?.[0]?.permissionConfig;
+                permissionEditAccess = permissionConfig?.permission?.edit === true;
+                roleEditAccess = permissionConfig?.roles?.edit === true;
             }
 
 
             const roleId = req?.query?.roleId;
             const role = req?.body;
             let {roleCreate,roleEdit,roleView,roleDelete} = req.body;
+            const changesPermissions = [roleCreate, roleEdit, roleView, roleDelete].some((value) => value !== undefined);
             if (!roleId) {
                 return res.send(Response.FailResp(RolesMessageNew['VALIDATION_FAIL'][language ?? 'en'], 'Missing roleId'));
             }
@@ -241,9 +242,18 @@ class RolesServices{
             ]);
             const userRoles = isRoleExist.map(item => item.roleName?.trim().toLowerCase());
             const isRoleDuplicate = userRoles.includes(roleValue?.toLowerCase());
-            const existingRole = await rolesModel.findOne({ _id: roleId });
+            const existingRole = await rolesModel.findOne({ _id: roleId, adminId });
             if (!existingRole) {
                 return res.send(Response.FailResp(RolesMessageNew['ROLES_NOT_FOUND'][language ?? 'en']));
+            }
+            if (memberId && existingRole.is_default) {
+                return res.status(400).send(Response.accessDeniedResp('Default roles cannot be edited.'));
+            }
+            if (memberId) {
+                const member = await userModel.findById(memberId);
+                if (String(member?.roleIds) === String(roleId)) {
+                    return res.status(400).send(Response.accessDeniedResp('You cannot edit your own role.'));
+                }
             }
     
             // if (existingRole.is_default) {
@@ -287,7 +297,7 @@ class RolesServices{
                     updateSet.view = roleView;
                 }
             }
-            if(!permissionEditAccess){
+            if(changesPermissions && !permissionEditAccess){
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['EDIT_ACCESS_DENIED']['en']} roles module ⚠️.`));
             }
 
@@ -306,14 +316,14 @@ class RolesServices{
            
             // Update role and ensure the user has permission
             const data = await rolesModel.findOneAndUpdate(
-                { _id: roleId },
+                { _id: roleId, adminId },
                 updateQuery,
                 { new: true } // Return the updated document
             );
 
 
 
-            if (existingRole.permissionId&&permissionEditAccess) {
+            if (existingRole.permissionId && changesPermissions && permissionEditAccess) {
                 // Step 4: Fetch the associated permission
                 const permission = await permissionModel.findById(existingRole.permissionId);
                 if (!permission) {

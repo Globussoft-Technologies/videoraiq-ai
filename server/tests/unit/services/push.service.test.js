@@ -4,12 +4,16 @@ import path from "path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeApp } from "firebase-admin/app";
 
-const { sendEachForMulticast, find, deleteMany, findById, logger } = vi.hoisted(() => ({
+const { sendEachForMulticast, find, deleteMany, findById, findUsers, findRoles, findPermissions, findAccess, logger } = vi.hoisted(() => ({
   sendEachForMulticast: vi.fn(),
   find: vi.fn(),
   deleteMany: vi.fn(),
   findById: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  findUsers: vi.fn(),
+  findRoles: vi.fn(),
+  findPermissions: vi.fn(),
+  findAccess: vi.fn(),
 }));
 
 vi.mock("firebase-admin/app", () => ({ initializeApp: vi.fn(() => ({})), cert: vi.fn((x) => x) }));
@@ -17,10 +21,15 @@ vi.mock("firebase-admin/messaging", () => ({ getMessaging: vi.fn(() => ({ sendEa
 vi.mock("../../../core/v2/pushTokens/pushTokens.model.js", () => ({ default: { find, deleteMany } }));
 vi.mock("../../../core/v2/NVR/nvr.model.js", () => ({ default: { findById } }));
 vi.mock("../../../utils/logger.js", () => ({ default: logger }));
+vi.mock("../../../core/v2/authorizedUsers/authorizedUsers.model.js", () => ({ default: { find: findUsers } }));
+vi.mock("../../../core/v2/roles/roles.model.js", () => ({ default: { find: findRoles } }));
+vi.mock("../../../core/v2/permission/permissions.model.js", () => ({ default: { find: findPermissions } }));
+vi.mock("../../../core/v2/cameraRestrictions/authorizedChannels.model.js", () => ({ default: { find: findAccess } }));
 
 const nvrDoc = (doc) => ({ select: () => ({ lean: () => Promise.resolve(doc) }) });
 
-const tokensFor = (...tokens) => ({ select: () => ({ lean: async () => tokens.map((token) => ({ token, platform: "ios" })) }) });
+const tokensFor = (...tokens) => ({ select: () => ({ lean: async () => tokens.map((token) => ({ token, platform: "ios", userId: "1" })) }) });
+const rowsFor = (rows) => ({ select: () => ({ lean: async () => rows }) });
 const originalFirebasePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 const serviceAccountFile = path.join(os.tmpdir(), `push-test-sa-${process.pid}.json`);
 afterAll(() => {
@@ -158,7 +167,7 @@ describe("sendIncidentPush", () => {
   it("logs when the incident owner has no registered devices", async () => {
     const { sendIncidentPush } = await loadPush(true);
     find.mockReturnValue(tokensFor());
-    await sendIncidentPush({ admin: { _id: "a1" }, incident });
+    await sendIncidentPush({ admin: { _id: "a1", user_id: "1" }, incident });
     expect(logger.info).toHaveBeenCalledWith("[PUSH] incident skipped", { incidentId: "abc123", adminId: "a1", reason: "no_registered_tokens" });
     expect(sendEachForMulticast).not.toHaveBeenCalled();
   });
@@ -175,7 +184,7 @@ describe("sendIncidentPush", () => {
       ],
     });
 
-    await sendIncidentPush({ admin: { _id: "a1", timezone: "Asia/Kolkata" }, incident });
+    await sendIncidentPush({ admin: { _id: "a1", user_id: "1", timezone: "Asia/Kolkata" }, incident });
 
     expect(find).toHaveBeenCalledWith({ adminId: "a1" });
     expect(sendEachForMulticast.mock.calls[0][0].tokens).toEqual(["good-token", "dead-token", "flaky-token"]);
@@ -192,17 +201,49 @@ describe("sendIncidentPush", () => {
     const { sendIncidentPush } = await loadPush(true);
     find.mockReturnValue(tokensFor("private-ios-token"));
     sendEachForMulticast.mockResolvedValue({ successCount: 0, responses: [{ success: false, error: { code: "messaging/third-party-auth-error", message: "private-ios-token" } }] });
-    await sendIncidentPush({ admin: { _id: "a1" }, incident });
+    await sendIncidentPush({ admin: { _id: "a1", user_id: "1" }, incident });
     expect(logger.warn).toHaveBeenCalledWith("[PUSH] send failed (messaging/third-party-auth-error)", { incidentId: "abc123", adminId: "a1", platform: "ios", stale: false });
     expect(deleteMany).not.toHaveBeenCalled();
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private-ios-token");
+  });
+
+  it("excludes members without alert access or access to the incident camera", async () => {
+    const { sendIncidentPush } = await loadPush(true);
+    const allowedId = "507f1f77bcf86cd799439011";
+    const deniedId = "507f1f77bcf86cd799439012";
+    find.mockReturnValue(rowsFor([
+      { token: "admin-token", userId: "1" },
+      { token: "allowed-token", userId: allowedId },
+      { token: "denied-token", userId: deniedId },
+    ]));
+    findUsers.mockReturnValue(rowsFor([
+      { _id: allowedId, roleIds: "allowed-role" },
+      { _id: deniedId, roleIds: "denied-role" },
+    ]));
+    findRoles.mockReturnValue(rowsFor([
+      { _id: "allowed-role", permissionId: "allowed-permission" },
+      { _id: "denied-role", permissionId: "denied-permission" },
+    ]));
+    findPermissions.mockReturnValue(rowsFor([
+      { _id: "allowed-permission", permissionConfig: { alerts: { view: true } } },
+      { _id: "denied-permission", permissionConfig: { alerts: { view: false } } },
+    ]));
+    findAccess.mockReturnValue(rowsFor([
+      { userId: allowedId, channels: ["ch1"] },
+      { userId: deniedId, channels: ["ch1"] },
+    ]));
+    sendEachForMulticast.mockResolvedValue({ successCount: 2, responses: [{ success: true }, { success: true }] });
+
+    await sendIncidentPush({ admin: { _id: "a1", user_id: "1" }, incident });
+
+    expect(sendEachForMulticast.mock.calls[0][0].tokens).toEqual(["admin-token", "allowed-token"]);
   });
 
   it("never throws when FCM itself fails", async () => {
     const { sendIncidentPush } = await loadPush(true);
     find.mockReturnValue(tokensFor("t1"));
     sendEachForMulticast.mockRejectedValue(Object.assign(new Error("private-device-token"), { code: "messaging/server-unavailable" }));
-    await expect(sendIncidentPush({ admin: { _id: "a1" }, incident })).resolves.toBeUndefined();
+    await expect(sendIncidentPush({ admin: { _id: "a1", user_id: "1" }, incident })).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalledWith("[PUSH] incident push failed", expect.objectContaining({ code: "messaging/server-unavailable" }));
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain("private-device-token");
   });

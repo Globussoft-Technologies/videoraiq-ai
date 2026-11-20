@@ -127,7 +127,7 @@ class PermissionService {
 
     async updatePermissions(req, res) {
         const result = req.verified;
-        let { _id: userId, language ,adminId} = result.userData;
+        let { _id: userId, language ,adminId, memberId} = result.userData;
         
         try {
             let permissionId = req?.query?.permissionId;
@@ -146,7 +146,7 @@ class PermissionService {
             }
     
             // Fetch the existing permission document
-            let defaultData = await permissionModel.findById({_id:permissionId});
+            let defaultData = await permissionModel.findOne({ _id: permissionId, adminId });
             if (!defaultData) {
                 return res.send(
                     Response.FailResp(
@@ -154,6 +154,13 @@ class PermissionService {
                         commonMessage['VALIDATION_FAILED']['en']
                     )
                 );
+            }
+            if (memberId) {
+                const member = await userModel.findById(memberId).select('roleIds');
+                const targetRole = await roleModel.findOne({ permissionId, adminId }).select('_id');
+                if (!member || !targetRole || String(member.roleIds) === String(targetRole._id)) {
+                    return res.status(400).send(Response.accessDeniedResp('You cannot edit your own role.'));
+                }
             }
             
             const updateFields = {};
@@ -230,7 +237,7 @@ class PermissionService {
                 return res.send(Response.FailResp(PermissionMessageNew['UPDATE_DEFAULT_PERMISSIONS'][language ?? 'en'],commonMessage['VALIDATION_FAILED']['en']));
             }
             const response = await permissionModel.findOneAndUpdate(
-                { _id: permissionId },
+                { _id: permissionId, adminId },
                 { $set: updateFields },
                 { returnDocument: 'after' }
             );
@@ -424,6 +431,7 @@ class PermissionService {
         const result = req.verified;
         let { _id: userId,adminId, language, orgId, planData, firstName: Name, profilePic: userProfilePic, lastName, creatorId} = result.userData;
         try{
+            if (result.userData.memberId) return res.status(403).send(Response.accessDeniedResp('Only the admin can update all role permissions.'));
             let data = req.body;
             let admin = await adminModel.findOne({_id:adminId});
             if(!admin) return res.send(Response.FailResp(PermissionMessageNew['ADMIN_NOT_EXIST']['en'],'error'));
@@ -466,6 +474,7 @@ class PermissionService {
     async bulkPermissionDelete(req, res, next) {
         try {
             const result = req.verified;
+            if (result.userData.memberId) return res.status(403).send(Response.accessDeniedResp('Only the admin can delete permissions across roles.'));
             let { _id: userId,adminId, language, orgId, planData, firstName: Name, profilePic: userProfilePic, lastName, creatorId } = result.userData;
             let data = req.body; 
             let admin = await adminModel.findOne({ _id:adminId });
@@ -596,6 +605,7 @@ class PermissionService {
         let { _id: userId, language, adminId } = result.userData;
 
         try {
+            if (result.userData.memberId) return res.status(403).send(Response.accessDeniedResp('Only the admin can update all role permissions.'));
             let data = req.body;
             let targetAdminId = data.adminId || adminId;
             let admin = await adminModel.findOne({ _id: targetAdminId });
