@@ -615,7 +615,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
   );
 }
 
-function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, onEdit, onDelete }) {
+function RoleRow({ role, perms, isOwnRole, canConfigureThisRole, onToggleField, onConfigure, onView, onEdit, onDelete }) {
   const config = useMemo(() => permissionConfigForRole(role), [role]);
   
   const hasView = PERMISSION_MODULES.some(m => config[m]?.view) || LOG_SUBMODULES.some(s => config.logs?.[s]?.view);
@@ -627,7 +627,7 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
   // list) can't be renamed server-side (400s) and stay non-deletable here too.
   const defaultRole = !!role.is_default;
   const lockedRole = defaultRole || isOwnRole;
-  const noActions = !perms.canConfigure && !perms.canView && !(perms.canEditRole && !lockedRole) && !(perms.canDeleteRole && !lockedRole);
+  const noActions = !canConfigureThisRole && !perms.canView && !(perms.canEditRole && !lockedRole) && !(perms.canDeleteRole && !lockedRole);
   const roleName = role.roleName || '';
   const displayedRoleName = roleName.length > ROLE_NAME_MAX_LENGTH
     ? `${roleName.slice(0, ROLE_NAME_MAX_LENGTH)}\u2026`
@@ -674,7 +674,7 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
 
       <span style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', color: 'var(--tx3)' }}>
         {noActions && <span style={{ fontSize: 11 }}>—</span>}
-        {perms.canConfigure && (
+        {canConfigureThisRole && (
           <button
             onClick={onConfigure}
             title="Configure"
@@ -909,6 +909,9 @@ export default function RolesPermission() {
   const myRoleId = String(
     user?.roleId?._id || user?.roleId || user?.roleIds?._id || user?.roleIds || ''
   );
+  const canConfigureRole = (role) =>
+    !!role?._id && !!canConfigure && !role.is_default && String(role._id) !== myRoleId &&
+    (isAdmin || !!canEditRole || (!!user?.memberId && String(role?.createdBy?.userId || '') === String(user.memberId)));
 
   const [search, setSearch] = useState('');
   const [searchWarning, setSearchWarning] = useState('');
@@ -1019,7 +1022,7 @@ export default function RolesPermission() {
       try {
         const { roles: freshRoles } = await getRoles({ searchQuery: name, limit: 5 });
         const created = freshRoles.find(r => r.roleName?.toLowerCase() === name.toLowerCase());
-        if (created) setConfigureTarget({ role: created, readOnly: false, requireConfig: true });
+        if (created && canConfigureRole(created)) setConfigureTarget({ role: created, readOnly: false, requireConfig: true });
       } catch {
         // Non-fatal — the role list refetch above already succeeded, the
         // admin can still open Configure manually from the row.
@@ -1081,6 +1084,11 @@ export default function RolesPermission() {
     }
     if (configureTarget?.role?.is_default) {
       toast.error('Default roles cannot be edited');
+      setConfigureTarget(null);
+      return;
+    }
+    if (!canConfigureRole(configureTarget?.role)) {
+      toast.error('You do not have permission to configure this role');
       setConfigureTarget(null);
       return;
     }
@@ -1219,10 +1227,11 @@ export default function RolesPermission() {
                 <RoleRow
                   key={role._id}
                   role={role}
-                  perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
+                  perms={{ canView, canEditRole, canDeleteRole }}
                   isOwnRole={!!myRoleId && String(role._id) === myRoleId}
+                  canConfigureThisRole={canConfigureRole(role)}
                   onToggleField={(field, currentVal) => handleToggleField(role, field, currentVal)}
-                  onConfigure={() => setConfigureTarget({ role, readOnly: role.is_default || String(role._id) === myRoleId })}
+                  onConfigure={() => { if (canConfigureRole(role)) setConfigureTarget({ role, readOnly: false }); }}
                   onView={() => setConfigureTarget({ role, readOnly: true })}
                   onEdit={() => setRenameTarget(role)}
                   onDelete={() => setDeleteTarget(role)}

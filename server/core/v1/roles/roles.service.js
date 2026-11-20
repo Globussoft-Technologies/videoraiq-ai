@@ -17,7 +17,8 @@ class RolesServices{
         try {
             const data = req.body;
             const result = req.verified;
-            let { orgId ,_id,adminId} = result?.userData;
+            let { orgId ,_id,adminId,memberId} = result?.userData;
+            const creatorUserId = memberId || _id || adminId;
 
             const rolesDetails = (data?.roles).map(role => String(role).trim());
             const { value, error } = RoleValidation.createRole({ rolesDetails });
@@ -49,7 +50,7 @@ class RolesServices{
                 adminId,
                 permissionName: 'completeDefaultConfig',
                 is_default: false,
-                "createdBy.userId":_id??adminId,
+                "createdBy.userId":creatorUserId,
                 permissionConfig: completeConfig,
             }
             //Updating new Roles and their permissions
@@ -62,7 +63,7 @@ class RolesServices{
                             is_default: value.is_default,
                             orgId
                         };
-                        roles.createdBy = { userId: _id };
+                        roles.createdBy = { userId: creatorUserId };
                         roles.createdAt = new Date();
                         roles.updatedAt = new Date();
                         let roleInsert = await rolesModel.create(roles);
