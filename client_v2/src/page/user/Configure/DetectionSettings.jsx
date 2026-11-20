@@ -34,6 +34,14 @@ const CAM_TYPE_FILTERS = [
 // enough to scroll — matches the ~5 rows the popover fits at its 220px cap.
 const TYPE_SEARCH_MIN = 6;
 const TYPE_SEARCH_DEBOUNCE_MS = 300;
+const NVR_SEARCH_EMOJI_RE = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\uFE0F\u20E3\u{E0020}-\u{E007F}]/u;
+
+function cleanNvrSearch(value) {
+  const characters = typeof Intl.Segmenter === 'function'
+    ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value), ({ segment }) => segment)
+    : Array.from(value);
+  return characters.filter(character => !NVR_SEARCH_EMOJI_RE.test(character)).slice(0, 60).join('');
+}
 
 function mergeCameraStreamFields(nextCamera, previousCamera) {
   if (!nextCamera || !previousCamera) return nextCamera;
@@ -461,6 +469,91 @@ function EngineChip({ label, status = 'idle', onSelect }) {
           document.body
         )}
     </span>
+  );
+}
+
+function NvrFilterDropdown({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 700);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const filteredNvrs = useMemo(() => {
+    if (!debouncedQuery) return options;
+    return options.filter(nvr => String(nvr.nvrName || '').toLowerCase().includes(debouncedQuery));
+  }, [options, debouncedQuery]);
+  const selectedNvr = options.find(nvr => String(nvr._id) === value);
+
+  const selectNvr = (id) => {
+    onChange(id);
+    setOpen(false);
+    setQuery('');
+    setDebouncedQuery('');
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(nextOpen) => {
+      setOpen(nextOpen);
+      if (!nextOpen) {
+        setQuery('');
+        setDebouncedQuery('');
+      }
+    }}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={`Filter by NVR: ${selectedNvr?.nvrName || 'All NVRs'}`} style={{
+          height: 40, minWidth: 150, maxWidth: 190, padding: '0 34px',
+          borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
+          fontSize: 13, color: 'var(--tx)', cursor: 'pointer', position: 'relative', textAlign: 'left',
+        }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {selectedNvr?.nvrName || 'All NVRs'}
+          </span>
+          <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6}>
+        <div style={{ width: 260, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+            <input
+              autoFocus
+              type="search"
+              aria-label="Search NVRs"
+              value={query}
+              onChange={event => setQuery(cleanNvrSearch(event.target.value))}
+              placeholder="Search NVRs..."
+              style={{
+                width: '100%', height: 34, padding: '0 10px 0 32px', boxSizing: 'border-box',
+                borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)',
+                color: 'var(--tx)', fontSize: 12.5, outline: 'none',
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 190, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <button type="button" onClick={() => selectNvr('')} style={{
+              minHeight: 34, padding: '0 10px', borderRadius: 8, border: 'none',
+              background: !value ? 'rgba(59,130,246,.12)' : 'transparent',
+              color: 'var(--tx)', fontSize: 12.5, textAlign: 'left', cursor: 'pointer',
+            }}>All NVRs</button>
+            {filteredNvrs.length ? filteredNvrs.map(nvr => (
+              <button key={nvr._id} type="button" onClick={() => selectNvr(String(nvr._id))} style={{
+                minHeight: 34, padding: '0 10px', borderRadius: 8, border: 'none',
+                background: String(nvr._id) === value ? 'rgba(59,130,246,.12)' : 'transparent',
+                color: 'var(--tx)', fontSize: 12.5, textAlign: 'left', cursor: 'pointer',
+                overflowWrap: 'anywhere',
+              }}>{nvr.nvrName}</button>
+            )) : (
+              <div style={{ padding: '8px 10px', color: 'var(--tx3)', fontSize: 12.5 }}>No NVRs found</div>
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1035,7 +1128,15 @@ export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }
   const retryBulk = bulkJob?.status === 'failed';
 
 
-  const nvrsApi = useApi(() => getNvrs(0, 100), []);
+  const nvrsApi = useApi(async () => {
+    const firstPage = await getNvrs(0, 100);
+    const remainingPages = Math.ceil(Math.max(0, firstPage.total - firstPage.nvrs.length) / 100);
+    if (!remainingPages) return firstPage;
+    const rest = await Promise.all(
+      Array.from({ length: remainingPages }, (_, index) => getNvrs((index + 1) * 100, 100))
+    );
+    return { ...firstPage, nvrs: [...firstPage.nvrs, ...rest.flatMap(page => page.nvrs)] };
+  }, []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
 
   const typesApi = useApi(() => getDetectionTypes(), []);
@@ -1344,21 +1445,11 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             }}
           />
         </div>
-        <div style={{ position: 'relative' }}>
-          <select
-            value={nvrFilter}
-            onChange={e => { setNvrFilter(e.target.value); setPage(0); }}
-            style={{
-              height: 40, padding: '0 34px 0 13px', borderRadius: 10,
-              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13,
-              outline: 'none', cursor: 'pointer', color: 'var(--tx)', appearance: 'none',
-            }}
-          >
-            <option value="">All NVRs</option>
-            {nvrs.map(n => <option key={n._id} value={n._id}>{n.nvrName}</option>)}
-          </select>
-          <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
-        </div>
+        <NvrFilterDropdown
+          value={nvrFilter}
+          options={nvrs}
+          onChange={id => { setNvrFilter(id); setPage(0); }}
+        />
         <div style={{ position: 'relative' }}>
           <select
             value={camTypeFilter}

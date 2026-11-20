@@ -353,7 +353,7 @@ export function DetectionNotificationProvider({ children }) {
 
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, handleDetection);
-  }, [socket, user?.adminId, labels]);
+  }, [socket, user?.adminId, canViewAlerts, labels]);
 
   // Incident push for when no tab is open — follows the same Settings ▸
   // Desktop notifications switch as the socket-driven desktop notification.

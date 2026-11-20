@@ -583,7 +583,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
             {logsOpen && LOG_SUBMODULES.filter(sub => sub !== 'global').map(sub => (
               <ConfigureRow
                 key={sub}
-                label={labels.logPermission(sub, MODULE_LABELS[sub] || sub)}
+                label={labels.logPermission(sub, MODULE_LABELS[sub] || NAV_LOG_LABELS[sub] || sub)}
                 row={(config.logs || {})[sub] || {}}
                 onToggleField={(field) => toggle('logs', field, sub)}
                 readOnly={readOnly}
