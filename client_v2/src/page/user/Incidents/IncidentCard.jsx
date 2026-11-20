@@ -1,8 +1,9 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useEffect, useRef, useState } from 'react';
 import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
 import { Activity, PlayCircle, ImageOff, Maximize2, X, Flag, Check, FileText, UserPlus, UserCheck, UserMinus } from 'lucide-react';
-import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
+import { shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
@@ -392,7 +393,8 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
     setLocalResolved(!!item.resolved);
   }, [item._id, item.id, item.resolved]);
 
-  const det      = detectionLabel(item.incidentType || item.displayName);
+  const labels = useDetectionLabels();
+  const det = labels.label(item.incidentType || item.displayName);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const st       = statusOf({ ...item, resolved: localResolved });
   const isMachineOps = item.incidentType === 'machineOpsDetection';
@@ -671,7 +673,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               {/* Title + Tag User on one row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                  {item.incidentName || det}
+                  {labels.event(item.incidentType || item.displayName, item.incidentName)}
                 </span>
                 <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} showPlate={false} />
               </div>
@@ -716,7 +718,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
               <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
                 <span style={{ fontSize: item.incidentType === 'boxPackingDetection' ? 14 : 13, fontWeight: item.incidentType === 'boxPackingDetection' || isConditionIncident ? 700 : 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: isConditionIncident ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: isConditionIncident ? 'clip' : 'ellipsis', overflowWrap: 'anywhere', minWidth: 0 }}>
-                  {item.incidentName || det}
+                  {labels.event(item.incidentType || item.displayName, item.incidentName)}
                 </span>
                 {isGuardSleeping && (
                   <span style={{ flexShrink: 0, fontSize: 11.5 }}>

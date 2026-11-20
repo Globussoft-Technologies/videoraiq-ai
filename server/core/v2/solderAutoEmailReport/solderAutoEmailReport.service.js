@@ -1,3 +1,4 @@
+import { customDetectionName } from "../../../utils/detectionDisplayNames.js";
 import mongoose from 'mongoose';
 import Joi from 'joi';
 import moment from 'moment-timezone';
@@ -141,10 +142,11 @@ export async function fetchReportRows(report, window, timezone) {
   return { channel, rows: buildReportRows(report.reportType, { channel, panels, absences, window, timezone, snapshotBase }) };
 }
 
-async function prepareEmail(report, window, timezone) {
+async function prepareEmail(report, window, timezone, detectionDisplayNames) {
   await validateTargets(report, report);
   const { rows, channel } = await fetchReportRows(report, window, timezone);
-  const title = `Solder Line — ${REPORT_TITLES[report.reportType]}`;
+  const detectionName = customDetectionName(detectionDisplayNames, "deskSolarShoulderDetectionSettings") || "Solder Line";
+  const title = `${detectionName} — ${REPORT_TITLES[report.reportType]}`;
   const subtitle = `${channel.customName || channel.name || 'Camera'} · ${reportWindowLabel(window, timezone, report.schedule.frequency)}`;
   const generated = await buildAttachments(rows, title, subtitle, report.formats);
   let downloads = [], attachments = [];
@@ -200,7 +202,7 @@ class SolderAutoEmailReportService {
       if (!scopedChannel(req, data.channelId)) throw httpError('You do not have access to this station.', 403);
       const report = { ...data, ...auth(req) };
       await validateTargets(report, report);
-      const admin = await Admin.findById(report.adminId).select('timezone').lean();
+      const admin = await Admin.findById(report.adminId).select('timezone detectionDisplayNames').lean();
       const timezone = validTimezone(admin?.timezone) || DEFAULT_ADMIN_TIMEZONE;
       const end = moment().tz(timezone);
       const start = end.clone().subtract(1, data.schedule.frequency === 'monthly' ? 'month' : data.schedule.frequency === 'weekly' ? 'week' : 'day');
@@ -209,7 +211,7 @@ class SolderAutoEmailReportService {
         end: moment.tz(data.schedule.endDate, 'YYYY-MM-DD', timezone).startOf('day').add(1, 'day'),
       } : { start, end };
       if (sendTest) {
-        email = await prepareEmail(report, window, timezone);
+        email = await prepareEmail(report, window, timezone, admin?.detectionDisplayNames);
         email.subject = `[Test] ${email.subject}`;
         const result = await mail.send(email);
         await trackOutboundEmail(email, result, { adminId: report.adminId, category: 'Solder report test' }).catch((e) => logger.error(e));
@@ -231,7 +233,7 @@ class SolderAutoEmailReportService {
       const account = auth(req);
       const [recipients, admin] = await Promise.all([
         Recipient.find({ adminId: account.adminId, type: 'email', verified: true }).select('value fullName').sort({ value: 1 }).lean(),
-        Admin.findById(account.adminId).select('timezone').lean(),
+        Admin.findById(account.adminId).select('timezone detectionDisplayNames').lean(),
       ]);
       return res.json(Response.userSuccessResp('Schedule options fetched', {
         recipients: recipients.map((r) => ({ email: r.value.toLowerCase(), name: r.fullName })),
@@ -318,7 +320,7 @@ class SolderAutoEmailReportService {
   }
 
   async runReport(report, now) {
-    const admin = await Admin.findOne({ _id: report.adminId, user_id: report.userId }).select('timezone').lean();
+    const admin = await Admin.findOne({ _id: report.adminId, user_id: report.userId }).select('timezone detectionDisplayNames').lean();
     if (!admin || !report.schedule) return;
     const timezone = validTimezone(admin.timezone) || DEFAULT_ADMIN_TIMEZONE;
     const window = scheduledWindow(report.schedule, timezone, now);
@@ -332,7 +334,7 @@ class SolderAutoEmailReportService {
     } catch (error) { if (error.code === 11000) return; throw error; }
     let email;
     try {
-      email = await prepareEmail(report, window, timezone);
+      email = await prepareEmail(report, window, timezone, admin?.detectionDisplayNames);
       // Check enabled state again immediately before sending; generation can be slow.
       if (!await Report.exists({ _id: report._id, enabled: true, updatedAt: report.updatedAt })) {
         await Delivery.deleteOne({ _id: delivery._id, token, status: 'preparing' });

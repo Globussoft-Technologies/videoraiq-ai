@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download } from 'lucide-react';
@@ -16,6 +17,7 @@ import { getGuardChannelGraph } from './Api';
 const LIMIT = 10;
 
 const GuardLog = () => {
+  const displayTitle = useDetectionLabels().logPermission('guardLogs');
   const navigate = useNavigate();
   const { permissions, loading: permissionsLoading } = usePermissions();
 
@@ -94,7 +96,7 @@ const GuardLog = () => {
   }, [currentPage, selectedDate, searchQuery, canView]);
 
   const handleExport = () => {
-    const exported = downloadLogsExcel(channels, selectedDate);
+    const exported = downloadLogsExcel(channels, selectedDate, displayTitle);
     if (!exported) toast.error('No logs available');
   };
 

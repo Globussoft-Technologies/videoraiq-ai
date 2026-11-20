@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, GitBranch, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
@@ -134,14 +135,14 @@ function detectionDetails(item) {
   return details;
 }
 
-function mapDetection(item, index) {
+function mapDetection(item, index, labels) {
   const incidentType = item?.incidentType || item?.detectionType || item?.incidentName || item?.displayName;
   const entry = item?.totalEntry ?? item?.entry ?? item?.entryCount ?? item?.atoB;
   const exit = item?.totalExit ?? item?.exit ?? item?.exitCount ?? item?.btoA;
   const hasMovementCounts = valueExists(entry) || valueExists(exit);
   return {
     key: item?.key || item?._id || `${incidentType || 'detection'}_${item?.timeOfIncident || item?.timestamp || index}`,
-    title: item?.incidentName || item?.displayName || detectionLabel(incidentType),
+    title: labels.event(incidentType, item?.incidentName, item?.displayName || detectionLabel(incidentType)),
     camera: item?.channelData?.name || item?.channelData?.customName || item?.channelName || item?.cameraName || item?.channelId?.name || 'Camera',
     time: item?.timeOfIncident || item?.timestamp || item?.updatedAt || item?.createdAt,
     severity: item?.severity,
@@ -313,6 +314,7 @@ function LogSection({ title, items, type, renderItem }) {
 }
 
 export default function LiveCameraLogsOverlay({ channel }) {
+  const labels = useDetectionLabels();
   const { allDetections = [], attendanceLogs = [], accessAllDetections = [] } = useAttendanceSocket() || {};
   const panelRef = useRef(null);
   const dragRef = useRef(null);
@@ -339,9 +341,9 @@ export default function LiveCameraLogsOverlay({ channel }) {
     (Array.isArray(allDetections) ? allDetections : [])
       .filter((item) => getDetectionCameraId(item) === cameraId)
       .filter((item) => !isHiddenLiveDetection(item))
-      .map(mapDetection)
+      .map((item, index) => mapDetection(item, index, labels))
       .slice(0, 5)
-  ), [allDetections, cameraId]);
+  ), [allDetections, cameraId, labels]);
 
   useEffect(() => {
     const onMove = (e) => {

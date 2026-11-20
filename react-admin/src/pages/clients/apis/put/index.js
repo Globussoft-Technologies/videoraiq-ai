@@ -32,6 +32,16 @@ export const updateDetection = async (adminId, settingType, { cameraAllocation, 
   return response.data
 }
 
+export const updateDetectionDisplayName = async (adminId, settingType, displayName) => {
+  const token = await waitForToken()
+  const response = await axios.put(
+    `${apiUrl}/api/v1/client-config/${encodeURIComponent(adminId)}/detections/${encodeURIComponent(settingType)}/display-name`,
+    { displayName },
+    authHeaders(token)
+  )
+  return response.data
+}
+
 // Toggle one detection's enabled flag for a single camera (ClientCameraDetection).
 export const updateCameraDetection = async (adminId, cameraId, { settingType, enabled }) => {
   const token = await waitForToken()

@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import { latestAttendanceCapture } from './components/latestCapture';
 import useLogPolling from '@/hooks/useLogPolling';
@@ -84,6 +85,7 @@ const ABSENT_TAB_LABELS = {
 };
 
 const AttendanceLogs = () => {
+  const displayTitle = useDetectionLabels().logPermission('attendanceLogs');
   const { timezone: region } = useTimezone();
   // Arriving from another screen (e.g. Attendance Analytics' "Present" tile)
   // can pre-select a day and status — read once, on mount, as the reducer's
@@ -634,6 +636,7 @@ const AttendanceLogs = () => {
 
   const handleExport = (format) =>
     handleAttendanceExport(format, {
+      displayTitle,
       searchInput,
       nvrIds,
       cameraId,

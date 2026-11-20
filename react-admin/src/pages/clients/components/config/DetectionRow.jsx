@@ -1,5 +1,7 @@
-import { CopyCheck, Minus, Plus } from 'lucide-react'
+import { useState } from 'react'
+import { CopyCheck, Minus, Pencil, Plus } from 'lucide-react'
 import { DETECTION_META, FALLBACK_META } from '../../../detectionCatalog/data'
+import { getApiMessage } from '../../../../utils/apiError'
 
 // Rotating accent for the detection icon tile, keyed by index.
 const ICON_TINTS = [
@@ -18,13 +20,32 @@ const DetectionRow = ({
   onToggle,
   onAllocationChange,
   onApplyToAll,
+  onSaveName,
   applyToAllCount = 0,
 }) => {
-  const { name, enabled, cameraAllocation, camerasInUse = 0 } = detection
+  const { name, displayName, enabled, cameraAllocation, camerasInUse = 0 } = detection
+  const [nameDraft, setNameDraft] = useState(null)
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState('')
   const tint = ICON_TINTS[index % ICON_TINTS.length]
   const DetectionIcon = (DETECTION_META[detection.settingType] || FALLBACK_META).Icon
 
   const setAlloc = (n) => onAllocationChange(Math.max(0, Math.min(maxCameras, n)))
+
+  const saveName = async (value) => {
+    setSavingName(true)
+    setNameError('')
+    try {
+      await onSaveName(value)
+      setNameDraft(null)
+    } catch (error) {
+      setNameError(getApiMessage(error, 'Could not save the display name'))
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  const nameButton = 'cursor-pointer rounded px-2 py-1 font-medium hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10'
 
   // The client is already running this detection on more cameras than the
   // allocation about to be saved. Existing cameras keep running — the limit
@@ -41,11 +62,44 @@ const DetectionRow = ({
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
           <DetectionIcon size={17} strokeWidth={2} />
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{name}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{name}</p>
+            {nameDraft === null && (
+              <button
+                type="button"
+                title="Edit display name"
+                aria-label={`Edit display name for ${name}`}
+                className={`${nameButton} shrink-0 text-gray-500 dark:text-gray-300`}
+                onClick={() => setNameDraft(name)}
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+          </div>
           <p className="truncate font-mono text-[10px] tracking-wide text-gray-400 uppercase dark:text-gray-600">
             {detection.settingType}
           </p>
+          {nameDraft !== null && (
+            <form className="mt-2 text-xs" onSubmit={(event) => {
+              event.preventDefault()
+              if (!savingName && nameDraft.trim()) void saveName(nameDraft.trim())
+            }}>
+              <label className="block text-gray-600 dark:text-gray-300">
+                Display name for this client
+                <input autoFocus value={nameDraft} maxLength={80} required disabled={savingName}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-900 dark:border-white/10 dark:bg-gray-900 dark:text-white"
+                />
+              </label>
+              <div className="mt-1 flex flex-wrap items-center gap-1 text-gray-700 dark:text-gray-200">
+                <button type="submit" className={nameButton} disabled={savingName || !nameDraft.trim()}>{savingName ? 'Saving…' : 'Save'}</button>
+                {displayName && <button type="button" className={nameButton} disabled={savingName} onClick={() => saveName(null)}>Restore default</button>}
+                <button type="button" className={nameButton} disabled={savingName} onClick={() => { setNameDraft(null); setNameError('') }}>Cancel</button>
+              </div>
+              {nameError && <p role="alert" className="mt-1 text-red-600 dark:text-red-400">{nameError}</p>}
+            </form>
+          )}
           {overAllocated && (
             <p className="mt-0.5 truncate text-[11px] font-medium text-amber-600 dark:text-amber-400">
               In use on {camerasInUse} cameras — above this allocation

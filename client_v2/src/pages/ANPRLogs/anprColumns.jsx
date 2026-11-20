@@ -269,7 +269,7 @@ export const buildColumns = ({
   {
     accessorKey: 'incidentName',
     header: sortHeader('Incident Name', 'incidentName'),
-    cell: ({ row }) => <span className={styles.text}>{row.original.incidentName}</span>,
+    cell: ({ row }) => <span className={styles.text}>{row.original.incidentDisplayName || row.original.incidentName}</span>,
   },
   {
     accessorKey: 'nvrName',

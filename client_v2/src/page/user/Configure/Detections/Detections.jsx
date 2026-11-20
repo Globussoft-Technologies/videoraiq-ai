@@ -6,6 +6,7 @@ import AccessDenied from '../../../../components/AccessDenied';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
+import { useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import MultiSelect from '../../../../components/MultiSelect';
 import { createDetectionSetting, deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { useSocket } from '../../../../context/SocketContext';
@@ -569,6 +570,7 @@ export default function Detections() {
   const { permissions, loading: permissionsLoading } = usePermissions();
   const canViewDetections = permissions?.detectionSettings?.view === true;
   const canEditDetections = permissions?.detectionSettings?.edit === true;
+  const { names: displayNames } = useDetectionDisplayNames();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [stateTab, setStateTab] = useState('all');
@@ -694,6 +696,7 @@ export default function Detections() {
           ...m,
           ...edited,
           name: uiData.detectionName || m.name,
+          displayName: displayNames[settingType] || uiData.detectionName || m.name,
           status: uiData.status || edited.status || m.status,
           scheduleMode: scheduleMode || edited.scheduleMode || m.scheduleMode,
           schedule: scheduleMode || edited.schedule || m.schedule,
@@ -710,7 +713,7 @@ export default function Detections() {
           overrideUntil: (typeof cameraEntry === 'object' ? cameraEntry?.overrideUntil : null) || null,
         };
       }),
-    [edits, license, typesApi.data, zoneCamera],
+    [displayNames, edits, license, typesApi.data, zoneCamera],
   );
 
   useEffect(() => {
@@ -928,6 +931,7 @@ export default function Detections() {
             ? 'camera tampering covered blocked blurred camera blur image clarity focus obstruction'
             : '';
         const haystack = [
+          m.displayName,
           m.name,
           m.subtitle,
           m.id,
@@ -1123,7 +1127,7 @@ export default function Detections() {
       flexibleInUse >= flexibleSlots
     ) {
       toast.error(
-        `${model.name} is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.`,
+        `${model.displayName} is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.`,
       );
       return;
     }
@@ -1229,7 +1233,7 @@ export default function Detections() {
       await toggleChannelDetection({ channelId: zoneCamera._id, detectionType, enable });
       patch(model.id, { active: enable });
       setCameraDetectionEnabled(detectionType, enable);
-      toast.success(`${model.name} ${enable ? 'enabled' : 'disabled'}.`);
+      toast.success(`${model.displayName} ${enable ? 'enabled' : 'disabled'}.`);
       setLimitBlock(null);
       refreshZoneCamera();
       refreshLicense();
@@ -1722,12 +1726,12 @@ export default function Detections() {
           value={incidentFilter && incidentStatsApi.loading
             ? '...'
             : (loadingValue ?? selectedIncidentCount.toLocaleString())}
-          sub={incidentFilter ? `${selected?.name || 'Selected detection'} total` : 'all detections combined'}
+          sub={incidentFilter ? `${selected?.displayName || 'Selected detection'} total` : 'all detections combined'}
           color="#ec4899"
         />
         <StatCard
           label="Selected"
-          value={selected?.name || (typesApi.loading ? '...' : 'All detections')}
+          value={selected?.displayName || (typesApi.loading ? '...' : 'All detections')}
           sub={selected ? `${incidents.length} ${incidents.length === 1 ? 'incident' : 'incidents'} shown` : 'Select a model to configure'}
           color="#ec4899"
           small
@@ -2134,7 +2138,7 @@ export default function Detections() {
                   hideToggle={isAttendanceDetectionType(selectedSettingType || selected?.name)}
                 />
                 <DetectionIncidents
-                  detectionName={selected.name}
+                  detectionName={selected.displayName}
                   incidents={incidents}
                   loading={incidentPanelLoading}
                   loadingMore={incidentLoadingMore}
@@ -2192,7 +2196,7 @@ export default function Detections() {
         onCancel={() => setShowResetThresholdConfirm(false)}
         onConfirm={handleResetThresholds}
       >
-        Reset saved threshold values for <strong>{selected?.name || 'this detection'}</strong> to defaults?
+        Reset saved threshold values for <strong>{selected?.displayName || 'this detection'}</strong> to defaults?
       </ConfirmDialog>
       <DetectionLimitDialog
         open={Boolean(limitBlock)}

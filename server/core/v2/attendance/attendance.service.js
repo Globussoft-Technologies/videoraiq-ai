@@ -3,6 +3,8 @@ import Attendance from "./attendance.model.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import Admin from "../admin/admin.model.js";
+import { customDetectionName } from "../../../utils/detectionDisplayNames.js";
+import { requestAdmin } from "../../../utils/requestAdmin.js";
 import { attendanceSchema, attendanceSettingsSchema } from "./attendance.validate.js";
 import mongoose from "mongoose";
 import { sendPayloadToUser } from "../../../socket.js";
@@ -1531,9 +1533,11 @@ class AttendanceService {
         return res.status(200).json(Response.userSuccessResp("No attendance data to export", []));
       }
 
+      const admin = await requestAdmin(req, () => null);
+      const displayTitle = customDetectionName(admin?.detectionDisplayNames, "faceAuthenticationSettings");
       const report = { formats: [format] };
       if (format === "pdf") {
-        const buffer = await buildPdf({ report, rows, label, timezone });
+        const buffer = await buildPdf({ report, rows, label, timezone, title: displayTitle });
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.pdf");
         return res.end(buffer);
@@ -1547,7 +1551,7 @@ class AttendanceService {
           cells: line.cells.map((value, index) => index === lateIndex && Number.isFinite(value)
             ? formatLateDuration(value) : value),
         }));
-        const buffer = await buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount: rows.length });
+        const buffer = await buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount: rows.length, displayTitle });
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.xlsx");
         return res.end(buffer);

@@ -168,10 +168,22 @@ class MailHelper {
     }
 
     _renderIncidentTemplate(templateFn, timezone, ...templateArgs) {
+        const [incident, ...rest] = templateArgs;
+        if (incident?.detectionDisplayName) {
+            const escaped = String(incident.incidentName || "").replace(/[&<>"']/g, (char) => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+            })[char]);
+            return templateFn({ ...incident, incidentName: escaped }, ...rest, resolveEmailTimezone(timezone));
+        }
         return templateFn(...templateArgs, resolveEmailTimezone(timezone));
     }
 
     async _sendAndTrack(email, args = []) {
+        const incident = args[1];
+        if (incident?.detectionDisplayName) {
+            const title = String(incident.incidentName || incident.detectionDisplayName).replace(/[\r\n]+/g, " ");
+            email.subject = `[Incident Alert] ${title} | Severity: ${incident.severity || "Info"}`;
+        }
         this._withReliableAssets(email);
         this._withConfidence(email, args);
         try {

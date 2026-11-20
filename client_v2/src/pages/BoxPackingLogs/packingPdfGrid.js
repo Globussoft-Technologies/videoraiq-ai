@@ -1,5 +1,5 @@
 // Fixed print dimensions fit two complete rows on the first landscape A4 page.
-export function drawPackingPdfGrid(doc, records, images, { linkFor = (url) => url, firstY = 62 } = {}) {
+export function drawPackingPdfGrid(doc, records, images, { linkFor = (url) => url, firstY = 62, title = 'Box Packing Alert Logs' } = {}) {
   const pageWidth = doc.internal.pageSize.getWidth(), pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14, gap = 5, columns = 4, height = 76;
   const width = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
@@ -16,7 +16,7 @@ export function drawPackingPdfGrid(doc, records, images, { linkFor = (url) => ur
     if (!column && index) y += height + gap;
     if (!column && y + height > pageHeight - 12) {
       doc.addPage(); y = 19;
-      text('Box Packing Alert Logs', margin, 11, pageWidth - margin * 2, 10, ink, true);
+      text(title, margin, 11, pageWidth - margin * 2, 10, ink, true);
     }
     const x = margin + column * (width + gap), pad = 2.5;
     doc.setDrawColor(...rule); doc.setFillColor(249, 248, 255); doc.roundedRect(x, y, width, height, 2, 2, 'FD');

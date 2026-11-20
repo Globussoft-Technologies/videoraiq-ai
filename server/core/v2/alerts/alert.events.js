@@ -1,3 +1,4 @@
+import { incidentForEmail } from "../../../utils/detectionDisplayNames.js";
 import AlertsConfig from '../alerts/alerts.model.js';
 import MailResponse from '../../../mailService/mail.helper.js'
 import { sendIncidentWhatsApp } from "../../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js";
@@ -43,13 +44,14 @@ const getAlertAdminContext = async (adminId) => {
 
   const admin = await adminModel
     .findOne(query)
-    .select("_id timezone emailAlertsEnabled telegramAlertsEnabled")
+    .select("_id timezone emailAlertsEnabled telegramAlertsEnabled detectionDisplayNames")
     .lean();
 
   return {
     adminObjectId: admin?._id ? String(admin._id) : null,
     timezone: admin?.timezone || "Asia/Kolkata",
     emailAlertsEnabled: admin?.emailAlertsEnabled,
+    detectionDisplayNames: admin?.detectionDisplayNames,
     telegramAlertsEnabled: admin?.telegramAlertsEnabled,
   };
 };
@@ -142,75 +144,76 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
 
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
       if (emailAddresses?.length && alertAdminContext?.emailAlertsEnabled !== false) {
+        const mailIncident = incidentForEmail(incidentData, alertAdminContext.detectionDisplayNames, detectionType);
         if (detectionType === "loiteringWithoutAuth") {
-          let mailResponse = await MailResponse.loiteringWithoutAuth(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.loiteringWithoutAuth(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "loiteringWithAuth") {
-          let mailResponse = await MailResponse.LoiteringWithAuth(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.LoiteringWithAuth(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "unauthorizedAccess") {
-          let mailResponse = await MailResponse.unauthorizedAccess(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.unauthorizedAccess(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "lineCrossing") {
-          let mailResponse = await MailResponse.LineCrossingAuth(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.LineCrossingAuth(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "motionDetection") {
-          let mailResponse = await MailResponse.motionDetectionAuth(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.motionDetectionAuth(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "genericObjectDetection") {
-          let mailResponse = await MailResponse.genericObjectDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.genericObjectDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "countPersons") {
-          let mailResponse = await MailResponse.countPersons(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.countPersons(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "countVehicles") {
-          let mailResponse = await MailResponse.countVehicles(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.countVehicles(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "crowdDetection") {
-          let mailResponse = await MailResponse.crowdDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.crowdDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "personalProtectiveEquipment") {
-          let mailResponse = await MailResponse.personalProtectiveEquipment(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz);
+          let mailResponse = await MailResponse.personalProtectiveEquipment(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz);
         } else if (detectionType === "lightDetection") {
-          let mailResponse = await MailResponse.lightDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.lightDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "doorDetection") {
-          let mailResponse = await MailResponse.doorDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.doorDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "bagDetection") {
-          let mailResponse = await MailResponse.bagDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.bagDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleDetection") {
-          let mailResponse = await MailResponse.vehicleDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.vehicleDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "carModelDetection") {
-          let mailResponse = await MailResponse.carModelDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.carModelDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleCheckInOut") {
-          let mailResponse = await MailResponse.vehicleCheckInOut(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.vehicleCheckInOut(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "deskAbsence") {
-          let mailResponse = await MailResponse.deskAbsence(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.deskAbsence(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "guardAbsence") {
-          let mailResponse = await MailResponse.guardAbsence(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.guardAbsence(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "guardSleepingDetection") {
-          let mailResponse = await MailResponse.guardSleepingDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.guardSleepingDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "conveyorDetection") {
-          let mailResponse = await MailResponse.conveyorDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.conveyorDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "crusherDetection") {
-          let mailResponse = await MailResponse.crusherDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.crusherDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "cylinderDetection") {
-          let mailResponse = await MailResponse.cylinderDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.cylinderDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "waterSpillageDetection") {
-          let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "fireSmokeDetection") {
-          let mailResponse = await MailResponse.fireSmokeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.fireSmokeDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "personFallSickDetection") {
-          let mailResponse = await MailResponse.personFallSickDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.personFallSickDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         // Camera tampering (stored as blurredCameraDetection) had no email; it uses the generic one.
         } else if (INDUSTRIAL_INCIDENT_TYPES.includes(detectionType) || detectionType === "blurredCameraDetection") {
-          let mailResponse = await MailResponse.industrialDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.industrialDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {
-          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "unauthorizedParkingDetection") {
-          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleTypeDetection") {
-          let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "loiteringDetection") {
           if (incidentData) incidentData.loiteringThreshold = loiteringThreshold;
           if (saved) saved.loiteringThreshold = loiteringThreshold;
-          let mailResponse = await MailResponse.loiteringDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.loiteringDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "tableOccupancyDetection") {
-          let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "foodServicePPEDetection") {
-          let mailResponse = await MailResponse.foodServicePPEDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.foodServicePPEDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "mobilePhoneDetection") {
-          let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+          let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses, mailIncident, detectionType, nvrData, channelData, adminTz)
         }
       }
     } catch (err) {

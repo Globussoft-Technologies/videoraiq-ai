@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ReactApexChart from 'react-apexcharts';
@@ -525,6 +526,7 @@ function lineCrossingDirection(data) {
 }
 
 export default function LineCrossingLogs() {
+  const labels = useDetectionLabels();
   const { permissions, loading: permissionsLoading } = usePermissions();
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -1685,7 +1687,7 @@ export default function LineCrossingLogs() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, minWidth: 0 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b', flexShrink: 0 }} />
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {data?.incidentName || 'Line crossing detected'}
+                            {labels.event(data?.incidentType || 'lineCrossing', data?.incidentName, 'Line crossing detected')}
                           </span>
                         </div>
                         <div style={{ marginTop: 5, color: 'rgba(226,232,240,.82)', fontSize: 11, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

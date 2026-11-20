@@ -57,7 +57,7 @@ const fetchAllForExport = async (params) => {
   const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
   const list = res?.data?.body?.data?.data || [];
   return list.map((item) => ({
-    incidentName: item.incidentName || '--',
+    incidentName: params.eventTitle?.(item.incidentType || 'vehicleDetection', item.incidentName, '--') || item.incidentName || '--',
     nvrName: item.nvrData?.nvrName || '--',
     channelName: item.channelData?.name || '--',
     vehicleNumber: item.vehicleNumber || '--',
@@ -245,7 +245,7 @@ const exportToPDF = async (params) => {
     }
 
     const doc = new jsPDF('landscape');
-    await drawReportHeader(doc, REPORT_TITLE, allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || REPORT_TITLE, allLogs.length);
 
     const headers = [
       '#',
@@ -364,7 +364,7 @@ const exportToGridPDF = async (params) => {
 
     doc.setFillColor(245, 247, 251);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    await drawReportHeader(doc, REPORT_TITLE, allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || REPORT_TITLE, allLogs.length);
 
     const addPageIfNeeded = () => {
       if (y + cardHeight <= pageHeight - 6) return;

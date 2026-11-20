@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ImageOff, LayoutGrid, List, Maximize } from 'lucide-react';
 import { mediaUrl } from '@/lib/format';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { clock, describeSolderAlert } from './solderLineData';
 import { BAD, WARN, OK, mono, label, Panel, OpBadge, Chip, NoPeriodData, SnapshotPreview } from './ui';
 import { downloadPdf, downloadXlsx, formatExportDates } from './exports';
@@ -40,6 +41,7 @@ function ImageDownload({ row, style }) {
 }
 
 export default function AlertLogs({ model, rows, range }) {
+  const logTitle = detectionLogLabel(useDetectionDisplayNames(), 'deskSolarShoulderLogs', 'Solder Alert Logs');
   const [type, setType] = useState('all');
   const [grid, setGrid] = useState(true);
   const [openId, setOpenId] = useState(null);
@@ -71,7 +73,7 @@ export default function AlertLogs({ model, rows, range }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 20 }}>Solder Alert Logs</span>
+        <span style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 20 }}>{logTitle}</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Absence alerts and panel results, with their camera snapshots</span>
       </div>
 
@@ -87,8 +89,8 @@ export default function AlertLogs({ model, rows, range }) {
           <Chip on={!grid} color="var(--blue)" onClick={() => setGrid(false)}><List size={13} />List</Chip>
           <Chip on={grid} color="var(--blue)" onClick={() => setGrid(true)}><LayoutGrid size={13} />Grid</Chip>
           <DownloadButton disabled={!shown.some((r) => r.image)} action={() => downloadSnapshotsZip(shown)} description="snapshots ZIP" title="Download all filtered snapshots as ZIP" style={{ ...mono, fontSize: 10.5, fontWeight: 700 }}>SNAPSHOTS .ZIP</DownloadButton>
-          <DownloadButton disabled={!shown.length} action={() => downloadXlsx(exportRows(), fileName, { title: 'Solder Alert Logs', subtitle: exportSubtitle })} description="Excel report">XLSX</DownloadButton>
-          <DownloadButton disabled={!shown.length} action={() => downloadPdf({ title: 'Solder Alert Logs', subtitle: exportSubtitle, rows: exportRows(), filename: fileName })} description="PDF report">PDF</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadXlsx(exportRows(), fileName, { title: logTitle, subtitle: exportSubtitle })} description="Excel report">XLSX</DownloadButton>
+          <DownloadButton disabled={!shown.length} action={() => downloadPdf({ title: logTitle, subtitle: exportSubtitle, rows: exportRows(), filename: fileName })} description="PDF report">PDF</DownloadButton>
         </span>
       </Panel>
 
@@ -151,7 +153,7 @@ export default function AlertLogs({ model, rows, range }) {
           </div>
         </Panel>
       )}
-      <SolderPagination pagination={pagination} label="Solder Alert Logs" />
+      <SolderPagination pagination={pagination} label={logTitle} />
       <SnapshotPreview items={pageRows} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)} />
     </>
   );

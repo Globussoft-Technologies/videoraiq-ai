@@ -199,6 +199,7 @@ export const initSocket = (server) => {
       "purchasedCameras:update",
       "detectionAllocation:update",
       "moduleConfig:update",
+      "detectionDisplayNames:update",
       "detectionCatalog:sync",
       (err) => {
         if (err) logger.error(`Failed to subscribe superadmin channels: ${err.message}`);
@@ -224,6 +225,11 @@ export const initSocket = (server) => {
         const update = JSON.parse(message);
         const { adminId, userId } = update;
         if (!adminId) return;
+
+        if (channel === "detectionDisplayNames:update") {
+          io.emit(`detectionDisplayNames_${adminId}`);
+          return;
+        }
 
         if (channel === "moduleConfig:update") {
           // Read the current tenant snapshot so delayed messages cannot replay

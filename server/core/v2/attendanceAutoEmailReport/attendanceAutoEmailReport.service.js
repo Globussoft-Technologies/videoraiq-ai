@@ -1021,7 +1021,9 @@ function emailHtml(report, details) {
   const incidentReport = reportIncludes(report, "incidents");
   const attendanceReport = reportIncludes(report, "attendance");
   const combinedReport = incidentReport && attendanceReport;
-  const displayTitle = combinedReport ? COMBINED_REPORT_DISPLAY_TITLE : incidentReport ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+  const displayTitle = combinedReport ? COMBINED_REPORT_DISPLAY_TITLE : incidentReport
+    ? (details.detectionName ? `${details.detectionName} Incident Report` : INCIDENT_REPORT_DISPLAY_TITLE)
+    : REPORT_DISPLAY_TITLE;
   const reportHeading = combinedReport ? "Attendance & Incident Report" : incidentReport ? "Incident Report" : "Attendance Report";
   const recordLabel = combinedReport ? "report record" : incidentReport ? "incident" : "employee attendance record";
   const preheader = `${displayTitle} — ${count} ${recordLabel}${count === 1 ? "" : "s"} · ${details.label}`;
@@ -1308,7 +1310,9 @@ async function sendReportEmail(report, details, recipients) {
   const category = `${kind} report`;
   const displayTitle = kind === "Attendance & Incident"
     ? COMBINED_REPORT_DISPLAY_TITLE
-    : kind === "Incident" ? INCIDENT_REPORT_DISPLAY_TITLE : REPORT_DISPLAY_TITLE;
+    : kind === "Incident"
+      ? (details.detectionName ? `${details.detectionName} Incident Report` : INCIDENT_REPORT_DISPLAY_TITLE)
+      : REPORT_DISPLAY_TITLE;
   const email = {
     from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
     to: recipients,

@@ -53,7 +53,7 @@ function worksheetValue(value) {
 }
 
 /** Daily workbook using the PDF's expanded day/session/total table. */
-export async function buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount }) {
+export async function buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount, displayTitle }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "VideoraIQ";
   workbook.created = new Date();
@@ -81,7 +81,7 @@ export async function buildAttendanceWorkbook({ headers, lines, label, timezone,
   brand.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 
   const title = lastColumn > 1 ? sheet.getCell(1, titleColumn) : sheet.getCell(1, 1);
-  title.value = lastColumn > 1 ? "Attendance Report" : "VideoraIQ Attendance Report";
+  title.value = displayTitle || (lastColumn > 1 ? "Attendance Report" : "VideoraIQ Attendance Report");
   title.font = { bold: true, size: 20, color: { argb: "FFFFFFFF" } };
   title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
   title.alignment = { vertical: "middle", horizontal: "center" };

@@ -268,7 +268,7 @@ const exportToPDF = async (params) => {
     }
 
     const doc = new jsPDF('landscape');
-    await drawReportHeader(doc, 'Car Detection Logs', allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || 'Car Detection Logs', allLogs.length);
 
     const headers = [
       '#',
@@ -392,7 +392,7 @@ const exportToGridPDF = async (params) => {
 
     doc.setFillColor(245, 247, 251);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    await drawReportHeader(doc, 'Car Detection Logs', allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || 'Car Detection Logs', allLogs.length);
 
     const addPageIfNeeded = () => {
       if (y + cardHeight <= pageHeight - 6) return;
@@ -495,7 +495,7 @@ const exportToExcel = async (params) => {
 
     const headerRows = [
       ['VIDEORAIQ', '', '', '', '', '', '', '', '', '', ''],
-      ['Car Detection Logs', '', '', '', '', '', '', '', '', '', ''],
+      [params.displayTitle || 'Car Detection Logs', '', '', '', '', '', '', '', '', '', ''],
       [`Generated on ${moment().format('DD/MM/YYYY HH:mm')}`, '', '', '', `Total records: ${allLogs.length}`, '', '', '', '', '', ''],
       [],
     ];

@@ -1487,9 +1487,9 @@ export default function DetectionDetailPanel({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}
-            title={model.name}
+            title={model.displayName || model.name}
           >
-            {model.name}
+            {model.displayName || model.name}
           </span>
           <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--tx2)', marginTop: 3 }}>
             {category?.label} · {model.subtitle}
@@ -1607,7 +1607,7 @@ export default function DetectionDetailPanel({
                       event.preventDefault();
                       explainThresholdControl('set');
                     }}
-                    aria-label={`${model.name} ${label}`}
+                    aria-label={`${model.displayName || model.name} ${label}`}
                     title={thresholdsBlockedByInactive ? 'Enable this detection to set thresholds' : undefined}
                     style={{
                       flex: 1,
@@ -1784,7 +1784,7 @@ export default function DetectionDetailPanel({
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: '#7c3aed', fontFamily: 'var(--disp, sans-serif)' }}>
-                      Edit Schedule for {model.name}
+                      Edit Schedule for {model.displayName || model.name}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 13, color: 'var(--tx2)', lineHeight: 1.5 }}>
                       Set the timezone, mode and daily time ranges for the schedule.

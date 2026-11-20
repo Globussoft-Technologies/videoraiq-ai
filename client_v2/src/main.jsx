@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from '@/context/AuthContext';
+import { DetectionDisplayNamesProvider } from '@/context/DetectionDisplayNamesContext';
 import { PermissionProvider } from '@/context/PermissionContext';
 import { LicenseProvider } from '@/context/LicenseContext';
 import { SocketProvider } from '@/context/SocketContext';
@@ -32,10 +33,12 @@ createRoot(document.getElementById('root')).render(
           <LicenseProvider>
             <LogsConfigProvider>
               <AttendanceSocketProvider>
-                <DetectionNotificationProvider>
-                  <RouterProvider router={router} />
-                  <Toaster position="top-right" richColors closeButton />
-                </DetectionNotificationProvider>
+                <DetectionDisplayNamesProvider>
+                  <DetectionNotificationProvider>
+                    <RouterProvider router={router} />
+                    <Toaster position="top-right" richColors closeButton />
+                  </DetectionNotificationProvider>
+                </DetectionDisplayNamesProvider>
               </AttendanceSocketProvider>
             </LogsConfigProvider>
           </LicenseProvider>

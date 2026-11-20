@@ -113,7 +113,7 @@ const drawGridHeader = (doc, logo, params, page, pageCount) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(255, 255, 255);
-  doc.text('Attendance Logs', 63, 12);
+  doc.text(params.displayTitle || 'Attendance Logs', 63, 12);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(218, 225, 255);

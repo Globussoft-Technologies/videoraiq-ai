@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import WhatsAppAlerts from './WhatsAppAlerts';
 import { IS_FLO_MATTRESS } from '@/lib/featureFlags';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
@@ -1289,6 +1290,7 @@ function TelegramChannelMobileCard({
 }
 
 export default function AlertRecipients() {
+  const labels = useDetectionLabels();
   const { permissions } = usePermissions();
   const canView = permissions?.recipients?.view ?? true;
   const canCreate = permissions?.recipients?.create ?? true;
@@ -1372,7 +1374,9 @@ export default function AlertRecipients() {
   }, []);
 
   const recipients = Array.isArray(recipientsApi.data) ? recipientsApi.data : [];
-  const detectionTypes = typesApi.data || {};
+  const detectionTypes = useMemo(() => Object.fromEntries(
+    Object.entries(typesApi.data || {}).map(([type, label]) => [type, labels.label(type, label)]),
+  ), [typesApi.data, labels]);
   const verifiedCount = recipients.filter((recipient) => recipient.verified).length;
   const emailTotalPages = Math.max(1, Math.ceil(recipients.length / EMAIL_RECIPIENTS_PER_PAGE));
   const currentEmailPage = Math.min(emailPage, emailTotalPages);

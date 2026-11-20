@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
@@ -74,6 +75,7 @@ const SLEEPING_OPTIONS = [
 ];
 
 const SleepActivityLogs = () => {
+  const displayTitle = useDetectionLabels().logPermission('sleepActivityLogs');
   const navigate = useNavigate();
   const maxDateDefault = useMemo(() => moment().endOf('day').toDate(), []);
 
@@ -284,8 +286,8 @@ const SleepActivityLogs = () => {
   );
 
   const handleExport = useCallback(
-    (format) => handleSleepActivityExport(format, exportParams),
-    [exportParams]
+    (format) => handleSleepActivityExport(format, { ...exportParams, displayTitle }),
+    [exportParams, displayTitle]
   );
 
   const handlePdfExport = useCallback(

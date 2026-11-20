@@ -1,3 +1,4 @@
+import { customDetectionName } from "../utils/detectionDisplayNames.js";
 import fs from "fs";
 import config from "config";
 import { initializeApp, cert } from "firebase-admin/app";
@@ -102,8 +103,9 @@ function incidentDetail(incident) {
  * date and time. The snapshot rides along as an image URL (shown on web and
  * Android; iOS needs a notification service extension in the app).
  */
-export function buildIncidentMessage(incident, timezone = "Asia/Kolkata", nvr = {}) {
+export function buildIncidentMessage(incident, timezone = "Asia/Kolkata", nvr = {}, displayName) {
   const title =
+    displayName ||
     incident?.detectionSetting?.name ||
     prettify(incident?.incidentType || incident?.incidentName) ||
     "Detection";
@@ -199,7 +201,7 @@ export async function sendIncidentPush({ admin, incident }) {
     const nvr = incident?.nvrId
       ? await NVR.findById(incident.nvrId).select("nvrName location").lean().catch(() => null)
       : null;
-    const message = buildIncidentMessage(incident, admin.timezone || undefined, nvr || {});
+    const message = buildIncidentMessage(incident, admin.timezone || undefined, nvr || {}, customDetectionName(admin.detectionDisplayNames, incident?.incidentType));
     const stale = [];
     let delivered = 0;
 

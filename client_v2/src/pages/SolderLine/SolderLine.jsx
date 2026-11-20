@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import { useModuleConfig } from '@/context/ModuleConfigContext';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { isModuleAllowed } from '@/lib/navVisibility';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
@@ -34,6 +35,7 @@ export default function SolderLine() {
   const view = TABS.find((t) => t.view !== 'overview' && pathname.startsWith(t.to))?.view || 'overview';
   const { permissions, loading: permissionsLoading } = usePermissions();
   const { modules } = useModuleConfig();
+  const detectionNames = useDetectionDisplayNames();
   const visibleTabs = TABS.filter((tab) => isModuleAllowed({ moduleKey: 'solarLineQc', modulePageKey: tab.modulePageKey }, modules));
   const canOpenLogs = isModuleAllowed({ moduleKey: 'solarLineQc', modulePageKey: 'solderAlertLogs' }, modules);
   const today = moment.tz(getConfiguredTimezone()).format('YYYY-MM-DD');
@@ -108,7 +110,7 @@ export default function SolderLine() {
             textDecoration: 'none', color: isActive ? 'var(--tx)' : 'var(--tx3)', marginBottom: -1,
             borderBottom: `2px solid ${isActive ? 'var(--blue)' : 'transparent'}`,
           })}>
-            {t.label}
+            {t.view === 'logs' ? detectionLogLabel(detectionNames, 'deskSolarShoulderLogs', t.label) : t.label}
             {t.view === 'logs' && !loading && rows.length > 0 && (
               <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#fff', background: BAD, borderRadius: 8, padding: '1px 6px' }}>{rows.length}</span>
             )}

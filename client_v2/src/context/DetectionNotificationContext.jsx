@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@/App';
@@ -264,6 +265,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
 }
 
 export function DetectionNotificationProvider({ children }) {
+  const labels = useDetectionLabels();
   const { socket } = useSocket();
   const { user } = useAuth();
   const shownDetections = useRef(new Set());
@@ -299,7 +301,8 @@ export function DetectionNotificationProvider({ children }) {
         shownDetections.current.delete(oldest);
       }
 
-      const title = detectionTitle(data);
+      const type = data?.incidentType || data?.detectionType;
+      const title = labels.override(type) ? labels.event(type, data?.incidentName) : detectionTitle(data);
       const description = `${cameraLabel(data)} - ${detectionTime(data)}`;
 
       const desktopEnabled = desktopNotificationsEnabled();
@@ -343,7 +346,7 @@ export function DetectionNotificationProvider({ children }) {
 
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, handleDetection);
-  }, [socket, user?.adminId]);
+  }, [socket, user?.adminId, labels]);
 
   // Incident push for when no tab is open — follows the same Settings ▸
   // Desktop notifications switch as the socket-driven desktop notification.

@@ -35,6 +35,51 @@ beforeEach(async () => {
 });
 
 describe("detection allocation revocation", () => {
+  it("uses the selected client's display name for the allocation row and toggle response", async () => {
+    const [custom, defaults] = await Admin.create([
+      { user_id: "rename-client", login: "rename-client", email: "rename@test.com", purchasedCameras: 5,
+        detectionDisplayNames: { [PPE]: "Safety Gear" } },
+      { user_id: "default-client", login: "default-client", email: "defaults@test.com", purchasedCameras: 5 },
+    ]);
+    await DetectionCatalog.create({ settingType: PPE, name: "PPE Detection" });
+    for (const [admin, name] of [[custom, "Safety Gear"], [defaults, "PPE Detection"]]) {
+      const config = serviceCtx({ params: { adminId: String(admin._id) } });
+      await ClientConfigService.getConfig(config.req, config.res);
+      expect(payload(config.res).data.detections).toContainEqual(expect.objectContaining({ settingType: PPE, name }));
+    }
+
+    const allocation = serviceCtx({
+      params: { adminId: String(custom._id), settingType: PPE },
+      body: { cameraAllocation: 3, enabled: true },
+    });
+    await ClientConfigService.updateDetectionAllocation(allocation.req, allocation.res);
+    expect(payload(allocation.res).data).toMatchObject({ settingType: PPE, name: "Safety Gear", enabled: true });
+  });
+
+  it("renames and restores only the selected client's detection", async () => {
+    const [target, other] = await Admin.create([
+      { user_id: "target-client", login: "target-client", email: "target@test.com" },
+      { user_id: "other-client", login: "other-client", email: "other@test.com" },
+    ]);
+    await DetectionCatalog.create({ settingType: PPE, name: "PPE Detection" });
+    const params = { adminId: String(target._id), settingType: PPE };
+    const renamed = serviceCtx({ params, body: { displayName: " Safety Gear ", adminId: String(other._id) } });
+    await ClientConfigService.updateDetectionDisplayName(renamed.req, renamed.res);
+    expect(payload(renamed.res).data).toEqual({ settingType: PPE, name: "Safety Gear", displayName: "Safety Gear" });
+    expect((await Admin.findById(target._id).lean()).detectionDisplayNames[PPE]).toBe("Safety Gear");
+    expect((await Admin.findById(other._id).lean()).detectionDisplayNames?.[PPE]).toBeUndefined();
+    expect(redis.publish).toHaveBeenCalledWith("detectionDisplayNames:update", JSON.stringify({ adminId: params.adminId }));
+
+    const invalid = serviceCtx({ params: { ...params, settingType: "__proto__" }, body: { displayName: "Invalid" } });
+    await ClientConfigService.updateDetectionDisplayName(invalid.req, invalid.res);
+    expect(invalid.res.statusCode).toBe(400);
+
+    const restored = serviceCtx({ params, body: { displayName: null } });
+    await ClientConfigService.updateDetectionDisplayName(restored.req, restored.res);
+    expect(payload(restored.res).data).toEqual({ settingType: PPE, name: "PPE Detection", displayName: null });
+    expect((await Admin.findById(target._id).lean()).detectionDisplayNames?.[PPE]).toBeUndefined();
+  });
+
   it.each([
     ["machine operations detection", "machineOpsDetectionSettings"],
     ["gender and age detection", "genderAgeDetectionSettings"],

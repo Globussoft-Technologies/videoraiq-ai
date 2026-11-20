@@ -269,6 +269,22 @@ export const NAV_GROUPS = [
 ];
 
 /** Title + subtitle shown in the header per view (ported from the prototype). */
+const logKeysByPath = new Map([
+  ['logs/guard', 'guardLogs'],
+  ['box-packing/alerts', 'boxPackingLogs'],
+  ...NAV_GROUPS.flatMap(({ items }) => items
+    .filter(isDetectionLogNav)
+    .map(({ path, logsConfigKey }) => [path, logsConfigKey])),
+]);
+
+export function isDetectionLogNav({ path, logsConfigKey }) {
+  return Boolean(logsConfigKey && (path?.startsWith('logs/') || path?.endsWith('/logs')));
+}
+
+export function detectionLogKeyForPath(path) {
+  return logKeysByPath.get(path.replace(/^\/|\/$/g, ''));
+}
+
 export const VIEW_META = {
   overview: { title: 'Command Center', sub: 'Real-time intelligence across all sites' },
   wall: { title: 'Live Video Wall', sub: 'Multi-camera monitoring grid' },

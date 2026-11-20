@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ShieldCheck, ChevronDown } from 'lucide-react';
@@ -176,6 +177,7 @@ function DetectionTypeRow({ label, color, enabled, onToggle }) {
 }
 
 export default function SystemControls() {
+  const labels = useDetectionLabels();
   const { permissions } = usePermissions();
   const canViewControls = !!permissions?.detectionSettings?.view && !!permissions?.detectionSettings?.edit;
 
@@ -321,7 +323,7 @@ export default function SystemControls() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 245, overflowY: 'auto' }} className="vq-scroll">
           {detectionKeys.filter((key) => typeLabels[key]).map((key, i) => {
-            const label = typeLabels[key];
+            const label = labels.label(key, typeLabels[key]);
             const enabled = isTypeEnabled(selectedCamera, key);
             return (
               <DetectionTypeRow

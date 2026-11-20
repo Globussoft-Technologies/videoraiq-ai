@@ -185,7 +185,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
     const images = await snapshotImages;
     const pageHeight = doc.internal.pageSize.getHeight();
     if (options.layout === 'grid') {
-      drawPackingPdfGrid(doc, records, images, { linkFor: (url) => packingMediaUrls(url).link });
+      drawPackingPdfGrid(doc, records, images, { title: reportTitle, linkFor: (url) => packingMediaUrls(url).link });
     } else {
       const widths = [42, 30, 30, 25, 52, 28, 27, 27, 29];
       const scale = (pageWidth - 28) / widths.reduce((a, b) => a + b, 0);
@@ -205,7 +205,7 @@ export const downloadBoxPackingPdf = async (rows = [], stats = {}, options = {})
     }
     for (let page = 1; page <= doc.getNumberOfPages(); page += 1) {
       doc.setPage(page); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED);
-      doc.text('Box Packing Alert Logs', 14, pageHeight - 7);
+      doc.text(reportTitle, 14, pageHeight - 7);
       doc.text(`Page ${page} of ${doc.getNumberOfPages()}`, pageWidth - 14, pageHeight - 7, { align: 'right' });
     }
     doc.save(`${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.pdf`);

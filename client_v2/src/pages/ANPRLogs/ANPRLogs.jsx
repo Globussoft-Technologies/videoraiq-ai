@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
@@ -81,11 +82,12 @@ function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
 }
 
 const ANPRLogs = () => {
+  const labels = useDetectionLabels();
   const maxDateDefault = useMemo(() => moment().endOf('day').toDate(), []);
 
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
-    rows,
+    rows: sourceRows,
     loading,
     error,
     totalCount,
@@ -108,6 +110,7 @@ const ANPRLogs = () => {
     tagStatus,
     limit,
   } = state;
+  const rows = useMemo(() => sourceRows.map((row) => ({ ...row, incidentDisplayName: labels.event(row.incidentType || 'vehicleDetection', row.incidentName === '--' ? '' : row.incidentName, '--') })), [sourceRows, labels]);
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(REFRESH_KEY);
@@ -382,6 +385,8 @@ const ANPRLogs = () => {
 
   const handleExport = (format) =>
     handleANPRExport(format, {
+      eventTitle: labels.event,
+      displayTitle: labels.logPermission('ANPRLogs'),
       startDate,
       endDate,
       sortField,
@@ -483,7 +488,7 @@ const ANPRLogs = () => {
         onPageChange={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         limit={limit}
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
-        searchKeys={['incidentName', 'nvrName', 'channelName', 'vehicleNumber']}
+        searchKeys={['incidentDisplayName', 'incidentName', 'nvrName', 'channelName', 'vehicleNumber']}
         searchQuery={searchInput}
         onSearchChange={(v) => dispatch({ type: 'SET_SEARCH_INPUT', value: v })}
         startDate={startDate}

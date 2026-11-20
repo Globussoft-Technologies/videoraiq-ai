@@ -1,5 +1,7 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
+
 export default function IncidentSummary({ item, cameraName, titleFallback = 'Incident', lightbox = false }) {
-  const title = item.incidentName || titleFallback;
+  const title = useDetectionLabels().event(item.incidentType, item.incidentName, titleFallback);
   const description = typeof item.description === 'string' && item.description.trim() ? item.description : '--';
   const camera = cameraName || item.channelData?.customName || item.channelData?.name || item.cameraName || '--';
   return <div style={{ display: 'flex', flexDirection: 'column', gap: lightbox ? 7 : 5, minWidth: 0, width: '100%' }}>

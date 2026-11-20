@@ -54,9 +54,9 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
             overflowWrap: 'anywhere',
             lineHeight: 1.3,
           }}
-          title={model.name}
+          title={model.displayName || model.name}
         >
-          {model.name}
+          {model.displayName || model.name}
         </span>
         {!hideToggle && (
           <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto', marginTop: 1 }}>

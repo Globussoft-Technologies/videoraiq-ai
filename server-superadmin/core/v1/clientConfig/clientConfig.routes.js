@@ -6,6 +6,7 @@ import verifySuperAdmin from "../../../middlewares/verifySuperAdmin.js";
 router.get("/:adminId", verifySuperAdmin, clientConfigController.getConfig);
 router.put("/:adminId/purchased-cameras", verifySuperAdmin, clientConfigController.updatePurchasedCameras);
 router.put("/:adminId/detections/:settingType", verifySuperAdmin, clientConfigController.updateDetectionAllocation);
+router.put("/:adminId/detections/:settingType/display-name", verifySuperAdmin, clientConfigController.updateDetectionDisplayName);
 router.put("/:adminId/modules/:moduleKey", verifySuperAdmin, clientConfigController.updateModuleConfig);
 
 export default router;

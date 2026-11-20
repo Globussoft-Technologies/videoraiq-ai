@@ -8,7 +8,8 @@ import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { usePermissions } from '../context/PermissionContext';
 import { useLogsConfig } from '../context/LogsConfigContext';
 import { useLicense } from '../context/LicenseContext';
-import { NAV_GROUPS } from './nav.config';
+import { NAV_GROUPS, detectionLogKeyForPath } from './nav.config';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { isClientNavGroupVisible, isClientNavItemVisible, isModuleAllowed, isItemLogEnabled, isItemVisible } from '../lib/navVisibility';
 import { useModuleConfig } from '@/context/ModuleConfigContext';
 import { getChannels } from '../helpers/monitoring';
@@ -30,14 +31,15 @@ const isSearchNavItemVisible = (item, permissions, logsConfig, logsLoading, modu
   && (!item.logsConfigKey || (!logsLoading && (!IS_LICENSING_ENABLED || Boolean(logsConfig))))
   && isItemLogEnabled(item, logsConfig);
 
-const buildPageIndex = (permissions, logsConfig, logsLoading, modules) => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
+const buildPageIndex = (permissions, logsConfig, logsLoading, modules, detectionNames) => NAV_GROUPS.filter((g) => !g.hidden && isClientNavGroupVisible(g)).flatMap((g) =>
   g.items.filter((item) => isSearchNavItemVisible(item, permissions, logsConfig, logsLoading, modules)).flatMap((it) => (
     (it.children?.length ? it.children : [it])
       .filter((entry) => isSearchNavItemVisible({ ...it, ...entry }, permissions, logsConfig, logsLoading, modules))
       .map((entry) => ({
         kind: 'Page',
         kindColor: 'var(--blue)',
-        label: entry.label === 'Logs' ? it.label : `${it.label} - ${entry.label}`,
+        label: detectionLogLabel(detectionNames, detectionLogKeyForPath(entry.path),
+          entry.label === 'Logs' ? it.label : `${it.label} - ${entry.label}`),
         sub: g.label,
         to: `/${entry.path}`,
       }))
@@ -223,6 +225,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const { permissions, loading: permissionsLoading, error: permissionsError } = usePermissions();
   const { logs: logsConfig, loading: logsLoading } = useLogsConfig();
   const { modules } = useModuleConfig();
+  const detectionNames = useDetectionDisplayNames();
   const { license, allowedDetections, loading: licenseLoading } = useLicense();
   const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
@@ -248,8 +251,8 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const unreadNum = unreadCount ?? notifications.length;
   const permissionsReady = !permissionsLoading && !permissionsError && Boolean(permissions && Object.keys(permissions).length);
   const pageIndex = useMemo(
-    () => permissionsReady ? buildPageIndex(permissions, logsConfig, logsLoading, modules) : [],
-    [permissionsReady, permissions, logsConfig, logsLoading, modules, showLiveDemo]
+    () => permissionsReady ? buildPageIndex(permissions, logsConfig, logsLoading, modules, detectionNames) : [],
+    [permissionsReady, permissions, logsConfig, logsLoading, modules, detectionNames]
   );
   const canSearchCameras = permissionsReady && isSearchNavItemVisible(SEARCH_CAMERA_NAV_ITEM, permissions, logsConfig, logsLoading);
   const canSearchDetections = permissionsReady && isSearchNavItemVisible(SEARCH_DETECTION_NAV_ITEM, permissions, logsConfig, logsLoading);
@@ -258,8 +261,8 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const assignedDetectionIndex = useMemo(
     () => {
       if (!canSearchDetections || !detectionAssignmentsReady) return [];
-      if (!IS_LICENSING_ENABLED) return DETECTION_SEARCH_INDEX;
-      const assigned = DETECTION_SEARCH_INDEX.filter((detection) => allowedDetections.has(detectionSettingType(detection)));
+      const assigned = DETECTION_SEARCH_INDEX.filter((detection) =>
+        !IS_LICENSING_ENABLED || allowedDetections.has(detectionSettingType(detection)));
       const indexedTypes = new Set(assigned.map(detectionSettingType));
       // The licence includes names for assigned types outside the shortcut list.
       for (const detection of license?.detections || []) {
@@ -274,9 +277,12 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
         });
         indexedTypes.add(detection.settingType);
       }
-      return assigned;
+      return assigned.map((detection) => {
+        const label = detectionNames.names[detectionSettingType(detection)];
+        return label ? { ...detection, label, keywords: `${detection.keywords || ''} ${detection.label.toLowerCase()}` } : detection;
+      });
     },
-    [canSearchDetections, detectionAssignmentsReady, allowedDetections, license]
+    [canSearchDetections, detectionAssignmentsReady, allowedDetections, license, detectionNames]
   );
 
   // Measure the surrounding content area, not the header: switching between

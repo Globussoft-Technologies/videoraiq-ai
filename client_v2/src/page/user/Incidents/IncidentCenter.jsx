@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
@@ -230,7 +231,7 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
   const label = selected.size === 0
     ? placeholder
     : selected.size === 1
-      ? detectionLabel([...selected][0])
+      ? options.find((option) => selected.has(option.value))?.label || detectionLabel([...selected][0])
       : `${selected.size} selected`;
 
   return (
@@ -826,6 +827,7 @@ function CarModelDetails({ item }) {
 }
 
 function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onIndexChange, onClose, onRefresh, onResolvedChange, onTagUser, onUntagUser, onViewUser, tagOpen = false, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
+  const labels = useDetectionLabels();
   const item = selectedItem || items[index];
   // Navigation spans the whole filtered result set, not just the loaded page:
   // hitting either end of `items` fetches the neighbouring page via
@@ -1036,7 +1038,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
   // True only when a mounted arrow is rendering its own spinner.
   const arrowSpinning = navLoading && ((navDir === 'prev' && hasPrev) || (navDir === 'next' && hasNext));
   const imgSrc = item.Image ? mediaUrl(item.Image) : null;
-  const det    = detectionLabel(item.incidentType || item.displayName);
+  const det = labels.label(item.incidentType || item.displayName);
   const isMachineOps = item.incidentType === 'machineOpsDetection';
   const cam    = isMachineOps ? (item.channelData?.customName || item.channelData?.name || item.cameraName || '') : item.channelData?.name || '';
   const site   = item.nvrData?.nvrName  || item.location  || '';
@@ -1236,7 +1238,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   Security Feed
                 </span>
                 <h1 style={{ margin: 0, fontSize: carModel ? 22 : compactDetails ? 20 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
-                  {item.incidentName || det}
+                  {labels.event(item.incidentType || item.displayName, item.incidentName)}
                 </h1>
                 {item.incidentType === 'emotionDetection' ? <IncidentZoneDetails item={item} variant="lightbox" /> : <p style={{ margin: 0, fontSize: carModel ? 13 : compactDetails ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {lateArrivalDescription(item) || [cam, site].filter(Boolean).join(' · ')}
@@ -1473,7 +1475,8 @@ function IncidentListRow({
   const previewChannelId = previewChannel?._id || item.channelId || null;
   const previewAt = item.timeOfIncident || null;
   const canPreview = Boolean(previewChannelId && previewAt);
-  const incident = item.incidentName || detectionLabel(item.incidentType || item.displayName);
+  const labels = useDetectionLabels();
+  const incident = labels.event(item.incidentType || item.displayName, item.incidentName);
   const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item.incidentType);
   const incidentDescription = isDescriptiveIncident ? String(item.description || '').trim() : '';
   const camera = item.channelData?.customName || item.channelData?.name || '--';
@@ -1561,7 +1564,7 @@ function IncidentListRow({
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
-          {!isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detectionLabel(item.incidentType || item.displayName)}</span>}
+          {!isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labels.label(item.incidentType || item.displayName)}</span>}
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           <IncidentReportMessage item={item} compact />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
@@ -1669,6 +1672,7 @@ function IncidentListRow({
 }
 
 export default function IncidentCenter() {
+  const labels = useDetectionLabels();
   const ctx    = useOutletContext() || {};
   const ctxLoc = ctx.location || '';
   const location = useLocation();
@@ -1903,7 +1907,7 @@ export default function IncidentCenter() {
     if (!listSort.field) return items;
     const valueFor = (item) => {
       switch (listSort.field) {
-        case 'incident': return item.incidentName || detectionLabel(item.incidentType || item.displayName);
+        case 'incident': return labels.event(item.incidentType || item.displayName, item.incidentName);
         case 'camera': return item.channelData?.customName || item.channelData?.name || '';
         case 'issueCount': return Number.isInteger(item.violationCount) ? item.violationCount : item.violations?.length || 0;
         case 'violation': return item.violations?.[0]?.categoryName || item.violations?.[0]?.category || '';
@@ -1919,7 +1923,7 @@ export default function IncidentCenter() {
       const comparison = typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
       return listSort.direction === 'asc' ? comparison : -comparison;
     });
-  }, [items, listSort]);
+  }, [items, listSort, labels]);
   const toggleListSort = (field) => setListSort((current) => ({ field, direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc' }));
   const sortHeader = (label, field) => {
     const active = listSort.field === field;
@@ -1975,14 +1979,14 @@ export default function IncidentCenter() {
     if (exportingFormat || !grid.data?.totalCount) return;
     setExportingFormat(format);
     try {
-      await exportIncidentCenter(format, serverFilter, { viewMode });
+      await exportIncidentCenter(format, serverFilter, { viewMode, labels });
     } catch (err) {
       console.error('Incident Center export failed:', err);
       toast.error(`Failed to export ${format === 'excel' ? 'Excel' : 'PDF'}`);
     } finally {
       setExportingFormat('');
     }
-  }, [exportingFormat, grid.data?.totalCount, serverFilter, viewMode]);
+  }, [exportingFormat, grid.data?.totalCount, serverFilter, viewMode, labels]);
 
   const handleResolvedChange = useCallback((incidentId, resolved, savedIncident) => {
     const updateIncident = (item) => {
@@ -2531,9 +2535,9 @@ export default function IncidentCenter() {
     const raw = Array.isArray(types.data) ? types.data : [];
     return raw.map((t) => {
       const v = t.incidentType || t.type || t.value || t;
-      return { value: v, label: detectionLabel(v) };
+      return { value: v, label: labels.label(v) };
     });
-  }, [types.data]);
+  }, [types.data, labels]);
 
   return (
     <div ref={pageRef} className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%', overflow: isPageFS ? 'auto' : undefined }}>
@@ -3040,7 +3044,7 @@ export default function IncidentCenter() {
       <div>
         <div style={{ marginBottom: 14, display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)' }}>
-            {detTypes.size === 1 ? detectionLabel([...detTypes][0]) : detTypes.size > 1 ? `${detTypes.size} detection types` : 'All detections'}
+            {detTypes.size === 1 ? labels.label([...detTypes][0]) : detTypes.size > 1 ? `${detTypes.size} detection types` : 'All detections'}
           </span>
           <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
             showing {shownCount} of {num(totalCount)}

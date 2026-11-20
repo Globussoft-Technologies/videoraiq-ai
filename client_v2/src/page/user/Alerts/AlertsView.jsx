@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -27,8 +28,7 @@ const incidentIdOf = (incident) => String(
   incident?._id || incident?.id || incident?.incidentId || ''
 );
 
-function exportClipFilename(incident) {
-  const name = incident?.incidentName || detectionLabel(incident?.incidentType) || 'alert';
+function exportClipFilename(name) {
   const safeName = String(name)
     .trim()
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
@@ -443,6 +443,7 @@ function ReportModal({ item, onClose, onSuccess }) {
 }
 
 export default function AlertsView() {
+  const labels = useDetectionLabels();
   const { socket } = useSocket() || {};
   const { user } = useAuth();
   const ctx = useOutletContext() || {};
@@ -701,10 +702,10 @@ export default function AlertsView() {
   const canReportActive = !!activeId && !activeResolved && !activeReported;
   const activeImageUrl = active?.Image ? mediaUrl(active.Image) : '';
   const activeSeverityMeta = active ? alertSeverityMeta(active.severity) : null;
-  const activeTypeLabel = active ? shortIncidentName(active) : '';
+  const activeTypeLabel = active ? labels.label(active.incidentType, shortIncidentName(active)) : '';
   const activeDescription = active?.incidentType === 'emotionDetection'
-    ? emotionAlertLabel(active) || detectionLabel(active.incidentType)
-    : incidentDescription(active) || active?.incidentName || detectionLabel(active?.incidentType);
+    ? emotionAlertLabel(active) || activeTypeLabel
+    : incidentDescription(active) || labels.event(active?.incidentType, active?.incidentName);
   const activeCameraName = cameraNameOf(active) || active?.channelData?.name || '_';
   const activeLocationName = locationNameOf(active);
   const activeCameraLine = [activeCameraName, activeLocationName].filter(Boolean).join(' - ') || '_';
@@ -716,7 +717,7 @@ export default function AlertsView() {
       toast.error('No alert snapshot available to export.');
       return;
     }
-    const filename = exportClipFilename(active);
+    const filename = exportClipFilename(labels.event(active?.incidentType, active?.incidentName, 'alert'));
     try {
       const response = await fetch(activeImageUrl);
       if (!response.ok) throw new Error('Download failed');
@@ -817,7 +818,7 @@ export default function AlertsView() {
             setDateTo(toIso(end));
           }}
         />
-        <div style={{ minWidth: 190 }}><MultiSelect options={detectionTypes} value={selectedDetectionTypes} onChange={setSelectedDetectionTypes} placeholder="Select Detection" /></div>
+        <div style={{ minWidth: 190 }}><MultiSelect options={detectionTypes.map((option) => ({ ...option, label: labels.label(option.id, option.label) }))} value={selectedDetectionTypes} onChange={setSelectedDetectionTypes} placeholder="Select Detection" /></div>
         {hasFilters && (
           <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
             <X size={13} /> Clear
@@ -841,8 +842,9 @@ export default function AlertsView() {
                   const s = severity(it.severity);
                   const sevMeta = alertSeverityMeta(it.severity);
                   const st = statusOf(it);
-                  const eventTitle = shortIncidentName(it) || detectionLabel(it?.incidentType);
+                  const eventTitle = labels.label(it?.incidentType, shortIncidentName(it));
                   const typeCode = incidentTypeCode(it);
+                  const customType = labels.override(it.incidentType);
                   // Remove a leading type code from the full title (e.g. "PPE PPE compliance...")
                   let rawTitle = String(eventTitle || '').trim();
                   if (typeCode && new RegExp('^' + typeCode + '\\b', 'i').test(rawTitle)) {
@@ -851,7 +853,7 @@ export default function AlertsView() {
                   // Truncate long titles for the list view but keep the full title on hover
                   const displayTitle = rawTitle.length > 42 ? rawTitle.slice(0, 42).trim() + '…' : rawTitle;
                   // Hide the title when it's essentially the same as the incident type label
-                  const typeLabel = detectionLabel(it?.incidentType || it?.incidentCode || it?.eventCode || it?.code || it?.type || '');
+                  const typeLabel = labels.label(it?.incidentType || it?.incidentCode || it?.eventCode || it?.code || it?.type || '');
                   const norm = (s = '') => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const displayNorm = norm(displayTitle);
                   const typeNorm = norm(typeLabel) || norm(typeCode);
@@ -898,7 +900,8 @@ export default function AlertsView() {
                           letterSpacing: '.04em',
                           color: typeColor,
                           whiteSpace: 'nowrap',
-                        }}>{typeCode}</span>
+                          maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
+                        }} title={customType || undefined}>{customType || typeCode}</span>
                         <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                           {!hideDuplicateTitle && (
                             <span title={eventTitle} style={{ fontFamily: 'var(--disp)', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto' }}>{displayTitle}</span>

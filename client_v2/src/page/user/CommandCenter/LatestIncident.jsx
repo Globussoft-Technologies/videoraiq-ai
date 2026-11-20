@@ -1,10 +1,11 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Maximize2, X } from 'lucide-react';
 import { Panel, ActionLink, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
-import { severity, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
+import { severity, shortDateTime, mediaUrl } from '../../../lib/format';
 import { updateIncidentReportStatus, updateIncidentResolved } from '../../../helpers/monitoring';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
@@ -198,6 +199,7 @@ function EmptyIncidentCard() {
 
 /** Latest incident card with Resolve / Report actions wired to incidents API. */
 export default function LatestIncident({ incident, loading, error, isEmpty, onRetry, onChanged }) {
+  const labels = useDetectionLabels();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -212,7 +214,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
   const activeReported = !!incident?.report?.status;
   const canReportActive = !!activeIncidentId && !activeResolved && !activeReported;
   const sev = severity(incident?.severity);
-  const det = detectionLabel(incident?.incidentType || incident?.displayName);
+  const det = labels.label(incident?.incidentType || incident?.displayName);
   const confidence = formatConfidence(incident);
   const status = activeResolved
     ? { label: 'Resolved', color: 'var(--ok)' }
@@ -286,7 +288,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
             </div>
             <div style={{ padding: '11px 14px', minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {incident?.incidentName || det}
+                {labels.event(incident?.incidentType, incident?.incidentName, det)}
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {incident?.channelData?.name || '_'}
@@ -312,7 +314,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
               </div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div
-                  onClick={busy || activeResolved ? undefined : () => setResolveTarget({ id: activeIncidentId, incidentType: incident?.incidentType, name: incident?.incidentName || det })}
+                  onClick={busy || activeResolved ? undefined : () => setResolveTarget({ id: activeIncidentId, incidentType: incident?.incidentType, name: labels.event(incident?.incidentType, incident?.incidentName, det) })}
                   aria-disabled={busy || activeResolved}
                   style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 8, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
                 >

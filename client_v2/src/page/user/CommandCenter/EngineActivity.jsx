@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useState } from 'react';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary, Empty } from '../../../components/States';
@@ -59,6 +60,7 @@ function hourRange(index) {
  *  - Right: 24-hour detection event area chart.
  */
 export default function EngineActivity({ todayEngines = [], events24h = [], total24h = 0, loading, error, isEmpty, onRetry }) {
+  const labels = useDetectionLabels();
   const [hoveredHour, setHoveredHour] = useState(null);
   const { total: todayTotal, segments } = donutSegments(todayEngines);
   // Largest engine count sets the full-width bar; floor at 1 so an empty or
@@ -128,8 +130,8 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                   const color = PALETTE[i % PALETTE.length] || 'var(--blue)';
                   return (
                     <div key={e.type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ width: 54, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx2)', flex: '0 0 auto' }}>{meta.short}</span>
-                      <span style={{ flex: 1, fontSize: 12, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.name}</span>
+                      {!labels.override(e.type) && <span style={{ width: 54, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx2)', flex: '0 0 auto' }}>{meta.short}</span>}
+                      <span style={{ flex: 1, fontSize: 12, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labels.label(e.type, meta.name)}</span>
                       <div style={{ width: 140, height: 6, borderRadius: 3, background: 'var(--track)', overflow: 'hidden', flex: '0 0 auto' }}>
                         <div
                           style={{

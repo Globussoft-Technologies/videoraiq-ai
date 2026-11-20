@@ -179,6 +179,15 @@ describe('mail asset normalization', () => {
     ))).toBe(true);
   });
 
+  it('escapes the custom detection name in incident email HTML', () => {
+    const template = ({ incidentName }) => `<td>${incidentName}</td>`;
+    const html = MailHelper._renderIncidentTemplate(template, 'UTC', {
+      detectionDisplayName: 'Safety <Gear>',
+      incidentName: 'Safety <Gear>',
+    });
+    expect(html).toBe('<td>Safety &lt;Gear&gt;</td>');
+  });
+
   it('leaves incident images from other hosts unchanged', () => {
     const email = { html: '<img src="https://media.example.com/incidents/1.jpg">' };
 

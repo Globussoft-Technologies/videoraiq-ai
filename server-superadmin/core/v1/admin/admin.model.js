@@ -68,6 +68,7 @@ const adminSchema = new mongoose.Schema({
   planCamerasGranted: { type: Boolean, default: false },
   // Product modules granted by the super admin. Each leaf controls one page in
   // the client UI; the parent module is visible when at least one leaf is true.
+  detectionDisplayNames: { type: Map, of: String },
   moduleConfig: {
     mattressMeasurement: {
       measurementLogs: { type: Boolean, default: false },

@@ -26,6 +26,7 @@ import { getClientConfig, getClientCameras } from './apis/get/clientConfig'
 import {
   updatePurchasedCameras,
   updateDetection,
+  updateDetectionDisplayName,
   updateCameraDetection,
   updateModuleConfig,
   syncDetectionCatalog,
@@ -53,6 +54,7 @@ const ClientConfig = () => {
 
   const [stats, setStats] = useState(null)
   const [detections, setDetections] = useState([])
+  const [savedNames, setSavedNames] = useState({})
   const [totalCameras, setTotalCameras] = useState(0)
   const [modulePermissions, setModulePermissions] = useState({
     mattressMeasurement: { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
@@ -327,7 +329,9 @@ const ClientConfig = () => {
   // reshuffling as you type.
   const visibleDetections = useMemo(() => {
     const q = detectionSearch.trim().toLowerCase()
-    const withIndex = detections.map((d, index) => ({ ...d, index }))
+    const withIndex = detections.map((d, index) => ({
+      ...d, ...savedNames[adminId]?.[d.settingType], index,
+    }))
     return q
       ? withIndex.filter(
           (d) =>
@@ -335,7 +339,23 @@ const ClientConfig = () => {
             (d.settingType || '').toLowerCase().includes(q)
         )
       : withIndex
-  }, [detections, detectionSearch])
+  }, [detections, detectionSearch, savedNames, adminId])
+
+  const saveDetectionName = async (settingType, displayName) => {
+    const res = await updateDetectionDisplayName(adminId, settingType, displayName)
+    const saved = res?.body?.data ?? res?.data
+    if (typeof saved?.name !== 'string') {
+      throw new Error(getApiMessage({ response: { data: res } }, 'Could not save the display name'))
+    }
+    setSavedNames((previous) => ({
+      ...previous,
+      [adminId]: {
+        ...previous[adminId],
+        [settingType]: { name: saved.name, displayName: saved.displayName },
+      },
+    }))
+    notifyApiSuccess(res, 'Detection display name updated')
+  }
 
   const isFiltered = detectionSearch.trim().length > 0
   const visibleEnabledCount = visibleDetections.filter((d) => d.enabled).length
@@ -765,7 +785,7 @@ const ClientConfig = () => {
               ) : (
                 visibleDetections.map((d) => (
                   <DetectionRow
-                    key={d.settingType}
+                    key={`${adminId}:${d.settingType}`}
                     detection={d}
                     index={d.index}
                     maxCameras={totalCameras}
@@ -780,6 +800,7 @@ const ClientConfig = () => {
                       setDetection(d.settingType, { cameraAllocation })
                     }
                     onApplyToAll={() => applyAllocationToAll(d.cameraAllocation)}
+                    onSaveName={(displayName) => saveDetectionName(d.settingType, displayName)}
                     applyToAllCount={visibleEnabledCount}
                   />
                 ))

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { useTimezone } from '@/context/TimezoneContext';
 import { getConfiguredTimezone } from '@/utils/timezone';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
@@ -670,6 +671,7 @@ function AnalyticsPanel({ rows, stats }) {
 }
 
 export default function BoxPackingLogs() {
+  const alertLogsLabel = detectionLogLabel(useDetectionDisplayNames(), 'boxPackingLogs', 'Alert Logs');
   const { logs, loading, refresh } = useLogsConfig();
   const { socket } = useSocket() || {};
   const { user } = useAuth();
@@ -796,7 +798,7 @@ export default function BoxPackingLogs() {
   const showAlerts = isAlertRoute || view === 'alerts' || view === 'logs';
   return <div style={{ width: '100%' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '0 clamp(12px, 3vw, 22px)', position: 'sticky', top: 0, zIndex: 40, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)' }}>
-      {[['overview', 'Overview', '/box-packing'], ['alerts', 'Alert Logs', '/box-packing/alerts'], ['reports', 'Reports', '/box-packing/reports']].map(([key, text, to]) => { const active = routeView === key || (key === 'overview' && routeView === 'analytics'); const reviewCount = dbRows.filter((row) => row.status === 'review').length; return <button key={key} type="button" onClick={() => { setView(key); navigate(to); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600, color: active ? 'var(--tx)' : 'var(--tx3)', border: 0, borderBottom: `2px solid ${active ? 'var(--blue)' : 'transparent'}`, background: 'transparent', cursor: 'pointer' }}>{text}{key === 'alerts' && reviewCount > 0 && <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#fff', background: WARN, borderRadius: 8, padding: '1px 6px' }}>{reviewCount}</span>}</button>; })}
+      {[['overview', 'Overview', '/box-packing'], ['alerts', alertLogsLabel, '/box-packing/alerts'], ['reports', 'Reports', '/box-packing/reports']].map(([key, text, to]) => { const active = routeView === key || (key === 'overview' && routeView === 'analytics'); const reviewCount = dbRows.filter((row) => row.status === 'review').length; return <button key={key} type="button" onClick={() => { setView(key); navigate(to); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px', fontSize: 13.5, fontWeight: 600, color: active ? 'var(--tx)' : 'var(--tx3)', border: 0, borderBottom: `2px solid ${active ? 'var(--blue)' : 'transparent'}`, background: 'transparent', cursor: 'pointer' }}>{text}{key === 'alerts' && reviewCount > 0 && <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: '#fff', background: WARN, borderRadius: 8, padding: '1px 6px' }}>{reviewCount}</span>}</button>; })}
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%', gap: 12, padding: '5px 0' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999, border: `1px solid ${OK}66`, background: `${OK}1a` }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: OK }} /><span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: OK }}>LIVE</span></span><PresetDateRangePicker startDate={dateRange.startDate} endDate={dateRange.endDate} maxDate={today} onRangeChange={({ start, end }) => { const nextStart = start ? moment(start).format('YYYY-MM-DD') : today; const nextEnd = end ? moment(end).format('YYYY-MM-DD') : nextStart; setDateRange({ startDate: nextStart, endDate: nextEnd }); }} /></div>
     </div>
     <div style={{ width: '100%', padding: 'clamp(12px, 3vw, 22px)', boxSizing: 'border-box' }}><div style={{ maxWidth: 1560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>

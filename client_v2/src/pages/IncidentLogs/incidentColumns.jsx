@@ -212,7 +212,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
           >
             <ImageWithLoader
               src={url}
-              alt={row.original.incidentName}
+              alt={row.original.incidentDisplayName || row.original.incidentName}
               className="w-full h-full"
               imgClassName="w-full h-full object-cover"
             />
@@ -230,7 +230,7 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
     cols.push({
       accessorKey: 'incidentName',
       header: sortHeader('Incident Name', 'incidentName'),
-      cell: ({ row }) => <span className={styles.text}>{row.original.incidentName}</span>,
+      cell: ({ row }) => <span className={styles.text}>{row.original.incidentDisplayName || row.original.incidentName}</span>,
     });
   }
 
@@ -567,7 +567,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
       {row.incidentImageUrl ? (
         <ImageWithLoader
           src={row.incidentImageUrl}
-          alt={row.incidentName}
+          alt={row.incidentDisplayName || row.incidentName}
           className="h-full w-full cursor-pointer"
           imgClassName="w-full h-full object-cover"
           onClick={() => onPreview(row.incidentImageUrl, `incident:${row._id || row.aggregationKey || row.id}`)}
@@ -624,7 +624,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
           </span>
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
-            <div className="mt-0.5 text-[12px] font-semibold leading-snug text-[var(--tx)] break-words">{row.incidentName || '--'}</div>
+            <div className="mt-0.5 text-[12px] font-semibold leading-snug text-[var(--tx)] break-words">{row.incidentDisplayName || row.incidentName || '--'}</div>
           </div>
         </div>}
         <div className="min-w-0 rounded-[10px] border border-teal-200/80 bg-teal-50/80 px-3 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/30">
@@ -649,7 +649,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
           </span>
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">Incident</div>
-            <div className="mt-0.5 break-words text-[12px] font-semibold leading-snug text-[var(--tx)]">{row.incidentName || '--'}</div>
+            <div className="mt-0.5 break-words text-[12px] font-semibold leading-snug text-[var(--tx)]">{row.incidentDisplayName || row.incidentName || '--'}</div>
           </div>
         </div>}
         <div className="min-w-0 rounded-[10px] border border-teal-200/80 bg-teal-50/80 px-3 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/30">
@@ -669,7 +669,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
     ) : config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
         {config.showIncidentName !== false && !config.showDoorFields && !config.hideIncidentCardLabel && (
-          <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
+          <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentDisplayName || row.incidentName} />
         )}
         {config.showSeverity !== false && config.showSeverityOnCard !== false && !config.hideSeverityCardLabel && !config.showHygieneFields && !config.showLightingFields && !config.showBlurredCameraFields && !config.showDoorFields && (
           <IncidentCardRow
@@ -811,7 +811,7 @@ export const renderIncidentCard = (row, config, { onPreview }) => {
         <div className="flex items-center justify-between gap-2">
           {config.showIncidentName !== false && (
             <span className="text-[12.5px] font-semibold text-[var(--tx)] truncate">
-              {row.incidentName}
+              {row.incidentDisplayName || row.incidentName}
             </span>
           )}
           <span

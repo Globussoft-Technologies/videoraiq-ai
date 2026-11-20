@@ -84,15 +84,16 @@ const fetchAllFilteredIncidents = async (filter) => {
   return rows;
 };
 
-const mapRow = (item, index) => {
+const mapRow = (item, index, labels) => {
+  const type = item?.incidentType || item?.displayName;
   const isDoorDetection = item?.incidentType === 'doorDetection';
   const isDescriptiveIncident = ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item?.incidentType);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item?.incidentType);
   const violations = Array.isArray(item?.violations) ? item.violations.filter(Boolean) : [];
   return {
     'Sl No': index + 1,
-    Incident: text(item?.incidentName || detectionLabel(item?.incidentType || item?.displayName)),
-    Detection: text(detectionLabel(item?.incidentType || item?.displayName)),
+    Incident: text(labels?.event(type, item?.incidentName) || item?.incidentName || detectionLabel(type)),
+    Detection: text(labels?.label(type) || detectionLabel(type)),
     ...(isDescriptiveIncident ? { Description: text(item?.description) } : {}),
     ...(item?.incidentType === 'personSittingOnCan' ? {
       'Zone Name': text(item?.zoneName || item?.zone),
@@ -484,7 +485,7 @@ export async function exportIncidentCenter(format, filter = {}, options = {}) {
     return 0;
   }
 
-  const rows = incidents.map(mapRow);
+  const rows = incidents.map((item, index) => mapRow(item, index, options.labels));
   const showVehicleNumber = incidents.some(vehicleNumberRequired);
   const conditionTypes = new Set(incidents.map((item) => item.incidentType).filter((type) => ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(type)));
   const violationLabel = conditionTypes.size > 1 ? 'Hygiene Violations / Lighting Violations' : conditionTypes.has('lightingVisibilitySiteConditionsDetection') ? 'Lighting Violations' : 'Hygiene Violations';

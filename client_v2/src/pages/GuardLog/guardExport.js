@@ -31,7 +31,7 @@ const prepareLogs = (channels) => {
 };
 
 /** One sheet per camera, grouped by presence/absence segment. */
-export const downloadLogsExcel = (channels, selectedDate) => {
+export const downloadLogsExcel = (channels, selectedDate, displayTitle) => {
   const logs = prepareLogs(channels);
   if (!logs.length) return false;
 
@@ -57,7 +57,9 @@ export const downloadLogsExcel = (channels, selectedDate) => {
             : log.status,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
+    const worksheet = displayTitle
+      ? XLSX.utils.sheet_add_json(XLSX.utils.aoa_to_sheet([[displayTitle]]), data, { origin: "A2" })
+      : XLSX.utils.json_to_sheet(data);
     const safeSheetName = camera.substring(0, 31);
     XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName);
   });

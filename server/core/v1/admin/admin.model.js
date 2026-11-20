@@ -90,6 +90,7 @@ const adminSchema = new mongoose.Schema({
   // trial client to 0 would have the grant handed straight back on their next
   // login — the flag makes the grant a one-time starting value, not a floor.
   planCamerasGranted: { type: Boolean, default: false },
+  detectionDisplayNames: { type: Map, of: String },
   moduleConfig: {
     mattressMeasurement: {
       measurementLogs: { type: Boolean, default: false },

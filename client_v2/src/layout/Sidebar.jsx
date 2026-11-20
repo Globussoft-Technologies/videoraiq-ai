@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown, GripVertical } from 'lucide-react';
-import { NAV_GROUPS, LOGS_GROUP_LABEL } from './nav.config';
+import { NAV_GROUPS, LOGS_GROUP_LABEL, isDetectionLogNav } from './nav.config';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { useLogOrder, orderLogItems, moveLogItem } from '@/lib/logOrder';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 import {
@@ -69,6 +70,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const { permissions } = usePermissions();
   const { logs: logsConfig } = useLogsConfig();
   const { modules } = useModuleConfig();
+  const detectionNames = useDetectionDisplayNames();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -419,6 +421,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
             )}
             {(group.label !== LOGS_GROUP_LABEL || logsExpanded || collapsed || tourActive) && group.items.map((item) => {
               const Icon = item.icon;
+              const label = isDetectionLogNav(item) ? detectionLogLabel(detectionNames, item.logsConfigKey, item.label) : item.label;
               const badge = item.badgeKey ? badges[item.badgeKey] : null;
               // Reordering (Settings ▸ Log Order toggle) only applies to the
               // logs group, and only expanded — collapsed mode is icon-only
@@ -469,7 +472,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                     >
                       {draggableHere && <GripVertical size={13} style={{ color: 'var(--tx3)', flexShrink: 0, marginRight: -3 }} />}
                       <Icon size={18} strokeWidth={1.7} />
-                      <span style={{ flex: 1 }}>{item.label}</span>
+                      <span style={{ flex: 1 }}>{label}</span>
                       <ChevronDown
                         size={14}
                         style={{
@@ -521,7 +524,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   data-tour={`nav-${item.key}`}
                   to={item.path}
                   end={item.end}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? label : undefined}
                   draggable={draggableHere}
                   onDragStart={draggableHere ? (e) => {
                     // A dragged NavLink otherwise triggers browser link-drag
@@ -555,7 +558,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                 >
                   {draggableHere && <GripVertical size={13} style={{ color: 'var(--tx3)', flexShrink: 0, marginRight: -3 }} />}
                   <Icon size={18} strokeWidth={1.7} />
-                  {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                  {!collapsed && <span style={{ flex: 1 }}>{label}</span>}
                   {!collapsed && item.badge && (
                     <span
                       style={{

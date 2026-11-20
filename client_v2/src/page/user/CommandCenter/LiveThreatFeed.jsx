@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, timeOfDay } from '../../../lib/format';
@@ -47,6 +48,7 @@ function typeMeta(alert) {
  *  Shows exactly 6 items in the visible area; additional items scroll inside. */
 export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, onRetry }) {
   const navigate = useNavigate();
+  const labels = useDetectionLabels();
   return (
     <Panel style={{ display: 'flex', flexDirection: 'column', height: 580, minHeight: 580, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
@@ -96,13 +98,13 @@ export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, o
                   <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: type.color || sev.color, flex: '0 0 auto' }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <Badge color={type.color || sev.color}>{type.label}</Badge>
+                      {!labels.override(a.incidentType) && <Badge color={type.color || sev.color}>{type.label}</Badge>}
                       {incidentTime && (
                         <span style={{ marginLeft: 'auto', flex: '0 0 auto', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)' }}>{incidentTime}</span>
                       )}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {a.incidentName || det}
+                      {labels.event(a.incidentType, a.incidentName, det)}
                     </div>
                     {meta && (
                       <div style={{ fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

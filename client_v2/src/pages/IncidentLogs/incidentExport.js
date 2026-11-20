@@ -201,6 +201,7 @@ const loadExportRows = async (config, params) => {
     const incidentDateValue = item.timeOfIncident || item.createdAt;
     const incidentDate = incidentDateValue ? moment.utc(incidentDateValue).tz(timezone) : null;
     const targetGender = item.targetGender || item.gender || item.detectedGender || '--';
+    const outcome = item.incidentName || item.eventName || (targetGender !== '--' ? `${targetGender} Detected` : '--');
     const zoneName = item.zone || item.zoneName || (item.zoneIdx != null ? `Zone ${Number(item.zoneIdx) + 1}` : '--');
     let evidenceScoreStr = '--';
     if (item.evidenceScore != null) {
@@ -221,7 +222,7 @@ const loadExportRows = async (config, params) => {
       emotion: item.emotion || '--',
       ...(config.showGenderAgeFields ? { targetGender, zone: zoneName } : {}),
       ...(config.showMachineOpsFields ? { machineName: item.machineName || '--', machineState: item.machineState || '--' } : {}),
-      incidentName: item.incidentName || item.eventName || (targetGender !== '--' ? `${targetGender} Detected` : '--'),
+      incidentName: config.eventTitle?.(item.incidentType || config.logSettingType, outcome === '--' ? '' : outcome, '--') || outcome,
       currentStatus: formatStatus(item.currentStatus || item.status || (item.resolved ? 'Resolved' : 'New'), config),
       nvrName: nvrNameOf(item) || '--',
       channelName: channelNameOf(item) || '--',
@@ -413,7 +414,7 @@ const exportToPDF = async (config, params) => {
 
     const doc = new jsPDF('landscape');
     await drawReportHeader(doc, {
-      title: config.title,
+      title: config.displayTitle || config.title,
       subtitle: reportSubtitle({
         startDate: params.startDate,
         endDate: params.endDate,
@@ -640,7 +641,7 @@ const exportToGridPDF = async (config, params) => {
     let col = 0;
 
     await drawReportHeader(doc, {
-      title: config.title,
+      title: config.displayTitle || config.title,
       subtitle: reportSubtitle({
         startDate: params.startDate,
         endDate: params.endDate,
@@ -653,7 +654,7 @@ const exportToGridPDF = async (config, params) => {
       if (y + cardHeight <= pageHeight - 6) return;
       doc.addPage();
       await drawReportHeader(doc, {
-        title: config.title,
+        title: config.displayTitle || config.title,
         subtitle: reportSubtitle({ total: allLogs.length, allVehicles: 'All vehicles' }),
       });
       x = margin;
@@ -759,7 +760,7 @@ const exportToExcel = async (config, params) => {
     }
 
     const cols = buildExportColumns(config);
-    const reportTitle = config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs');
+    const reportTitle = config.displayTitle || (config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs'));
     const headers = [config.showGenderAgeFields ? 'S No' : '#', ...cols.map((column) => column.label), 'Image'];
     const timezone = params.timezone || params.region || getConfiguredTimezone();
     const startDate = params.startDate;
@@ -856,7 +857,7 @@ const exportToCsv = async (config, params) => {
       return;
     }
     const cols = buildExportColumns(config);
-    const reportTitle = config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs');
+    const reportTitle = config.displayTitle || (config.showGenderAgeFields ? 'Gender and Age Report' : (config.title || 'Incident Logs'));
     const headers = [config.showGenderAgeFields ? 'S No' : '#', ...cols.map((column) => column.label), 'Image'];
     const timezone = params.timezone || params.region || getConfiguredTimezone();
     const period = params.startDate && params.endDate

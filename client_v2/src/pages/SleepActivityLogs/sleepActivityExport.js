@@ -207,7 +207,7 @@ const exportToPDF = async (params) => {
     }
 
     const doc = new jsPDF('landscape');
-    await drawReportHeader(doc, 'Sleep Activity Logs', allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || 'Sleep Activity Logs', allLogs.length);
 
     const headers = ['#', 'Status', 'NVR Name', 'Camera Name', 'Time', 'Image'];
     const tableRows = allLogs.map((row, i) => [
@@ -316,7 +316,7 @@ const exportToGridPDF = async (params) => {
 
     doc.setFillColor(245, 247, 251);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    await drawReportHeader(doc, 'Sleep Activity Logs', allLogs.length);
+    await drawReportHeader(doc, params.displayTitle || 'Sleep Activity Logs', allLogs.length);
 
     const addPageIfNeeded = () => {
       if (y + cardHeight <= pageHeight - 6) return;
@@ -422,7 +422,7 @@ const exportToExcel = async (params) => {
 
     const headerRows = [
       ['VIDEORAIQ', '', '', '', '', ''],
-      ['Sleep Activity Logs', '', '', '', '', ''],
+      [params.displayTitle || 'Sleep Activity Logs', '', '', '', '', ''],
       [`Generated on ${moment().format('DD/MM/YYYY HH:mm')}`, '', '', `Total records: ${allLogs.length}`, '', ''],
       [],
     ];

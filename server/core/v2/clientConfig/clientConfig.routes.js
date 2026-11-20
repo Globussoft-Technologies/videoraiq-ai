@@ -2,6 +2,7 @@ import express from "express";
 import verifyToken from "../../../middlewares/verifyToken.js";
 import clientConfigController from "../../v1/clientConfig/clientConfig.controller.js";
 import clientLicenseService from "./clientLicense.service.js";
+import { getDetectionDisplayNames } from "./detectionDisplayNames.controller.js";
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ const router = express.Router();
 // viewAccessCheck here.
 router.get("/account", verifyToken, clientConfigController.getAccount);
 router.get("/cameras", verifyToken, clientConfigController.getCameras);
+router.get("/detection-display-names", verifyToken, getDetectionDisplayNames);
 
 // v2 only: the live licensing snapshot the admin UI checks before enabling a
 // detection, and reads back to list the cameras currently holding a slot.

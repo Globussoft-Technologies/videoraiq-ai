@@ -179,7 +179,7 @@ const exportToExcel = async (filters) => {
       const pad = new Array(Math.max(0, columnCount - 1)).fill('');
       return [
         ['VIDEORAIQ', ...pad],
-        ['Vehicle Check-In / Check-Out Logs', ...pad],
+        [filters.displayTitle || 'Vehicle Check-In / Check-Out Logs', ...pad],
         [`${rangeNote(filters)}  |  ${custodyNote(filters)}`, ...pad],
         [`Generated on ${generatedAt}  |  Total vehicles: ${rows.length}`, ...pad],
         [],
@@ -271,7 +271,7 @@ const exportToPDF = async (filters) => {
     const generatedAt = moment().format('DD/MM/YYYY hh:mm A');
     await drawReportHeader(
       doc,
-      'Vehicle Check-In / Check-Out Logs',
+      filters.displayTitle || 'Vehicle Check-In / Check-Out Logs',
       `${rangeNote(filters)}  |  ${custodyNote(filters)}  |  ${rows.length} vehicles  |  Generated on ${generatedAt}`,
     );
 

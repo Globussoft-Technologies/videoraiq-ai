@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -174,9 +175,9 @@ function cameraIdentity(camera) {
   );
 }
 
-function detectionName(row, typeLabels) {
+function detectionName(row, typeLabels, labels) {
   const setting = row?.detectionSetting || row;
-  return setting?.detectionName || typeLabels?.[setting?.settingType] || setting?.name || setting?.settingType || 'Detection';
+  return labels.label(setting?.settingType, setting?.detectionName || typeLabels?.[setting?.settingType] || setting?.name || setting?.settingType || 'Detection');
 }
 
 function countEnabledDetectionToggles(channels) {
@@ -605,6 +606,7 @@ function LogOrderPanel({ canEnable, canDisable }) {
 }
 
 export default function SystemSettings() {
+  const labels = useDetectionLabels();
   const navigate = useNavigate();
   const audio = useAttendanceSocket() || {};
   const { user } = useAuth();
@@ -1529,7 +1531,7 @@ export default function SystemSettings() {
               {(detectionSettingsApi.loading || channelsApi.loading) && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--blue)' }} />}
             </div>
             <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>
-              {firstEnabledDetection ? detectionName(firstEnabledDetection, typeLabels) : 'No enabled detection configuration found'}
+              {firstEnabledDetection ? detectionName(firstEnabledDetection, typeLabels, labels) : 'No enabled detection configuration found'}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 5 }}>
               {recipientLinkedCount} recipient link{recipientLinkedCount === 1 ? '' : 's'} across {detectionRows.length} configuration{detectionRows.length === 1 ? '' : 's'}

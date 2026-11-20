@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useState, useMemo } from 'react';
 import { Search, Plus, Settings2, Eye, Pencil, Trash2, X, CheckCheck, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -301,6 +302,7 @@ function DeleteRoleModal({ role, onClose, onConfirm }) {
 
 // ── Configure — granular per-module permission matrix ───────────────────────
 function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
+  const labels = useDetectionLabels();
   const initialConfig = permissionConfigForRole(role);
   const [config, setConfig] = useState(initialConfig);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -565,7 +567,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
             {logsOpen && LOG_SUBMODULES.filter(sub => sub !== 'global').map(sub => (
               <ConfigureRow
                 key={sub}
-                label={MODULE_LABELS[sub] || sub}
+                label={labels.logPermission(sub, MODULE_LABELS[sub] || sub)}
                 row={(config.logs || {})[sub] || {}}
                 onToggleField={(field) => toggle('logs', field, sub)}
                 readOnly={readOnly}
@@ -716,11 +718,11 @@ const VISIBLE_MODULE_KEYS = new Set([...PERMISSION_MODULES, ...LOG_SUBMODULES]);
  * server's canonical config — they just aren't presented as something to go
  * and verify.
  */
-function describeModules(keys) {
+function describeModules(keys, logPermission) {
   const leaves = keys.map(key => key.split('.').pop());
   const named = leaves.filter(leaf => VISIBLE_MODULE_KEYS.has(leaf));
   const hiddenCount = leaves.length - named.length;
-  const labels = named.map(leaf => MODULE_LABELS[leaf] || leaf).join(', ');
+  const labels = named.map(leaf => logPermission(leaf, MODULE_LABELS[leaf] || leaf)).join(', ');
   if (!hiddenCount) return labels;
   // Separated rather than appended to the comma list, so the count does not
   // read as one more module name.
@@ -740,6 +742,7 @@ function describeModules(keys) {
  * user can see exactly which roles and modules a sync would touch.
  */
 function SyncDefaultsModal({ onClose, onSynced }) {
+  const { logPermission } = useDetectionLabels();
   const previewApi = useApi(() => syncDefaultRoles({ dryRun: true }), []);
   const [syncing, setSyncing] = useState(false);
   const preview = previewApi.data;
@@ -827,7 +830,7 @@ function SyncDefaultsModal({ onClose, onSynced }) {
                           the sync did what it said. */}
                       {!!count && (
                         <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2, wordBreak: 'break-word' }}>
-                          {describeModules([...role.added, ...role.changed])}
+                          {describeModules([...role.added, ...role.changed], logPermission)}
                         </div>
                       )}
                     </div>

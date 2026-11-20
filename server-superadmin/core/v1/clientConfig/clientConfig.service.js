@@ -86,7 +86,8 @@ class ClientConfigService {
         const a = byType[settingType];
         return {
           settingType,
-          name,
+          name: admin.detectionDisplayNames?.[settingType] || name,
+          displayName: admin.detectionDisplayNames?.[settingType] || null,
           cameraAllocation: a?.cameraAllocation || 0,
           enabled: a?.enabled || false,
           camerasInUse: usageByType[settingType] || 0,
@@ -322,7 +323,7 @@ class ClientConfigService {
       return res.send(
         Response.SuccessResp("Detection allocation updated", {
           settingType,
-          name: catalogEntry?.name || DETECTION_TYPES[settingType],
+          name: admin.detectionDisplayNames?.[settingType] || catalogEntry?.name || DETECTION_TYPES[settingType],
           cameraAllocation: doc.cameraAllocation,
           enabled: doc.enabled,
           removedCameraIds,
@@ -338,6 +339,43 @@ class ClientConfigService {
   // Body contains the complete boolean leaf map for that module. Requiring the
   // complete map prevents an old/stale UI from accidentally leaving hidden
   // grants behind when the parent switch is turned off.
+  async updateDetectionDisplayName(req, res) {
+    try {
+      const { adminId, settingType } = req.params;
+      if (!mongoose.isValidObjectId(adminId)) {
+        return res.status(400).send(Response.userFailResp("Invalid adminId"));
+      }
+      if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(settingType)) {
+        return res.status(400).send(Response.userFailResp("Unknown detection type"));
+      }
+      const input = req.body?.displayName;
+      const displayName = typeof input === "string" ? input.trim() : input;
+      if (displayName !== null && (typeof displayName !== "string" || !displayName ||
+          displayName.length > 80 || /[\x00-\x1f\x7f]/.test(displayName))) {
+        return res.status(400).send(Response.userFailResp("Enter a display name between 1 and 80 characters"));
+      }
+      const catalog = await resolveDetectionTypes();
+      const entry = catalog.detections.find((detection) => detection.settingType === settingType);
+      if (!entry) return res.status(400).send(Response.userFailResp("Unknown detection type"));
+
+      const key = `detectionDisplayNames.${settingType}`;
+      const update = displayName === null ? { $unset: { [key]: 1 } } : { $set: { [key]: displayName } };
+      const result = await adminModel.updateOne({ _id: adminId }, update, { runValidators: true });
+      if (!result.matchedCount) return res.status(404).send(Response.notFoundResp("Client not found"));
+
+      void redis.publish("detectionDisplayNames:update", JSON.stringify({ adminId }))
+        .catch((error) => logger.error(`Detection display names publish failed: ${error.message}`));
+      return res.send(Response.SuccessResp("Detection display name updated", {
+        settingType,
+        displayName,
+        name: displayName || entry.name,
+      }));
+    } catch (error) {
+      logger.error(`clientConfig updateDetectionDisplayName: ${error.message}`);
+      return res.status(500).send(Response.userFailResp("Could not save the detection display name"));
+    }
+  }
+
   async updateModuleConfig(req, res) {
     try {
       const { adminId, moduleKey } = req.params;

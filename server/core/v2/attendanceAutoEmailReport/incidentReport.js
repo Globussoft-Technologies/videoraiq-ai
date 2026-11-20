@@ -1,3 +1,4 @@
+import { customDetectionName } from "../../../utils/detectionDisplayNames.js";
 import axios from "axios";
 import { packingReportData, formatPackingReportTotalTime } from "./packingReportData.js";
 import config from "config";
@@ -88,7 +89,7 @@ const isPackingReviewRow = (row) => (
 
 
 export async function incidentRowsForReport(report, summary) {
-  const admin = await Admin.findById(report.adminId).select("user_id").lean();
+  const admin = await Admin.findById(report.adminId).select("user_id detectionDisplayNames").lean();
   if (!admin?.user_id) throw new Error("The report owner does not have an incident data owner configured");
 
   const incidentTypes = Array.isArray(report.incidentTypes) ? report.incidentTypes : [];
@@ -123,7 +124,11 @@ export async function incidentRowsForReport(report, summary) {
     { $lookup: { from: "departments", localField: "channelData.department", foreignField: "_id", as: "departmentData" } },
   ]);
 
-  const rows = incidents.map((item) => rowFromIncident(item, summary.timezone));
+  const rows = incidents.map((item) => {
+    const row = rowFromIncident(item, summary.timezone);
+    const custom = customDetectionName(admin.detectionDisplayNames, item.incidentType);
+    return custom ? { ...row, incident: custom, detection: custom } : row;
+  });
   // Keep the selected Box Packing report tab with the details. In particular,
   // review schedules must not fall back to the full total-report dataset.
   const reportType = report.reportType || "total";
@@ -138,6 +143,7 @@ export async function incidentRowsForReport(report, summary) {
   const packing = packingOnly ? packingReportData(selectedRows, reportType, summary.timezone, packingChannels) : null;
   return {
     ...summary,
+    detectionName: incidentTypes.length === 1 ? customDetectionName(admin.detectionDisplayNames, incidentTypes[0]) : undefined,
     rows: selectedRows,
     rowCount: packing ? packing.records.length : selectedRows.length,
     ...(packing ? { packingReport: true, packingRecords: packing.records, packingColumns: packing.columns, packingSummary: packing.summary } : {}),
@@ -158,7 +164,8 @@ const pdfBuffer = (draw, options = {}) => new Promise((resolve, reject) => {
 });
 
 const drawReportHeader = (document, details, suffix) => {
-  document.font("Helvetica-Bold").fontSize(15).fillColor(INK).text(`Incident Report - ${suffix}`, 28, 22);
+  const title = details.detectionName ? `${details.detectionName} Incident Report` : "Incident Report";
+  document.font("Helvetica-Bold").fontSize(15).fillColor(INK).text(`${title} - ${suffix}`, 28, 22);
   document.font("Helvetica").fontSize(8).fillColor(MUTED)
     .text(`${details.label}  |  ${details.rowCount} incident${details.rowCount === 1 ? "" : "s"}  |  ${details.timezone}`, 28, 42);
 };
@@ -198,7 +205,7 @@ const drawPackingHeader = (document, details, suffix, summary) => {
   document.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff").text("VideoiraQ", 28, 19);
   const rightBandX = split + 12;
   const rightBandWidth = width - split - 40;
-  document.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff").text("Box Packing Reports", rightBandX, 15, { width: rightBandWidth, align: "right", ellipsis: true });
+  document.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff").text(details.detectionName ? `${details.detectionName} Reports` : "Box Packing Reports", rightBandX, 15, { width: rightBandWidth, align: "right", ellipsis: true });
   document.font("Helvetica").fontSize(7).fillColor("#ffffff").text("Box Packing QC", rightBandX, 34, { width: rightBandWidth, align: "right", ellipsis: true });
   document.font("Helvetica-Bold").fontSize(11).fillColor(INK).text(({ comparison: "Worker Comparison", hourly: "Hourly activity", total: "Total report" })[details.reportType] || "Packing activity", 28, 68);
   document.font("Helvetica").fontSize(8).fillColor(MUTED).text(`${details.label}  |  ${details.timezone}`, 28, 82);

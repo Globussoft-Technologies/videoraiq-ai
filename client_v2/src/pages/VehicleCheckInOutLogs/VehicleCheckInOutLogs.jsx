@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -147,6 +148,7 @@ const SortTh = ({ label, field, sort, onSort }) => {
 };
 
 const VehicleCheckInOutLogs = () => {
+  const displayTitle = useDetectionLabels().logPermission('vehicleCheckInOutLogs');
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [inCustodyCount, setInCustodyCount] = useState(0);
@@ -415,7 +417,7 @@ const VehicleCheckInOutLogs = () => {
   const runExport = async (format) => {
     setExporting(format);
     try {
-      await handleVehicleCheckInOutExport(format, exportFilters);
+      await handleVehicleCheckInOutExport(format, { ...exportFilters, displayTitle });
     } finally {
       setExporting(null);
     }

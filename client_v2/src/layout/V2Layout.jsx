@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import useDetectionScheduleEvents from '../hooks/useDetectionScheduleEvents';
@@ -8,7 +9,8 @@ import AppTour from '../components/Tour/AppTour';
 import AgentLauncher from '../components/AgentLauncher';
 import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
-import { VIEW_META } from './nav.config';
+import { VIEW_META, detectionLogKeyForPath } from './nav.config';
+import { detectionLogLabel, useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { getLocations, getChannels } from '../helpers/monitoring';
 import { getNvrs } from '../helpers/configure';
 import { getCriticalityStats } from '../helpers/dashboard';
@@ -124,6 +126,8 @@ function Shell() {
   // sidebar is a drawer, so it has to be opened on the tour's behalf.
   const { needsSidebar } = useTour();
   const location = useLocation();
+  const detectionNames = useDetectionDisplayNames();
+  const labels = useDetectionLabels();
   const navigate = useNavigate();
 
   // Clicking a push notification while the app is already open: the service
@@ -209,7 +213,7 @@ function Shell() {
   const [readIds, setReadIds] = useState(loadReadIds);
   const notifications = useMemo(() => recentAlerts.map((a, i) => ({
     id: a._id || i,
-    title: a.incidentName || a.displayName || a.incidentType || 'Detection event',
+    title: labels.event(a.incidentType, a.incidentName, a.displayName || a.incidentType || 'Detection event'),
     cam: a.channelData?.name || a.nvrData?.nvrName || '',
     // Derive relative time from the raw timestamp client-side so the bell
     // tray matches the incident card's actual time instead of the backend's
@@ -218,7 +222,7 @@ function Shell() {
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
     go: notificationTarget(a, navigate),
-  })), [recentAlerts, readIds, navigate]);
+  })), [recentAlerts, readIds, navigate, labels]);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markNotificationsRead = useCallback((ids) => {
@@ -355,7 +359,7 @@ function Shell() {
       )}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         {!embedded && <Header
-          title={meta.title}
+          title={detectionLogLabel(detectionNames, detectionLogKeyForPath(location.pathname), meta.title)}
           sub={meta.sub}
           sites={sites}
           siteFilter={siteFilter}

@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import moment from 'moment-timezone';
@@ -27,7 +28,6 @@ import PageLoader from '../../../components/PageLoader';
 import { getRecipients } from '../../../api/administer';
 import { fetchTimezone, getTimezones, updateTimezone } from '../../../helpers/administer';
 import { fetchDetectionTypes } from '../../../helpers/incidents';
-import { detectionLabel } from '../../../lib/format';
 import {
   createAutoEmailReport,
   deleteAutoEmailReport,
@@ -335,16 +335,17 @@ function ReportFormModal({
   onSaveTimezone,
   savingTimezone,
 }) {
+  const labels = useDetectionLabels();
   const employeeOptions = employees.map((user) => ({ id: String(user._id || user.id), label: employeeLabel(user) })).filter((item) => item.id);
   const departmentOptions = departments.map((department) => ({ id: String(department._id || department.id), label: departmentLabel(department) })).filter((item) => item.id);
   const recipientOptions = recipients.map((recipient) => ({ id: recipientValue(recipient), label: recipientValue(recipient) })).filter((item) => item.id);
   const incidentOptions = incidentTypes.map((incident) => ({
     id: String(incident.incidentType || incident.value || incident._id || ''),
-    label: incident.incidentName || incident.label || incident.incidentType || 'Unnamed incident',
+    label: labels.label(incident.incidentType || incident.value || incident._id, incident.incidentName || incident.label || incident.incidentType || 'Unnamed incident'),
   })).filter((item) => item.id);
   form.incidentTypes.forEach((incidentType) => {
     if (!incidentOptions.some((option) => option.id === incidentType)) {
-      incidentOptions.push({ id: incidentType, label: detectionLabel(incidentType) });
+      incidentOptions.push({ id: incidentType, label: labels.label(incidentType) });
     }
   });
   const hasAttendance = form.contentTypes.includes('attendance');

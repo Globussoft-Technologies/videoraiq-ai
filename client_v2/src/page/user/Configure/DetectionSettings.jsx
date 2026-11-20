@@ -7,6 +7,7 @@ import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
 import { useAuth } from '@/context/AuthContext';
+import { useDetectionDisplayNames } from '@/context/DetectionDisplayNamesContext';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch, resetAllDetections, resetAllCameraTypes, verifyDetectionResetPassword, bulkDetectionControl, getBulkDetectionState } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import MultiSelect from '../../../components/MultiSelect';
@@ -90,13 +91,17 @@ function detectionTypeLabel(value, fallback) {
  * knows nothing about, so without this a narrowed catalogue would push every
  * non-matching camera key into the tail and defeat the search.
  */
-function appliedTypesFor(camera, typeLabels, search = '') {
-  const entries = Array.isArray(typeLabels)
+function detectionLabelEntries(typeLabels) {
+  return Array.isArray(typeLabels)
     ? typeLabels.map((type, index) => [
         type?.settingType || type?.detectionType || type?.key || type?.id || `type-${index}`,
         type,
       ])
     : Object.entries(typeLabels || {});
+}
+
+function appliedTypesFor(camera, typeLabels, search = '', displayNames = {}) {
+  const entries = detectionLabelEntries(typeLabels);
 
   const knownKeys = new Set(entries.map(([key]) => key));
   const normalizedSearch = search.trim().toLowerCase();
@@ -106,6 +111,7 @@ function appliedTypesFor(camera, typeLabels, search = '') {
     .filter(([key]) => key && !knownKeys.has(key))
     .filter(([key, value]) => !normalizedSearch
       || key.toLowerCase().includes(normalizedSearch)
+      || displayNames[key]?.toLowerCase().includes(normalizedSearch)
       || String(detectionTypeLabel(value, key)).toLowerCase().includes(normalizedSearch))
     .map(([key, value], index) => [key, value, entries.length + index]);
 
@@ -114,7 +120,8 @@ function appliedTypesFor(camera, typeLabels, search = '') {
     ...cameraEntries,
   ].map(([key, value, order]) => ({
     key,
-    label: detectionTypeLabel(value, key),
+    label: displayNames[key] || detectionTypeLabel(value, key),
+    defaultLabel: detectionTypeLabel(value, key),
     enabled: isTypeEnabled(camera, key),
     // Set server-side (channels.service.js getAllChannels) alongside `enabled`:
     // true when a camera-specific or NVR-level global schedule governs this
@@ -126,6 +133,7 @@ function appliedTypesFor(camera, typeLabels, search = '') {
     .filter(type => type.key && type.label)
     .filter(type => !normalizedSearch
       || type.key.toLowerCase().includes(normalizedSearch)
+      || String(type.defaultLabel || '').toLowerCase().includes(normalizedSearch)
       || String(type.label || '').toLowerCase().includes(normalizedSearch));
 
   return masterList.filter(type => !isAttendanceDetectionType(type.key || type.label)).sort((a, b) => {
@@ -134,8 +142,8 @@ function appliedTypesFor(camera, typeLabels, search = '') {
   });
 }
 
-function enabledTypesFor(camera, typeLabels) {
-  return appliedTypesFor(camera, typeLabels).filter(type => type.enabled);
+function enabledTypesFor(camera, typeLabels, displayNames) {
+  return appliedTypesFor(camera, typeLabels, '', displayNames).filter(type => type.enabled);
 }
 
 // Every type with a zone (a saved DetectionSetting) configured, whether or not
@@ -143,8 +151,8 @@ function enabledTypesFor(camera, typeLabels) {
 // exists, colour-coded by zoneStatusOf, instead of only the running ones.
 // Named distinctly from DetectionZoneMarking/utils.js's zonesFor(), which
 // returns a setting's drawn polygon areas — a different "zone".
-function configuredZoneTypesFor(camera, typeLabels) {
-  return appliedTypesFor(camera, typeLabels).filter(type => !!type.settingId);
+function configuredZoneTypesFor(camera, typeLabels, displayNames) {
+  return appliedTypesFor(camera, typeLabels, '', displayNames).filter(type => !!type.settingId);
 }
 
 /**
@@ -159,8 +167,8 @@ function zoneStatusOf(type) {
   return 'idle';
 }
 
-function resettableTypesFor(camera, typeLabels) {
-  return enabledTypesFor(camera, typeLabels).filter(type => type.settingId);
+function resettableTypesFor(camera, typeLabels, displayNames) {
+  return enabledTypesFor(camera, typeLabels, displayNames).filter(type => type.settingId);
 }
 
 function resetBatchEntries(result) {
@@ -628,6 +636,7 @@ function EngineFilterDropdown({ value, options, onChange }) {
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
 function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = false }) {
+  const { names: displayNames } = useDetectionDisplayNames();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -650,13 +659,20 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = f
   // No query -> the full catalogue the parent already loaded, so opening the
   // popover costs no request. With a query, the API response replaces it.
   const searching = debouncedQuery.length > 0;
-  const activeTypeLabels = searching ? (searchApi.data ?? {}) : typeLabels;
+  const activeTypeLabels = useMemo(() => {
+    if (!searching) return typeLabels;
+    const term = debouncedQuery.toLowerCase();
+    return Object.fromEntries([
+      ...detectionLabelEntries(searchApi.data),
+      ...detectionLabelEntries(typeLabels).filter(([key]) => displayNames[key]?.toLowerCase().includes(term)),
+    ]);
+  }, [searching, debouncedQuery, searchApi.data, typeLabels, displayNames]);
 
   // Detection types API is the master list; merge each type with
   // camera.detections[key]?.enabled and show enabled items first.
   const availableTypes = useMemo(
-    () => appliedTypesFor(camera, activeTypeLabels, debouncedQuery),
-    [camera, activeTypeLabels, debouncedQuery],
+    () => appliedTypesFor(camera, activeTypeLabels, debouncedQuery, displayNames),
+    [camera, activeTypeLabels, debouncedQuery, displayNames],
   );
 
   // Deliberately measured against the unsearched catalogue: keying this off the
@@ -832,8 +848,9 @@ function CameraPreviewModal({ camera, onClose }) {
 }
 
 function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onResetThresholdsRequest, onCheckTypeChange, checkTypeSaving, resetLoading = false, canEdit = false }) {
-  const zoneTypes = configuredZoneTypesFor(camera, typeLabels);
-  const resettableTypes = resettableTypesFor(camera, typeLabels);
+  const { names: displayNames } = useDetectionDisplayNames();
+  const zoneTypes = configuredZoneTypesFor(camera, typeLabels, displayNames);
+  const resettableTypes = resettableTypesFor(camera, typeLabels, displayNames);
 
   return (
     <div
@@ -975,6 +992,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
 const LIMIT = 100;
 
 export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }) {
+  const { names: displayNames } = useDetectionDisplayNames();
   const { permissions } = usePermissions();
   const { user } = useAuth();
   const canEditDetections = permissions?.detectionSettings?.edit === true;
@@ -1084,8 +1102,10 @@ export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }
       .filter(key => !entries.some(entry => entry.value === key))
       .map(key => ({ value: key, label: key }));
 
-    return [...entries, ...cameraOnlyEntries].sort((a, b) => a.label.localeCompare(b.label));
-  }, [typeLabels, cameras]);
+    return [...entries, ...cameraOnlyEntries]
+      .map((entry) => ({ ...entry, label: displayNames[entry.value] || entry.label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [typeLabels, cameras, displayNames]);
 
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
@@ -1140,7 +1160,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
 
   const handleResetThresholdsRequest = (camera) => {
     if (!canEditDetections) return;
-    const options = resettableTypesFor(camera, typeLabels);
+    const options = resettableTypesFor(camera, typeLabels, displayNames);
     if (options.length === 0) {
       toast.error('No enabled detections to reset');
       return;

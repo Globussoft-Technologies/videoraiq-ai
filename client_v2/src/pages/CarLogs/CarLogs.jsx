@@ -1,3 +1,4 @@
+import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import usePagedLogImagePreview from '@/hooks/usePagedLogImagePreview';
@@ -325,6 +326,7 @@ const getVehicleNumbers = (search) =>
   });
 
 const CarLogs = () => {
+  const displayTitle = useDetectionLabels().logPermission('carLogs');
   const todayISO = moment().format('YYYY-MM-DD');
   const maxDateDefault = useMemo(() => moment().endOf('day').toDate(), []);
 
@@ -737,6 +739,7 @@ const CarLogs = () => {
 
   const handleExport = async (format) => {
     await handleCarExport(format, {
+      displayTitle,
       startDate,
       endDate,
       sortField,

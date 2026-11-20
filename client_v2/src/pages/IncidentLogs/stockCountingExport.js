@@ -232,7 +232,7 @@ const excelHeaderBlock = (columnCount, filters, total, config) => {
   const pad = new Array(Math.max(0, columnCount - 1)).fill('');
   return [
     ['VIDEORAIQ', ...pad],
-    [config.showSackFields ? config.title : 'Loading/Unloading Stock Logs', ...pad],
+    [config.displayTitle || (config.showSackFields ? config.title : 'Loading/Unloading Stock Logs'), ...pad],
     [`${rangeNote(filters)}  |  ${filterNote(filters)}`, ...pad],
     [`Generated on ${moment().format('DD/MM/YYYY hh:mm A')}  |  Total vehicles: ${total}`, ...pad],
     [],
@@ -377,7 +377,7 @@ const exportToPDF = async (config, filters) => {
     const doc = new jsPDF('landscape');
     await drawReportHeader(
       doc,
-      config.showSackFields ? config.title : 'Loading/Unloading Stock Logs',
+      config.displayTitle || (config.showSackFields ? config.title : 'Loading/Unloading Stock Logs'),
       `${rangeNote(filters)}  |  ${filterNote(filters)}  |  ${vehicles.length} vehicles  |  Generated on ${moment().format('DD/MM/YYYY hh:mm A')}`,
     );
 

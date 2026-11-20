@@ -1,3 +1,5 @@
+import { detectionLogLabel, useDetectionDisplayNames, useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
+import { detectionLogKeyForPath } from '@/layout/nav.config';
 import useMetadataEffect from '@/hooks/useMetadataEffect';
 import useLogPolling from '@/hooks/useLogPolling';
 import useGenderAgeLiveUpdates from '@/hooks/useGenderAgeLiveUpdates';
@@ -5,7 +7,7 @@ import GenderAgeSummary from './components/GenderAgeSummary';
 import EmotionGroupSummary from './components/EmotionGroupSummary';
 import GenderFilter from './components/GenderFilter';
 import React, { useEffect, useCallback, useMemo, useReducer, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { LayoutGrid, List, Loader2, Cog, Power, PowerOff, Truck } from 'lucide-react';
 import { getConfiguredTimezone } from '@/utils/timezone';
@@ -108,9 +110,15 @@ const IncidentLogsPage = ({ config }) => {
   const REFRESH_KEY = `${config.storagePrefix}_auto_refresh_enabled`;
   const INTERVAL_KEY = `${config.storagePrefix}_auto_refresh_interval`;
 
+  const labels = useDetectionLabels();
+  const detectionNames = useDetectionDisplayNames();
+  const { pathname } = useLocation();
+  const logKey = detectionLogKeyForPath(pathname);
+  const logSettingType = detectionNames.settingTypeByLogKey[logKey];
+  const displayTitle = detectionLogLabel(detectionNames, logKey, '');
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
-    rows,
+    rows: sourceRows,
     loading,
     error,
     totalCount,
@@ -135,6 +143,12 @@ const IncidentLogsPage = ({ config }) => {
     peopleCount,
     limit,
   } = state;
+
+  const rows = useMemo(() => sourceRows.map((row) => {
+    const type = row.incidentType || logSettingType;
+    if (!labels.override(type)) return row;
+    return { ...row, incidentDisplayName: labels.event(type, row.incidentName === '--' ? '' : row.incidentName) };
+  }), [sourceRows, labels, logSettingType]);
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(REFRESH_KEY);
@@ -795,14 +809,14 @@ const IncidentLogsPage = ({ config }) => {
     setExportingFormat(format);
     try {
       if (config.useVehicleStyleExport) {
-        await handleStockCountingExport(format, config, exportParams);
+        await handleStockCountingExport(format, { ...config, displayTitle }, exportParams);
       } else {
-        await handleIncidentExport(format, config, exportParams);
+        await handleIncidentExport(format, { ...config, displayTitle, logSettingType, eventTitle: labels.event }, exportParams);
       }
     } finally {
       setExportingFormat('');
     }
-  }, [config, exportParams]);
+  }, [config, exportParams, labels, displayTitle, logSettingType]);
 
   const handlePdfExport = useCallback(
     async (format) => {
@@ -862,7 +876,7 @@ const IncidentLogsPage = ({ config }) => {
         onPageChange={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         limit={limit}
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
-        searchKeys={config.showBoxPackingFields ? ['boxId', 'completedBy', 'packingZone', 'endTimeSource', 'detectedVia', 'confirmationReason', 'nvrName', 'channelName', 'createdAt'] : ['incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
+        searchKeys={config.showBoxPackingFields ? ['boxId', 'completedBy', 'packingZone', 'endTimeSource', 'detectedVia', 'confirmationReason', 'nvrName', 'channelName', 'createdAt'] : ['incidentDisplayName', 'incidentName', 'nvrName', 'channelName', 'vehicleNumber', 'direction', 'boxTypes']}
         searchQuery={searchInput}
         onSearchChange={(v) => dispatch({
           type: 'SET_SEARCH_INPUT',

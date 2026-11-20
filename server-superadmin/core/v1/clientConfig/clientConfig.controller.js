@@ -30,6 +30,12 @@ class ClientConfigController {
     /* #swagger.description = 'Set the page-level grants for one client product module. Super-admin token required.' */
     return await clientConfigService.updateModuleConfig(req, res, next);
   }
+
+  async updateDetectionDisplayName(req, res, next) {
+    /* #swagger.tags = ['Client Config'] */
+    /* #swagger.description = 'Set or restore the display name of one detection for this client. Super-admin token required.' */
+    return await clientConfigService.updateDetectionDisplayName(req, res, next);
+  }
 }
 
 export default new ClientConfigController();
