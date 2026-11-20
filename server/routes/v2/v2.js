@@ -62,7 +62,7 @@ import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/m
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
 import assistantRoutes from "../../core/v2/assistant/assistant.routes.js";
-import agentChatRoutes from "../../core/v2/agentChat/agentChat.routes.js";
+import agentChatRoutes, { serveInventoryExportImage } from "../../core/v2/agentChat/agentChat.routes.js";
 import measurementMediaRoutes from "../../core/v2/measurementMedia/measurementMedia.routes.js";
 // X-Ray mode. Both imports are side-effect-free by design: xray.config.js reads
 // only env/config, and xray.routes.js defers its controller (and so its Mongoose
@@ -133,6 +133,7 @@ router.use("/vehicle", verifyToken, vehicleRoutes);
 router.use("/locations", verifyToken, locationRoutes);
 router.use("/analytics", verifyToken, analyticsRoutes);
 router.use("/assistant", verifyToken, assistantRoutes);
+router.get("/agent-chat/export-image/:grant/:key", serveInventoryExportImage);
 router.use("/agent-chat", verifyToken, agentChatRoutes);
 router.use('/agent-auth', verifyToken, agentAuthRoutes);
 router.use("/agent-actions", verifyToken, agentActionsRoutes);

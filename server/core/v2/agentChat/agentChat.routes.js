@@ -2,7 +2,8 @@ import { Router } from "express";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import config from "config";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import InventoryExportGrant from './inventoryExportGrant.model.js';
 
 const router = Router();
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -10,6 +11,9 @@ const MAX_MESSAGE_LENGTH = 16_000;
 const AGENT_PROXY_HEADER = 'X-Agent-Backend-Key';
 const sessionCache = new Map();
 const pendingSignIns = new Map();
+const inventoryIdPattern = /^[a-f0-9]{32}$/i;
+const inventoryFilePattern = /^[a-f0-9]{24}(?:-[a-z0-9]{1,80})?\.jpg$/i;
+const exportKey = () => randomBytes(16).toString('hex');
 
 function configured(name, fallback) {
   return process.env[name] ?? (config.has(name) ? config.get(name) : fallback);
@@ -166,6 +170,52 @@ router.post('/actions/:aid/decision', checkIds, (req, res) => {
   return forward(req, res, 'POST', `/agent/actions/${req.params.aid}/decision`, { decision, proposalVersion, digest });
 });
 router.get('/capabilities', (req, res) => forward(req, res, 'GET', '/agent/capabilities'));
+router.get('/camera-inventory/:inventoryId', (req, res) => {
+  const { inventoryId } = req.params;
+  if (!/^[a-f0-9]{32}$/i.test(inventoryId)) return error(res, 404, 'ROUTE_NOT_ALLOWED', 'Invalid inventory path.');
+  return forward(req, res, 'GET', '/agent/camera-inventory/' + inventoryId);
+});
+router.post('/camera-inventory/:inventoryId/export-links', async (req, res) => {
+  const { inventoryId } = req.params;
+  if (!inventoryIdPattern.test(inventoryId)) return error(res, 404, 'ROUTE_NOT_ALLOWED', 'Invalid inventory path.');
+  const { baseUrl, token } = res.locals.agentChat;
+  let { session } = res.locals.agentChat;
+  const path = '/agent/camera-inventory/' + inventoryId;
+  const read = () => fetch(baseUrl + path, {
+    headers: { ...gatewayHeaders(), Authorization: `Bearer ${session}` },
+    signal: AbortSignal.timeout(timeout('DETECTION_AGENT_TIMEOUT_MS', 25_000)),
+  });
+  res.set('Cache-Control', 'no-store');
+  try {
+    let upstream = await read();
+    if (upstream.status === 401) {
+      session = await agentSession(token, baseUrl, true);
+      upstream = await read();
+    }
+    if (!upstream.ok) return agentError(res, upstream);
+    const { nvrs } = await upstream.json();
+    if (!Array.isArray(nvrs)) throw new Error('Invalid inventory');
+
+    const prefix = path + '/images/';
+    const hrefs = nvrs.flatMap(({ cameras }) => (cameras || []).flatMap((camera) =>
+      [camera.image?.href, ...(camera.detections || []).map((item) => item.image)]));
+    const files = new Set(hrefs.filter((href) => typeof href === 'string' && href.startsWith(prefix))
+      .map((href) => href.slice(prefix.length)).filter((file) => inventoryFilePattern.test(file)));
+    if (!files.size) return res.json({ images: {} });
+
+    const cached = sessionCache.get(createHash('sha256').update(token).digest('hex'));
+    if (cached?.session !== session || cached.expiresAt <= Date.now()) {
+      return error(res, 401, 'UNAUTHENTICATED', 'The agent session has expired.');
+    }
+    const grant = exportKey();
+    const images = [...files].map((file) => ({ file, key: exportKey() }));
+    const expiresAt = new Date(Math.min(cached.expiresAt, Date.now() + 60 * 60_000));
+    await InventoryExportGrant.create({ _id: grant, inventoryId, session, images, expiresAt });
+    return res.json({ grant, images: Object.fromEntries(images.map(({ file, key }) => [file, key])) });
+  } catch {
+    return error(res, 502, 'AGENT_UNAVAILABLE', 'Could not create zone image links.');
+  }
+});
 router.get('/reports/:reportId/:fileName', async (req, res) => {
   const reportId = String(req.params.reportId || '');
   const fileName = String(req.params.fileName || '');
@@ -191,21 +241,49 @@ router.get('/reports/:reportId/:fileName', async (req, res) => {
     return res.status(200).set(headers).send(Buffer.from(await upstream.arrayBuffer()));
   } catch { return error(res, 502, 'AGENT_UNAVAILABLE', 'The report is unavailable.'); }
 });
-router.get('/actions/:aid/preview', checkIds, async (req, res) => {
+async function forwardAgentJpeg(res, path) {
   try {
-    const send = () => fetch(`${res.locals.agentChat.baseUrl}/agent/actions/${req.params.aid}/preview`, {
+    const send = () => fetch(res.locals.agentChat.baseUrl + path, {
       headers: { ...gatewayHeaders(), Authorization: `Bearer ${res.locals.agentChat.session}` },
       signal: AbortSignal.timeout(timeout('DETECTION_AGENT_TIMEOUT_MS', 25_000)),
     });
     let upstream = await send();
-    if (upstream.status === 401) {
+    if (upstream.status === 401 && res.locals.agentChat.token) {
       res.locals.agentChat.session = await agentSession(res.locals.agentChat.token, res.locals.agentChat.baseUrl, true);
       upstream = await send();
     }
     if (!upstream.ok) return agentError(res, upstream);
     if (!upstream.headers.get('content-type')?.includes('image/jpeg')) return error(res, 502, 'AGENT_UNAVAILABLE', 'Invalid preview response.');
-    return res.status(200).set('Cache-Control', 'no-store').type('image/jpeg').send(Buffer.from(await upstream.arrayBuffer()));
+    return res.status(200).set('Cache-Control', 'private, no-store').type('image/jpeg').send(Buffer.from(await upstream.arrayBuffer()));
   } catch { return error(res, 502, 'AGENT_UNAVAILABLE', 'The preview is unavailable.'); }
+}
+router.get('/actions/:aid/preview', checkIds, (req, res) =>
+  forwardAgentJpeg(res, '/agent/actions/' + req.params.aid + '/preview'));
+
+export async function serveInventoryExportImage(req, res) {
+  const { grant, key } = req.params;
+  res.set({ 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' });
+  if (!inventoryIdPattern.test(grant) || !inventoryIdPattern.test(key)) return res.sendStatus(404);
+  const baseUrl = agentBaseUrl();
+  if (!baseUrl || String(configured("DETECTION_AGENT_ENABLED", configured("VIDEORAI_AGENT_ENABLED", false))) !== "true") {
+    return res.sendStatus(503);
+  }
+  try {
+    const record = await InventoryExportGrant.findOne({ _id: grant, expiresAt: { $gt: new Date() } }).lean();
+    const image = record?.images.find((item) => item.key === key);
+    if (!image) return res.sendStatus(404);
+    res.locals.agentChat = { baseUrl, session: record.session };
+    return forwardAgentJpeg(res, '/agent/camera-inventory/' + record.inventoryId + '/images/' + image.file);
+  } catch {
+    return res.sendStatus(502);
+  }
+}
+router.get('/camera-inventory/:inventoryId/images/:fileName', (req, res) => {
+  const { inventoryId, fileName } = req.params;
+  if (!inventoryIdPattern.test(inventoryId) || !inventoryFilePattern.test(fileName)) {
+    return error(res, 404, 'ROUTE_NOT_ALLOWED', 'Invalid inventory image path.');
+  }
+  return forwardAgentJpeg(res, '/agent/camera-inventory/' + inventoryId + '/images/' + fileName);
 });
 router.post('/sign-out', async (req, res) => {
   const { token, baseUrl, session } = res.locals.agentChat;
