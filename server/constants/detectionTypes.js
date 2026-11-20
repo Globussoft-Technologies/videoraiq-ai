@@ -1,5 +1,6 @@
 import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 export const ROLLER_STOCK_SETTING_MODE = "rollerLoadingUnloadingSettings";
+export const PPE_REQUIRED_ITEMS = ["head_cap", "mask", "dangri", "helmet", "vest"];
 /* Update constants when new settings is added - DETECTION_TYPES, TYPE_MAP, Example payloads
  detection settings model
  detection settings service - createDetectionSettings, getDetectionExamples

@@ -8,7 +8,7 @@ import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import DoorAlertDurationInput from '../components/DoorAlertDurationInput';
 import DoorAlertRules from '../components/DoorAlertRules';
-import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC, ROLLER_STOCK_SETTING_MODE } from '../constants';
+import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC, PPE_SETTING_TYPE, ROLLER_STOCK_SETTING_MODE } from '../constants';
 import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
@@ -18,6 +18,7 @@ import { machineOpsSharedZones } from '../../../../../helpers/machineOpsDetectio
 import MachineOpsGroups from '../components/MachineOpsGroups';
 import TargetGenderSelect from '../components/TargetGenderSelect';
 import PostureSelect from '../components/PostureSelect';
+import PpeItemsSelect from '../components/PpeItemsSelect';
 import { hygieneZoneErrors } from '../../../../../helpers/hygieneDetection';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
@@ -446,6 +447,8 @@ export default function SaveDetectionAreaModal({
                   errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))}
                 />
               )}
+              {specialSettingType === PPE_SETTING_TYPE && <PpeItemsSelect value={z.required_items} disabled={saving}
+                onChange={value => updateZoneField(i, 'required_items', value)} />}
               {isFireSmoke && (
                 <div>
                   <label htmlFor={`fire-outside-zone-enabled-${i}`} style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>

@@ -18,6 +18,7 @@ import {
   DEFAULT_MAX_POINTS,
   FIRE_SMOKE_SETTING_TYPE,
   MIN_POINTS_TO_CLOSE,
+  PPE_SETTING_TYPE,
   isAttendanceDetectionType,
   isCansStackDetectionType,
   isStockCountingType,
@@ -137,6 +138,7 @@ export default function DetectionZoneMarking({
   const isStockCounting = isStockCountingType(activeType?.settingType);
   const isSackLoading = activeType?.settingType === 'sackLoadingUnloadingSettings';
   const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
+  const isPpe = activeType?.settingType === PPE_SETTING_TYPE;
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const isEmotion = activeType?.settingType === EMOTION_SETTING_TYPE;
@@ -677,6 +679,7 @@ export default function DetectionZoneMarking({
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       ...(Array.isArray(z.whatsappRecipientIds) ? { whatsappRecipientIds: z.whatsappRecipientIds } : {}),
       name: z.name.trim(),
+      ...(isPpe ? { required_items: z.required_items ?? [] } : {}),
       ...(activeType.settingType === 'personPostureDetectionSettings' ? { trigger_on: z.trigger_on || activeType.setting?.settings?.trigger_on || 'both' } : {}),
       ...(isHygiene ? hygieneZonePayload(z) : {}),
       ...(isLighting ? lightingZonePayload(z) : {}),
@@ -1690,6 +1693,7 @@ export default function DetectionZoneMarking({
                 isGenderAge={isGenderAge}
                 isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
+                isPpe={isPpe}
                 isDoor={isDoor}
                 isPosture={activeType.settingType === 'personPostureDetectionSettings'}
                 doorAlertMode={doorAlertModeDraft}
@@ -1834,6 +1838,7 @@ export default function DetectionZoneMarking({
                 isGenderAge={isGenderAge}
                 isMachineOps={isMachineOps}
                 isHygiene={isHygiene}
+                isPpe={isPpe}
                 isDoor={isDoor}
                 isPosture={activeType.settingType === 'personPostureDetectionSettings'}
                 doorAlertMode={doorAlertModeDraft}

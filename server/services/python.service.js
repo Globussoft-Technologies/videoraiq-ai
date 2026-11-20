@@ -41,6 +41,39 @@ const plainZoneConfig = (config) =>
       ? config._doc
       : config;
 
+const PPE_OPTIONS = {
+  provider: "jev",
+  sample_interval_sec: 1,
+  best_crop_window_sec: 1,
+  refresh_sec: 60,
+  retry_sec: 15,
+  dangri_upper_color: "blue",
+  dangri_lower_color: "blue",
+  mask_require_nose_mouth: false,
+};
+
+function buildPpeDetector(zones, zoneConfigs, severity) {
+  const detector = {
+    name: "personalProtectiveEquipmentSettings",
+    zone_configs: zoneConfigs,
+    zones: zones || [],
+    severity,
+  };
+  const configs = Array.isArray(zoneConfigs) ? zoneConfigs.map(plainZoneConfig) : [];
+  if (!configs.some(config => Array.isArray(config?.required_items))) return detector;
+
+  const polygons = typeof zones?.[0]?.[0] === "number" ? [zones] : detector.zones;
+  return {
+    ...detector,
+    zones: polygons,
+    zone_configs: polygons.map((_, index) => ({
+      name: configs[index]?.name || `Zone ${index + 1}`,
+      required_items: configs[index]?.required_items ?? [],
+    })),
+    ppe_options: PPE_OPTIONS,
+  };
+}
+
 const appendIndustrialDetectors = (
   detectors,
   modes,
@@ -686,12 +719,7 @@ class PythonService {
       }
 
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
-        detectors.push({
-          name: "personalProtectiveEquipmentSettings",
-          zone_configs,
-          zones: zones || [],
-          severity,
-        });
+        detectors.push(buildPpeDetector(zones, zone_configs, severity));
       }
 
       if (detection_modes?.includes("crowd")) {
@@ -1022,12 +1050,7 @@ class PythonService {
       const detectors = [];
 
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
-        detectors.push({
-          name: "personalProtectiveEquipmentSettings",
-          zone_configs,
-          zones: zones || [],
-          severity,
-        });
+        detectors.push(buildPpeDetector(zones, zone_configs, severity));
       }
 
       if (detection_modes?.includes("crowd")) {

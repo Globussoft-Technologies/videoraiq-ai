@@ -4,6 +4,7 @@ import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../../../consta
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
+  PPE_REQUIRED_ITEMS,
   ROLLER_STOCK_SETTING_MODE,
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
@@ -652,6 +653,9 @@ const PersonalProtectiveEquipmentSchema = new mongoose.Schema({
   },
 });
 
+PersonalProtectiveEquipmentSchema.path("zone_configs").schema.add({
+  required_items: { type: [{ type: String, enum: PPE_REQUIRED_ITEMS }], default: undefined },
+});
 
 const PersonalProtectiveEquipmentSetting = DetectionSetting.discriminator(
   "personalProtectiveEquipmentSettings",

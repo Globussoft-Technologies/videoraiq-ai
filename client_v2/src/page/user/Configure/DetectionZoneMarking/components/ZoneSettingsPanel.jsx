@@ -13,6 +13,7 @@ import LightingFields from './LightingFields';
 import EmotionAlertGroups from './EmotionAlertGroups';
 import MachineOpsGroups from './MachineOpsGroups';
 import TargetGenderSelect from './TargetGenderSelect';
+import PpeItemsSelect from './PpeItemsSelect';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -36,6 +37,7 @@ export default function ZoneSettingsPanel({
   isSackLoading = false,
   isFireSmoke = false,
   isHygiene = false,
+  isPpe = false,
   isLighting = false,
   isEmotion = false,
   isGenderAge = false,
@@ -231,6 +233,8 @@ export default function ZoneSettingsPanel({
                       errors={Object.fromEntries(Object.entries(errors).filter(([key]) => key.startsWith(`zone-${i}-`)).map(([key, value]) => [key.slice(`zone-${i}-`.length), value]))}
                     />
                   )}
+                  {isPpe && <PpeItemsSelect value={z.required_items} disabled={savingIndex !== null}
+                    onChange={value => onUpdateField(i, 'required_items', value)} />}
                   {isStockCounting && (
                     <div>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>

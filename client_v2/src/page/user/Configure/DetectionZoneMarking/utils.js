@@ -1,6 +1,7 @@
 import {
   ATTENDANCE_DETECTION_NAME,
   DETECTION_FIELD_KEYS,
+  PPE_SETTING_TYPE,
   ZONE_EXTRA_FIELDS,
   isAttendanceDetectionType,
 } from './constants';
@@ -48,6 +49,7 @@ export function zonesFor(setting, cameraId, settingType) {
     ...(settingType === LIGHTING_SETTING_TYPE ? lightingZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === EMOTION_SETTING_TYPE ? emotionZoneSettings(configs[i], setting?.settings) : {}),
     ...(settingType === GENDER_AGE_SETTING_TYPE ? genderAgeZoneSettings(configs[i], setting?.settings) : {}),
+    ...(settingType === PPE_SETTING_TYPE ? { required_items: configs[i]?.required_items } : {}),
     name: configs[i]?.name || `${settingType === 'doorDetectionSettings' ? 'Door' : 'Zone'} ${i + 1}`,
     trigger_on: configs[i]?.trigger_on || setting?.settings?.trigger_on || 'both',
     fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
