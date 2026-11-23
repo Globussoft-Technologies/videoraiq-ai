@@ -6572,6 +6572,7 @@ console.log(result,'result');
               $or: [
                 { description: searchRegex },
                 { severity: searchRegex },
+                ...(searchTerm.toLowerCase() === "medium" ? [{ severity: /^moderate$/i }] : []),
                 { "nvrData.nvrName": searchRegex },
                 { "channelData.name": searchRegex },
                 { "channelData.customName": searchRegex },

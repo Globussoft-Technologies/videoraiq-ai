@@ -570,7 +570,7 @@ const DeskAbsenceLogs = () => {
         <input
           type="search"
           aria-label="Search desk absence logs"
-          placeholder="Search desk absence logs"
+          placeholder="Search description, severity, NVR, camera, or zone"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           className="h-full w-full bg-transparent pl-9 pr-3 text-sm text-[var(--tx)] outline-none placeholder:text-[var(--tx3)]"

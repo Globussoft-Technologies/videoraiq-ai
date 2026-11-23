@@ -29,21 +29,31 @@ const cardFields = [
   ['incidentTime', 'Time of Incident', Clock],
 ];
 const severityClasses = new Map([
-  ['High', 'bg-red-100 text-red-800'],
-  ['Moderate', 'bg-amber-100 text-amber-900'],
-  ['Low', 'bg-emerald-100 text-emerald-800'],
-  ['Info', 'bg-blue-100 text-blue-800'],
+  ['High', 'text-[var(--crit)] bg-[var(--crit)]/15'],
+  ['Medium', 'text-[var(--warn)] bg-[var(--warn)]/15'],
+  ['Low', 'text-[var(--ok)] bg-[var(--ok)]/15'],
+]);
+const severityBackgrounds = new Map([
+  ['High', '#ff4d4d'],
+  ['Medium', '#f59e0b'],
+  ['Low', '#22c55e'],
 ]);
 
-const SeverityBadge = ({ severity }) => (
-  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${severityClasses.get(severity) || 'bg-slate-100 text-slate-700'}`}>
+const SeverityBadge = ({ severity, overlay = false }) => (
+  <span
+    className={overlay
+      ? 'inline-flex rounded-[5px] px-[7px] py-[3px] text-[10px] font-semibold text-white shadow-sm'
+      : `inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${severityClasses.get(severity) || 'text-[var(--tx3)] bg-[var(--bg2)]'}`}
+    style={overlay ? { background: severityBackgrounds.get(severity) || 'rgba(6,8,13,.7)' } : undefined}
+  >
     {severity}
   </span>
 );
 
 export const mapDeskAbsenceImage = (item) => {
   const path = item.Image.trim();
-  const severity = typeof item.severity === 'string' ? item.severity.trim().toLowerCase() : '';
+  const rawSeverity = typeof item.severity === 'string' ? item.severity.trim().toLowerCase() : '';
+  const severity = rawSeverity === 'moderate' ? 'medium' : rawSeverity;
   return {
     id: item._id,
     imageUrl: /^https?:\/\//i.test(path) ? path : `${import.meta.env.VITE_INCIDENT_URL || ''}${path}`,
@@ -134,7 +144,7 @@ export default function DeskAbsenceImageLogs({
       <div className="relative bg-[var(--bg2)]">
         {picture(row, true)}
         <div className="pointer-events-none absolute right-2 top-2">
-          <SeverityBadge severity={row.severity} />
+          <SeverityBadge severity={row.severity} overlay />
         </div>
       </div>
       <dl className="space-y-[9px] p-[11px]">
@@ -198,8 +208,8 @@ export default function DeskAbsenceImageLogs({
         recentlyViewedPulse={preview.recentlyViewedPulse}
         showSearch={false}
         showDateRange={false}
-        dateFilterActions={logSearchControls}
         stats={stats}
+        dateFilterActions={logSearchControls}
       >
         <ExportButton disabled={!!exporting || loading} onClick={() => runExport('excel')}>
           {exporting === 'excel' ? 'Exporting…' : 'Excel'}
