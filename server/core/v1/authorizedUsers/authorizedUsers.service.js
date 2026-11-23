@@ -95,10 +95,15 @@ class AuthUsersService {
 
   async deleteUserFromDS(user) {
     const url = `${await this.getDSAuthUsersAPI(user.adminId)}/delete?uid=${user._id.toString()}&db=${this.getDbName(user.adminId)}`;
-    return axios.delete(url, {
-      headers: { accept: "application/json" },
-      timeout: FACE_SERVICE_TIMEOUT_MS,
-    });
+    try {
+      return await axios.delete(url, {
+        headers: { accept: "application/json" },
+        timeout: FACE_SERVICE_TIMEOUT_MS,
+      });
+    } catch (error) {
+      if (error?.response?.status === 404) return;
+      throw error;
+    }
   }
   // Resolve the current admin from the verified token payload. Prefer
   // adminId because it is the canonical app-side identifier; fall back to the
