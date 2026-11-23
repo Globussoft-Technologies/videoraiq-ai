@@ -18,12 +18,9 @@ const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
 // Per-module permission matrix module keys, ported 1:1 from V1's
 // server/core/v1/permission/permissions.config.js. `logs` is a nested
 // sub-map of its own {view,create,edit,delete} rows.
-// 'permission' is intentionally excluded from this list — it's hidden from
-// the Configure/View Permissions matrix (product decision). It still exists
-// in the backend's permissionConfig and is still what gates this whole page
-// (see canConfigure/canView below, which read permissions.permission.edit/
-// view directly from the viewer's own permission object) — only the row in
-// this editable matrix is hidden, nothing about the underlying enforcement.
+// 'permission' remains hidden from this matrix. The visible Roles grants
+// control role viewing and editing; the hidden grant still protects bulk
+// default-role maintenance.
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
   'roles', 'settings', 'storageSettings', 'departments', 'detectionSettings', 'profiles', 'recipients',
@@ -618,10 +615,12 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
 function RoleRow({ role, perms, isOwnRole, canConfigureThisRole, onToggleField, onConfigure, onView, onEdit, onDelete }) {
   const config = useMemo(() => permissionConfigForRole(role), [role]);
   
-  const hasView = PERMISSION_MODULES.some(m => config[m]?.view) || LOG_SUBMODULES.some(s => config.logs?.[s]?.view);
-  const hasCreate = PERMISSION_MODULES.some(m => config[m]?.create) || LOG_SUBMODULES.some(s => config.logs?.[s]?.create);
-  const hasEdit = PERMISSION_MODULES.some(m => config[m]?.edit) || LOG_SUBMODULES.some(s => config.logs?.[s]?.edit);
-  const hasDelete = PERMISSION_MODULES.some(m => config[m]?.delete) || LOG_SUBMODULES.some(s => config.logs?.[s]?.delete);
+  const allGranted = (field) => PERMISSION_MODULES.every(m => config[m]?.[field] === true) &&
+    LOG_SUBMODULES.every(s => config.logs?.[s]?.[field] === true);
+  const hasView = allGranted('view');
+  const hasCreate = allGranted('create');
+  const hasEdit = allGranted('edit');
+  const hasDelete = allGranted('delete');
 
   // Default roles (role.is_default, set server-side — never a hardcoded name
   // list) can't be renamed server-side (400s) and stay non-deletable here too.
@@ -894,14 +893,15 @@ export default function RolesPermission() {
   const canCreateRole = permissions?.roles?.create;
   const canEditRole = permissions?.roles?.edit;
   const canDeleteRole = permissions?.roles?.delete;
-  const canConfigure = permissions?.permission?.edit;
-  const canView = permissions?.permission?.view;
+  const canConfigure = canEditRole;
+  const canView = canViewRole;
+  const canEditPermissionDocument = permissions?.permission?.edit;
   // Admin tokens are not role-restricted by the backend permission middleware.
   // Keep the repair action visible for them even when the very permission
   // document it is meant to repair is stale or missing roles/permission flags.
   // Sub-users still need both explicit edit permissions.
   const isAdmin = !user?.memberId;
-  const canSyncDefaults = isAdmin || !!(canEditRole && canConfigure);
+  const canSyncDefaults = isAdmin || !!(canEditRole && canEditPermissionDocument);
 
   // A role must never be able to edit/delete itself, even if the admin granted
   // roles.edit/delete — otherwise a user could unlock further permissions on
@@ -910,8 +910,7 @@ export default function RolesPermission() {
     user?.roleId?._id || user?.roleId || user?.roleIds?._id || user?.roleIds || ''
   );
   const canConfigureRole = (role) =>
-    !!role?._id && !!canConfigure && !role.is_default && String(role._id) !== myRoleId &&
-    (isAdmin || !!canEditRole || (!!user?.memberId && String(role?.createdBy?.userId || '') === String(user.memberId)));
+    !!role?._id && !!canConfigure && !role.is_default && String(role._id) !== myRoleId;
 
   const [search, setSearch] = useState('');
   const [searchWarning, setSearchWarning] = useState('');

@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import ConfirmationModal from '../../../../components/DeleteConfirmation';
-import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
+import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule, updateChannel } from '../../../../helpers/configure';
 import { useTimezone } from '../../../../context/TimezoneContext';
 import { nowInConfiguredTimezone, utcToConfiguredTimezone } from '../../../../utils/timezone';
 import { thresholdLabel } from './detectionsData';
@@ -166,7 +166,7 @@ function recipientId(value) {
   return String(typeof value === 'string' ? value : value?._id || value?.id || '');
 }
 
-function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
+function RecipientSelectButton({ settingId, cameraId, emailOnly = false, recipientDisabled = false, initialAlerts = [], onSaved }) {
   const [open, setOpen] = useState(false);
   const [recipients, setRecipients] = useState([]);
   const [allDepartments, setAllDepartments] = useState([]);
@@ -178,7 +178,13 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
 
   useEffect(() => {
     setSelectedIds(initialAlerts.map(recipientId).filter(Boolean));
-  }, [settingId, initialAlerts]);
+  }, [settingId, initialAlerts, emailOnly]);
+
+  useEffect(() => {
+    setRecipients([]);
+    setLoaded(false);
+    setOpen(false);
+  }, [cameraId, emailOnly, recipientDisabled]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -194,11 +200,18 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
     setLoading(true);
     try {
       const [result, departments] = await Promise.all([
-        fetchAlertRecipients({ limit: 1000, filterByStatus: 'verified' }),
+        fetchAlertRecipients({ limit: 1000, filterByStatus: 'verified', ...(emailOnly ? { alertType: 'email' } : {}) }),
         // Only for the filter, so a failure just leaves the recipients' own departments.
         fetchDepartments(0, 1000).then((resp) => resp?.data?.body?.data?.data || []).catch(() => []),
       ]);
-      setRecipients(result?.recipients || []);
+      const fetchedRecipients = result?.recipients || [];
+      setRecipients(fetchedRecipients);
+      if (emailOnly) {
+        const emailIds = new Set(fetchedRecipients
+          .filter(recipient => recipient.type === 'email' && recipient.verified)
+          .map(recipientId));
+        setSelectedIds(current => current.filter(id => emailIds.has(id)));
+      }
       setAllDepartments(departments);
       setLoaded(true);
     } catch {
@@ -209,7 +222,8 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
   };
 
   const toggleOpen = () => {
-    if (!settingId) {
+    if (recipientDisabled) return;
+    if (emailOnly ? !cameraId : !settingId) {
       toast.error('No saved setting found for recipients.');
       return;
     }
@@ -221,11 +235,16 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
   };
 
   const persist = async (nextIds) => {
+    if (recipientDisabled) return;
     const previous = selectedIds;
     setSelectedIds(nextIds);
     setSaving(true);
     try {
-      await updateDetectionAlerts(settingId, nextIds);
+      if (emailOnly) {
+        await updateChannel(cameraId, { attendanceEmailRecipients: nextIds });
+      } else {
+        await updateDetectionAlerts(settingId, nextIds);
+      }
       onSaved?.(nextIds);
       toast.success('Recipients updated successfully.');
     } catch (err) {
@@ -245,7 +264,7 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
   };
 
   // Every verified recipient can be selected here.
-  const offered = recipients;
+  const offered = emailOnly ? recipients.filter(recipient => recipient.type === 'email' && recipient.verified) : recipients;
   // Department filter and search, only to find people. The filter last picked
   // for this detection is remembered in this browser and restored on open.
   // (Not derived from the selected people: a few users with many departments
@@ -393,29 +412,31 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
   const buttonLabel = selectedIds.length
     ? `${selectedIds.length} Recipient${selectedIds.length === 1 ? '' : 's'}`
     : 'Select Recipients';
+  const canSelectRecipients = !recipientDisabled && Boolean(emailOnly ? cameraId : settingId);
 
   return (
     <div ref={wrapRef} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
       <button
         type="button"
         onClick={toggleOpen}
-        disabled={!settingId}
-        title={!settingId ? 'No saved setting for this detection type' : 'Select alert recipients'}
+        disabled={!canSelectRecipients}
+        title={recipientDisabled ? 'Save an attendance zone or select Check-in/Check-out camera type to assign recipients'
+          : canSelectRecipients ? (emailOnly ? 'Select check-in/out email recipients' : 'Select alert recipients') : 'No saved setting for this detection type'}
         style={{
           width: '100%',
           height: 36,
           borderRadius: 8,
           border: '1px solid var(--bd)',
-          cursor: !settingId ? 'not-allowed' : 'pointer',
+          cursor: !canSelectRecipients ? 'not-allowed' : 'pointer',
           fontSize: 12,
           fontWeight: 600,
-          color: !settingId ? 'var(--tx3)' : 'var(--tx2)',
+          color: !canSelectRecipients ? 'var(--tx3)' : 'var(--tx2)',
           background: 'var(--bg2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 7,
-          opacity: !settingId ? 0.65 : 1,
+          opacity: !canSelectRecipients ? 0.65 : 1,
         }}
       >
         {saving ? (
@@ -1168,6 +1189,7 @@ export default function DetectionDetailPanel({
   resetThresholdDisabled = false,
   settingId,
   channel,
+  cameraTypeSaving = false,
   onScheduleSaved,
   initialAlerts = [],
   onRecipientsChange,
@@ -1724,6 +1746,12 @@ export default function DetectionDetailPanel({
         </button>
         <RecipientSelectButton
           settingId={canEdit ? settingId : null}
+          cameraId={channel?._id}
+          emailOnly={isAttendanceDetectionType(model?.settingType || model?.id || model?.name)
+            && ['checkin', 'checkout'].includes(channel?.checkType)}
+          recipientDisabled={isAttendanceDetectionType(model?.settingType || model?.id || model?.name)
+            && (!canEdit || cameraTypeSaving || (!['checkin', 'checkout'].includes(channel?.checkType)
+              && !channel?.detections?.faceAuthenticationSettings?.id?.settings?.referencePoints?.[channel?._id]?.length))}
           initialAlerts={initialAlerts}
           onSaved={onRecipientsChange}
         />

@@ -39,6 +39,7 @@ import {
   resolveCarryOverWindowMs,
 } from "../../v1/attendance/checkoutCarryOver.js";
 import { getRequestTimezone } from "../../../utils/timezone.js";
+import { attendanceEmailRecipients } from "../../v1/attendance/attendanceEmailRecipients.js";
 // Reused so Attendance Logs exports render byte-for-byte the same spreadsheet
 // layout as the scheduled auto email report (multi-row sessions + totals).
 import {
@@ -534,9 +535,9 @@ class AttendanceService {
         socketPayload
       );
 
-      // Best-effort: notify the admin via email that a person was detected.
+      // Best-effort: route check-in/out email through the camera's attendance email recipients.
       // Fire-and-forget — failures here must not affect the attendance flow.
-      if (user?.email) {
+      if (user?.email || ['checkin', 'checkout'].includes(channel?.checkType)) {
         const employeeName = [
           populatedAttendance?.employee?.firstName,
           populatedAttendance?.employee?.lastName,
@@ -562,13 +563,15 @@ class AttendanceService {
           count: 1,
         };
 
-        MailResponse.personDetected(
-          user.email,
-          mailData,
-          "countPersons",
-          channel?.nvrId,
-          channel,
-          user?.timezone
+        attendanceEmailRecipients({ channel, admin: user }).then((emailAddresses) =>
+          emailAddresses.length && MailResponse.personDetected(
+            emailAddresses,
+            mailData,
+            "countPersons",
+            channel?.nvrId,
+            channel,
+            user?.timezone
+          )
         ).catch((err) =>
           logger.error(
             "personDetected email (attendance) error:",

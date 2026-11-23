@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import axios from "axios";
-import { ATTENDANCE_COLUMNS, BREAK_COLUMNS, selectTableColumns } from "../../../core/v2/attendanceAutoEmailReport/reportColumns.js";
+import { ATTENDANCE_COLUMNS, BREAK_COLUMNS, displayLateDurationTable, selectTableColumns } from "../../../core/v2/attendanceAutoEmailReport/reportColumns.js";
 import { createReportSchema, updateReportSchema } from "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.validation.js";
 import Report from "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
 import { buildAttendanceWorkbook } from "../../../core/v2/attendanceAutoEmailReport/attendanceWorkbook.js";
@@ -77,6 +77,26 @@ describe("optional auto email report columns", () => {
     expect(sheet.columnCount).toBe(table.headers.length);
     expect(sheet.getCell(7, 1).value).toBe(selected.length === 1 ? "Morning" : "Shoaib");
     if (selected.includes("Checkin Image")) expect(sheet.getCell(7, 3).value.hyperlink).toBe(row.checkInImage);
+  });
+
+  it("displays selected lateness as HH:mm:ss in preview and Excel without changing stored minutes", async () => {
+    const lateRow = { ...row, lateMinutes: 75.5 };
+    const table = displayLateDurationTable(selectTableColumns(
+      REPORT_HEADERS, reportTableRows([lateRow]), ["Late By (minutes)"],
+    ));
+    expect(table.headers).toEqual(["Late By (HH:mm:ss)"]);
+    expect(table.lines[0].cells).toEqual(["01:15:30"]);
+    expect(lateRow.lateMinutes).toBe(75.5);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await buildAttendanceWorkbook({ ...context, ...table }));
+    expect(workbook.worksheets[0].getCell(6, 1).value).toBe("Late By (HH:mm:ss)");
+    expect(workbook.worksheets[0].getCell(7, 1).value).toBe("01:15:30");
+
+    const unknown = displayLateDurationTable(selectTableColumns(
+      REPORT_HEADERS, reportTableRows([{ ...row, lateMinutes: null }]), ["Late By (minutes)"],
+    ));
+    expect(unknown.lines[0].cells).toEqual(["-"]);
   });
 
   it("renders a single selected break-log Excel column", async () => {

@@ -23,3 +23,23 @@ export function selectTableColumns(headers, lines, selected = []) {
     lines: lines.map((line) => ({ ...line, cells: indices.map((index) => line.cells[index]) })),
   };
 }
+
+export function formatLateDuration(minutes) {
+  const seconds = Math.max(0, Math.round(minutes * 60));
+  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+    .map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+// Apply only after selecting columns; saved selections still use the minutes header.
+export function displayLateDurationTable(table) {
+  const lateColumn = table.headers.indexOf("Late By (minutes)");
+  if (lateColumn < 0) return table;
+  return {
+    headers: table.headers.map((header, index) => index === lateColumn ? "Late By (HH:mm:ss)" : header),
+    lines: table.lines.map((line) => ({
+      ...line,
+      cells: line.cells.map((value, index) => index === lateColumn && Number.isFinite(value)
+        ? formatLateDuration(value) : value),
+    })),
+  };
+}

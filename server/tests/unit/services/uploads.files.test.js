@@ -167,6 +167,20 @@ describe.each(["v1", "v2"])("public %s file downloads", (version) => {
   });
 });
 
+it("downloads a department report PDF with its requested name while retaining legacy report names", async () => {
+  const key = `v2/${mocks.adminId}/env/aws/uploads/reports/${mocks.adminId}/id-Sales & Support.pdf`;
+  const url = `/api/v2/uploads/${key}`;
+  const named = await request(app).get(url).query({ download: "Sales & Support.pdf", reportName: "department" });
+  expect(named.status).toBe(200);
+  expect(named.headers["content-disposition"]).toContain('filename="Sales & Support.pdf"');
+
+  const unmatched = await request(app).get(url).query({ download: "Other.pdf", reportName: "department" });
+  expect(unmatched.headers["content-disposition"]).toContain('filename="AttendanceReport.pdf"');
+
+  const legacy = await request(app).get(url).query({ download: "attendance-report.pdf" });
+  expect(legacy.headers["content-disposition"]).toContain('filename="AttendanceReport.pdf"');
+});
+
 it("keeps general files as attachments through the legacy storage endpoint", async () => {
   mocks.provider = "nas";
   const key = `/media/v2/${mocks.adminId}/env/nas/uploads/files/docs/id-page.pdf`;

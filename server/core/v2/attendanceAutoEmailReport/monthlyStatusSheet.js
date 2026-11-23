@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import moment from "moment-timezone";
 import { SHIFT_DAY_KEYS, resolveShiftDay } from "../shifts/shifts.model.js";
+import { formatLateDuration } from "./reportColumns.js";
 
 /**
  * The "Monthly Status Report (Basic Work Duration)" workbook.
@@ -212,7 +213,7 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     { title: "Total Break", value: (day, row) => minutesToHm(row ? row.breakMinutesDay : 0) },
     { title: "Total", value: (day, row) => minutesToHm(row ? row.workingMinutesDay : 0) },
     { title: "Late Check-in", value: (day, row) => !row ? "" : row.isLate == null ? "-" : row.isLate ? "Yes" : "No" },
-    { title: "Late By (minutes)", value: (day, row) => !row ? "" : row.lateMinutes ?? "-" },
+    { title: "Late By (HH:mm:ss)", value: (day, row) => !row ? "" : Number.isFinite(row.lateMinutes) ? formatLateDuration(row.lateMinutes) : "-" },
   ];
 
   lines.forEach((line, lineIndex) => {

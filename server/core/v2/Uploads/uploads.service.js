@@ -184,7 +184,10 @@ class UploadService {
                 && /(?:^|-)report\.(pdf|csv)$/i.test(requestedName)
                 && !/^attendance-report\.(pdf|csv)$/i.test(requestedName)
                 && fileName.toLowerCase().endsWith(`-${requestedName.toLowerCase()}`);
-            if (namedIncidentReport) {
+            const namedDepartmentReport = reportMatch
+                && req.query?.reportName === "department"
+                && fileName.toLowerCase().endsWith(`-${requestedName.toLowerCase()}`);
+            if (namedIncidentReport || namedDepartmentReport) {
                 res.setHeader("Content-Disposition", contentDispositionFor(requestedName, fileName));
             } else if (reportMatch) {
                 res.setHeader("Content-Disposition", `attachment; filename="AttendanceReport.${reportMatch[1].toLowerCase()}"`);

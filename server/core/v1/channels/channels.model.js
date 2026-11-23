@@ -212,6 +212,10 @@ const ChannelSchema = new mongoose.Schema(
       enum: ["checkin", "checkout", "none"],
       default: "none",
     },
+    attendanceEmailRecipients: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "recipients",
+    }],
     alerts: {
       type: [
         {
@@ -283,6 +287,10 @@ const localSchema = new mongoose.Schema(
       enum: ["checkin", "checkout", "none"],
       default: "none",
     },
+    attendanceEmailRecipients: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "recipients",
+    }],
     // 📨 Alerts
     alerts: {
       type: [

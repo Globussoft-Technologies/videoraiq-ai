@@ -121,6 +121,12 @@ export const viewPermissionConfigChecker = (mainPath = '') => findModule(mainPat
 
 export const createPermissionConfigChecker = (mainPath = '') => findModule(mainPath, createPathMap);
 
-export const editPermissionConfigChecker = (mainPath = '') => findModule(mainPath, editPathMap);
+export const editPermissionConfigChecker = (mainPath = '') => {
+  const path = normalizePath(mainPath);
+  // This endpoint edits a role's permission matrix. Other /permissions edits
+  // retain their separate permission.edit gate.
+  if (path === '/api/v1/permissions/update' || path === '/api/v2/permissions/update') return 'roles';
+  return findModule(mainPath, editPathMap);
+};
 
 export const deletePermissionConfigChecker = (mainPath = '') => findModule(mainPath, deletePathMap);

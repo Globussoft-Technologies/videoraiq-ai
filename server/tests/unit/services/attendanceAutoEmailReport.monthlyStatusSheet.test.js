@@ -277,5 +277,6 @@ it("includes daily late details without changing status or worked time", async (
   expect(sheet.getCell(11, column).value).toBe("P");
   expect(sheet.getCell(15, column).value).toBe("8:00");
   expect(sheet.getCell(16, column).value).toBe("Yes");
-  expect(sheet.getCell(17, column).value).toBe(15);
+  expect(sheet.getCell(17, 2).value).toBe("Late By (HH:mm:ss)");
+  expect(sheet.getCell(17, column).value).toBe("00:15:00");
 });

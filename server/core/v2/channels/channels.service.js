@@ -349,6 +349,26 @@ class ChannelService {
         delete updates.checkType;
       }
 
+      if (Object.hasOwn(updates, "attendanceEmailRecipients")) {
+        const ids = updates.attendanceEmailRecipients;
+        if (!['checkin', 'checkout'].includes(existingChannel.checkType) ||
+            !Array.isArray(ids) || ids.some(id => !mongoose.isValidObjectId(id))) {
+          return res.status(400).json(Response.userFailResp("Invalid attendance email recipients"));
+        }
+        const uniqueIds = [...new Set(ids.map(String))];
+        const recipients = await Recipient.find({
+          _id: { $in: uniqueIds },
+          adminId: req?.verified?.userData?.adminId,
+          type: "email",
+          verified: true,
+        }).select("_id");
+        if (recipients.length !== uniqueIds.length) {
+          return res.status(400).json(Response.userFailResp("Invalid attendance email recipients"));
+        }
+        existingChannel.attendanceEmailRecipients = uniqueIds;
+        delete updates.attendanceEmailRecipients;
+      }
+
       if (updates?.alerts?.length) {
         
         const validRecipients = await Recipient.find({

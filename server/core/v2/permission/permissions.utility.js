@@ -157,10 +157,9 @@ class PermissionService {
             }
             if (memberId) {
                 const member = await userModel.findById(memberId).select('roleIds');
-                const targetRole = await roleModel.findOne({ permissionId, adminId }).select('_id is_default createdBy');
+                const targetRole = await roleModel.findOne({ permissionId, adminId }).select('_id is_default');
                 const canEditAnyRole = req.verified?.permissionConfig?.[0]?.permissionConfig?.roles?.edit === true;
-                const isCreator = targetRole?.createdBy?.userId && String(targetRole.createdBy.userId) === String(memberId);
-                if (!member || !targetRole || targetRole.is_default || String(member.roleIds) === String(targetRole._id) || (!canEditAnyRole && !isCreator)) {
+                if (!member || !targetRole || targetRole.is_default || String(member.roleIds) === String(targetRole._id) || !canEditAnyRole) {
                     return res.status(400).send(Response.accessDeniedResp('You do not have permission to configure this role.'));
                 }
             }

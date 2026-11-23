@@ -17,7 +17,6 @@ import DetectionZoneMarking from '../DetectionZoneMarking';
 import SpecialDetectionSettings from './SpecialDetectionSettings';
 import { snapshotForPreview } from '../DetectionZoneMarking/preview';
 import {
-  ATTENDANCE_DETECTION_NAME,
   ATTENDANCE_DETECTION_SETTING_TYPE,
   isAttendanceDetectionType,
   isCansStackDetectionType,
@@ -466,10 +465,14 @@ function findSettingForCamera(settingsResult, settingType, cameraId) {
 function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
   const item = findSettingForCamera(settingsResult, settingType, camera?._id);
   const linkedCamera = getLinkedCameras(item).find((cam) => String(cam?._id) === String(camera?._id));
-  const base = mergeCameraStreamFields(
-    cameraWithNvr(linkedCamera || camera, linkedCamera?.nvrId || nvr),
-    camera,
-  );
+  const base = {
+    ...mergeCameraStreamFields(
+      cameraWithNvr(linkedCamera || camera, linkedCamera?.nvrId || nvr),
+      camera,
+    ),
+    checkType: camera?.checkType ?? linkedCamera?.checkType,
+    attendanceEmailRecipients: camera?.attendanceEmailRecipients ?? linkedCamera?.attendanceEmailRecipients,
+  };
   const setting = getDetectionSetting(item);
   if (!setting?._id) {
     const existingEntry = base.detections?.[settingType] || camera?.detections?.[settingType] || {};
@@ -773,9 +776,12 @@ export default function Detections() {
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
     : null;
-  const selectedDetectionAlerts = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
-    ? selectedDetectionEntry.id.alerts || []
-    : [];
+  const selectedDetectionAlerts = isAttendanceDetectionType(selectedSettingType) &&
+    ['checkin', 'checkout'].includes(zoneCamera?.checkType)
+    ? zoneCamera?.attendanceEmailRecipients || []
+    : selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
+      ? selectedDetectionEntry.id.alerts || []
+      : [];
   const incidentFilter = useMemo(() => {
     if (!enteredDetections || !zoneCamera?._id || incidentFilterTypesApi.loading || !selectedIncidentType) return null;
     const severity = severityFilterValue(incidentSeverity);
@@ -1054,6 +1060,10 @@ export default function Detections() {
 
   const updateSelectedRecipients = (alertIds) => {
     if (!selectedSettingType) return;
+    if (isAttendanceDetectionType(selectedSettingType) && ['checkin', 'checkout'].includes(zoneCamera?.checkType)) {
+      setZoneCamera((prev) => prev ? { ...prev, attendanceEmailRecipients: alertIds } : prev);
+      return;
+    }
     setZoneCamera((prev) => {
       if (!prev) return prev;
       const currentEntry = prev.detections?.[selectedSettingType] || {};
@@ -2075,6 +2085,8 @@ export default function Detections() {
                       selectedSettingType={selectedSettingType}
                       hideZoneControls={isCansStackDetection}
                       onSaved={canEditDetections ? refreshZoneCamera : undefined}
+                      canEditRecipients={canEditDetections}
+                      cameraTypeSaving={cameraTypeSaving}
                       zoneSettingsOpen={zoneSettingsOpen}
                       onZoneSettingsClose={() => setZoneSettingsOpen(false)}
                     />
@@ -2108,6 +2120,7 @@ export default function Detections() {
                   category={selectedCategory}
                   settingId={selectedDetectionSettingId}
                   channel={zoneCamera}
+                  cameraTypeSaving={cameraTypeSaving}
                   onToggle={() => toggleModel(selected)}
                   toggleDisabled={!canEditDetections || detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}

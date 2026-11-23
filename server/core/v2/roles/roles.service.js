@@ -208,12 +208,10 @@ class RolesServices{
 
 
             let roleWithPermission;
-            let permissionEditAccess = true;
             let roleEditAccess = true;
             if(memberId){
                 roleWithPermission = req.verified?.permissionConfig;
                 const permissionConfig = roleWithPermission?.[0]?.permissionConfig;
-                permissionEditAccess = permissionConfig?.permission?.edit === true;
                 roleEditAccess = permissionConfig?.roles?.edit === true;
             }
 
@@ -282,8 +280,8 @@ class RolesServices{
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['EDIT_ACCESS_DENIED']['en']} roles module ⚠️.`));
             }
 
-            //Checking Permission Edit Access
-            if(permissionEditAccess){
+            // The Roles Edit grant also covers this role's permission flags.
+            if(roleEditAccess){
                
                 if (typeof roleCreate !== 'undefined') {
                     updateSet.create = roleCreate;
@@ -298,7 +296,7 @@ class RolesServices{
                     updateSet.view = roleView;
                 }
             }
-            if(changesPermissions && !permissionEditAccess){
+            if(changesPermissions && !roleEditAccess){
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['EDIT_ACCESS_DENIED']['en']} roles module ⚠️.`));
             }
 
@@ -324,7 +322,7 @@ class RolesServices{
 
 
 
-            if (existingRole.permissionId && changesPermissions && permissionEditAccess) {
+            if (existingRole.permissionId && changesPermissions && roleEditAccess) {
                 // Step 4: Fetch the associated permission
                 const permission = await permissionModel.findById(existingRole.permissionId);
                 if (!permission) {

@@ -12,6 +12,7 @@ import { undoAreaDrawing } from './DetectionZoneMarking/drawingDraft';
 import { useApi } from '../../../hooks/useApi';
 import { emptySchedule, buildScheduleFields, formatTime, scheduleError } from './ZoneScheduleFields';
 import { usePermissions } from '@/context/PermissionContext';
+import { updateChannel } from '../../../helpers/configure';
 import {
   ATTENDANCE_DETECTION_NAME,
   ATTENDANCE_DETECTION_SETTING_TYPE,
@@ -74,6 +75,8 @@ export default function DetectionZoneMarking({
   camera,
   onBack,
   onSaved,
+  canEditRecipients = true,
+  cameraTypeSaving = false,
   embedded = false,
   selectedSettingType = null,
   zoneSettingsOpen = false,
@@ -126,6 +129,9 @@ export default function DetectionZoneMarking({
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
   const isZoneFreeDetection = hideZoneControls || isCansStackDetectionType(activeType?.settingType || selectedSettingType);
   const isAttendanceDetection = isAttendanceDetectionType(activeType?.settingType || activeType?.label);
+  const isAttendanceCamera = isAttendanceDetection && ['checkin', 'checkout'].includes(camera?.checkType);
+  const attendanceRecipientsDisabled = isAttendanceDetection && (!canEditRecipients || cameraTypeSaving ||
+    (!isAttendanceCamera && zonesFor(activeType?.setting, camera?._id, activeType?.settingType).length === 0));
   // Line Crossing draws a single straight line (exactly 2 points), not a
   // closed area â€” V1 gives it its own toolbar/shape entirely (see
   // AreaMarkingControls.jsx's isLineCrossing), unlike every other type here
@@ -1018,24 +1024,43 @@ export default function DetectionZoneMarking({
   };
 
   // â”€â”€ Alert Recipients (scoped to the selected detection type) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const recipientsApi = useApi(() => fetchAlertRecipients({ limit: 200 }), []);
-  const allRecipients = recipientsApi.data?.recipients ?? [];
+  const recipientsApi = useApi(() => fetchAlertRecipients(isAttendanceCamera
+    ? { alertType: 'email', limit: 1000, filterByStatus: 'verified' }
+    : { limit: 200 }), [isAttendanceCamera]);
+  const allRecipients = isAttendanceCamera
+    ? (recipientsApi.data?.recipients ?? []).filter(r => r.type === 'email' && r.verified)
+    : (recipientsApi.data?.recipients ?? []);
   const [pendingAlerts, setPendingAlerts] = useState(null); // null = not yet touched for this type
   const [savingAlerts, setSavingAlerts] = useState(false);
 
-  useEffect(() => { setPendingAlerts(null); }, [selectedType]);
+  useEffect(() => { setPendingAlerts(null); }, [selectedType, isAttendanceCamera]);
 
-  const alertIds = pendingAlerts ?? (activeType?.setting?.alerts || []).map(String);
+  const savedAlertIds = pendingAlerts ?? (isAttendanceCamera
+    ? camera?.attendanceEmailRecipients || []
+    : activeType?.setting?.alerts || []).map(recipient => String(recipient?._id || recipient));
+  const alertIds = isAttendanceCamera
+    ? savedAlertIds.filter(id => allRecipients.some(recipient => String(recipient._id) === id))
+    : savedAlertIds;
   const selectedRecipients = allRecipients.filter(r => alertIds.includes(String(r._id)));
   const addableRecipients = allRecipients.filter(r => !alertIds.includes(String(r._id)));
 
   const persistAlerts = async (nextIds) => {
-    if (!activeType?.settingId) return;
+    if (attendanceRecipientsDisabled) return;
+    if (!isAttendanceCamera && !activeType?.settingId) return;
     setPendingAlerts(nextIds);
     setSavingAlerts(true);
     try {
-      await updateDetectionAlerts(activeType.settingId, nextIds);
-    } catch {
+      if (isAttendanceCamera) {
+        await updateChannel(camera._id, { attendanceEmailRecipients: nextIds });
+        onSaved?.();
+      } else {
+        await updateDetectionAlerts(activeType.settingId, nextIds);
+      }
+    } catch (err) {
+      if (isAttendanceCamera) {
+        setPendingAlerts(null);
+        toast.error(err?.response?.data?.body?.message || err.message || 'Failed to update recipients.');
+      }
       // Keep the optimistic local state â€” a retry (add/remove again) will resend the full list.
     } finally {
       setSavingAlerts(false);
@@ -1716,9 +1741,11 @@ export default function DetectionZoneMarking({
               <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-                  Who gets notified on a {activeType.label} event.
+                  {isAttendanceCamera
+                    ? 'Who receives check-in/out attendance emails from this camera.'
+                    : `Who gets notified on a ${activeType.label} event.`}
                 </div>
-                {activeType.settingId ? (
+                {activeType.settingId || isAttendanceCamera ? (
                   <>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 11 }}>
                       {selectedRecipients.map(r => (
@@ -1731,7 +1758,7 @@ export default function DetectionZoneMarking({
                           }}
                         >
                           {r.fullName}
-                          <span onClick={() => removeRecipient(String(r._id))} style={{ cursor: 'pointer', display: 'flex', opacity: 0.7 }}>
+                          <span onClick={() => { if (!attendanceRecipientsDisabled) removeRecipient(String(r._id)); }} style={{ cursor: attendanceRecipientsDisabled ? 'not-allowed' : 'pointer', display: 'flex', opacity: attendanceRecipientsDisabled ? 0.35 : 0.7 }}>
                             <X size={12} />
                           </span>
                         </span>
@@ -1753,11 +1780,11 @@ export default function DetectionZoneMarking({
                         <select
                           value="__add"
                           onChange={e => addRecipient(e.target.value === '__add' ? null : e.target.value)}
-                          disabled={savingAlerts}
+                          disabled={savingAlerts || attendanceRecipientsDisabled}
                           style={{
                             width: '100%', height: 40, padding: '0 34px 0 13px', borderRadius: 10, boxSizing: 'border-box',
                             background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5,
-                            outline: 'none', cursor: 'pointer', color: 'var(--tx3)', appearance: 'none',
+                            outline: 'none', cursor: attendanceRecipientsDisabled ? 'not-allowed' : 'pointer', color: 'var(--tx3)', appearance: 'none',
                           }}
                         >
                           <option value="__add">+ Add recipientâ€¦</option>

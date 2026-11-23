@@ -59,8 +59,11 @@ export const PermissionProvider = ({ children }) => {
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [resolvedForUser, setResolvedForUser] = useState(null);
+  const [resolvedForAccount, setResolvedForAccount] = useState(null);
   const { user, setUser } = useAuth();
+  const accountId = !user ? null : user.memberId
+    ? `member:${user.memberId}`
+    : `admin:${user.adminId || user.user_id || user.userId || user._id || user.id}`;
   // Guards against out-of-order responses: a fetch kicked off for a previous
   // `user` (e.g. still in flight right as logout->login swaps the user, or
   // React 18 StrictMode's dev-only double effect invocation) can resolve
@@ -76,13 +79,13 @@ export const PermissionProvider = ({ children }) => {
       if (requestId === requestIdRef.current) {
         setPermissions({});
         setError(null);
-        setResolvedForUser(user);
+        setResolvedForAccount(accountId);
         setLoading(false);
       }
       return;
     }
 
-    setLoading(true);
+    if (resolvedForAccount !== accountId) setLoading(true);
     setError(null);
     try {
       const response = await getAllUserPermissions();
@@ -125,7 +128,7 @@ export const PermissionProvider = ({ children }) => {
       setError(error);
     } finally {
       if (requestId === requestIdRef.current) {
-        setResolvedForUser(user);
+        setResolvedForAccount(accountId);
         setLoading(false);
       }
     }
@@ -140,7 +143,7 @@ export const PermissionProvider = ({ children }) => {
       permissions,
       // A user change must stop consumers using the previous user's grants
       // before the effect starts fetching permissions for the new user.
-      loading: loading || resolvedForUser !== user,
+      loading: loading || resolvedForAccount !== accountId,
       error,
       refresh: fetchPermissions,
     }}>

@@ -19,7 +19,8 @@ import { createReportSchema, updateReportSchema } from "./attendanceAutoEmailRep
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
 import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
 import { buildAttendanceWorkbook } from "./attendanceWorkbook.js";
-import { ATTENDANCE_COLUMNS, BREAK_COLUMNS, selectTableColumns } from "./reportColumns.js";
+import { ATTENDANCE_COLUMNS, BREAK_COLUMNS, displayLateDurationTable, formatLateDuration, selectTableColumns } from "./reportColumns.js";
+export { formatLateDuration } from "./reportColumns.js";
 import { buildBreakPdf, buildBreakWorkbook } from "./breakLogReport.js";
 import {
   buildIncidentGridPdf,
@@ -113,12 +114,6 @@ function formatPeriodDuration(minutes) {
   const hours = Math.floor(total / 60);
   const mins = total % 60;
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-}
-
-export function formatLateDuration(minutes) {
-  const seconds = Math.max(0, Math.round(minutes * 60));
-  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
-    .map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 function formatUnitDurationFromMs(ms) {
@@ -545,7 +540,7 @@ async function reportRows(report, reference) {
   // CSV render, so the preview modal shows the exact layout recipients receive
   // (multi-row check-in/check-out sessions + a per-day total row) instead of a
   // flattened one-row-per-day view. `headers` pairs with each line's `cells`.
-  const table = selectTableColumns(REPORT_HEADERS, reportTableRows(rows), report.selectedColumns);
+  const table = displayLateDurationTable(selectTableColumns(REPORT_HEADERS, reportTableRows(rows), report.selectedColumns));
   return {
     rows: cleanRows,
     headers: table.headers,
@@ -1184,6 +1179,35 @@ function safeReportName(report) {
   return report?.contentType === "incidents" ? "incident-report" : "attendance-report";
 }
 
+function safeDepartmentFileName(name) {
+  const safeName = String(name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]/g, "_").replace(/[<>:"/\\|?*;\x00-\x1f\x7f]/g, "_")
+    .replace(/\.\.+/g, "_").replace(/^[. ]+|[. ]+$/g, "").trim().slice(0, 100).replace(/[. ]+$/g, "");
+  return /[A-Za-z0-9]/.test(safeName) ? safeName : "";
+}
+
+async function reportFileNames(report) {
+  const defaultName = safeReportName(report);
+  const defaultNames = { main: defaultName, breaks: "break-logs", departmentScoped: false };
+  if (report?.contentType !== "attendance" || report?.target?.scope !== "departments") {
+    return defaultNames;
+  }
+  const ids = [...new Set((report.target.departmentIds || []).map(String))];
+  if (!ids.length) return defaultNames;
+  let main = "departments-report";
+  if (ids.length === 1) {
+    try {
+      const department = await Department.findOne({ _id: ids[0], adminId: report.adminId })
+        .select("departmentName").lean();
+      main = safeDepartmentFileName(department?.departmentName);
+    } catch (error) {
+      logger.warn(`[ATTENDANCE_AUTO_EMAIL_REPORT] Department filename lookup failed: ${error.message}`);
+    }
+    if (!main) return defaultNames;
+  }
+  return { main, breaks: `${main}-break-logs`, departmentScoped: true };
+}
+
 // Stored media paths are relative (see toRelativeMediaPath in mediaStorage.js)
 // — every other stored file in this codebase is resolved to a full URL by
 // prepending this same config key at link/display time, never baked in.
@@ -1199,9 +1223,10 @@ export function publicUrlFor(mediaPath) {
   return `${base}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
 }
 
-function reportDownloadUrl(mediaPath, extension, report) {
+function reportDownloadUrl(mediaPath, extension, baseName, departmentScoped = false) {
   const url = new URL(publicUrlFor(mediaPath));
-  url.searchParams.set("download", `${safeReportName(report)}.${extension}`);
+  url.searchParams.set("download", `${baseName}.${extension}`);
+  if (departmentScoped) url.searchParams.set("reportName", "department");
   return url.toString();
 }
 
@@ -1213,35 +1238,36 @@ function reportDownloadUrl(mediaPath, extension, report) {
  * One file per format, no size limit to juggle: the email links to the file
  * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
-export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
-  const safeName = safeReportName(report);
+export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer, names = null) {
+  names ??= await reportFileNames(report);
+  const safeName = names.main;
   const files = [];
   if (pdfBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf`, fallbackToEnv: true });
-    files.push({ format: "pdf", contentType: report.contentType, path, url: reportDownloadUrl(path, "pdf", report) });
+    files.push({ format: "pdf", contentType: report.contentType, path, url: reportDownloadUrl(path, "pdf", safeName, names.departmentScoped) });
   }
   if (csvBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv`, fallbackToEnv: true });
-    files.push({ format: "csv", contentType: report.contentType, path, url: reportDownloadUrl(path, "csv", report) });
+    files.push({ format: "csv", contentType: report.contentType, path, url: reportDownloadUrl(path, "csv", safeName, names.departmentScoped) });
   }
   if (xlsxBuffer) {
     const path = await putMedia({ adminId: report.adminId, buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx`, fallbackToEnv: true });
-    files.push({ format: "xlsx", contentType: report.contentType, path, url: reportDownloadUrl(path, "xlsx", report) });
+    files.push({ format: "xlsx", contentType: report.contentType, path, url: reportDownloadUrl(path, "xlsx", safeName, names.departmentScoped) });
   }
   if (breakPdfBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf`, fallbackToEnv: true });
-    files.push({ format: "breakPdf", contentType: "attendance", path, url: reportDownloadUrl(path, "pdf", report) });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${names.breaks}.pdf`, fallbackToEnv: true });
+    files.push({ format: "breakPdf", contentType: "attendance", path, url: reportDownloadUrl(path, "pdf", names.departmentScoped ? names.breaks : safeName, names.departmentScoped) });
   }
   if (breakXlsxBuffer) {
-    const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx`, fallbackToEnv: true });
-    files.push({ format: "breakXlsx", contentType: "attendance", path, url: reportDownloadUrl(path, "xlsx", report) });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${names.breaks}.xlsx`, fallbackToEnv: true });
+    files.push({ format: "breakXlsx", contentType: "attendance", path, url: reportDownloadUrl(path, "xlsx", names.departmentScoped ? names.breaks : safeName, names.departmentScoped) });
   }
   return files;
 }
 
-function attachmentFor(format, buffer, report) {
+function attachmentFor(format, buffer, names) {
   const extension = format === "breakPdf" ? "pdf" : format === "breakXlsx" ? "xlsx" : format;
-  const baseName = format.startsWith("break") ? "break-logs" : safeReportName(report);
+  const baseName = format.startsWith("break") ? names.breaks : names.main;
   const type = extension === "pdf"
     ? "application/pdf"
     : extension === "csv"
@@ -1256,8 +1282,9 @@ function attachmentFor(format, buffer, report) {
 }
 
 export async function prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
+  const names = await reportFileNames(report);
   try {
-    const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+    const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer, names);
     return { files, attachments: [], deliveryMode: "links" };
   } catch (storageError) {
     const generated = [
@@ -1279,7 +1306,7 @@ export async function prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBu
     );
     return {
       files: [],
-      attachments: generated.map(([format, buffer]) => attachmentFor(format, buffer, report)),
+      attachments: generated.map(([format, buffer]) => attachmentFor(format, buffer, names)),
       deliveryMode: "attachments",
     };
   }
@@ -1389,7 +1416,7 @@ async function prepareAttendanceReport(report, options = {}) {
   const xlsxBuffer = wantsXlsx
     ? usesDailyAttendanceWorkbook(attendanceReport, summary)
       ? await buildAttendanceWorkbook({
-          ...selectTableColumns(REPORT_HEADERS, reportTableRows(rows), attendanceReport.selectedColumns),
+          ...displayLateDurationTable(selectTableColumns(REPORT_HEADERS, reportTableRows(rows), attendanceReport.selectedColumns)),
           label: summary.label,
           timezone: summary.timezone,
           rowCount: summary.rowCount,
