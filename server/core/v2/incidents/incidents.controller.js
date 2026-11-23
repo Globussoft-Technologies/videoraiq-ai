@@ -974,7 +974,7 @@ class IncidentsController {
 
   async getDeskAbsenceLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData.'
+    #swagger.description = 'Get Desk Absence time-series grouped by camera. Set mode to images to return paginated events with snapshots.'
     #swagger.parameters['data'] = {
       in: 'body',
       description: 'Filter parameters',

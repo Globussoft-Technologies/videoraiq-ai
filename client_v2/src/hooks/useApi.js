@@ -5,11 +5,16 @@ import { dropdownCache } from '@/utils/dropdownCache';
 // cache survive those unmounts for the lifetime of the SPA, which lets a
 // returning screen render its last successful response while it revalidates.
 const responseCache = new Map();
+const RETRY_DELAYS_MS = [15000, 30000, 60000];
+
+function isTransientReadError(error) {
+  return error?.code === 'ERR_NETWORK' || [502, 503, 504].includes(error?.response?.status);
+}
 
 /**
  * Generic data-fetching hook with loading / error / empty handling and refetch.
  *
- * @param {Function} fetcher  async () => data  (memoize with useCallback at call site)
+ * @param {Function} fetcher  async () => data from a read-only operation
  * @param {Array}    deps     dependency list that triggers a refetch
  * @param {Object}   opts     { enabled, initialData, pollMs, cacheKey, pollSilent }
  */
@@ -30,28 +35,41 @@ export function useApi(fetcher, deps = [], opts = {}) {
   // user keeps typing in a search box) before an in-flight request resolves,
   // a stale response must never overwrite what a newer request already set.
   const requestIdRef = useRef(0);
+  const retryTimer = useRef(null);
 
   // `silent` refetches without flipping `loading` to true — the previous data
   // stays rendered while the new request is in flight, so callers can refresh
   // after a mutation without AsyncBoundary swapping the whole view for a
   // spinner (avoids a full unmount/remount flicker on e.g. a checkbox toggle).
-  const run = useCallback(async ({ silent = false } = {}) => {
+  const run = useCallback(async function read({ silent = false } = {}, retryAttempt = 0) {
+    clearTimeout(retryTimer.current);
     if (!enabled) return;
     const requestId = ++requestIdRef.current;
-    if (!silent) setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const result = await fetcherRef.current();
       if (mounted.current && requestId === requestIdRef.current) {
         if (cacheKey) responseCache.set(cacheKey, result);
         setData(result);
+        setError(null);
       }
     } catch (err) {
-      if (mounted.current && requestId === requestIdRef.current) setError(err);
+      if (mounted.current && requestId === requestIdRef.current) {
+        setError(err);
+        const delay = RETRY_DELAYS_MS[retryAttempt];
+        if (delay !== undefined && isTransientReadError(err)) {
+          retryTimer.current = setTimeout(() => {
+            void read({ silent: true }, retryAttempt + 1);
+          }, delay + Math.random() * 1000);
+        }
+      }
       // eslint-disable-next-line no-console
       console.error('[useApi]', err?.message || err);
     } finally {
-      if (mounted.current && requestId === requestIdRef.current && !silent) setLoading(false);
+      if (mounted.current && requestId === requestIdRef.current) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, cacheKey]);
@@ -85,6 +103,7 @@ export function useApi(fetcher, deps = [], opts = {}) {
       mounted.current = false;
       // Also invalidate requests when an enabled flag or cache scope changes.
       requestIdRef.current += 1;
+      clearTimeout(retryTimer.current);
       if (id) clearInterval(id);
     };
     // `enabled` must be tracked here, not just inside run() — callers like

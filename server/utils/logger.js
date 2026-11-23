@@ -3,16 +3,11 @@ import winston from "winston"
 import DailyRotateFile from "winston-daily-rotate-file";
 import { fileURLToPath } from "url";
 import path from "path";
-import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const logDir = path.join(__dirname, "../logs");
-
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-}
 
 const { combine, timestamp, printf, errors } = format;
 
@@ -48,7 +43,23 @@ const logFormat = printf((info) => {
   return `${timestamp} ${level}: ${stack || message}${extra}`;
 });
 
-const dailyRotateTransport = new DailyRotateFile({
+function reportLoggingError(error, transport) {
+  console.error(`[FILE-LOG] ${transport?.filename || "logger"}:`, error);
+}
+
+function rotatingFile(options) {
+  try {
+    const transport = new DailyRotateFile(options);
+    // The underlying rotator stream can emit filesystem errors directly.
+    transport.logStream.on("error", error => reportLoggingError(error, transport));
+    return [transport];
+  } catch (error) {
+    reportLoggingError(error, options);
+    return [];
+  }
+}
+
+const dailyRotateTransports = rotatingFile({
   dirname: logDir,
   filename: `%DATE%.log`,
   datePattern: "YYYY-MM-DD",
@@ -65,9 +76,10 @@ const logger = createLogger({
   ),
   transports: [
     new transports.Console(),
-    dailyRotateTransport
+    ...dailyRotateTransports
   ]
 });
+logger.on("error", reportLoggingError);
 
 if (process.env.NODE_ENV !== "production") {
   logger.add(
@@ -77,28 +89,30 @@ if (process.env.NODE_ENV !== "production") {
   );
 }
 
+const nasFileTransports = [
+  ...rotatingFile({
+    filename: 'logs/nas-sucess/nas-success-%DATE%.log',
+    datePattern: 'YYYY-MM-DD',
+    level: 'info',
+    maxFiles: '14d',
+    zippedArchive: false
+  }),
+  ...rotatingFile({
+    filename: 'logs/nas-err/nas-error-%DATE%.log',
+    datePattern: 'YYYY-MM-DD',
+    level: 'error',
+    maxFiles: '30d',
+    zippedArchive: false
+  }),
+];
+
 export const nasLogger = winston.createLogger({
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
   ),
-  transports: [
-    new DailyRotateFile({
-      filename: 'logs/nas-sucess/nas-success-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'info',
-      maxFiles: '14d',
-      zippedArchive: false
-    }),
-    new DailyRotateFile({
-      filename: 'logs/nas-err/nas-error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxFiles: '30d',
-      zippedArchive: false
-    }),
-    // new winston.transports.Console()
-  ]
+  transports: nasFileTransports.length ? nasFileTransports : [new transports.Console()],
 });
+nasLogger.on("error", reportLoggingError);
 
 export default logger;

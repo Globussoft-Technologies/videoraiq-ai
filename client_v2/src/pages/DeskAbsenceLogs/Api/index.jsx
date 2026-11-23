@@ -10,7 +10,7 @@ const jsonHeaders = () => ({
 });
 
 /**
- * Paginated desk-absence chart logs. Filters live in the POST body:
+ * Paginated desk-absence charts or image events. Filters live in the POST body:
  * nvrIds/channelIds are comma-separated strings; zoneNames is an array.
  * Response: res.data.body.data => { data: [...records], totalCount }.
  */
@@ -23,10 +23,20 @@ export const getDeskAbsenceLogs = async ({
   channelIds,
   zoneNames,
   granularity,
+  mode,
+  sortField,
+  sortOrder,
+  personPresent,
+  search,
 }) => {
   const body = {
     skip,
     limit,
+    mode,
+    sortField,
+    sortOrder,
+    ...(typeof personPresent === 'boolean' && { personPresent }),
+    ...(search && { search }),
     ...(startDate && { startDate }),
     ...(endDate && { endDate }),
     ...(granularity && { granularity }),

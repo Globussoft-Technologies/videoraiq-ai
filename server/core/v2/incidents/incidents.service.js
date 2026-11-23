@@ -6474,6 +6474,11 @@ console.log(result,'result');
         channelIds,
         zoneNames,
         granularity = "time",
+        mode,
+        sortField,
+        sortOrder,
+        personPresent,
+        search,
       } = req.body;
       const timezone = getRequestTimezone(req);
       const requestedGranularity = ["time", "day", "month"].includes(granularity)
@@ -6527,6 +6532,154 @@ console.log(result,'result');
       const zoneFilter = Array.isArray(zoneNames) ? zoneNames.filter(Boolean) : [];
       if (zoneFilter.length) {
         pointMatch["point.zoneName"] = { $in: zoneFilter };
+      }
+
+      const cameraDetailsStages = [
+        {
+          $lookup: {
+            from: "nvrs",
+            localField: "nvrId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
+            as: "nvrData",
+          },
+        },
+        { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "channels",
+            localField: "channelId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
+            as: "channelData",
+          },
+        },
+        { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+      ];
+
+      if (mode === "images") {
+        const imageMatch = {
+          ...matchStage,
+          Image: { $type: "string", $regex: /\S/ },
+          ...(zoneFilter.length && { "timeSeries.zoneName": { $in: zoneFilter } }),
+        };
+        const searchTerm = typeof search === "string" ? search.trim() : "";
+        const searchRegex = searchTerm ? new RegExp(escapeRegex(searchTerm), "i") : null;
+        const searchStages = searchRegex ? [
+          ...cameraDetailsStages,
+          {
+            $match: {
+              $or: [
+                { description: searchRegex },
+                { severity: searchRegex },
+                { "nvrData.nvrName": searchRegex },
+                { "channelData.name": searchRegex },
+                { "channelData.customName": searchRegex },
+                {
+                  "timeSeries.zoneName": zoneFilter.length
+                    ? { $in: zoneFilter.filter((name) => searchRegex.test(name)) }
+                    : searchRegex,
+                },
+              ],
+            },
+          },
+        ] : [];
+        const [summary] = await Incident.aggregate([
+          { $match: imageMatch },
+          ...searchStages,
+          {
+            $group: {
+              _id: null,
+              totalCount: { $sum: 1 },
+              presentCount: { $sum: { $cond: [{ $eq: ["$personPresent", true] }, 1, 0] } },
+              absentCount: { $sum: { $cond: [{ $eq: ["$personPresent", false] }, 1, 0] } },
+            },
+          },
+        ]);
+        const { totalCount: allCount = 0, presentCount = 0, absentCount = 0 } = summary || {};
+        const filterPresence = typeof personPresent === "boolean";
+        const totalCount = filterPresence ? (personPresent ? presentCount : absentCount) : allCount;
+        const pageMatch = filterPresence ? { ...imageMatch, personPresent } : imageMatch;
+
+        const direction = sortOrder === "asc" ? 1 : -1;
+        const labelSort = new Map([
+          ["nvrName", { $ifNull: ["$nvrData.nvrName", "--"] }],
+          ["channelName", {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$channelData.customName", ""] } }, 0] },
+              "$channelData.customName",
+              { $ifNull: ["$channelData.name", "--"] },
+            ],
+          }],
+          ["zoneName", {
+            $reduce: {
+              input: "$zoneNames",
+              initialValue: "",
+              in: {
+                $concat: ["$$value", { $cond: [{ $eq: ["$$value", ""] }, "", ", "] }, "$$this"],
+              },
+            },
+          }],
+        ]).get(sortField);
+        const sort = {
+          ...(sortField === "status" && { personPresent: direction }),
+          ...(sortField === "severity" && { severityRank: direction }),
+          timeOfIncident: sortField === "incidentTime" ? direction : -1,
+          _id: -1,
+        };
+        const paginationStages = [
+          { $skip: Math.max(0, Number.parseInt(skip, 10) || 0) },
+          { $limit: Math.max(1, Math.min(100, Number.parseInt(limit, 10) || 10)) },
+        ];
+
+        const logs = totalCount ? await Incident.aggregate([
+          { $match: pageMatch },
+          ...searchStages,
+          ...(sortField === "severity" ? [{
+            $set: {
+              severityRank: { $indexOfArray: [["info", "low", "moderate", "high"], { $toLower: "$severity" }] },
+            },
+          }] : []),
+          ...(!labelSort ? [{ $sort: sort }, ...paginationStages] : []),
+          {
+            $project: {
+              Image: 1,
+              timeOfIncident: 1,
+              personPresent: 1,
+              severity: 1,
+              description: 1,
+              nvrId: 1,
+              channelId: 1,
+              ...(searchRegex && { nvrData: 1, channelData: 1 }),
+              zoneNames: {
+                $setUnion: [{
+                  $filter: {
+                    input: { $ifNull: ["$timeSeries.zoneName", []] },
+                    cond: zoneFilter.length
+                      ? { $in: ["$$this", { $literal: zoneFilter }] }
+                      : { $ne: ["$$this", ""] },
+                  },
+                }, []],
+              },
+            },
+          },
+          ...(searchRegex ? [] : cameraDetailsStages),
+          ...(labelSort ? [
+            { $set: { sortLabel: { $toLower: labelSort } } },
+            { $sort: { sortLabel: direction, timeOfIncident: -1, _id: -1 } },
+            ...paginationStages,
+            { $unset: "sortLabel" },
+          ] : []),
+        ]) : [];
+
+        return res.status(200).json(
+          Response.userSuccessResp("deskAbsence logs fetched successfully", {
+            totalCount,
+            summary: { totalCount: allCount, presentCount, absentCount },
+            data: logs,
+            mode: "images",
+          }),
+        );
       }
 
       const groupedSeriesStages = requestedGranularity === "time"
@@ -6600,26 +6753,7 @@ console.log(result,'result');
         },
         ...(Object.keys(pointMatch).length ? [{ $match: pointMatch }] : []),
         ...groupedSeriesStages,
-        {
-          $lookup: {
-            from: "nvrs",
-            localField: "nvrId",
-            foreignField: "_id",
-            pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
-            as: "nvrData",
-          },
-        },
-        { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
-        {
-          $lookup: {
-            from: "channels",
-            localField: "channelId",
-            foreignField: "_id",
-            pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
-            as: "channelData",
-          },
-        },
-        { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+        ...cameraDetailsStages,
         { $sort: { "channelData.name": 1 } },
       ];
 

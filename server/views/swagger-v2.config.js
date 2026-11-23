@@ -54,6 +54,8 @@ const doc = {
       endDate: "2026-01-31",
       skip: 0,
       limit: 10,
+      granularity: "time",
+      mode: "images",
     },
     // No dedicated validator; permissive object so the $ref resolves.
     updateStorage: {
