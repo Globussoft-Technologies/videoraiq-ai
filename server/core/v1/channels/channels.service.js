@@ -1488,6 +1488,15 @@ class ChannelService {
       if (!channel) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
       }
+      const channelAdmin = await adminModel
+        .findOne({ user_id: String(channel.userId) })
+        .select("_id")
+        .lean();
+      if (adminId && (!channelAdmin || String(channelAdmin._id) !== String(adminId))) {
+        return res.status(403).json(Response.accessDeniedResp(
+          "You don’t have permission to change detections for this camera. Please sign out and sign in again. If the issue continues, contact your administrator."
+        ));
+      }
       if (enable && channel.detectionBulkPaused && detectionType !== 'faceAuthenticationSettings') {
         return res.status(409).json(Response.userFailResp('Resume all detections before enabling an individual detector'));
       }
