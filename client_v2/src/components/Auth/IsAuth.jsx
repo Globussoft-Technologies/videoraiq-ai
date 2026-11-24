@@ -152,6 +152,7 @@ export default function IsAuth({ children }) {
   useEffect(() => {
     if (isMobileEmbedded()) {
       let stopped = false;
+      let verified = false;
       const checkEmbedded = async () => {
         try {
           const session = getMobileEmbed();
@@ -159,7 +160,11 @@ export default function IsAuth({ children }) {
           const response = await fetch(`${HOST}/mobile-access/session`, { headers: { 'x-access-token': session.token } });
           const result = await response.json();
           if (!response.ok || result.body?.status !== 'success') throw new Error('Page access expired or revoked. Reopen from the mobile app.');
-          if (!stopped) { setUser(result.body.data.user); setIsLoading(false); }
+          if (!stopped && !verified) {
+            verified = true;
+            setUser(result.body.data.user);
+            setIsLoading(false);
+          }
         } catch (error) {
           if (!stopped) { clearMobileEmbed(); setUser(null); setFailure({ title: 'Mobile page unavailable', message: error.message }); setIsLoading(false); }
         }
