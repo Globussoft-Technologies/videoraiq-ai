@@ -1,3 +1,4 @@
+import { hasFloMattressAccess } from "../../../middlewares/floMattressAccess.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import config from "config";
@@ -14,9 +15,9 @@ function normalizeMac(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function adminIdentity(req) {
+function adminIdentity(req, action = "view") {
   const user = req?.verified?.userData || {};
-  if (!user.adminId || user.memberId) return null;
+  if (!hasFloMattressAccess(req, "raspberryPiDevices", action)) return null;
   return String(user.adminId);
 }
 
@@ -275,7 +276,7 @@ class RaspberryPiService {
   async adminRegistrations(req, res) {
     const adminId = adminIdentity(req);
     if (!adminId) {
-      return res.status(403).json({ status: "error", message: "Administrator access is required" });
+      return res.status(403).json({ status: "error", message: "Raspberry Pi Devices permission is required" });
     }
 
     try {
@@ -314,9 +315,9 @@ class RaspberryPiService {
   }
 
   async updateApproval(req, res) {
-    const adminId = adminIdentity(req);
+    const adminId = adminIdentity(req, "edit");
     if (!adminId) {
-      return res.status(403).json({ status: "error", message: "Administrator access is required" });
+      return res.status(403).json({ status: "error", message: "Raspberry Pi Devices permission is required" });
     }
 
     const code = String(req.params?.code || "").trim();
@@ -359,9 +360,9 @@ class RaspberryPiService {
   }
 
   async deleteRegistration(req, res) {
-    const adminId = adminIdentity(req);
+    const adminId = adminIdentity(req, "delete");
     if (!adminId) {
-      return res.status(403).json({ status: "error", message: "Administrator access is required" });
+      return res.status(403).json({ status: "error", message: "Raspberry Pi Devices permission is required" });
     }
 
     const code = String(req.params?.code || "").trim().toUpperCase();

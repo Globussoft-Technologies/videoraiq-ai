@@ -46,6 +46,10 @@ export function isClientNavGroupVisible(group) {
 // permissions[key]?.view === true to appear at all — hidden, not disabled.
 export function isItemVisible(item, permissions) {
   if (!item.permissionKey) return true;
+  if (item.moduleKey === 'mattressMeasurement' && item.modulePageKey) {
+    const grant = permissions?.[item.permissionKey];
+    return (item.permissionSubKey ? grant?.[item.permissionSubKey] : grant)?.view === true;
+  }
   if (!permissions || Object.keys(permissions).length === 0) return true;
   if (item.permissionSubKey) {
     const module = permissions?.[item.permissionKey];

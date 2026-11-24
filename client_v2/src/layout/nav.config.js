@@ -171,8 +171,8 @@ export const NAV_GROUPS = [
         icon: Move3d,
         children: [
           { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementLogs', permissionKey: 'logs', permissionSubKey: 'measurementLogs', logsConfigKey: 'measurementLogs' },
-          { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, moduleKey: 'mattressMeasurement', modulePageKey: 'raspberryPiDevices', permissionKey: 'settings' },
-          { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementCalibration', permissionKey: 'settings' },
+          { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, moduleKey: 'mattressMeasurement', modulePageKey: 'raspberryPiDevices', permissionKey: 'raspberryPiDevices' },
+          { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, moduleKey: 'mattressMeasurement', modulePageKey: 'measurementCalibration', permissionKey: 'measurementCalibration' },
         ],
       },
     ],

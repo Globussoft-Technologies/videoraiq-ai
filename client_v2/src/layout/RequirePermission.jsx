@@ -40,7 +40,7 @@ export default function RequirePermission({ permissionKey, permissionSubKey, mod
     return <ErrorState error={new Error('No page permissions are available for your account.')} onRetry={refresh} minH={360} />;
   }
 
-  const item = { permissionKey, permissionSubKey };
+  const item = { permissionKey, permissionSubKey, moduleKey, modulePageKey };
   if (isItemVisible(item, permissions) && (!modulePageKey || isModuleAllowed({ moduleKey, modulePageKey }, modules))) return children;
 
   const fallback = firstVisiblePath(permissions, modules);

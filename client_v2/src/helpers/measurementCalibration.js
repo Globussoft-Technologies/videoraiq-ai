@@ -1,5 +1,9 @@
 import api, { unwrap } from './client';
 
+export async function getCalibrationStations() {
+  return unwrap(await api.get('/measurement-calibration/stations'));
+}
+
 const devicePath = (deviceId, suffix) => (
   `/measurement-calibration/${encodeURIComponent(deviceId)}/${suffix}`
 );

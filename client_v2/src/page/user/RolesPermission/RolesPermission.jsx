@@ -24,7 +24,7 @@ const isKhanbas = import.meta.env.VITE_KHANBAS === 'true';
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
   'roles', 'settings', 'storageSettings', 'departments', 'detectionSettings', 'profiles', 'recipients',
-  'locations', 'playbacks', 'autoEmailReports', 'shifts',
+  'locations', 'playbacks', 'autoEmailReports', 'shifts', 'raspberryPiDevices', 'measurementCalibration',
 ];
 // Every sub-module the backend seeds under permissionConfig.logs (see
 // server/core/v1/permission/permissions.config.js's completeConfig.logs) —
@@ -69,6 +69,7 @@ const MODULE_LABELS = {
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
   shifts: 'Shift Management & Schedule',
+  raspberryPiDevices: 'Raspberry Pi Devices', measurementCalibration: 'Measurement Calibration',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
   personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',

@@ -7,21 +7,20 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
-  ShieldAlert,
   Undo2,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmationModal from '@/components/DeleteConfirmation';
-import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/context/PermissionContext';
 import { getApiErrorMessage } from '@/helpers/client';
-import { getRaspberryPiDevices } from '@/helpers/raspberryPiDevices';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import {
   captureCalibrationFrame,
   getCalibrationFrame,
   getSavedCalibrationZone,
+  getCalibrationStations,
   getCalibrationStatus,
   runMeasurementCalibration,
   saveCalibrationZone,
@@ -270,8 +269,8 @@ function friendlyRequestError(error, fallback) {
 }
 
 export default function MeasurementCalibration() {
-  const { user } = useAuth();
-  const isAdmin = !user?.memberId;
+  const { permissions } = usePermissions();
+  const canEdit = permissions.measurementCalibration?.edit === true;
   const [devices, setDevices] = useState([]);
   const [deviceId, setDeviceId] = useState('');
   const [loadingDevices, setLoadingDevices] = useState(true);
@@ -317,7 +316,7 @@ export default function MeasurementCalibration() {
     };
   }, [points, zoneBreadthInches, zoneLengthInches, zoneType]);
   const maxPoints = zoneType === 'rectangle' ? 4 : 32;
-  const canCalibrate = !zoneValidity.errors.length && !busy && Boolean(deviceId) && settingsValid;
+  const canCalibrate = canEdit && !zoneValidity.errors.length && !busy && Boolean(deviceId) && settingsValid;
 
   const loadFrame = useCallback(async (selectedId, version = '') => {
     try {
@@ -361,11 +360,9 @@ export default function MeasurementCalibration() {
   }, [loadFrame]);
 
   const loadDevices = useCallback(async () => {
-    if (!isAdmin) return;
     setLoadingDevices(true);
     try {
-      const allDevices = await getRaspberryPiDevices();
-      const approved = allDevices.filter((device) => device.approvalStatus === 'approved');
+      const approved = await getCalibrationStations();
       const savedDeviceId = String(readCalibrationDrafts().selectedDeviceId || '');
       setDevices(approved);
       setDeviceId((current) => (
@@ -381,7 +378,7 @@ export default function MeasurementCalibration() {
     } finally {
       setLoadingDevices(false);
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
     loadDevices();
@@ -445,7 +442,7 @@ export default function MeasurementCalibration() {
   }, [deviceId, refreshStatus]);
 
   useEffect(() => {
-    if (!deviceId || !draftReady) return undefined;
+    if (!canEdit || !deviceId || !draftReady) return undefined;
     if (hydratingDraftRef.current === deviceId) {
       hydratingDraftRef.current = '';
       return undefined;
@@ -483,7 +480,7 @@ export default function MeasurementCalibration() {
         });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [deviceId, draftReady, flatness, points, tolerance, zoneBreadthInches, zoneLengthInches, zoneType]);
+  }, [canEdit, deviceId, draftReady, flatness, points, tolerance, zoneBreadthInches, zoneLengthInches, zoneType]);
 
   useEffect(() => {
     if (!deviceId) return undefined;
@@ -510,7 +507,7 @@ export default function MeasurementCalibration() {
   }, [status?.message, status?.status]);
 
   const capture = async () => {
-    if (!deviceId || busy) return;
+    if (!canEdit || !deviceId || busy) return;
     setOperation('capture');
     setPoints([]);
     setFrameError('');
@@ -563,7 +560,7 @@ export default function MeasurementCalibration() {
     // Only the empty SVG drawing surface may add a point. Without this guard,
     // clicks on an existing marker (or a child element) bubble to the SVG and
     // create an unexpected extra vertex.
-    if (event.target !== event.currentTarget || !frameUrl || busy || points.length >= maxPoints) return;
+    if (!canEdit || event.target !== event.currentTarget || !frameUrl || busy || points.length >= maxPoints) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
     const y = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
@@ -571,21 +568,11 @@ export default function MeasurementCalibration() {
   };
 
   const changeZoneType = (nextType) => {
-    if (nextType === zoneType || busy) return;
+    if (!canEdit || nextType === zoneType || busy) return;
     setZoneType(nextType);
     setPoints([]);
     setPageError('');
   };
-
-  if (!isAdmin) {
-    return (
-      <div style={{ ...panelStyle(), color: 'var(--tx2)', margin: 22, padding: 24 }}>
-        <ShieldAlert size={25} style={{ color: 'var(--crit)', marginBottom: 10 }} />
-        <strong style={{ color: 'var(--tx)', display: 'block' }}>Administrator access required</strong>
-        Measurement calibration changes the reference plane used for every measurement on the selected station.
-      </div>
-    );
-  }
 
   const polygon = points.map((point) => `${point.x * 1000},${point.y * 1000}`).join(' ');
   const rectangleEdges = zoneType === 'rectangle' && points.length === 4
@@ -714,11 +701,11 @@ export default function MeasurementCalibration() {
           </div>
 
           <div onClick={(event) => event.stopPropagation()} style={{ alignItems: 'center', background: 'var(--bg1)', borderTop: '1px solid var(--bd)', display: 'flex', flexWrap: 'wrap', gap: 8, padding: 12, position: 'relative', zIndex: 2 }}>
-            <button disabled={!deviceId || busy} onClick={capture} style={actionStyle('primary', !deviceId || busy)} type="button">
+            <button disabled={!canEdit || !deviceId || busy} onClick={capture} style={actionStyle('primary', !canEdit || !deviceId || busy)} type="button">
               {operation === 'capture' ? <Loader2 className="animate-spin" size={15} /> : <Camera size={15} />} Capture / refresh frame
             </button>
-            <button disabled={!points.length || busy} onClick={() => setPoints((current) => current.slice(0, -1))} style={actionStyle('secondary', !points.length || busy)} type="button"><Undo2 size={15} /> Undo point</button>
-            <button disabled={!points.length || busy} onClick={() => setPoints([])} style={actionStyle('danger', !points.length || busy)} type="button"><RotateCcw size={15} /> Clear zone</button>
+            <button disabled={!canEdit || !points.length || busy} onClick={() => setPoints((current) => current.slice(0, -1))} style={actionStyle('secondary', !canEdit || !points.length || busy)} type="button"><Undo2 size={15} /> Undo point</button>
+            <button disabled={!canEdit || !points.length || busy} onClick={() => setPoints([])} style={actionStyle('danger', !canEdit || !points.length || busy)} type="button"><RotateCcw size={15} /> Clear zone</button>
             <span style={{ color: zoneValidity.errors.length ? 'var(--tx3)' : 'var(--ok)', fontFamily: 'var(--mono)', fontSize: 10.5, marginLeft: 'auto' }}>{points.length} / {maxPoints} points</span>
           </div>
         </section>
@@ -735,7 +722,7 @@ export default function MeasurementCalibration() {
             <div aria-label="Calibration zone mode" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 9, display: 'grid', gap: 4, gridTemplateColumns: '1fr 1fr', marginBottom: 16, padding: 4 }}>
               {['polygon', 'rectangle'].map((mode) => (
                 <button
-                  disabled={busy}
+                  disabled={!canEdit || busy}
                   key={mode}
                   onClick={() => changeZoneType(mode)}
                   style={{ background: zoneType === mode ? 'var(--blue)' : 'transparent', border: 0, borderRadius: 7, color: zoneType === mode ? '#fff' : 'var(--tx2)', cursor: busy ? 'not-allowed' : 'pointer', fontSize: 11.5, fontWeight: 750, padding: '8px 10px', textTransform: 'capitalize' }}
@@ -751,14 +738,14 @@ export default function MeasurementCalibration() {
                 <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
                   Length (P0-P3) · inches
                   <div style={{ alignItems: 'center', display: 'flex', gap: 7, marginTop: 6 }}>
-                    <input disabled={busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneLengthInches(event.target.value)} placeholder="e.g. 78.74" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneLengthInches} />
+                    <input disabled={!canEdit || busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneLengthInches(event.target.value)} placeholder="e.g. 78.74" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneLengthInches} />
                     <span style={{ color: 'var(--tx2)', fontWeight: 750 }}>in</span>
                   </div>
                 </label>
                 <label style={{ color: 'var(--tx2)', fontSize: 11.5, fontWeight: 650 }}>
                   Breadth (P0-P1) · inches
                   <div style={{ alignItems: 'center', display: 'flex', gap: 7, marginTop: 6 }}>
-                    <input disabled={busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneBreadthInches(event.target.value)} placeholder="e.g. 70.87" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneBreadthInches} />
+                    <input disabled={!canEdit || busy} max={Number(RECTANGLE_MAX_INCHES.toFixed(2))} min={Number(RECTANGLE_MIN_INCHES.toFixed(2))} onChange={(event) => setZoneBreadthInches(event.target.value)} placeholder="e.g. 70.87" step="0.01" style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', minWidth: 0, padding: '8px', width: '100%' }} type="number" value={zoneBreadthInches} />
                     <span style={{ color: 'var(--tx2)', fontWeight: 750 }}>in</span>
                   </div>
                 </label>
@@ -771,8 +758,8 @@ export default function MeasurementCalibration() {
             <label style={{ color: 'var(--tx2)', display: 'block', fontSize: 11.5, fontWeight: 650 }}>
               Minimum flatness
               <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 7 }}>
-                <input disabled={busy} max="100" min="10" onChange={(event) => setFlatness(event.target.value)} step="1" style={{ accentColor: 'var(--blue)', flex: 1 }} type="range" value={flatness} />
-                <input disabled={busy} max="100" min="10" onChange={(event) => setFlatness(event.target.value)} style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', padding: '6px', width: 58 }} type="number" value={flatness} />
+                <input disabled={!canEdit || busy} max="100" min="10" onChange={(event) => setFlatness(event.target.value)} step="1" style={{ accentColor: 'var(--blue)', flex: 1 }} type="range" value={flatness} />
+                <input disabled={!canEdit || busy} max="100" min="10" onChange={(event) => setFlatness(event.target.value)} style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', padding: '6px', width: 58 }} type="number" value={flatness} />
                 <span>%</span>
               </div>
             </label>
@@ -780,8 +767,8 @@ export default function MeasurementCalibration() {
             <label style={{ color: 'var(--tx2)', display: 'block', fontSize: 11.5, fontWeight: 650, marginTop: 16 }}>
               Inlier tolerance
               <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 7 }}>
-                <input disabled={busy} max="100" min="1" onChange={(event) => setTolerance(event.target.value)} step="1" style={{ accentColor: 'var(--blue)', flex: 1 }} type="range" value={tolerance} />
-                <input disabled={busy} max="100" min="1" onChange={(event) => setTolerance(event.target.value)} style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', padding: '6px', width: 58 }} type="number" value={tolerance} />
+                <input disabled={!canEdit || busy} max="100" min="1" onChange={(event) => setTolerance(event.target.value)} step="1" style={{ accentColor: 'var(--blue)', flex: 1 }} type="range" value={tolerance} />
+                <input disabled={!canEdit || busy} max="100" min="1" onChange={(event) => setTolerance(event.target.value)} style={{ background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 7, color: 'var(--tx)', padding: '6px', width: 58 }} type="number" value={tolerance} />
                 <span>mm</span>
               </div>
             </label>

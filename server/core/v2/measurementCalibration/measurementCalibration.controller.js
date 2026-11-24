@@ -1,6 +1,7 @@
 import service from "./measurementCalibration.service.js";
 
 class MeasurementCalibrationController {
+  stations(req, res) { return service.stations(req, res); }
   status(req, res) { return service.status(req, res); }
   capture(req, res) { return service.capture(req, res); }
   frame(req, res) { return service.frame(req, res); }

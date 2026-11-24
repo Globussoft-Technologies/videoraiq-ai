@@ -140,7 +140,7 @@ export const PermissionProvider = ({ children }) => {
 
   return (
     <PermissionContext.Provider value={{
-      permissions,
+      permissions: resolvedForAccount === accountId ? permissions : {},
       // A user change must stop consumers using the previous user's grants
       // before the effect starts fetching permissions for the new user.
       loading: loading || resolvedForAccount !== accountId,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Cpu, Loader2, ShieldAlert, Trash2, Wifi, WifiOff, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/context/PermissionContext';
 import DeleteConfirmation from '@/components/DeleteConfirmation';
 import RefreshControl from '@/components/RefreshControl';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
@@ -63,10 +63,10 @@ function DeviceCard({ device, busy, onDecision, onDelete }) {
           {connected ? <Wifi size={14} /> : <WifiOff size={14} />}{connected ? 'Pi is connected' : 'Pi is not currently connected'}
         </span>
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          {device.approvalStatus !== 'pending' && (
+          {onDelete && device.approvalStatus !== 'pending' && (
             <button disabled={busy} onClick={() => onDelete(device)} style={{ alignItems: 'center', background: 'transparent', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, color: 'var(--crit)', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}><Trash2 size={14} /> Delete</button>
           )}
-          {device.approvalStatus === 'pending' && (
+          {onDecision && device.approvalStatus === 'pending' && (
             <>
             <button disabled={busy} onClick={() => onDecision(device, 'rejected')} style={{ alignItems: 'center', background: 'rgba(239,68,68,.10)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 8, color: 'var(--crit)', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}><X size={14} /> Reject</button>
             <button disabled={busy} onClick={() => onDecision(device, 'approved')} style={{ alignItems: 'center', background: 'var(--ok)', border: 0, borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'inline-flex', fontSize: 12, fontWeight: 700, gap: 6, opacity: busy ? .5 : 1, padding: '8px 12px' }}>{busy ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Approve</button>
@@ -79,16 +79,16 @@ function DeviceCard({ device, busy, onDecision, onDelete }) {
 }
 
 export default function RaspberryPiDevices() {
-  const { user } = useAuth();
+  const { permissions } = usePermissions();
+  const canEdit = permissions.raspberryPiDevices?.edit === true;
+  const canDelete = permissions.raspberryPiDevices?.delete === true;
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [busyCode, setBusyCode] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const isAdmin = !user?.memberId;
 
   const loadDevices = useCallback(async ({ quiet = false } = {}) => {
-    if (!isAdmin) return;
     if (!quiet) setLoading(true);
     try {
       const nextDevices = await getRaspberryPiDevices();
@@ -101,7 +101,7 @@ export default function RaspberryPiDevices() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
     loadDevices();
@@ -121,7 +121,7 @@ export default function RaspberryPiDevices() {
   };
 
   const removeDevice = async () => {
-    if (!deleteTarget) return;
+    if (!canDelete || !deleteTarget) return;
     setBusyCode(deleteTarget.code);
     try {
       await deleteRaspberryPiDevice(deleteTarget.code);
@@ -134,10 +134,6 @@ export default function RaspberryPiDevices() {
       setBusyCode('');
     }
   };
-
-  if (!isAdmin) {
-    return <div style={{ margin: 22, padding: 24, border: '1px solid var(--bd)', borderRadius: 14, background: 'var(--bg1)', color: 'var(--tx2)' }}><ShieldAlert size={24} style={{ color: 'var(--crit)', marginBottom: 10 }} /><strong style={{ color: 'var(--tx)', display: 'block' }}>Administrator access required</strong>Only the security administrator can approve a Raspberry Pi.</div>;
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: 22 }}>
@@ -168,7 +164,7 @@ export default function RaspberryPiDevices() {
       {loading ? <div style={{ color: 'var(--tx3)', padding: 30, textAlign: 'center' }}><Loader2 className="animate-spin" size={22} style={{ margin: '0 auto 8px' }} />Loading devices...</div>
         : loadError ? <div role="alert" style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 14, color: 'var(--crit)', padding: 24, textAlign: 'center' }}><ShieldAlert size={24} style={{ margin: '0 auto 9px' }} /><strong style={{ display: 'block' }}>Unable to load Raspberry Pi connections</strong><span style={{ display: 'block', fontSize: 12, marginTop: 6 }}>{loadError}</span><button type="button" onClick={() => loadDevices()} style={{ background: 'var(--bg1)', border: '1px solid var(--bd2)', borderRadius: 8, color: 'var(--tx)', cursor: 'pointer', fontWeight: 700, marginTop: 14, padding: '8px 14px' }}>Try again</button></div>
         : devices.length === 0 ? <div style={{ background: 'var(--bg1)', border: '1px dashed var(--bd2)', borderRadius: 14, color: 'var(--tx3)', padding: 32, textAlign: 'center' }}>No registration requests yet. Use the refresh control to check again or configure automatic refresh.</div>
-          : <div style={{ display: 'grid', gap: 13, gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))' }}>{devices.map((device) => <DeviceCard busy={busyCode === device.code} device={device} key={device.id || device.code} onDecision={decide} onDelete={setDeleteTarget} />)}</div>}
+          : <div style={{ display: 'grid', gap: 13, gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))' }}>{devices.map((device) => <DeviceCard busy={busyCode === device.code} device={device} key={device.id || device.code} onDecision={canEdit ? decide : undefined} onDelete={canDelete ? setDeleteTarget : undefined} />)}</div>}
 
       <DeleteConfirmation
         open={Boolean(deleteTarget)}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Download, Plus, Mail, Pencil, Trash2, Send, ChevronLeft, ChevronRight, Search, X, Pause, Play } from 'lucide-react';
+import { usePermissions } from '@/context/PermissionContext';
 import { getApiErrorMessage } from '@/helpers/client';
 import ConfirmationModal from '@/components/DeleteConfirmation';
 import { DOWNLOADS, FREQ_OPTS, REPORT_OPTS } from '../data';
@@ -27,6 +28,11 @@ const scopeLabelOf = (r) =>
     : 'All stations';
 
 const ReportsAutomation = ({ rows = [] }) => {
+  const { permissions } = usePermissions();
+  const grant = permissions.logs?.measurementLogs;
+  const canCreate = grant?.create === true;
+  const canEdit = grant?.edit === true;
+  const canDelete = grant?.delete === true;
   const selectedCount = rows.length;
 
   const [schedules, setSchedules] = useState([]);
@@ -217,15 +223,16 @@ const ReportsAutomation = ({ rows = [] }) => {
               Generated on the plant server and mailed to recipients
             </span>
           </span>
-          <span className="ml-auto">
-            <span
+          {canCreate && <span className="ml-auto">
+            <button
+              type="button"
               onClick={() => setModal({})}
               style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}
               className="flex items-center gap-[6px] text-[12px] font-semibold text-white rounded-[8px] px-[13px] py-[7px] cursor-pointer"
             >
               <Plus size={14} />New Report Schedule
-            </span>
-          </span>
+            </button>
+          </span>}
         </div>
 
         {/* Filter bar — server-side search by title / recipient, plus status, frequency + report type */}
@@ -337,7 +344,7 @@ const ReportsAutomation = ({ rows = [] }) => {
                   {(s.recipients || []).join(', ')}
                 </span>
               </span>
-              <button
+              {canEdit && <button
                 type="button"
                 onClick={() => sendNow(s._id)}
                 disabled={busyId === s._id}
@@ -345,16 +352,16 @@ const ReportsAutomation = ({ rows = [] }) => {
                 className="w-[30px] h-[30px] shrink-0 rounded-[8px] flex items-center justify-center cursor-pointer text-[var(--violet)] bg-[rgba(146,116,245,.1)] border border-[rgba(146,116,245,.25)] hover:bg-[rgba(146,116,245,.18)] transition-colors disabled:opacity-50"
               >
                 <Send size={13} strokeWidth={1.9} />
-              </button>
-              <button
+              </button>}
+              {canEdit && <button
                 type="button"
                 onClick={() => setModal(reportToForm(s))}
                 title="Edit schedule"
                 className="w-[30px] h-[30px] shrink-0 rounded-[8px] flex items-center justify-center cursor-pointer text-[var(--blue)] bg-[rgba(59,130,246,.1)] border border-[rgba(59,130,246,.25)] hover:bg-[rgba(59,130,246,.18)] transition-colors"
               >
                 <Pencil size={14} strokeWidth={1.9} />
-              </button>
-              <button
+              </button>}
+              {canEdit && <button
                 type="button"
                 onClick={() => toggle(s)}
                 disabled={busyId === s._id}
@@ -370,8 +377,8 @@ const ReportsAutomation = ({ rows = [] }) => {
                 ) : (
                   <Play size={13} strokeWidth={2} />
                 )}
-              </button>
-              <button
+              </button>}
+              {canDelete && <button
                 type="button"
                 onClick={() => setPendingDelete(s)}
                 disabled={busyId === s._id}
@@ -379,7 +386,7 @@ const ReportsAutomation = ({ rows = [] }) => {
                 className="w-[30px] h-[30px] shrink-0 rounded-[8px] flex items-center justify-center cursor-pointer text-[var(--crit)] bg-[rgba(255,77,77,.1)] border border-[rgba(255,77,77,.25)] hover:bg-[rgba(255,77,77,.18)] transition-colors disabled:opacity-50"
               >
                 <Trash2 size={14} strokeWidth={1.9} />
-              </button>
+              </button>}
             </div>
           ))}
         </div>
@@ -419,7 +426,7 @@ const ReportsAutomation = ({ rows = [] }) => {
         </div>
       </div>
 
-      {modal !== null && (
+      {modal !== null && (modal.id ? canEdit : canCreate) && (
         <ScheduleModal
           initial={modal.id ? modal : null}
           recipients={options.recipients}
@@ -430,7 +437,7 @@ const ReportsAutomation = ({ rows = [] }) => {
       )}
 
       <ConfirmationModal
-        open={Boolean(pendingDelete)}
+        open={canDelete && Boolean(pendingDelete)}
         title="Delete Schedule"
         icon={<Trash2 className="w-6 h-6 text-[var(--crit)]" />}
         message={

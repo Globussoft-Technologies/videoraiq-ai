@@ -5,6 +5,7 @@ import controller from "./measurementCalibration.controller.js";
 const router = express.Router();
 
 router.use(verifyToken);
+router.get("/stations", controller.stations.bind(controller));
 router.get("/:deviceId/status", controller.status.bind(controller));
 router.post("/:deviceId/frame", controller.capture.bind(controller));
 router.get("/:deviceId/frame", controller.frame.bind(controller));

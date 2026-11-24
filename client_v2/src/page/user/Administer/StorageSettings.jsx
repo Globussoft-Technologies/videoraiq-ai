@@ -7,6 +7,7 @@ import {
   testAdminStorage,
 } from '@/helpers/adminStorage';
 import videoraLogo from '@/assets/videoraiq-logo-color.png';
+import { Loading } from '@/components/States';
 import { usePermissions } from '@/context/PermissionContext';
 
 const PROVIDERS = [
@@ -127,7 +128,7 @@ export default function StorageSettings() {
     }
   };
 
-  if (loading) return <div className="storage-loading"><Loader2 size={22} className="spin" /> Loading storage configuration…</div>;
+  if (loading) return <Loading label="Loading storage configuration…" minH={240} />;
 
   return (
     <div className="storage-page">
@@ -146,7 +147,7 @@ export default function StorageSettings() {
         .storage-field input{background:var(--bg1);border:1px solid var(--bd1);border-radius:9px;color:var(--tx1);padding:10px 12px;outline:none}.storage-field input:focus{border-color:#7c3aed}
         .storage-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx2);margin-top:16px}
         .storage-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.storage-actions button{border:1px solid var(--bd1);border-radius:9px;padding:9px 14px;background:var(--bg1);color:var(--tx1);cursor:pointer;display:flex;align-items:center;gap:7px}.storage-actions button.primary{background:#7c3aed;border-color:#7c3aed;color:white}.storage-actions button:disabled{opacity:.55;cursor:not-allowed}
-        .storage-note{padding:14px;border-radius:10px;background:rgba(59,130,246,.08);color:var(--tx2);font-size:13px;line-height:1.5;margin-top:16px}.storage-loading{padding:40px;display:flex;gap:10px;align-items:center;color:var(--tx3)}.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+        .storage-note{padding:14px;border-radius:10px;background:rgba(59,130,246,.08);color:var(--tx2);font-size:13px;line-height:1.5;margin-top:16px}.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
         .storage-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(2,6,23,.64);display:grid;place-items:center;padding:20px;backdrop-filter:blur(3px)}
         .storage-modal{width:min(460px,100%);background:var(--bg2);border:1px solid var(--bd1);border-radius:16px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.35)}
         .storage-modal-head{display:flex;justify-content:space-between;align-items:center;gap:16px}.storage-modal-head h3{margin:0;font-size:17px}.storage-modal-close{border:0;background:transparent;color:var(--tx3);cursor:pointer;padding:4px}

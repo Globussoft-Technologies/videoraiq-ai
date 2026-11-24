@@ -1,3 +1,4 @@
+import { hasFloMattressAccess } from "../../../middlewares/floMattressAccess.js";
 import config from "config";
 import axios from "axios";
 import mongoose from "mongoose";
@@ -10,7 +11,7 @@ const DS_ROOT = "/v1/calibration";
 
 function adminIdFrom(req) {
   const user = req?.verified?.userData || {};
-  if (!user.adminId || user.memberId) return "";
+  if (!user.adminId) return "";
   return String(user.adminId);
 }
 
@@ -49,10 +50,10 @@ function dsError(error, action) {
   );
 }
 
-async function approvedStation(req) {
+async function approvedStation(req, action = "view") {
   const adminId = adminIdFrom(req);
-  if (!mongoose.isValidObjectId(adminId)) {
-    throw Object.assign(new Error("Administrator access is required"), { status: 403 });
+  if (!mongoose.isValidObjectId(adminId) || !hasFloMattressAccess(req, "measurementCalibration", action)) {
+    throw Object.assign(new Error("Measurement Calibration permission is required"), { status: 403 });
   }
   const deviceId = String(req.params?.deviceId || "");
   if (!mongoose.isValidObjectId(deviceId)) {
@@ -110,6 +111,31 @@ function zoneData(document) {
 }
 
 class MeasurementCalibrationService {
+  async stations(req, res) {
+    if (!hasFloMattressAccess(req, "measurementCalibration")) {
+      return sendFailure(res, Object.assign(new Error("Measurement Calibration permission is required"), { status: 403 }), "stations");
+    }
+    try {
+      const devices = await RaspberryPiDevice.find({
+        admin: adminIdFrom(req),
+        approvalStatus: "approved",
+      }).sort({ createdAt: -1 }).lean();
+      return sendData(res, 200, "Calibration stations fetched", devices.map((device) => ({
+        id: String(device._id),
+        station: device.station,
+        mac: device.mac,
+        ip: device.ip,
+        connectivityStatus: device.status,
+      })));
+    } catch (error) {
+      logger.error(`[MEASUREMENT_CALIBRATION] stations failed: ${error.message}`);
+      return res.status(500).json({
+        statusCode: 500,
+        body: { status: "failed", message: "Failed to load calibration stations" },
+      });
+    }
+  }
+
   async status(req, res) {
     try {
       const device = await approvedStation(req);
@@ -122,7 +148,7 @@ class MeasurementCalibrationService {
 
   async capture(req, res) {
     try {
-      const device = await approvedStation(req);
+      const device = await approvedStation(req, "edit");
       const response = await axios.post(calibrationDsUrl(device.ip, "frame"), undefined, { maxRedirects: 0, timeout: 25000 });
       return sendData(res, 200, "Calibration frame captured", response.data);
     } catch (error) {
@@ -159,7 +185,7 @@ class MeasurementCalibrationService {
       );
     }
     try {
-      const device = await approvedStation(req);
+      const device = await approvedStation(req, "edit");
       const response = await axios.post(calibrationDsUrl(device.ip, "run"), validation.value, { maxRedirects: 0, timeout: 10000 });
       return sendData(res, 202, "Calibration started", response.data);
     } catch (error) {
@@ -190,7 +216,7 @@ class MeasurementCalibrationService {
       );
     }
     try {
-      const device = await approvedStation(req);
+      const device = await approvedStation(req, "edit");
       const document = await MeasurementCalibration.findOneAndUpdate(
         { adminId: adminIdFrom(req), deviceId: device._id },
         {

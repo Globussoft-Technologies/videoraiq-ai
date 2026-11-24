@@ -126,10 +126,10 @@ const TOUR_MODULE_DEFINITIONS = [
   { "key": "messy-area", "label": "Messy Area Logs", "path": "logs/messy-area", "permissionKey": "logs", "permissionSubKey": "messyAreaLogs", "logsConfigKey": "messyAreaLogs", "group": "LOGS & RECORDS" },
   { "key": "cameras", "label": "Cameras & NVRs", "path": "cameras", "group": "CONFIGURE", "permissionKey": "NVR" },
   { "key": "detection-settings", "label": "Detections", "path": "detection-settings", "group": "CONFIGURE", "permissionKey": "detectionSettings" },
-  { "key": "measurement-calibration", "label": "Measurement Calibration", "path": "measurement-calibration", "group": "CONFIGURE", "permissionKey": "settings", "modulePageKey": "measurementCalibration" },
+  { "key": "measurement-calibration", "label": "Measurement Calibration", "path": "measurement-calibration", "group": "CONFIGURE", "permissionKey": "measurementCalibration", "modulePageKey": "measurementCalibration" },
   { "key": "users", "label": "User Role Detail", "path": "users", "group": "ADMINISTER", "permissionKey": "Users" },
   { "key": "settings", "label": "Settings", "path": "settings", "group": "ADMINISTER", "permissionKey": "settings" },
-  { "key": "raspberry-pi-devices", "label": "Raspberry Pi Devices", "path": "raspberry-pi-devices", "group": "ADMINISTER", "permissionKey": "settings", "modulePageKey": "raspberryPiDevices" },
+  { "key": "raspberry-pi-devices", "label": "Raspberry Pi Devices", "path": "raspberry-pi-devices", "group": "ADMINISTER", "permissionKey": "raspberryPiDevices", "modulePageKey": "raspberryPiDevices" },
   { "key": "roles", "label": "Roles & Permission", "path": "roles", "group": "ADMINISTER", "permissionKey": "roles" },
   { "key": "locations", "label": "Locations", "path": "locations", "group": "ADMINISTER", "permissionKey": "locations" },
   { "key": "departments", "label": "Departments", "path": "departments", "group": "ADMINISTER", "permissionKey": "departments" },
@@ -177,6 +177,10 @@ export function normalizePermissionConfig(permissionConfig, roleName) {
  */
 export function isModuleVisible(module, permissions) {
   if (!module.permissionKey) return true;
+  if (["measurementLogs", "raspberryPiDevices", "measurementCalibration"].includes(module.modulePageKey)) {
+    const grant = permissions?.[module.permissionKey];
+    return (module.permissionSubKey ? grant?.[module.permissionSubKey] : grant)?.view === true;
+  }
   if (!permissions || Object.keys(permissions).length === 0) return true;
   if (module.permissionSubKey) {
     const group = permissions[module.permissionKey];

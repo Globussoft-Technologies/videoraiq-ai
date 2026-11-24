@@ -231,7 +231,7 @@ export const v2Routes = (
         `detections` permission module exists server-side. */}
     <Route path="detection-settings" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
-    <Route path="measurement-calibration" element={<RequirePermission permissionKey="settings" modulePageKey="measurementCalibration"><MeasurementCalibration /></RequirePermission>} />
+    <Route path="measurement-calibration" element={<RequirePermission permissionKey="measurementCalibration" modulePageKey="measurementCalibration"><MeasurementCalibration /></RequirePermission>} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     <Route path="auto-email-reports" element={guard('autoEmailReports', undefined, <AutoEmailReports />)} />
@@ -239,7 +239,7 @@ export const v2Routes = (
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
-    <Route path="raspberry-pi-devices" element={<RequirePermission permissionKey="settings" modulePageKey="raspberryPiDevices"><RaspberryPiDevices /></RequirePermission>} />
+    <Route path="raspberry-pi-devices" element={<RequirePermission permissionKey="raspberryPiDevices" modulePageKey="raspberryPiDevices"><RaspberryPiDevices /></RequirePermission>} />
     {ADMIN_STORAGE_UI_ENABLED && <Route path="storage-settings" element={guard('storageSettings', undefined, <StorageSettings />)} />}
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
