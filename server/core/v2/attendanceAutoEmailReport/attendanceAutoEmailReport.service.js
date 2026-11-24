@@ -369,6 +369,7 @@ export function rowFromAttendance(item, timezone, rules) {
     designation: cleanField(employee.designation),
     branch: cleanField(employee.branch),
     department: cleanField(employee.departmentId?.departmentName),
+    departmentKey: String(employee.departmentId?._id || ""),
     location: cleanField(employee.location),
     // Day line carries the FIRST work session's check-in / check-out / worked
     // duration. Remaining sessions are the sub-rows (`sessions` below).
@@ -1022,12 +1023,11 @@ function emailHtml(report, details) {
   const reportHeading = combinedReport ? "Attendance & Incident Report" : incidentReport ? "Incident Report" : "Attendance Report";
   const recordLabel = combinedReport ? "report record" : incidentReport ? "incident" : "employee attendance record";
   const preheader = `${displayTitle} — ${count} ${recordLabel}${count === 1 ? "" : "s"} · ${details.label}`;
-  const buttonRow = details.files.map(downloadButton).join("");
+  const buttonRows = details.files.map((file) => `<tr>${downloadButton(file)}</tr>`).join("");
   const attachmentFallback = Array.isArray(details.attachments) && details.attachments.length > 0;
-  const deliveryLabel = attachmentFallback ? "Attached Report" : "Download Report";
-  const deliveryRow = attachmentFallback
-    ? `<td align="center" style="${SANS}font-size:14px;line-height:1.6;color:${MAIL.tx2};padding:2px 8px 10px;">The requested report file${details.attachments.length === 1 ? " is" : "s are"} attached to this email.</td>`
-    : buttonRow;
+  const deliveryLabel = details.files.length ? "Download Report" : "Attached Report";
+  const attachmentRow = `<tr><td align="center" style="${SANS}font-size:14px;line-height:1.6;color:${MAIL.tx2};padding:2px 8px 10px;">The ${details.files.length ? "remaining" : "requested"} report file${details.attachments.length === 1 ? " is" : "s are"} attached to this email.</td></tr>`;
+  const deliveryRow = `${buttonRows}${attachmentFallback ? attachmentRow : ""}`;
   const tz = details.timezone || DEFAULT_TIMEZONE;
   const nowTz = moment().tz(tz);
   const startStr = details.start ? moment(details.start).tz(tz).format("DD MMM YYYY") : "";
@@ -1135,7 +1135,7 @@ function emailHtml(report, details) {
 
               <!-- buttons -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 6px;">
-                <tr>${deliveryRow}</tr>
+                ${deliveryRow}
               </table>
 
             </td>
@@ -1281,8 +1281,8 @@ function attachmentFor(format, buffer, names) {
   };
 }
 
-export async function prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
-  const names = await reportFileNames(report);
+export async function prepareReportDelivery(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer, namesOverride = null) {
+  const names = namesOverride || await reportFileNames(report);
   try {
     const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer, names);
     return { files, attachments: [], deliveryMode: "links" };
@@ -1386,13 +1386,7 @@ async function prepareIncidentReport(report, options = {}) {
   return { ...details, ...delivery };
 }
 
-async function prepareAttendanceReport(report, options = {}) {
-  const attendanceReport = reportForContent(report, "attendance");
-  // Collect one report row per employee-day, then fill each row's
-  // "period" total (a per-employee sum that isn't knowable until every day
-  // has been read). buildCsv/buildPdf expand these into the spreadsheet grid.
-  const rows = [];
-  const summary = await streamReportRows(attendanceReport, options.reference, (row) => rows.push(row));
+async function prepareAttendanceFiles(attendanceReport, rows, summary, namesOverride = null) {
   applyPeriodTotals(rows);
   const wantsPdf = attendanceReport.formats.includes("pdf");
   // CSV is no longer offered in the report email; keep the legacy format
@@ -1444,7 +1438,7 @@ async function prepareAttendanceReport(report, options = {}) {
   const breakMs = Date.now() - breakT0;
 
   const uploadT0 = Date.now();
-  const delivery = await prepareReportDelivery(attendanceReport, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
+  const delivery = await prepareReportDelivery(attendanceReport, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer, namesOverride);
   const { files } = delivery;
   const uploadMs = Date.now() - uploadT0;
 
@@ -1462,6 +1456,56 @@ async function prepareAttendanceReport(report, options = {}) {
   );
 
   return { ...summary, ...delivery };
+}
+
+export function departmentAttendanceGroups(rows, departments = []) {
+  const groups = new Map();
+  for (const department of departments) {
+    groups.set(String(department._id), { name: department.departmentName, rows: [] });
+  }
+  for (const row of rows) {
+    const key = row.departmentKey || "unassigned";
+    if (!groups.has(key)) groups.set(key, { name: row.departmentKey ? row.department : "Unassigned", rows: [] });
+    groups.get(key).rows.push(row);
+  }
+  const usedNames = new Set();
+  const result = [];
+  for (const [key, group] of [...groups].sort((a, b) => a[1].name.localeCompare(b[1].name) || a[0].localeCompare(b[0]))) {
+    let name = safeDepartmentFileName(group.name) || `Department-${key.slice(-6)}`;
+    if (usedNames.has(name.toLowerCase())) name = `${name.slice(0, 92)}-${key.slice(-6)}`;
+    usedNames.add(name.toLowerCase());
+    result.push({ rows: group.rows, names: { main: name, breaks: `${name}-break-logs`, departmentScoped: true } });
+  }
+  return result;
+}
+
+async function prepareAttendanceReport(report, options = {}) {
+  const attendanceReport = reportForContent(report, "attendance");
+  const rows = [];
+  const summary = await streamReportRows(attendanceReport, options.reference, (row) => rows.push(row));
+  const target = attendanceReport.target || {};
+  const departmentFormats = attendanceReport.formats.filter((format) => format === "pdf" || format === "xlsx");
+  const splitByDepartment = target.scope === "organization" ||
+    (target.scope === "departments" && new Set((target.departmentIds || []).map(String)).size > 1);
+  if (!splitByDepartment || !departmentFormats.length) return prepareAttendanceFiles(attendanceReport, rows, summary);
+
+  const departmentQuery = { adminId: attendanceReport.adminId };
+  if (target.scope === "departments") departmentQuery._id = { $in: target.departmentIds.map(asObjectId) };
+  const departments = await Department.find(departmentQuery).select("_id departmentName").lean();
+  const groups = departmentAttendanceGroups(rows, departments);
+  if (!groups.length) return prepareAttendanceFiles(attendanceReport, rows, summary);
+  const prepared = [];
+  for (const group of groups) {
+    prepared.push(await prepareAttendanceFiles({ ...attendanceReport, formats: departmentFormats }, group.rows, { ...summary, rowCount: group.rows.length }, group.names));
+  }
+  const breakFormats = attendanceReport.formats.filter((format) => format === "breakPdf" || format === "breakXlsx");
+  if (breakFormats.length) prepared.push(await prepareAttendanceFiles({ ...attendanceReport, formats: breakFormats }, rows, summary));
+  return {
+    ...summary,
+    files: prepared.flatMap((item) => item.files),
+    attachments: prepared.flatMap((item) => item.attachments),
+    deliveryMode: prepared.some((item) => item.deliveryMode === "attachments") ? "attachments" : "links",
+  };
 }
 
 async function deliver(report, options = {}) {

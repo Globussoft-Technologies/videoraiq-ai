@@ -22,11 +22,30 @@ vi.mock("../../../core/v2/departments/departments.model.js", () => ({
 }));
 
 const { putMediaV2: putMedia } = await import("../../../core/v2/adminStorage/mediaStorage.v2.js");
-const { uploadReportFiles, publicUrlFor, prepareReportDelivery } = await import(
+const { uploadReportFiles, publicUrlFor, prepareReportDelivery, departmentAttendanceGroups } = await import(
   "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js"
 );
 
 const report = { title: "Email Test", adminId: "64b000000000000000000001" };
+
+describe("department attendance grouping", () => {
+  it("keeps department records separate even when their display names match", () => {
+    const rows = [
+      { departmentKey: "64b000000000000000000002", department: "Sales", employee: "A" },
+      { departmentKey: "64b000000000000000000003", department: "Sales", employee: "B" },
+      { departmentKey: "64b000000000000000000002", department: "Sales", employee: "C" },
+      { departmentKey: "", department: "-", employee: "D" },
+    ];
+    const groups = departmentAttendanceGroups(rows);
+    expect(groups.map((group) => group.rows.map((row) => row.employee))).toEqual([["A", "C"], ["B"], ["D"]]);
+    expect(groups.map((group) => group.names.main)).toEqual(["Sales", "Sales-000003", "Unassigned"]);
+  });
+
+  it("includes a selected department even when it has no attendance rows", () => {
+    const groups = departmentAttendanceGroups([], [{ _id: "64b000000000000000000002", departmentName: "Support" }]);
+    expect(groups).toEqual([{ rows: [], names: { main: "Support", breaks: "Support-break-logs", departmentScoped: true } }]);
+  });
+});
 
 describe("attendanceAutoEmailReport.uploadReportFiles", () => {
   it("uploads PDF, CSV and XLSX via putMedia with mediaType 'report' and returns path + public url for each", async () => {
@@ -86,6 +105,20 @@ describe("attendanceAutoEmailReport.uploadReportFiles", () => {
     expect(byFormat.breakXlsx.url).toContain("?download=Sales+%26+Support-break-logs.xlsx&reportName=department");
     expect(putMedia.mock.calls.map(([options]) => options.originalName)).toEqual([
       "Sales & Support.pdf", "Sales & Support.xlsx", "Sales & Support-break-logs.pdf", "Sales & Support-break-logs.xlsx",
+    ]);
+  });
+
+  it("uses each grouped department name for PDF and Excel links", async () => {
+    const scopedReport = { ...report, contentType: "attendance", target: { scope: "organization" } };
+    const groups = departmentAttendanceGroups([
+      { departmentKey: "64b000000000000000000002", department: "Sales", employee: "A" },
+      { departmentKey: "64b000000000000000000003", department: "Support", employee: "B" },
+    ]);
+    const files = (await Promise.all(groups.map((group) =>
+      uploadReportFiles(scopedReport, null, Buffer.from("pdf"), Buffer.from("xlsx"), null, null, group.names)
+    ))).flat();
+    expect(files.map((file) => new URL(file.url).searchParams.get("download"))).toEqual([
+      "Sales.pdf", "Sales.xlsx", "Support.pdf", "Support.xlsx",
     ]);
   });
 
