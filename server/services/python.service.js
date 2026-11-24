@@ -609,7 +609,8 @@ class PythonService {
     if (enable && channel?.subscriptionPaused) {
       throw new Error('Detection is paused due to subscription expiry');
     }
-    if (enable && channel?.detectionBulkPaused && type !== 'faceAuthenticationSettings') {
+            if (enable && channel?.detectionBulkPaused && type !== 'faceAuthenticationSettings' &&
+        !channel.detectionBulkPauseExceptions?.includes(type)) {
       throw new Error('Resume all detections before starting a detector on a paused camera');
     }
     if (enable) {
@@ -1424,7 +1425,7 @@ class PythonService {
         { timeout: 8000, headers: aiAuthHeaders() },
       );
       const logics = response?.data?.active_logics;
-      return Array.isArray(logics) ? logics : [];
+      return Array.isArray(logics) ? logics : null;
     } catch (error) {
       // 404 is a definite answer: DS has no pipeline for this camera at all.
       if (error?.response?.status === 404) return [];

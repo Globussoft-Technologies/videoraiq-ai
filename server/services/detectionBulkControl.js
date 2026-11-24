@@ -111,14 +111,15 @@ async function runBulkJob(owner, job, lease) {
       for (const item of job.items) {
         await lease.assertOwned();
         const camera = await Channel.findOne({ _id: item.cameraId, userId: String(owner.user_id) }).setOptions({ includeInactive: true });
-        if (!camera) continue;
+        if (!camera || (camera.detectionBulkPaused && !camera.detectionBulkPauseExceptions.length)) continue;
         if (!camera.detectionBulkPaused) {
           camera.detectionResumeTypes = Object.entries(camera.detections || {})
             .filter(([type, link]) => type !== 'faceAuthenticationSettings' && link?.id && link.enabled)
             .map(([type]) => type);
           camera.detectionBulkPaused = true;
-          await camera.save();
         }
+        camera.detectionBulkPauseExceptions = [];
+        await camera.save();
       }
     }
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -138,7 +139,13 @@ async function runBulkJob(owner, job, lease) {
             const camera = await Channel.findOne({ _id: item.cameraId, userId: String(owner.user_id) }).setOptions({ includeInactive: true });
             if (!camera) throw new Error('Camera was removed before the action completed');
             if (job.action === 'pause') {
-              assertDetectionServiceSuccess(await pythonService.stopAdminPipelines(String(owner._id), 'detections', [item.cameraId]));
+              try {
+                assertDetectionServiceSuccess(await pythonService.stopNewDetection(item.cameraId, String(camera.nvrId), [], String(owner._id)));
+              } catch (error) {
+                // A retry can reach a camera whose pipeline has already stopped.
+                const activeLogics = await pythonService.getCameraActiveLogics(item.cameraId, String(owner._id));
+                if (!Array.isArray(activeLogics) || activeLogics.length) throw error;
+              }
               for (const [type, link] of Object.entries(camera.detections || {})) {
                 if (type !== 'faceAuthenticationSettings' && link?.id) link.enabled = false;
               }
@@ -181,6 +188,7 @@ async function runBulkJob(owner, job, lease) {
                 if (enable) item.completedTypes = [...(item.completedTypes || []), type];
               }
               camera.detectionBulkPaused = false;
+              camera.detectionBulkPauseExceptions = [];
               camera.subscriptionPaused = false;
               camera.detectionResumeTypes = [];
             }
@@ -240,7 +248,8 @@ export async function bulkDetectionControl(req, res) {
     const freshOwner = await Admin.findById(owner._id);
     const previous = freshOwner.detectionBulkJob;
     const filter = { userId: String(owner.user_id) };
-    if (previous?.status === 'failed' && previous.action === action) {
+    // Acquiring the lock also proves a previous running job no longer owns it.
+    if (previous?.action === action && ['failed', 'running'].includes(previous.status)) {
       filter._id = { $in: previous.items.filter(item => item.status !== 'success').map(item => item.cameraId) };
     }
     let cameras = await Channel.find(filter).setOptions({ includeInactive: true }).select('_id name customName detections detectionBulkPaused');

@@ -345,7 +345,7 @@ export const toggleChannelDetection = async ({ channelId, detectionType, enable 
       err?.response?.data?.body?.message?.toLowerCase()?.includes('failed to start detection') ||
       !err?.response;
 
-    if (isSpecialType && isDsFailure) {
+    if (isSpecialType && isDsFailure && err?.response?.status !== 503) {
       const fallbackRes = await axios.put(`${Api_url}/channel/${channelId}`, {
         detections: {
           [detectionType]: {

@@ -790,7 +790,7 @@ class DetectionSettingService {
       // the current page filters. Removing links also removes local schedules
       // and overrides. Face-auth belongs to the separate camera-type action.
       await Channel.updateMany(scope, [{ $set: {
-        detectionBulkPaused: false, detectionResumeTypes: [],
+        detectionBulkPaused: false, detectionBulkPauseExceptions: [], detectionResumeTypes: [],
         detections: { $arrayToObject: { $filter: {
           input: { $objectToArray: { $ifNull: ["$detections", {}] } },
           as: "link", cond: { $eq: ["$$link.k", "faceAuthenticationSettings"] },

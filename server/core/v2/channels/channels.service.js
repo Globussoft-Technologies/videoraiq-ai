@@ -187,6 +187,7 @@ class ChannelService {
       const cameraId = req.params.id;
       const updates = { ...req.body };
       delete updates.detectionBulkPaused;
+      delete updates.detectionBulkPauseExceptions;
       delete updates.subscriptionPaused;
       delete updates.detectionResumeTypes;
 
@@ -2284,9 +2285,6 @@ class ChannelService {
         }
       }
 
-      if (enable && channel.detectionBulkPaused && detectionType !== 'faceAuthenticationSettings') {
-        return res.status(409).json(Response.userFailResp('Resume all detections before enabling an individual detector'));
-      }
       // Check if detection setting exists and is linked
       const existingLink = channel?.detections?.[detectionType];
       logger.debug(
@@ -2296,7 +2294,10 @@ class ChannelService {
       if (existingLink && existingLink?.id) {
         // Check if already in desired state
         const currentStatus = channel?.detections?.[detectionType]?.enabled;
-        if (currentStatus === enable) {
+        const hasBulkPauseException = channel.detectionBulkPauseExceptions.includes(detectionType);
+        const needsBulkPauseException = enable && channel.detectionBulkPaused &&
+          !channel.subscriptionPaused && detectionType !== 'faceAuthenticationSettings';
+        if (currentStatus === enable && hasBulkPauseException === needsBulkPauseException) {
           return res.status(200).json(
             Response.userSuccessResp(
               `Detection is already ${enable ? "enabled" : "disabled"}`,
@@ -2312,6 +2313,11 @@ class ChannelService {
 
         // Linked: Update enabled status
         channel.detections[detectionType].enabled = enable;
+        if (needsBulkPauseException) {
+          channel.detectionBulkPauseExceptions.addToSet(detectionType);
+        } else if (hasBulkPauseException) {
+          channel.detectionBulkPauseExceptions.pull(detectionType);
+        }
 
         // Record WHY this changed. A schedule-governed detector is force-synced
         // by the one-minute runner, which cannot tell a deliberate toggle from
@@ -2481,6 +2487,19 @@ class ChannelService {
       }
     } catch (error) {
       logger.error(error);
+      if (error?.response?.status === 503) {
+        const atCapacity = /\binsufficient free VRAM\b/i.test(error.response.data?.detail ?? error.message);
+        return res.status(503).json({
+          statusCode: 503,
+          body: {
+            status: "failed",
+            errorCode: atCapacity ? "DETECTION_GPU_CAPACITY" : "DETECTION_SERVICE_UNAVAILABLE",
+            message: atCapacity
+              ? "The detection server has insufficient GPU memory to start this camera. Try again when GPU capacity is available."
+              : "Detection service is temporarily unavailable. Try again shortly.",
+          },
+        });
+      }
       return res
         .status(500)
         .json(Response.errorResp("Failed to start detection", error.message));

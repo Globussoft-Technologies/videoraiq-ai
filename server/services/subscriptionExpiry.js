@@ -37,6 +37,7 @@ export async function expireSubscription(adminId) {
       $set: {
         subscriptionPaused: true,
         detectionBulkPaused: true,
+        detectionBulkPauseExceptions: [],
         checkType: 'none',
         detections: { $arrayToObject: { $map: {
           input: { $objectToArray: { $ifNull: ['$detections', {}] } },

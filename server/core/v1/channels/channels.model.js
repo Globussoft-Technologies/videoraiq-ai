@@ -141,6 +141,7 @@ const ChannelSchema = new mongoose.Schema(
   {
     subscriptionPaused: { type: Boolean, default: false },
     detectionBulkPaused: { type: Boolean, default: false },
+    detectionBulkPauseExceptions: { type: [String], default: [] },
     detectionResumeTypes: { type: [String], default: [] },
     nvrId: {
       type: mongoose.Schema.Types.ObjectId,

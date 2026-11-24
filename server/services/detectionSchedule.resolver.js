@@ -1,5 +1,5 @@
 import GlobalSchedule from "../core/v1/globalSchedule/globalSchedule.model.js";
-import { DETECTION_TYPES } from "../constants/detectionTypes.js";
+import { DETECTION_TYPES, TYPE_MAP } from "../constants/detectionTypes.js";
 import logger from "../utils/logger.js";
 import {
   isScheduleOpeningNow,
@@ -49,7 +49,7 @@ export const SCHEDULE_SOURCE = {
  * timezone validation can still hold one, so fall back to the default and say
  * so rather than taking the sweep down.
  */
-const getNowInScheduleTimezone = (timezone) => {
+const getNowInScheduleTimezone = (timezone, at = new Date()) => {
   let zone = timezone;
   if (!isValidTimezone(zone)) {
     logger.error(
@@ -65,7 +65,7 @@ const getNowInScheduleTimezone = (timezone) => {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-  }).formatToParts(new Date());
+  }).formatToParts(at);
 
   const getPart = (type) => parts.find((part) => part.type === type)?.value;
 
@@ -85,12 +85,13 @@ const getNowInScheduleTimezone = (timezone) => {
  * after midnight belong to Tuesday's timeline but were configured on Monday.
  * Normal windows evaluate exactly as they always did.
  */
-export const isScheduleActiveNow = (schedule) => {
+export const isScheduleActiveNow = (schedule, at = new Date()) => {
   if (!schedule || schedule.mode === "always") return true;
   if (schedule.mode !== "custom") return true;
 
   const { day, minutes } = getNowInScheduleTimezone(
     schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
+    at,
   );
 
   return isWithinScheduleDays(schedule.days, day, minutes);
@@ -339,8 +340,9 @@ export const createGlobalScheduleIndex = (documents = []) => {
  * Fails safe: if the query throws, the index comes back empty, so every camera
  * falls back to its camera-specific schedule (existing behaviour) rather than
  * the runner dying or flipping cameras on a partial read.
+ * Incident writes use strict mode so a failed lookup cannot bypass an NVR schedule.
  */
-export const buildGlobalScheduleIndex = async (filter = {}) => {
+export const buildGlobalScheduleIndex = async (filter = {}, { strict = false } = {}) => {
   try {
     const query = { enabled: true };
     if (filter.userId) query.userId = filter.userId;
@@ -349,6 +351,7 @@ export const buildGlobalScheduleIndex = async (filter = {}) => {
     const documents = await GlobalSchedule.find(query).lean();
     return createGlobalScheduleIndex(documents);
   } catch (error) {
+    if (strict) throw error;
     logger.error(
       `[GLOBAL_SCHEDULE] Failed to load global schedules, falling back to camera-specific schedules: ${error?.message}`,
     );
@@ -383,18 +386,21 @@ export const resolveEffectiveSchedule = ({
  *
  * Pass `index` (from buildGlobalScheduleIndex) when resolving many cameras in a
  * loop; without it this issues one scoped query for the camera's own NVR.
+ * `scheduleTime` evaluates the weekly window at an event's capture time.
+ * Pauses and manual overrides still use the current camera state.
  *
  * Returns { active, schedule, source }.
  */
 export const resolveDesiredDetectionState = async (
   channel,
   settingType,
-  { index } = {},
+  { index, scheduleTime, strict = false } = {},
 ) => {
   if (channel?.subscriptionPaused) {
     return { active: false, source: 'subscription-expired', schedule: channel?.detections?.[settingType]?.schedule };
   }
-  if (channel?.detectionBulkPaused && settingType !== 'faceAuthenticationSettings') {
+  if (channel?.detectionBulkPaused && settingType !== 'faceAuthenticationSettings' &&
+      !channel.detectionBulkPauseExceptions?.includes(settingType)) {
     return { active: false, source: 'bulk-pause', schedule: channel?.detections?.[settingType]?.schedule };
   }
   const cameraSchedule = channel?.detections?.[settingType]?.schedule;
@@ -404,7 +410,7 @@ export const resolveDesiredDetectionState = async (
     (await buildGlobalScheduleIndex({
       userId: channel?.userId,
       nvrId: channelNvrId(channel),
-    }));
+    }, { strict }));
 
   const globalSchedule = globalIndex.find(channel, settingType);
   const { schedule, source } = resolveEffectiveSchedule({
@@ -425,5 +431,24 @@ export const resolveDesiredDetectionState = async (
     };
   }
 
-  return { active: isScheduleActiveNow(schedule), schedule, source };
+  return { active: isScheduleActiveNow(schedule, scheduleTime), schedule, source };
+};
+
+const settingTypeByIncident = new Map(Object.entries(TYPE_MAP).map(
+  ([settingType, incidentType]) => [incidentType, settingType],
+));
+settingTypeByIncident.set("genderAgeCount", "genderAgeDetectionSettings");
+settingTypeByIncident.set("tableOccupancyDetection", "tableOccupancyDetectionSettings");
+
+export const resolveIncidentDetectionSchedule = async (channel, { incidentType, timeOfIncident }) => {
+  const settingType = settingTypeByIncident.get(incidentType);
+  const detection = channel?.detections?.[settingType];
+  if (!detection?.id && !detection?.schedule) return null;
+
+  const captureTime = timeOfIncident == null ? null : new Date(timeOfIncident);
+  const scheduleTime = captureTime && Number.isFinite(captureTime.getTime())
+    ? captureTime
+    : new Date();
+  const desired = await resolveDesiredDetectionState(channel, settingType, { scheduleTime, strict: true });
+  return { ...desired, scheduleTime };
 };

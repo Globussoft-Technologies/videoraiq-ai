@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import Admin from '../core/v1/admin/admin.model.js';
+import logger from '../utils/logger.js';
 
 const LEASE_MS = 120_000;
 export async function acquireDetectionControlLease(adminId, kind) {
@@ -9,19 +10,24 @@ export async function acquireDetectionControlLease(adminId, kind) {
     { 'detectionControlLock.expiresAt': { $lte: new Date() } },
   ] }, { $set: { detectionControlLock: { token, kind, expiresAt: new Date(Date.now() + LEASE_MS) } } });
   if (!owner) return null;
-  let lost = false;
   const filter = { _id: adminId, 'detectionControlLock.token': token };
+  const activeFilter = () => ({ ...filter, 'detectionControlLock.expiresAt': { $gt: new Date() } });
   const timer = setInterval(async () => {
     try {
-      const result = await Admin.updateOne(filter, { $set: { 'detectionControlLock.expiresAt': new Date(Date.now() + LEASE_MS) } });
-      if (!result.matchedCount) lost = true;
-    } catch { lost = true; }
+      const result = await Admin.updateOne(activeFilter(), { $set: { 'detectionControlLock.expiresAt': new Date(Date.now() + LEASE_MS) } });
+      if (!result.matchedCount) {
+        clearInterval(timer);
+        logger.warn(`Detection control lock expired or changed during ${kind} for admin ${adminId}`);
+      }
+    } catch (error) {
+      logger.warn(`Detection control lock renewal failed during ${kind} for admin ${adminId}: ${error.message}`);
+    }
   }, 15_000);
   timer.unref?.();
   return {
     token,
     async assertOwned() {
-      if (lost || !await Admin.exists({ ...filter, 'detectionControlLock.expiresAt': { $gt: new Date() } })) {
+      if (!await Admin.exists(activeFilter())) {
         throw new Error('Bulk action was interrupted. Please retry the unfinished cameras.');
       }
     },

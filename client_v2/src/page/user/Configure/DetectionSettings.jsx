@@ -1435,8 +1435,20 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
           <input
+            type="search"
+            name="detection-camera-search"
+            aria-label="Filter cameras"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            onChange={event => {
+              // Password managers can autofill an unrelated field when the verification prompt opens.
+              if (document.activeElement !== event.currentTarget) return;
+              setSearch(event.currentTarget.value);
+              setPage(0);
+            }}
             placeholder="Filter cameras…"
             style={{
               width: '100%', height: 40, padding: '0 12px 0 36px', boxSizing: 'border-box',
@@ -1484,7 +1496,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
                 aria-label="Reset configuration"
                 aria-expanded={resetMenuOpen}
                 disabled={bulkBusy || resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
-                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))', background: resetMenuOpen ? 'var(--bg2)' : undefined }}
               >
                 <ListRestart size={15} /> Reset
@@ -1530,7 +1542,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             aria-label={retryBulk ? `Retry failed ${nextBulkAction}` : nextBulkAction === 'resume' ? 'Resume all detections' : 'Pause all detections'}
             disabled={bulkBusy || bulkStateApi.loading || Boolean(bulkStateApi.error) || !bulkStateApi.data?.cameraCount || resettingAll || detectionActionLoading || Boolean(resetLoadingId) || Boolean(checkTypeSavingId)}
             onClick={() => { setResetToken(''); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); setBulkAction(nextBulkAction); }}
-            className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--bg2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--crit)]/30 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderColor: 'color-mix(in srgb, var(--crit) 35%, var(--bd))' }}>
             {bulkBusy || bulkStateApi.loading ? <Loader2 size={15} className="animate-spin" /> : nextBulkAction === 'resume' ? <Play size={15} /> : <Pause size={15} />}
             {bulkBusy ? `${bulkJob?.action === 'resume' ? 'Resuming' : 'Pausing'} ${bulkJob?.completed || 0}/${bulkJob?.total || 0}` : retryBulk ? 'Retry failed' : nextBulkAction === 'resume' ? 'Resume all' : 'Pause all'}
@@ -1667,7 +1679,10 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
       <ConfirmationModal
         open={Boolean(resetAllTarget || bulkAction) && !resetToken}
         title={bulkAction ? `Verify password to ${bulkAction}` : 'Verify password to reset'}
-        message={<div className="space-y-3 text-left">
+        message={<form className="space-y-3 text-left" autoComplete="off" onSubmit={event => {
+          event.preventDefault();
+          handleVerifyResetPassword();
+        }}>
           <p>Enter your account password to continue. You will confirm the {bulkAction || 'reset'} next.</p>
           <div className="relative">
             <input type={showResetPassword ? 'text' : 'password'} autoComplete="off"
@@ -1675,7 +1690,6 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
               readOnly={!resetPasswordEditable} onFocus={() => setResetPasswordEditable(true)}
               value={resetPassword} onChange={event => setResetPassword(event.target.value)}
-              onKeyDown={event => { if (event.key === 'Enter') handleVerifyResetPassword(); }}
               className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] py-2 pl-3 pr-10 text-[var(--tx)]" />
             <button type="button" aria-label={showResetPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showResetPassword} onClick={() => setShowResetPassword(value => !value)}
@@ -1683,7 +1697,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
-        </div>}
+        </form>}
         confirmLabel="Verify password" loading={verifyingReset}
         onClose={() => { if (!verifyingReset) { setResetAllTarget(null); setBulkAction(null); setResetToken(''); setResetPassword(''); setShowResetPassword(false); setResetPasswordEditable(false); } }}
         onConfirm={handleVerifyResetPassword}

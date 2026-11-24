@@ -7,6 +7,7 @@ import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistan
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
 import logger from "../../../utils/logger.js";
+import { resolveIncidentDetectionSchedule } from "../../../services/detectionSchedule.resolver.js";
 import nvrModel from "../NVR/nvr.model.js";
 import incidentsValidate from "./incidents.validate.js";
 import mongoose from "mongoose";
@@ -496,6 +497,12 @@ class IncidentsService {
         (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
         return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
       }
+      const incidentSchedule = await resolveIncidentDetectionSchedule(channel, req.body);
+      if (incidentSchedule?.active === false) {
+        return res.status(200).json(Response.userSuccessResp(
+          "Detection is inactive for this incident", { accepted: false, ignored: true },
+        ));
+      }
       if (incidentType === 'personSittingOnCan') {
         const allowed = await getAllowedDetectionTypes({ adminId, userId });
         const configured = channel?.detections?.personSittingOnCanDetectionSettings;
@@ -602,9 +609,13 @@ class IncidentsService {
         }
       }
 
-      const currentTime = ['personPostureDetection', 'cansStackDetection', 'personSittingOnCan'].includes(incidentType) && req.body.timeOfIncident
-        ? new Date(req.body.timeOfIncident)
-        : new Date();
+      const usesCaptureTime = ['genderAgeDetection', 'personPostureDetection', 'cansStackDetection', 'personSittingOnCan'].includes(incidentType);
+      let currentTime = new Date();
+      if (incidentSchedule?.schedule?.mode === "custom") {
+        currentTime = incidentSchedule.scheduleTime;
+      } else if (usesCaptureTime && req.body.timeOfIncident) {
+        currentTime = new Date(req.body.timeOfIncident);
+      }
 
       // Check if the incidentType needs special update logic. Requires a
       // real channelId — live-demo incidents without one skip straight to

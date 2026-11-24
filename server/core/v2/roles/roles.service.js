@@ -249,8 +249,8 @@ class RolesServices{
                 return res.status(400).send(Response.accessDeniedResp('Default roles cannot be edited.'));
             }
             if (memberId) {
-                const member = await userModel.findById(memberId);
-                if (String(member?.roleIds) === String(roleId)) {
+                const member = await userSchema.findById(memberId).select('roleIds');
+                if (!member || String(member.roleIds) === String(existingRole._id)) {
                     return res.status(400).send(Response.accessDeniedResp('You cannot edit your own role.'));
                 }
             }

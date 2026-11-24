@@ -95,6 +95,7 @@ class ChannelService {
       const cameraId = req.params.id;
       const updates = { ...req.body };
       delete updates.detectionBulkPaused;
+      delete updates.detectionBulkPauseExceptions;
       delete updates.subscriptionPaused;
       delete updates.detectionResumeTypes;
 

@@ -516,6 +516,9 @@ class UsersService {
           if (!userId) {
             return res.status(400).json(Response.userFailResp("Missing userId in query"));
           }
+          if (memberId && String(memberId).toLowerCase() === String(userId).toLowerCase()) {
+            return res.status(400).json(Response.accessDeniedResp("You cannot edit your own account."));
+          }
       
           
           // Check if admin is valid
