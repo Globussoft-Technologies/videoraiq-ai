@@ -82,6 +82,16 @@ const appendIndustrialDetectors = (
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
       if (name === 'machineOpsDetectionSettings') {
+        if (stockSettings.machine_type === 'roller') {
+          detectors.push({
+            name,
+            machine_type: 'roller',
+            machine_name: stockSettings.machine_name,
+            severity: severity ?? 'low',
+            trigger_notification: stockSettings.trigger_notification ?? false,
+          });
+          continue;
+        }
         detectors.push({ name, severity: severity ?? 'low',
           trigger_notification: stockSettings.trigger_notification ?? true,
           machines: (stockSettings.machines || []).map(machine => ({

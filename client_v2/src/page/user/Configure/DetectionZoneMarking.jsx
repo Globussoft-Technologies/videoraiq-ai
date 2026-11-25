@@ -40,7 +40,7 @@ import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { LIGHTING_SETTING_TYPE, lightingZoneSettings, lightingZoneErrors, lightingZonePayload } from '../../../helpers/lightingDetection';
 import { HYGIENE_SETTING_TYPE, hygieneZoneSettings, hygieneZoneErrors, hygieneZonePayload } from '../../../helpers/hygieneDetection';
 import { EMOTION_SETTING_TYPE, emotionZoneSettings, emotionAlertGroupsError } from '../../../helpers/emotionDetection';
-import { MACHINE_OPS_SETTING_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId, machineOpsSharedZones } from '../../../helpers/machineOpsDetection?v=shared-zones-2';
+import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE, nextMachineOpsZone, machineOpsMachines, groupMachineOpsZones, machineOpsId, machineOpsSharedZones } from '../../../helpers/machineOpsDetection?v=shared-zones-2';
 import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../helpers/genderAgeDetection';
 import {
   createZoneDetectionSetting,
@@ -82,6 +82,7 @@ export default function DetectionZoneMarking({
   zoneSettingsOpen = false,
   onZoneSettingsClose,
   hideZoneControls = false,
+  machineType,
 }) {
   // Persisted zone/detection-setting deletion (per-zone trash, Reset
   // Detection UI) is gated on detectionSettings.delete â€” a write-only role
@@ -127,7 +128,10 @@ export default function DetectionZoneMarking({
   }, [selectedSettingType, camera?._id]);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
-  const isZoneFreeDetection = hideZoneControls || isCansStackDetectionType(activeType?.settingType || selectedSettingType);
+  const isMachineOps = activeType?.settingType === MACHINE_OPS_SETTING_TYPE;
+  const savedRoller = isMachineOps && activeType?.setting?.settings?.machine_type === ROLLER_MACHINE_TYPE;
+  const isRoller = (machineType ?? (savedRoller ? ROLLER_MACHINE_TYPE : '')) === ROLLER_MACHINE_TYPE;
+  const isZoneFreeDetection = hideZoneControls || isRoller || isCansStackDetectionType(activeType?.settingType || selectedSettingType);
   const isAttendanceDetection = isAttendanceDetectionType(activeType?.settingType || activeType?.label);
   const isAttendanceCamera = isAttendanceDetection && ['checkin', 'checkout'].includes(camera?.checkType);
   const attendanceRecipientsDisabled = isAttendanceDetection && (!canEditRecipients || cameraTypeSaving ||
@@ -148,7 +152,6 @@ export default function DetectionZoneMarking({
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
   const isLighting = activeType?.settingType === LIGHTING_SETTING_TYPE;
   const isEmotion = activeType?.settingType === EMOTION_SETTING_TYPE;
-  const isMachineOps = activeType?.settingType === MACHINE_OPS_SETTING_TYPE;
   const isGenderAge = activeType?.settingType === GENDER_AGE_SETTING_TYPE;
   const hasAuxiliaryLine = isCheckInOut;
   const isBlurredCameraDetection = activeType?.settingType === 'blurredCameraDetectionSettings';
@@ -648,7 +651,10 @@ export default function DetectionZoneMarking({
       : null;
     if (isLighting && nextZones.some(zone => Object.keys(lightingZoneErrors(zone)).length)) throw new Error('Please check lighting settings for each zone before saving.');
     if (isMachineOps) nextZones = machineOpsSharedZones(nextZones);
-    const machineSettings = isMachineOps ? { machines: machineOpsMachines(nextZones, videoSize.w, videoSize.h) } : {};
+    const machineSettings = isMachineOps ? {
+      machines: machineOpsMachines(nextZones, videoSize.w, videoSize.h),
+      ...(savedRoller ? { machine_type: null, machine_name: null, trigger_notification: true } : {}),
+    } : {};
     const machineIdsByZone = isMachineOps ? Object.fromEntries(groupMachineOpsZones(nextZones).flatMap(group =>
       group.entries.map(({ index }) => [index, machineOpsId(group.name)]))) : {};
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
@@ -1208,7 +1214,7 @@ export default function DetectionZoneMarking({
               <>
                 <img
                   src={snapshotUrl}
-                  alt="Last available camera frame for zone drawing"
+                  alt={isRoller ? 'Last available camera frame' : 'Last available camera frame for zone drawing'}
                   onLoad={event => setVideoSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
                   onError={() => { setSnapshotFailed(true); setVideoSize({ w: 0, h: 0 }); }}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
@@ -1220,7 +1226,7 @@ export default function DetectionZoneMarking({
                     style={{ position: 'absolute', bottom: 10, left: 10, maxWidth: 'calc(100% - 20px)', zIndex: 3, padding: '7px 9px', borderRadius: 8, background: 'rgba(15,23,42,.4)', backdropFilter: 'blur(3px)', color: '#fff', fontSize: 12, border: '1px solid rgba(255,255,255,.2)' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>Live stream unavailable. Configure zones using this snapshot.</span>
+                      <span>{isRoller ? 'Live stream unavailable. Showing the last saved snapshot.' : 'Live stream unavailable. Configure zones using this snapshot.'}</span>
                       <button type="button" aria-label={snapshotNoticeExpanded ? 'Collapse snapshot details' : 'Expand snapshot details'}
                         aria-expanded={snapshotNoticeExpanded} onClick={() => setSnapshotNoticeExpanded(previous => !previous)}
                         style={{ flexShrink: 0, display: 'flex', padding: 3, background: 'transparent', border: 0, color: 'inherit', cursor: 'pointer' }}>
@@ -1232,7 +1238,7 @@ export default function DetectionZoneMarking({
                       </button>
                     </div>
                     {snapshotNoticeExpanded && <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5 }}>
-                      This is a saved image, not a live view. You can draw and save detection zones on it.
+                      {!isRoller && 'This is a saved image, not a live view. You can draw and save detection zones on it.'}
                       <div>{camera.latestSnapshot.source === 'playback'
                         ? `Playback frame ${camera.latestSnapshot.recordingTimeEstimated ? 'near' : 'at'} ${shortDateTime(camera.latestSnapshot.recordedAt)} ? Saved ${shortDateTime(camera.latestSnapshot.capturedAt)}`
                         : `Snapshot captured at ${shortDateTime(camera.latestSnapshot.capturedAt)}`}</div>

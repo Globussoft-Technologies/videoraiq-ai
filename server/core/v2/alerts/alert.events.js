@@ -90,6 +90,9 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
       console.warn(`No detection config found for type: ${detectionType}`, { detectionType, channelId });
       return;
     }
+    const detectionSettings = matchedDetection?.id?.settings || {};
+    const isRoller = detectionType === 'machineOpsDetection' && detectionSettings.machine_type === 'roller';
+    if (isRoller && detectionSettings.trigger_notification !== true) return;
 
     // Alerts (mail / WhatsApp / Telegram) should show the detection setting's
     // name — what the user configured in the frontend — not the raw
@@ -113,7 +116,7 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
       const threshold = matchedZone?.threshold_sec;
       return Number.isFinite(Number(threshold)) ? Number(threshold) : null;
     };
-    const detectionZoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+    const detectionZoneConfigs = isRoller ? [] : (detectionSettings.zone_configs || []);
     const incidentZoneName = incidentData?.zone || incidentData?.zoneName || saved?.zone || saved?.zoneName;
     const loiteringThreshold = resolveZoneThreshold(detectionZoneConfigs, incidentZoneName);
     // Step 4: Group alerts by recipientModel
@@ -232,7 +235,6 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
       if (phoneNumbers?.length || resolvedAdminId) {
         const zoneName = String(incidentZoneName || '').trim().toLowerCase();
         const zone = detectionZoneConfigs.find(item => String(item.name || '').trim().toLowerCase() === zoneName);
-        const detectionSettings = matchedDetection?.id?.settings || {};
         const recipientIds = Array.isArray(zone?.whatsappRecipientIds)
           ? zone.whatsappRecipientIds.map(String)
           : (!zone && Array.isArray(detectionSettings.whatsappRecipientIds)
@@ -254,11 +256,9 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
     // earlier default-channel flow.
     try {
       const telegramIncident = incidentData || saved;
-      const detectionSettings = matchedDetection?.id?.settings || {};
-      const zoneConfigs = detectionSettings?.zone_configs || [];
       const matchingZoneConfig = resolveTelegramZoneConfig({
         incidentZone: telegramIncident?.zone || telegramIncident?.zoneName,
-        zoneConfigs,
+        zoneConfigs: detectionZoneConfigs,
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
         adminTimezone: adminTz,
       });
@@ -274,16 +274,15 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         matchingZoneConfig,
         detectionSettings,
       });
-      // Can Stack stores its optional schedule at detector level because it
-      // deliberately has no polygon zones. Zone-based detectors continue to
-      // use the matched zone schedule.
+      // Full-frame detectors use the schedule saved on the detector.
       const telegramWindowConfig = matchingZoneConfig || detectionSettings?.schedule;
       const hasEvaluableWindow =
         Boolean(telegramWindowConfig?.startTime) &&
         Boolean(telegramWindowConfig?.endTime) &&
         Boolean(telegramIncident?.timeOfIncident) &&
         Boolean(adminTz);
-      const windowOpen = vehicleChatIds !== null ? vehicleChatIds.length > 0 : hasEvaluableWindow
+      const hasRollerWindow = isRoller && Boolean(telegramWindowConfig?.startTime || telegramWindowConfig?.endTime);
+      const windowOpen = vehicleChatIds !== null ? vehicleChatIds.length > 0 : hasEvaluableWindow || hasRollerWindow
         ? isIncidentWithinZoneWindow(
           telegramWindowConfig,
           telegramIncident?.timeOfIncident,

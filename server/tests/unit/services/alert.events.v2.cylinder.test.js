@@ -65,6 +65,49 @@ const queryResult = (value) => ({
 
 beforeEach(() => vi.clearAllMocks());
 
+describe('Roller incident alerts', () => {
+  it.each([
+    ['10:00', true, true],
+    ['20:00', true, false],
+    ['10:00', false, false],
+  ])('routes notifications at %s UTC with notifications enabled=%s', async (time, enabled, sendTelegram) => {
+    const detections = {
+      machineOpsDetectionSettings: {
+        id: {
+          settings: {
+            machine_type: 'roller',
+            trigger_notification: enabled,
+            whatsappRecipientIds: ['roller-recipient'],
+            telegramChatIds: ['roller-chat'],
+            schedule: { startTime: '09:00 AM', endTime: '05:00 PM' },
+            zone_configs: [{ name: 'Old zone', whatsappRecipientIds: ['old-recipient'], telegramChatIds: ['old-chat'] }],
+          },
+        },
+      },
+    };
+    Channel.findOne.mockReturnValue({ populate: () => ({ lean: async () => ({ detections }) }) });
+    NVR.findOne.mockResolvedValue({ _id: 'nvr-1' });
+    const incident = { _id: 'incident-1', zone: 'Old zone', timeOfIncident: new Date(`2026-09-15T${time}:00Z`) };
+    Incident.findOne.mockReturnValue({ populate: () => ({ lean: async () => incident }) });
+    Recipient.find.mockReturnValue(queryResult([]));
+
+    await triggerAlertOnIncident({
+      detectionType: 'machineOpsDetection', nvrId: 'nvr-1', channelId: 'channel-1', saved: incident, adminId: 'admin-1',
+    });
+
+    if (enabled) {
+      expect(sendIncidentWhatsApp).toHaveBeenCalledWith(incident, [], expect.anything(), expect.anything(), 'UTC', 'admin-1', ['roller-recipient']);
+    } else {
+      expect(sendIncidentWhatsApp).not.toHaveBeenCalled();
+    }
+    if (sendTelegram) {
+      expect(TelegramService.sendIncident).toHaveBeenCalledWith(incident, expect.anything(), expect.anything(), 'admin-1', 'UTC', { preferredChatIds: ['roller-chat'] });
+    } else {
+      expect(TelegramService.sendIncident).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe("v2 cylinder incident alerts", () => {
   it.each([
     [undefined, undefined, undefined],

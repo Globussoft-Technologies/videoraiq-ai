@@ -1675,7 +1675,7 @@ export default function DetectionDetailPanel({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-        {!isBlurredCameraDetection && !isCansStackDetection && <button
+        {!isBlurredCameraDetection && !isCansStackDetection && onEditZones && <button
           type="button"
           onClick={onEditZones}
           disabled={!canEdit}

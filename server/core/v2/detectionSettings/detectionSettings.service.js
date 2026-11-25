@@ -358,6 +358,10 @@ const applyNormalizedTelegramSettings = (target, incomingSettings = {}) => {
   if (target.settingType === "loadingUnloadingStockCountingSettings" && settings.settingMode === null) {
     delete settings.settingMode;
   }
+  if (target.settingType === "machineOpsDetectionSettings" && settings.machine_type === null) {
+    delete settings.whatsappRecipientIds;
+    delete settings.schedule;
+  }
   target.settings = settings;
 
   target.markModified("settings");
@@ -1008,10 +1012,6 @@ class DetectionSettingService {
         const validation = sackSettingsSchema.validate(value.settings, { convert: false });
         if (validation.error) return res.status(400).json(Response.userFailResp('Validation Failed', validation.error.message));
       }
-      if ((value.settingType || settingType) === 'machineOpsDetectionSettings' && value.settings) {
-        const machineValidation = machineOpsSettingsSchema.validate(value.settings, { convert: false });
-        if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
-      }
       const genderAgeValidation = DetectionSettingsValidation.validateGenderAgeSettings(settingType, value.settings);
       if (genderAgeValidation.error) return res.status(400).json(Response.userFailResp("Validation Failed", genderAgeValidation.error.message));
       if (genderAgeValidation.value && value.settings) value.settings = genderAgeValidation.value;
@@ -1034,7 +1034,13 @@ class DetectionSettingService {
 
       // Update nested settings
       if (value.settings && typeof value.settings === "object") {
-        applyNormalizedTelegramSettings(detectionSetting, value.settings);
+        let nextSettings = value.settings;
+        if (settingType === 'machineOpsDetectionSettings') {
+          nextSettings = { ...(detectionSetting.settings?.toObject?.() || detectionSetting.settings), ...nextSettings };
+          const machineValidation = machineOpsSettingsSchema.validate(nextSettings, { convert: false });
+          if (machineValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', machineValidation.error.message));
+        }
+        applyNormalizedTelegramSettings(detectionSetting, nextSettings);
       }
 
       // Validate the merged zones before changing any camera links.

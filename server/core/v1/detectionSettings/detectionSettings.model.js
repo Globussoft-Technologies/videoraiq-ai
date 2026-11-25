@@ -1333,6 +1333,11 @@ const GenderAgeDetectionSetting = DetectionSetting.discriminator(
 
 const MachineOpsSchema = SpillsDirtyMessyAreasDetectionSchema.clone();
 MachineOpsSchema.add({
+  machine_type: { type: String, enum: ['roller'] },
+  machine_name: { type: String, trim: true, required() { return this.machine_type === 'roller'; } },
+  trigger_notification: Boolean,
+  whatsappRecipientIds: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
+  schedule: { type: Object, default: undefined },
   machines: {
     type: [new mongoose.Schema({
       machine_id: { type: String, required: true, trim: true },
@@ -1340,7 +1345,8 @@ MachineOpsSchema.add({
       machine_zone: { type: [[Number]], required: true, validate: isMachinePolygon },
       indicator_zone: { type: [[Number]], required: true, validate: isMachinePolygon },
     }, { _id: false })],
-    required: true,
+    default: undefined,
+    required() { return this.machine_type !== 'roller'; },
     validate: value => value.length > 0 && new Set(value.map(machine => machine.machine_id)).size === value.length,
   },
 });

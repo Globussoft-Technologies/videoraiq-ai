@@ -24,4 +24,17 @@ describe('Machine Operations DS requests', () => {
     await python.stopNewDetection('camera', 'nvr', ['machineOpsDetectionSettings'], 'admin');
     expect(axios.post.mock.calls[0][1].detectors).toEqual(['machineOpsDetectionSettings']);
   });
+  it.each(['startNewDetection', 'updateNewDetection'])('%s leaves Roller alert routing on the backend', async method => {
+    await python[method]({ camera_id: 'camera', nvr_id: 'nvr', admin_id: 'admin', stream_url: 'https://stream.test/camera/playlist.m3u8',
+      detection_modes: ['machineOpsDetectionSettings'], severity: 'low',
+      confidence_thresholds: {
+        machine_type: 'roller', machine_name: 'Foaming Machine', trigger_notification: true,
+        whatsappRecipientIds: ['recipient'], telegramChatIds: ['chat'], schedule: { startTime: '09:00 AM', endTime: '05:00 PM' },
+        machines,
+      },
+    });
+    expect(axios.post.mock.calls[0][1].detectors).toEqual([{
+      name: 'machineOpsDetectionSettings', machine_type: 'roller', machine_name: 'Foaming Machine', severity: 'low', trigger_notification: true,
+    }]);
+  });
 });

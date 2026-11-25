@@ -1,4 +1,5 @@
 export const MACHINE_OPS_SETTING_TYPE = 'machineOpsDetectionSettings';
+export const ROLLER_MACHINE_TYPE = 'roller';
 export const machineOpsId = name => String(name || '').trim().toLowerCase().replace(/\s+/g, '-');
 export const MACHINE_OPS_LOG_FIELDS = Object.freeze([
   { key: 'snap', label: 'Snapshot' },

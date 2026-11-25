@@ -277,6 +277,7 @@ function TimeSelect({ value = emptyTime(), onChange, disabled }) {
  */
 export default function ZoneScheduleFields({
   value = emptySchedule(),
+  label = 'Schedule',
   onChange,
   disabled,
   disabledMessage = 'Please select a Telegram channel before configuring a Telegram schedule.',
@@ -311,7 +312,7 @@ export default function ZoneScheduleFields({
         aria-expanded={expanded}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--blue)' }}>Schedule</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--blue)' }}>{label}</span>
           <span style={{ fontSize: 10.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
         </span>
         <ChevronDown size={15} style={{ flexShrink: 0, color: 'var(--blue)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />

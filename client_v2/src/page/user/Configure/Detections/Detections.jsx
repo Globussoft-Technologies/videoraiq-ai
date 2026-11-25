@@ -15,6 +15,8 @@ import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchDetectionLogs, fe
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
 import SpecialDetectionSettings from './SpecialDetectionSettings';
+import MachineOpsTypeSettings from './MachineOpsTypeSettings';
+import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE } from '../../../../helpers/machineOpsDetection';
 import { snapshotForPreview } from '../DetectionZoneMarking/preview';
 import {
   ATTENDANCE_DETECTION_SETTING_TYPE,
@@ -585,6 +587,7 @@ export default function Detections() {
   const [cameraFilterLoading, setCameraFilterLoading] = useState(false);
   const [enteredDetections, setEnteredDetections] = useState(false);
   const [zoneSettingsOpen, setZoneSettingsOpen] = useState(false);
+  const [machineTypeDraft, setMachineTypeDraft] = useState(null);
   const [detectionToggleLoading, setDetectionToggleLoading] = useState('');
   // Set when the backend refuses an enable on licensing grounds. Holds the
   // refusal plus the model we were trying to turn on, so the dialog can retry
@@ -760,6 +763,7 @@ export default function Detections() {
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
   const isCansStackDetection = isCansStackDetectionType(selectedSettingType);
+  const isMachineOps = selectedSettingType === MACHINE_OPS_SETTING_TYPE;
   const selectedIncidentType = incidentTypeForDetection(selected, incidentFilterTypesApi.data);
   // The licence row for the detection currently in focus, so the banner can show
   // that detection's own camera allocation alongside the account-wide licence.
@@ -773,6 +777,11 @@ export default function Detections() {
     .filter(Boolean)
     .join(' · ');
   const selectedDetectionEntry = selectedSettingType ? zoneCamera?.detections?.[selectedSettingType] : null;
+  const machineSetting = isMachineOps ? settingFromEntry(selectedDetectionEntry) : null;
+  const savedMachineType = machineSetting?.settings?.machine_type || '';
+  const machineTypeKey = `${zoneCamera?._id}:${machineSetting?._id || ''}:${savedMachineType}`;
+  const machineType = machineTypeDraft?.key === machineTypeKey ? machineTypeDraft.value : savedMachineType;
+  const isRoller = isMachineOps && machineType === ROLLER_MACHINE_TYPE;
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
     : null;
@@ -1112,6 +1121,10 @@ export default function Detections() {
       return;
     }
     const enable = typeof forcedEnable === 'boolean' ? forcedEnable : !model.active;
+    if (enable && detectionType === MACHINE_OPS_SETTING_TYPE && isMachineOps && machineType !== savedMachineType) {
+      toast.info(isRoller ? 'Save Roller settings before enabling this detection.' : 'Save the machine and indicator zones before enabling this detection.');
+      return;
+    }
     const assignment = (license?.detections || []).find(
       (row) => row.settingType === detectionType,
     );
@@ -1236,7 +1249,9 @@ export default function Detections() {
 
       if (enable && !hasExistingSetting) {
         setZoneSettingsOpen(false);
-        toast.info('Please configure zones and rules before enabling this detection.');
+        toast.info(detectionType === MACHINE_OPS_SETTING_TYPE
+          ? 'Save Machine Operations settings before enabling this detection.'
+          : 'Please configure zones and rules before enabling this detection.');
         return;
       }
 
@@ -2077,6 +2092,37 @@ export default function Detections() {
                     justifyContent: zoneCamera ? 'flex-start' : 'center',
                   }}
                 >
+                  {zoneCamera && isMachineOps && (!selectedDetectionEntry?.id || machineSetting?.settings) && (
+                    <MachineOpsTypeSettings
+                      key={machineTypeKey}
+                      camera={zoneCamera}
+                      setting={machineSetting}
+                      machineType={machineType}
+                      onTypeChange={(value) => {
+                        setMachineTypeDraft({ key: machineTypeKey, value });
+                        setZoneSettingsOpen(false);
+                      }}
+                      onSaved={(savedSetting) => {
+                        setMachineTypeDraft((draft) => draft?.key === machineTypeKey ? null : draft);
+                        setZoneCamera((previous) => {
+                          if (previous?._id !== zoneCamera._id) return previous;
+                          const previousEntry = previous.detections?.[MACHINE_OPS_SETTING_TYPE];
+                          return {
+                            ...previous,
+                            detections: {
+                              ...previous.detections,
+                              [MACHINE_OPS_SETTING_TYPE]: {
+                                ...previousEntry,
+                                id: savedSetting,
+                                enabled: previousEntry?.enabled ?? false,
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      canEdit={canEditDetections}
+                    />
+                  )}
                   {zoneCamera && selectedSettingType ? (
                     <DetectionZoneMarking
                       key={`${zoneCamera._id}-${selectedSettingType}`}
@@ -2084,6 +2130,7 @@ export default function Detections() {
                       embedded
                       selectedSettingType={selectedSettingType}
                       hideZoneControls={isCansStackDetection}
+                      machineType={isMachineOps ? machineType : undefined}
                       onSaved={canEditDetections ? refreshZoneCamera : undefined}
                       canEditRecipients={canEditDetections}
                       cameraTypeSaving={cameraTypeSaving}
@@ -2125,7 +2172,7 @@ export default function Detections() {
                   toggleDisabled={!canEditDetections || detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}
                   onThresholdChange={(key, value) => { if (canEditDetections) updateSelectedThreshold(key, value); }}
-                  onEditZones={() => { if (canEditDetections) setZoneSettingsOpen(true); }}
+                  onEditZones={isRoller ? undefined : () => { if (canEditDetections) setZoneSettingsOpen(true); }}
                   onResetSetting={() => {
                     if (!canEditDetections) return;
                     if (!selectedDetectionSettingId) {
