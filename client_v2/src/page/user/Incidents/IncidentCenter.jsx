@@ -2584,12 +2584,10 @@ export default function IncidentCenter() {
         }
         @media (max-width: 1024px) {
           .vq-inc-kpis { grid-template-columns: repeat(2,1fr) !important; }
-          .vq-inc-cards { grid-template-columns: repeat(2,1fr) !important; }
         }
         @media (max-width: 640px) {
           .vq-inc-page { padding: 14px 12px !important; }
           .vq-inc-kpis { grid-template-columns: 1fr !important; }
-          .vq-inc-cards { grid-template-columns: 1fr !important; }
           .vq-inc-pagination-row { grid-template-columns: 1fr !important; justify-items: center; }
           .vq-inc-pagination-summary { justify-self: start !important; }
           .vq-inc-datepicker, .vq-inc-multiselect, .vq-inc-filterspopover {
@@ -3099,7 +3097,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
               {items.map((item, i) => (
                 <div
                   key={`${item._id || item.id}:${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) ? lastViewedPulse : 0}`}

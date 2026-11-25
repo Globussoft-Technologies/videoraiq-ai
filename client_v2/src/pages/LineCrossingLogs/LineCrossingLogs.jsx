@@ -244,18 +244,18 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
           </button>
       </div>
       {dropdownOpen && (
-        <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 340, maxWidth: 'calc(100vw - 80px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
+        <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 340, maxWidth: 'calc(100% - 24px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--tx)' }}>All {title}</div>
             <div style={{ fontSize: 11, fontWeight: 800, color }}>{rows.length} cameras</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
+          <div className="vq-lcl-movement-dropdown-row" style={{ padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
             <div>Camera Name</div>
             <div>Mode</div>
             <div style={{ textAlign: 'right', color: headerColor }}>{columnLabel}</div>
           </div>
           {rows.length ? rows.map((row) => (
-            <div key={`dropdown-${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
+            <div key={`dropdown-${kind}-${row.camera}-${row.mode}`} className="vq-lcl-movement-dropdown-row" style={{ alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: 'var(--tx)' }}>
                 <span style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
                   <Camera size={12} />
@@ -536,6 +536,7 @@ export default function LineCrossingLogs() {
   const [allCameras, setAllCameras] = useState([]);
   const [enabledCameras, setEnabledCameras] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [fullscreenCamera, setFullscreenCamera] = useState(null);
   const [socketEventsByChannel, setSocketEventsByChannel] = useState({});
@@ -712,6 +713,7 @@ export default function LineCrossingLogs() {
 
   const refreshAll = useCallback(async () => {
     if (!canView) return;
+    setRefreshing(true);
     setLoading(true);
     try {
       await loadChannels();
@@ -721,6 +723,7 @@ export default function LineCrossingLogs() {
       ]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [canView, loadChannels, loadDateRangeLogs, loadLogs]);
 
@@ -1151,10 +1154,10 @@ export default function LineCrossingLogs() {
           <button
             type="button"
             onClick={refreshAll}
-            disabled={loading}
-            style={{ height: 34, padding: '0 13px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg1)', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, cursor: loading ? 'wait' : 'pointer' }}
+            disabled={loading || refreshing}
+            style={{ height: 34, padding: '0 13px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg1)', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, cursor: loading || refreshing ? 'wait' : 'pointer' }}
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={refreshing ? 'vq-lcl-refresh-spin' : undefined} />
             Refresh
           </button>
         </div>

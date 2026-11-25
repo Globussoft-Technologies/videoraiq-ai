@@ -3,6 +3,7 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 12px;
   align-items: stretch;
+  container-type: inline-size;
 }
 
 .vq-lcl-movement-card {
@@ -32,8 +33,37 @@
 
 .vq-lcl-movement-card-table-row {
   display: grid;
-  grid-template-columns: minmax(56px, 1fr) 36px 32px;
+  grid-template-columns: minmax(56px, 1fr) 36px 42px;
   gap: 5px;
+}
+
+.vq-lcl-movement-dropdown-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px 42px;
+  gap: 5px;
+}
+
+@container (max-width: 1074px) {
+  .vq-lcl-movement-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vq-lcl-movement-card-table {
+    border-left: 0;
+    border-top: 1px solid var(--bd);
+  }
+}
+
+.vq-lcl-refresh-spin {
+  animation: vq-lcl-refresh-spin 1s linear infinite;
+}
+
+@keyframes vq-lcl-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vq-lcl-refresh-spin { animation: none; }
 }
 
 .vq-lcl-metrics-grid {
