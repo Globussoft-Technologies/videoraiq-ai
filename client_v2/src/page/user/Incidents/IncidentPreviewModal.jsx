@@ -100,6 +100,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
   const [buffering, setBuffering] = useState(false);
   const [finished, setFinished] = useState(false);
   const [clipEnd, setClipEnd] = useState(0);
+  const [playlistDuration, setPlaylistDuration] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [downloading, setDownloading] = useState(false);
@@ -175,6 +176,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) return undefined;
+    setPlaylistDuration(0);
 
     // Raw RTSP (Tiandy and local-Tiandy branches) is not playable in a browser.
     if (/^rtsp:\/\//i.test(url)) {
@@ -258,9 +260,9 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
     const onWaiting = () => setBuffering(true);
     const onResumed = () => setBuffering(false);
 
-    const finishClip = (knownDuration) => {
+    const finishClip = () => {
       setBuffering(false);
-      setClipEnd(knownDuration > 0 ? knownDuration : measureClipEnd(video));
+      setClipEnd(measureClipEnd(video));
       setFinished(true);
       video.pause();
       try { hls?.stopLoad(); loadStopped = true; } catch { /* noop */ }
@@ -311,10 +313,12 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
             .map((fragment) => fragment?.url)
             .filter(Boolean);
 
-          // A playlist closed with EXT-X-ENDLIST is definitive: this is the
-          // whole clip and nothing has to be inferred.
+          // EXT-X-ENDLIST tells us the duration. The video still has to play
+          // through the playlist before its ended event fires.
           if (details.live === false) {
-            finishClip(details.totalduration);
+            if (Number.isFinite(details.totalduration) && details.totalduration > 0) {
+              setPlaylistDuration(details.totalduration);
+            }
             return;
           }
 
@@ -345,7 +349,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
           // this recording really is all there is.
           const { buffered } = video;
           const end = buffered.length ? buffered.end(buffered.length - 1) : 0;
-          if (video.currentTime >= end - 0.5) finishClip();
+          if (end > 0 && video.currentTime >= end - 0.5) finishClip();
         });
 
         let firstFrag = false;
@@ -434,9 +438,9 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
    * last partial segment is never published and it floors what it has.
    *
    * The requested window is known up front, so the track is scaled to that: it
-   * is full width from the first frame, the lighter fill shows how much the
-   * recorder has actually handed over, and the total reads the window that was
-   * asked for.
+   * is full width from the first frame and the lighter fill shows how much
+   * the recorder has actually handed over. A complete playlist can supply
+   * a shorter total up front.
    */
   useEffect(() => {
     const video = videoRef.current;
@@ -531,15 +535,16 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
    * has to follow the footage instead, or the thumb would stop before the end
    * of a clip that has nothing left to give.
    */
-  const clipSpan = finished
-    ? Math.min(clipEnd || totalSeconds, totalSeconds)
-    : totalSeconds;
+  const clipSpan = Math.min(
+    totalSeconds,
+    playlistDuration || (finished ? clipEnd : 0) || totalSeconds,
+  );
 
   const pct = (seconds) => (clipSpan
     ? Math.min(100, Math.max(0, (seconds / clipSpan) * 100))
     : 0);
 
-  const playedSeconds = finished ? clipSpan : currentTime;
+  const playedSeconds = finished ? clipSpan : Math.min(currentTime, clipSpan);
 
   // Say so when the recorder had less than the window to give, rather than
   // presenting four seconds as a complete six second preview.
@@ -695,10 +700,11 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
             <button
               type="button"
               onClick={toggleFullscreen}
-              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (zoom stays available)'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               style={{
-                position: 'absolute', top: 22, right: 14, zIndex: 31,
-                width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'absolute', top: 16, right: 14, zIndex: 31,
+                width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
                 background: 'rgba(15,23,42,0.72)', backdropFilter: 'blur(8px)',
                 color: '#fff', cursor: 'pointer',

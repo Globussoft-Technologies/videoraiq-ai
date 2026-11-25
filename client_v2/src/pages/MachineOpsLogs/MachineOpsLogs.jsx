@@ -1,4 +1,4 @@
-import IncidentLogsPage from '@/pages/IncidentLogs/IncidentLogsPage?v=machine-ops-logs-2';
+import IncidentLogsPage from '@/pages/IncidentLogs/IncidentLogsPage?v=machine-ops-logs-3';
 import { MACHINE_OPS_CONFIG } from '@/pages/IncidentLogs/configs?v=machine-ops-logs-2';
 
 export default function MachineOpsLogs() {

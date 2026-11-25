@@ -3,7 +3,7 @@ import { MACHINE_OPS_LOG_FIELDS } from '../../helpers/machineOpsDetection?v=mach
 import { Link } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { getConfiguredTimezone } from '@/utils/timezone';
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, Cpu, DoorOpen, Eye, FileText, Flame, Image, MapPin, Power, Server, ShieldAlert, Users, Video } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Clock, Cloud, Cpu, DoorOpen, Eye, FileText, Flame, Image, MapPin, PlayCircle, Power, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import { boxSplitLabel, directionSplitLabel } from './stockMovement';
 import { BOX_PACKING_FIELDS, packingZones, packingSeconds } from './boxPacking';
@@ -182,7 +182,29 @@ const MachineOpsSnapshot = ({ row, onPreview, grid = false }) => {
   </button>;
 };
 
-export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, recentlyViewedId }) => {
+const MachineOpsVideoPreview = ({ row, onVideoPreview, overlay = false }) => {
+  if (!row.channelId || !row.createdAt || !Number.isFinite(new Date(row.createdAt).getTime())) return null;
+
+  return (
+    <button
+      type="button"
+      title="Preview recording"
+      className={`inline-flex cursor-pointer items-center whitespace-nowrap border text-xs font-semibold ${overlay
+        ? 'absolute bottom-2 right-3 z-20 gap-1.5 rounded-full border-[var(--bd2)] bg-[var(--bg1solid)] px-2.5 py-1.5 leading-none text-[var(--tx)] shadow-sm transition-colors hover:bg-[var(--bg2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600'
+        : 'gap-1 rounded-[7px] border-[var(--bd2)] px-2 py-1 text-[var(--blue)] hover:bg-[var(--bg2)]'}`}
+      onClick={event => { event.stopPropagation(); onVideoPreview(row); }}
+    >
+      {overlay ? (
+        <span className="grid size-3 place-items-center rounded-full bg-violet-700" aria-hidden="true">
+          <span className="ml-px border-y-2 border-l-[3px] border-y-transparent border-l-white" />
+        </span>
+      ) : <PlayCircle size={13} aria-hidden="true" />}
+      Preview
+    </button>
+  );
+};
+
+export const buildColumns = (config, { onSort, onPreview, onVideoPreview, sortField, sortOrder, recentlyViewedId }) => {
   const sortable = config.sortable !== false;
   const sortHeader = (label, field) => sortableHeader(label, field, onSort, sortable, sortField, sortOrder);
   if (config.showMachineOpsFields) {
@@ -194,6 +216,11 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
       accessorKey: 'severity',
       header: sortHeader('Severity', 'severity'),
       cell: ({ row }) => <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${severityClass(row.original.severity)}`}>{severityLabel(row.original.severity)}</span>,
+    });
+    machineColumns.push({
+      id: 'videoPreview',
+      header: 'Preview',
+      cell: ({ row }) => <MachineOpsVideoPreview row={row.original} onVideoPreview={onVideoPreview} />,
     });
     return machineColumns;
   }
@@ -538,10 +565,11 @@ export const buildColumns = (config, { onSort, onPreview, sortField, sortOrder, 
   return cols;
 };
 
-export const renderIncidentCard = (row, config, { onPreview }) => {
+export const renderIncidentCard = (row, config, { onPreview, onVideoPreview }) => {
   if (config.showMachineOpsFields) return <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden h-full w-full min-w-0">
     <div className="relative">
       <MachineOpsSnapshot row={row} onPreview={onPreview} grid />
+      <MachineOpsVideoPreview row={row} onVideoPreview={onVideoPreview} overlay />
       {config.showSeverity !== false && <span className="absolute top-2 right-2 z-20 rounded-[5px] px-[7px] py-[3px] text-[10px] font-semibold capitalize text-white shadow-sm" style={{ background: severityBg(row.severity) }}>{severityLabel(row.severity)}</span>}
     </div>
     <div className="space-y-2.5 p-3.5">

@@ -18,11 +18,12 @@ import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePa
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
+import IncidentPreviewModal from '@/page/user/Incidents/IncidentPreviewModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 import { initialState, reducer } from './incidentState';
 // Keep the log renderer and exports on the same revision when staging caches source modules.
-import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns?v=machine-ops-logs-2';
+import { buildColumns, renderIncidentCard, StockPlaybackLink } from './incidentColumns?v=machine-ops-logs-3';
 import { handleIncidentExport } from './incidentExport?v=machine-ops-logs-2';
 import { handleStockCountingExport } from './stockCountingExport';
 import { boxSplitLabel, stockMovementColumns } from './stockMovement';
@@ -168,6 +169,7 @@ const IncidentLogsPage = ({ config }) => {
   const fetchRequestId = useRef(0);
   const [viewMode, setViewMode] = useState(() => (config.tableOnly ? 'table' : 'grid')); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
+  const [videoPreview, setVideoPreview] = useState(null);
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [recentlyViewedId, setRecentlyViewedId] = useState(null);
@@ -720,14 +722,14 @@ const IncidentLogsPage = ({ config }) => {
 
   const columns = useMemo(
     () => {
-      const allColumns = buildColumns(config, { onSort, onPreview: openPreview, sortField, sortOrder, recentlyViewedId: viewMode === 'grid' && !previewImage && recentlyViewedPulse ? recentlyViewedId : null });
+      const allColumns = buildColumns(config, { onSort, onPreview: openPreview, onVideoPreview: setVideoPreview, sortField, sortOrder, recentlyViewedId: viewMode === 'grid' && !previewImage && recentlyViewedPulse ? recentlyViewedId : null });
       return config.showStockCountingFields ? stockMovementColumns(allColumns, stockDirection) : allColumns;
     },
     [config, onSort, openPreview, stockDirection, sortField, sortOrder, viewMode, previewImage, recentlyViewedId, recentlyViewedPulse]
   );
 
   const gridCard = useCallback(
-    (item) => renderIncidentCard(item, config, { onPreview: openPreview }),
+    (item) => renderIncidentCard(item, config, { onPreview: openPreview, onVideoPreview: setVideoPreview }),
     [config, openPreview]
   );
 
@@ -839,6 +841,15 @@ const IncidentLogsPage = ({ config }) => {
 
   return (
     <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
+      {videoPreview && (
+        <IncidentPreviewModal
+          item={videoPreview}
+          channel={videoPreview.channelData}
+          channelId={videoPreview.channelId}
+          at={videoPreview.createdAt}
+          onClose={() => setVideoPreview(null)}
+        />
+      )}
       <ImagePreviewModal
         previewImage={previewImage}
         imageKey={previewRows[previewIndex]?.previewKey}

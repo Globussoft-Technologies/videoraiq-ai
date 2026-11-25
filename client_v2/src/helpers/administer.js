@@ -184,14 +184,18 @@ export const INCIDENT_PREVIEW_MAX_SECONDS = 300;
 /** Clamp whatever is stored into something a player can actually use. */
 export const normalizeIncidentPreview = (stored = {}) => {
   const pick = (value, fallback) => {
+    if (value == null || value === '') return fallback;
     const seconds = Number(value);
     if (!Number.isFinite(seconds) || seconds < 0) return fallback;
     return Math.min(Math.round(seconds), INCIDENT_PREVIEW_MAX_SECONDS);
   };
-  return {
+  const previewWindow = {
     beforeSeconds: pick(stored?.beforeSeconds, INCIDENT_PREVIEW_DEFAULTS.beforeSeconds),
     afterSeconds: pick(stored?.afterSeconds, INCIDENT_PREVIEW_DEFAULTS.afterSeconds),
   };
+  return previewWindow.beforeSeconds + previewWindow.afterSeconds > 0
+    ? previewWindow
+    : { ...INCIDENT_PREVIEW_DEFAULTS };
 };
 
 /*
