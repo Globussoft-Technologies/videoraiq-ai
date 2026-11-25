@@ -84,6 +84,10 @@ const adminSchema = new mongoose.Schema({
     token: { type: String, default: null },
     linkId: { type: String, default: null },
     expiresAt: { type: Date, default: null },
+    checkInCameraId: { type: String },
+    checkOutCameraId: { type: String },
+    checkinCameraIds: { type: [String], default: undefined },
+    checkoutCameraIds: { type: [String], default: undefined },
   },
   // Set once when a plan's default camera allowance is granted (see
   // defaultCamerasForPlan). Without it, a superadmin who deliberately drops a

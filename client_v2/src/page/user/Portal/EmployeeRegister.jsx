@@ -218,7 +218,7 @@ export default function EmployeeRegister() {
 
   const locationOptions = useMemo(() => locations.map((l) => ({ value: l, label: l })), [locations]);
   const departmentOptions = useMemo(
-    () => departments.map((d) => ({ value: d._id, label: d.departmentName })),
+    () => [{ value: "", label: "No department" }, ...departments.map((d) => ({ value: d._id, label: d.departmentName }))],
     [departments]
   );
 
@@ -272,7 +272,6 @@ export default function EmployeeRegister() {
     if (!form.lastName.trim()) errs.lastName = "Last name is required";
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Invalid email format";
     if (!form.designation.trim()) errs.designation = "Designation is required";
-    if (!form.department) errs.department = "Department is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -360,7 +359,7 @@ export default function EmployeeRegister() {
     formData.append("email", form.email);
     formData.append("designation", form.designation);
     formData.append("location", form.location);
-    formData.append("departmentId", form.department);
+    if (form.department) formData.append("departmentId", form.department);
     formData.append("vehicleNumber", form.vehicleNumber.trim());
     formData.append("userRegistrByLink", "true");
     PHOTO_SLOTS.forEach((s) => {
@@ -554,7 +553,7 @@ export default function EmployeeRegister() {
                     {errors.designation && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.designation}</div>}
                   </div>
                   <div className="flex flex-col gap-[7px]">
-                    <label className="text-[12.5px] font-semibold text-[#334155]">Department <span className="text-[#ef4444]">*</span></label>
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Department (optional)</label>
                     <PCombo
                       name="department"
                       value={form.department}
@@ -563,7 +562,6 @@ export default function EmployeeRegister() {
                       options={departmentOptions}
                       preferUp
                     />
-                    {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
                   </div>
                 </div>
 

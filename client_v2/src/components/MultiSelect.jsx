@@ -58,6 +58,8 @@ const MultiSelect = ({
   inlinePanel = false,
   closeOnSelectAll = false,
   wrapSelection = false,
+  disabled = false,
+  onOpen,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -65,6 +67,10 @@ const MultiSelect = ({
   const wrapperRef = useRef(null);
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   // While an element is fullscreen the browser paints only that element's
   // subtree, so a panel portalled to <body> would mount but never be visible.
@@ -187,11 +193,15 @@ const MultiSelect = ({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen(!open);
+        }}
         className={`flex items-center justify-between gap-2 w-full ${wrapSelection ? 'min-h-10 py-2 text-left' : 'h-10'} px-3 rounded-lg border text-[var(--tx)] text-sm cursor-pointer transition-colors ${
           tint && hasSelection ? '' : 'border-[var(--bd)] bg-[var(--bg2)] hover:border-[var(--brand)]'
-        }`}
+        } disabled:cursor-not-allowed disabled:opacity-60`}
         style={tint && hasSelection ? {
           borderColor: `${tint}66`, background: `${tint}14`,
         } : undefined}

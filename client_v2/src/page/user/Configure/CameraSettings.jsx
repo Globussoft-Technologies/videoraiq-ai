@@ -13,6 +13,12 @@ import { streamUrl } from '../../../lib/stream';
 import { usePermissions } from '@/context/PermissionContext';
 import { limitedTextError } from '@/utils/limitedText';
 
+const CAMERA_TYPE_LABELS = {
+  checkin: 'Check-in',
+  checkout: 'Check-out',
+  none: 'None',
+};
+
 // ── Alias edit popup ─────────────────────────────────────────────────────────
 function AliasModal({ camera, onClose, onSave }) {
   const [value, setValue] = useState(camera.aliasName || '');
@@ -436,6 +442,7 @@ export default function CameraSettings() {
         setTableData(channels.map((ch, idx) => ({
           id: ch._id,
           cameraName: ch.name || `Camera ${idx + 1}`,
+          checkType: ch.checkType,
           aliasName: ch.customName || '',
           departments: ch.department || [],
           streamingUrl: ch.streamingUrl || null,
@@ -625,7 +632,7 @@ export default function CameraSettings() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--bd)' }}>
-                    {['Camera Name', 'Alias Name', 'Assigned Departments'].map(h => (
+                    {['Camera Name', 'Camera Type', 'Alias Name', 'Assigned Departments'].map(h => (
                       <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>{h}</th>
                     ))}
                   </tr>
@@ -646,6 +653,9 @@ export default function CameraSettings() {
                             </button>
                           )}
                         </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+                        {CAMERA_TYPE_LABELS[camera.checkType] ?? CAMERA_TYPE_LABELS.none}
                       </td>
                       <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--tx2)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -27,6 +27,7 @@ import { reconcileDefaultRolesOnLogin } from "../roles/defaultRoles.sync.js";
 import permissionModel from "../permission/permissions.model.js";
 import locationModel from "../locations/location.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
+import { storedAttendanceCameraAssignments, validateAttendanceCameraAssignments } from "../authorizedUsers/attendanceCameraAssignments.js";
 import NVRModel from "../NVR/nvr.model.js";
 import sessionsService from "../sessions/sessions.service.js";
 import usersModel from "../users/users.model.js";
@@ -925,7 +926,11 @@ class AUTHService {
         return res.status(400).json({ ok: false, msg: "days must be an integer between 1 and 5" });
       }
 
-      const authenticatedAdminId = req?.verified?.userData?.adminId;
+      const requester = req?.verified?.userData;
+      if (requester?.registrationLinkId || requester?.userRegistrByLink) {
+        return res.status(403).json({ ok: false, msg: "Registration links require dashboard access" });
+      }
+      const authenticatedAdminId = requester?.adminId;
       const adminId = req.body?.adminId || authenticatedAdminId;
       if (!adminId || !/^[a-f\d]{24}$/i.test(String(adminId))) {
         return res.status(400).json({ ok: false, msg: "A valid adminId is required" });
@@ -938,6 +943,11 @@ class AUTHService {
       if (!admin) {
         return res.status(404).json({ ok: false, msg: "Admin not found" });
       }
+
+      const { assignments: cameraAssignments, error: cameraError } = await validateAttendanceCameraAssignments(
+        req.body, admin, req.verified
+      );
+      if (cameraError) return res.status(400).json({ ok: false, msg: cameraError });
 
       // Subscriptions from aMember by user_id (no password needed).
       let subscriptions = {};
@@ -1012,6 +1022,7 @@ class AUTHService {
               token,
               linkId: tokenPayload.registrationLinkId,
               expiresAt,
+              ...cameraAssignments,
             },
           },
         }
@@ -1023,6 +1034,7 @@ class AUTHService {
         token,
         days,
         expiresAt,
+        cameraAssignments,
         user: tokenPayload,
       });
     } catch (err) {
@@ -1033,7 +1045,8 @@ class AUTHService {
 
   async getRegistrationLink(req, res) {
     try {
-      const adminId = req?.verified?.userData?.adminId;
+      const requester = req?.verified?.userData;
+      const adminId = requester?.adminId;
       const admin = await adminModel.findById(adminId).select("registrationLink").lean();
       const link = admin?.registrationLink;
 
@@ -1046,7 +1059,13 @@ class AUTHService {
 
       return res.status(200).json({
         ok: true,
-        link: { token: link.token, expiresAt: link.expiresAt },
+        link: {
+          token: link.token,
+          expiresAt: link.expiresAt,
+          ...(!requester?.registrationLinkId && !requester?.userRegistrByLink && {
+            cameraAssignments: storedAttendanceCameraAssignments(link),
+          }),
+        },
       });
     } catch (err) {
       logger.error(`getRegistrationLink: ${err.message}`);

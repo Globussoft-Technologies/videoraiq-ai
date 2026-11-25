@@ -2,6 +2,7 @@ import { Field, ErrorMessage, useFormikContext } from 'formik';
 import { Input } from '@/components/ui/input';
 import SelectField from './SelectField';
 import ShiftSelect from './ShiftSelect';
+import CameraAssignmentFields, { cameraAssignmentFields } from './CameraAssignmentFields';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji } from '@/utils/emailValidation';
 
 const errorClass = 'text-[var(--crit)] text-[11px] mt-1';
@@ -12,8 +13,8 @@ function FieldLabel({ children }) {
 
 const locationLabel = (loc) => (loc.toLowerCase() === 'banglore' ? 'Bangalore' : loc);
 
-const RegisterFormStep1 = ({ departments = [], locations = [], currentShift }) => {
-  const { values, setFieldValue, handleChange, setFieldError, setFieldTouched } = useFormikContext();
+const RegisterFormStep1 = ({ departments = [], locations = [], currentShift, showCameraAssignments }) => {
+  const { values, setFieldValue, setValues, handleChange, setFieldError, setFieldTouched } = useFormikContext();
 
   // Combine fetched locations with the current value so it prepopulates on edit.
   const locationOptions = Array.from(new Set([values.location, ...locations]))
@@ -97,15 +98,21 @@ const RegisterFormStep1 = ({ departments = [], locations = [], currentShift }) =
         <ErrorMessage name="location" component="div" className={errorClass} />
       </div>
       <div>
-        <FieldLabel>Department*</FieldLabel>
+        <FieldLabel>Department (optional)</FieldLabel>
         <SelectField
           value={values.departmentId}
           options={departmentOptions}
-          onChange={(id) => setFieldValue('departmentId', id)}
+          onChange={(id) => {
+            if (id === values.departmentId) return;
+            const next = { ...values, departmentId: id };
+            if (id) {
+              for (const { name } of cameraAssignmentFields) delete next[name];
+            }
+            setValues(next);
+          }}
           placeholder="Select department"
           preferUp
         />
-        <ErrorMessage name="departmentId" component="div" className={errorClass} />
       </div>
       <div>
         <FieldLabel>Vehicle Number</FieldLabel>
@@ -121,6 +128,11 @@ const RegisterFormStep1 = ({ departments = [], locations = [], currentShift }) =
         <FieldLabel>Shift (optional)</FieldLabel>
         <ShiftSelect value={values.shiftId} onChange={(id) => setFieldValue('shiftId', id)} currentShift={currentShift} />
       </div>
+      {showCameraAssignments && (
+        <div className="md:col-span-2">
+          <CameraAssignmentFields values={values} onChange={setFieldValue} departmentId={values.departmentId} inline />
+        </div>
+      )}
     </div>
   );
 };

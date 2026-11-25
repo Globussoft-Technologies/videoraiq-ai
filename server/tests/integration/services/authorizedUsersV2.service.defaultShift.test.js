@@ -57,6 +57,8 @@ const { default: AuthorizedUsers } = await import(
 );
 const { default: Admin } = await import("../../../core/v1/admin/admin.model.js");
 const { default: Shift } = await import("../../../core/v2/shifts/shifts.model.js");
+const { default: Channel } = await import("../../../core/v2/channels/channels.model.js");
+const { default: Department } = await import("../../../core/v2/departments/departments.model.js");
 const { default: axios } = await import("axios");
 const { sendPayloadToUser } = await import("../../../socket.js");
 
@@ -245,5 +247,133 @@ describe("updateAuthUser ? optional DS profile images", () => {
     expect(axios.post.mock.calls[0][1].profileImages).toEqual([
       expect.stringContaining('/v2/test/old.jpg'), expect.stringContaining('/v2/test/second.jpg'),
     ]);
+  });
+});
+
+describe('employee attendance camera assignments', () => {
+  const camera = async (userId = admin.user_id, fields = {}) => String((await Channel.create({
+    nvrId: admin._id, userId, isAdded: true, ...fields,
+  }))._id);
+
+  const createDepartment = async (name) => String((await Department.create({ adminId: admin._id, departmentName: name }))._id);
+  const departmentCamera = (departmentId, checkType) => camera(admin.user_id, { department: [departmentId], checkType });
+
+  const employeeWith = (assignments) => AuthorizedUsers.create({
+    adminId: admin._id, firstName: 'Test', lastName: 'Employee', profilePics: ['/face.jpg'], ...assignments,
+  });
+
+  const updateCameras = async (employee, fields, dsError) => {
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id, query: { userId: String(employee._id) },
+      body: { firstName: employee.firstName, lastName: employee.lastName, profilePics: employee.profilePics, ...fields },
+    });
+    req.files = [];
+    if (dsError) axios.put.mockRejectedValueOnce({ response: { data: { message: dsError } } });
+    else axios.put.mockResolvedValueOnce({ data: { status: 'ok' } });
+    await AuthUsersService.updateAuthUser(req, res, next);
+    return res;
+  };
+
+  it('registers multiple check-in cameras and a single multipart check-out camera with DS', async () => {
+    const checkinCameraIds = [await camera(), await camera()];
+    const checkout = await camera();
+    const res = await createEmployee({ firstName: 'Test', lastName: 'User', checkinCameraIds, checkoutCameraIds: checkout });
+    expect(res.statusCode).toBe(201);
+    expect(axios.post.mock.calls[0][1]).toMatchObject({ checkinCameraIds, checkoutCameraIds: [checkout] });
+    const saved = await AuthorizedUsers.findById(payload(res).data._id);
+    expect(saved.checkinCameraIds.map(String)).toEqual(checkinCameraIds);
+    expect(saved.checkoutCameraIds.map(String)).toEqual([checkout]);
+  });
+
+  it('uses link assignments and fills an unassigned direction from the employee department', async () => {
+    const checkinCameraIds = [await camera(), await camera()];
+    const departmentId = await createDepartment('Testing');
+    await departmentCamera(departmentId, 'checkin');
+    const checkout = await departmentCamera(departmentId, 'checkout');
+    await Admin.updateOne({ _id: admin._id }, { registrationLink: {
+      linkId: 'invite', expiresAt: new Date(Date.now() + 60_000), checkinCameraIds, checkoutCameraIds: [],
+    } });
+    const { req, res, next } = serviceCtx({ adminId: admin._id, body: {
+      firstName: 'Link', lastName: 'User', departmentId, checkinCameraIds: [],
+    } });
+    req.verified.userData.registrationLinkId = 'invite';
+    req.files = threeFiles();
+    axios.post.mockResolvedValueOnce({ data: { status: 'ok' } });
+    await AuthUsersService.createAuthUser(req, res, next);
+    expect(res.statusCode).toBe(201);
+    expect(axios.post.mock.calls[0][1]).toMatchObject({ checkinCameraIds, checkoutCameraIds: [checkout] });
+  });
+
+  it('defaults to same-client department cameras by direction during registration', async () => {
+    const departmentId = await createDepartment('Testing');
+    const checkin = await departmentCamera(departmentId, 'checkin');
+    const checkout = await departmentCamera(departmentId, 'checkout');
+    await departmentCamera(departmentId, 'none');
+    await camera('other-tenant', { department: [departmentId], checkType: 'checkin' });
+    await departmentCamera(await createDepartment('Other'), 'checkout');
+    const res = await createEmployee({ firstName: 'Test', lastName: 'User', departmentId });
+    expect(res.statusCode).toBe(201);
+    expect(axios.post.mock.calls[0][1]).toMatchObject({ checkinCameraIds: [checkin], checkoutCameraIds: [checkout] });
+  });
+
+  it('fills missing camera choices for an existing department and preserves manual choices', async () => {
+    const departmentId = await createDepartment('Testing');
+    await departmentCamera(departmentId, 'checkin');
+    const checkout = await departmentCamera(departmentId, 'checkout');
+    const employee = await employeeWith({ departmentId, checkinCameraIds: [] });
+    const res = await updateCameras(employee, {});
+    expect(res.statusCode).toBe(200);
+    expect(axios.put.mock.calls[0][1]).not.toHaveProperty('checkinCameraIds');
+    expect(axios.put.mock.calls[0][1].checkoutCameraIds).toEqual([checkout]);
+  });
+
+  it('replaces department camera defaults on department change and accepts a manual override', async () => {
+    const oldDepartment = await createDepartment('Old');
+    const departmentId = await createDepartment('New');
+    const oldCheckin = await departmentCamera(oldDepartment, 'checkin');
+    const oldCheckout = await departmentCamera(oldDepartment, 'checkout');
+    const checkout = await departmentCamera(departmentId, 'checkout');
+    const employee = await employeeWith({ departmentId: oldDepartment, checkinCameraIds: [oldCheckin], checkoutCameraIds: [oldCheckout] });
+    const res = await updateCameras(employee, { departmentId, checkinCameraIds: [oldCheckin] });
+    expect(res.statusCode).toBe(200);
+    expect(axios.put.mock.calls[0][1]).toMatchObject({ checkinCameraIds: [oldCheckin], checkoutCameraIds: [checkout] });
+  });
+
+  it('clears check-out with an empty multipart field and leaves omitted check-in unchanged', async () => {
+    const checkin = await camera();
+    const employee = await employeeWith({ checkInCameraId: checkin, checkoutCameraIds: [await camera()] });
+    const res = await updateCameras(employee, { checkoutCameraIds: '' });
+    expect(res.statusCode).toBe(200);
+    const body = axios.put.mock.calls[0][1];
+    expect(body).not.toHaveProperty('checkinCameraIds');
+    expect(body.checkoutCameraIds).toEqual([]);
+    const saved = await AuthorizedUsers.findById(employee._id);
+    expect(String(saved.checkInCameraId)).toBe(checkin);
+    expect(saved.checkoutCameraIds).toEqual([]);
+  });
+
+  it('re-registers an employee missing in DS with the changed and previously stored camera lists', async () => {
+    const checkin = await camera();
+    const employee = await employeeWith({ checkInCameraId: checkin });
+    const checkoutCameraIds = [await camera(), await camera()];
+    axios.post.mockResolvedValueOnce({ data: { status: 'ok' } });
+    const res = await updateCameras(employee, { checkoutCameraIds }, 'User not found in this collection');
+    expect(res.statusCode).toBe(200);
+    expect(axios.post.mock.calls[0][1]).toMatchObject({ checkinCameraIds: [checkin], checkoutCameraIds });
+  });
+
+  it('keeps the saved camera list if DS rejects the update', async () => {
+    const checkin = await camera();
+    const employee = await employeeWith({ checkinCameraIds: [checkin] });
+    const res = await updateCameras(employee, { checkinCameraIds: [] }, 'Service unavailable');
+    expect(res.statusCode).toBe(500);
+    expect(axios.put.mock.calls[0][1].checkinCameraIds).toEqual([]);
+    expect((await AuthorizedUsers.findById(employee._id)).checkinCameraIds.map(String)).toEqual([checkin]);
+  });
+
+  it('rejects a camera owned by another client before calling DS', async () => {
+    const res = await createEmployee({ firstName: 'Wrong', lastName: 'Tenant', checkinCameraIds: [await camera('other-tenant')] });
+    expect(res.statusCode).toBe(400);
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });

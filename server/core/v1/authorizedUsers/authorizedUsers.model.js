@@ -24,6 +24,10 @@ const authorizedUsersSchema = new mongoose.Schema({
   orgId: { type: Number, default: null },
   emp_id: { type: String, default: null },
   shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },
+  checkInCameraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Channel' },
+  checkOutCameraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Channel' },
+  checkinCameraIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Channel', default: undefined },
+  checkoutCameraIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Channel', default: undefined },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',

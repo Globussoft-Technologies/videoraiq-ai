@@ -3,6 +3,7 @@ import { Loader, Copy, Check, Link as LinkIcon, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateAdminToken, terminateRegistrationLink } from './Api';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
+import CameraAssignmentFields, { getCameraAssignmentValues } from './CameraAssignmentFields';
 
 const MAX_DAYS = 5;
 const REGISTER_PATH = '/employee-register';
@@ -27,14 +28,17 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
   const [loading, setLoading] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cameraDraft, setCameraDraft] = useState(null);
   const link = activeLink?.url || '';
   const expiresAt = activeLink?.expiresAt || '';
+  const cameraAssignments = cameraDraft ?? getCameraAssignmentValues(activeLink?.cameraAssignments);
 
   if (!open) return null;
 
   const handleClose = () => {
     setDays('');
     setCopied(false);
+    setCameraDraft(null);
     onClose();
   };
 
@@ -62,7 +66,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
 
     setLoading(true);
     try {
-      const res = await generateAdminToken({ adminId, days: n });
+      const res = await generateAdminToken({ adminId, days: n, ...cameraAssignments });
       if (!res?.ok || !res?.token) {
         toast.error(res?.msg || 'Failed to generate token');
         return;
@@ -70,7 +74,9 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
       onLinkChange({
         url: buildRegistrationLink(res.token),
         expiresAt: res.expiresAt || '',
+        cameraAssignments: res.cameraAssignments,
       });
+      setCameraDraft(null);
       setCopied(false);
       toast.success('Registration link generated');
     } catch (err) {
@@ -97,7 +103,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
       onLinkChange(null);
       setCopied(false);
       toast.success('Registration link terminated');
-      onClose();
+      handleClose();
     } catch (err) {
       toast.error(err?.response?.data?.msg || 'Failed to terminate registration link');
     } finally {
@@ -137,6 +143,12 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
               Employees can self-register with this link until it expires.
             </p>
           </div>
+
+          <CameraAssignmentFields
+            values={cameraAssignments}
+            onChange={(name, value) => setCameraDraft({ ...cameraAssignments, [name]: value })}
+            disabled={loading || terminating}
+          />
 
           <button
             type="button"

@@ -4,6 +4,7 @@ import Response from "../../../utils/response.js";
 import adminModel from "../admin/admin.model.js";
 import AuthUsersValidator from "./authorizedUsers.validate.js"
 import authorizedUsersModel from "./authorizedUsers.model.js";
+import { fillDepartmentAttendanceCameras, hasAttendanceCameraAssignments, storedAttendanceCameraAssignments, validateAttendanceCameraAssignments } from "./attendanceCameraAssignments.js";
 import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import path from "path";
@@ -439,7 +440,7 @@ class AuthUsersService {
         const { firstName, lastName, email ,emp_id,departmentId,designation,branch,shiftId,numberPlate,vehicleNumber,location} = req.body;
         // Self-registration via an invite link. multipart/form-data delivers
         // every field as a string, so "true" is what actually arrives.
-        const userRegistrByLink = String(req.body.userRegistrByLink) === "true";
+        const userRegistrByLink = Boolean(data?.registrationLinkId || data?.userRegistrByLink) || String(req.body.userRegistrByLink) === "true";
         // Same multipart-string caveat as above.
         const liveDemoData = String(req.body.liveDemoData) === "true";
 
@@ -491,6 +492,20 @@ class AuthUsersService {
         if (!isAdminExist) {
           return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
         }
+
+        const link = isAdminExist.registrationLink;
+        if (data.registrationLinkId && (link?.linkId !== data.registrationLinkId || !(link.expiresAt > new Date()))) {
+          return res.status(401).json(Response.tokenFailResp("Registration link is invalid or has expired"));
+        }
+        const selections = data.registrationLinkId ? link : (userRegistrByLink ? undefined : req.body);
+        const { assignments, error: cameraError } = await validateAttendanceCameraAssignments(
+          selections, isAdminExist, req.verified
+        );
+        if (cameraError) return res.status(400).json(Response.validationFailResp(cameraError, "Validation Failed!"));
+        const selectedCameras = data.registrationLinkId
+          ? Object.fromEntries(Object.entries(assignments).filter(([, ids]) => ids.length > 0))
+          : assignments;
+        const cameraAssignments = await fillDepartmentAttendanceCameras(selectedCameras, department?._id, isAdminExist, req.verified);
     
         // Check required fields
         if (!firstName || !lastName ) {
@@ -571,6 +586,7 @@ class AuthUsersService {
 
         const newUser = await authorizedUsersModel.create({
           adminId: isAdminExist._id,
+          ...cameraAssignments,
           shiftId: isShiftExist?._id || null,
           firstName: cleanedFirstName,
           lastName: cleanedLastName,
@@ -604,6 +620,7 @@ class AuthUsersService {
             : [],
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
+            ...cameraAssignments,
           };
           try {
             
@@ -787,11 +804,12 @@ async updateAuthUser(req, res, _next) {
     }
 
     // 🔹 Validate Department
-    const department = await departmentsModel
-      .findById(departmentId)
-      .select("_id");
+    const hasDepartment = departmentId != null && departmentId !== "";
+    const department = hasDepartment && mongoose.isObjectIdOrHexString(departmentId)
+      ? await departmentsModel.findById(departmentId).select("_id")
+      : null;
 
-    if (departmentId && !department) {
+    if (hasDepartment && !department) {
       return res.send(
         Response.validationFailResp(
           "Invalid DepartmentId, please provide valid departmentId",
@@ -801,12 +819,26 @@ async updateAuthUser(req, res, _next) {
     }
 
     // 🔹 Check Existing User
-    const existingUser = await authorizedUsersModel.findById(userId);
+    const employeeScope = { _id: userId, adminId: isAdminExist._id };
+    const existingUser = await authorizedUsersModel.findOne(employeeScope);
     if (!existingUser) {
       return res
         .status(404)
         .json(Response.userFailResp("Authorized user not found"));
     }
+
+    if ((data.registrationLinkId || data.userRegistrByLink) && hasAttendanceCameraAssignments(req.body)) {
+      return res.status(403).json(Response.accessDeniedResp("Camera assignments require dashboard access"));
+    }
+    const { assignments, error: cameraError } = await validateAttendanceCameraAssignments(
+      req.body, isAdminExist, req.verified
+    );
+    if (cameraError) return res.status(400).json(Response.validationFailResp(cameraError, "Validation Failed!"));
+    const selectedDepartment = departmentId === undefined ? existingUser.departmentId : department?._id;
+    const cameraAssignments = await fillDepartmentAttendanceCameras(assignments, selectedDepartment, isAdminExist, req.verified, {
+      existing: existingUser,
+      departmentChanged: String(selectedDepartment ?? '') !== String(existingUser.departmentId ?? ''),
+    });
 
     // 🔹 Check duplicate email (only when an email is provided)
     if (email) {
@@ -905,8 +937,8 @@ async updateAuthUser(req, res, _next) {
     // =====================================================
 
     // 🔹 Update User
-    const updatedUser = await authorizedUsersModel.findByIdAndUpdate(
-      userId,
+    const updatedUser = await authorizedUsersModel.findOneAndUpdate(
+      employeeScope,
       {
         firstName,
         lastName,
@@ -914,7 +946,7 @@ async updateAuthUser(req, res, _next) {
         emp_id: emp_id || null,
         profilePics: newProfilePics,
         adminId: isAdminExist?._id,
-        departmentId,
+        ...(departmentId !== undefined && { departmentId: department?._id ?? null }),
         designation,
         branch,
         shiftId,
@@ -924,6 +956,7 @@ async updateAuthUser(req, res, _next) {
       },
       { new: true }
     );
+    if (!updatedUser) return res.status(404).json(Response.userFailResp("Authorized user not found"));
 
     // 🔹 Prepare AI Service Payload
     const payload = {
@@ -941,6 +974,15 @@ async updateAuthUser(req, res, _next) {
         : {}),
       collection_name: this.getDbName(updatedUser.adminId),
       admin_id: updatedUser.adminId?.toString(),
+      ...cameraAssignments,
+    };
+
+    const completeUpdate = async () => {
+      const savedUser = await authorizedUsersModel.findOneAndUpdate(
+        employeeScope, { verified: true, ...cameraAssignments }, { new: true }
+      );
+      if (!savedUser) return res.status(404).json(Response.userFailResp("Authorized user not found"));
+      return res.status(200).json(Response.userSuccessResp("Authorized user updated successfully", savedUser));
     };
 
     // 🔹 Update AI Service
@@ -994,6 +1036,8 @@ async updateAuthUser(req, res, _next) {
             profileImages:  newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
+            ...storedAttendanceCameraAssignments(newUser),
+            ...cameraAssignments,
           };
           try {
             
@@ -1006,17 +1050,7 @@ async updateAuthUser(req, res, _next) {
               }
             );
             console.log("✅ Face Auth Registered in AI service:", response.data);
-            // 🔹 Mark verified true
-            await authorizedUsersModel.findByIdAndUpdate(updatedUser._id, {
-              verified: true,
-            });
-
-            return res.status(200).json(
-              Response.userSuccessResp(
-                "Authorized user updated successfully",
-                updatedUser
-              )
-            );
+            return await completeUpdate();
           } catch (err) {
             
             console.error("❌ Failed to register user in Face Auth service:", err.response?.data?.message);
@@ -1077,17 +1111,7 @@ async updateAuthUser(req, res, _next) {
       );
     }
 
-    // 🔹 Mark verified true
-    await authorizedUsersModel.findByIdAndUpdate(updatedUser._id, {
-      verified: true,
-    });
-
-    return res.status(200).json(
-      Response.userSuccessResp(
-        "Authorized user updated successfully",
-        updatedUser
-      )
-    );
+    return await completeUpdate();
   } catch (error) {
     logger.error(error);
     return res.status(500).json(

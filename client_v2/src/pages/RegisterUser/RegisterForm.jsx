@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import RegisterFormStep1 from './RegisterFormStep1';
+import { appendCameraIds, cameraAssignmentFields, getCameraAssignmentValues } from './CameraAssignmentFields';
 import RegisterFormStep2 from './RegisterFormStep2';
 import {
   fetchDepartments,
@@ -48,7 +49,6 @@ const validationSchemaStep1 = Yup.object().shape({
   vehicleNumber: Yup.string(),
   designation: Yup.string().required('Designation is required'),
   location: Yup.string(),
-  departmentId: Yup.string().required('Department is required'),
 });
 
 const validationSchemaStep2 = Yup.object().shape({});
@@ -218,8 +218,9 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             vehicleNumber: editUser.vehicleNumber || '',
             designation: editUser.designation || '',
             location: editUser.location || '',
-            departmentId: editUser?.departmentId?._id || '',
+            departmentId: editUser.departmentId?._id || editUser.departmentId || '',
             shiftId: editUser.shiftId?._id || editUser.shiftId || '',
+            ...getCameraAssignmentValues(editUser),
           }
         : {
             empId: '',
@@ -268,6 +269,14 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       const fieldName = key === 'empId' ? 'emp_id' : key;
       // Omit an unselected shift: existing optional registration stays unchanged.
       if (key === 'shiftId' && !value) return;
+      if (cameraAssignmentFields.some(({ name }) => name === key)) {
+        const previous = initialValues[key];
+        if (Array.isArray(value) && (!previous || values.departmentId !== initialValues.departmentId ||
+          value.length !== previous.length || value.some(id => !previous.includes(id)))) {
+          appendCameraIds(formData, key, value);
+        }
+        return;
+      }
       formData.append(fieldName, value);
     });
     uploadedImagePaths.forEach((item) => {
@@ -366,8 +375,8 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
           onSubmit={handleSubmit}
         >
           {({ values, validateForm, setTouched }) => (
-            <Form className="flex flex-col h-full w-full overflow-hidden">
-              <DialogHeader className="p-6 border-b border-[var(--bd)]">
+            <Form className="flex min-h-0 flex-col h-full w-full overflow-hidden">
+              <DialogHeader className="shrink-0 p-6 border-b border-[var(--bd)]">
                 {headerContent && <fieldset disabled={isSubmitting} className="border-0 p-0 pr-12 m-0 mb-3">{headerContent}</fieldset>}
                 <div className="flex items-center justify-center relative">
                   {step === 2 && (
@@ -393,6 +402,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
               {/* fieldset[disabled] natively blocks every control inside, so
                   images can't be swapped or removed while the update is in flight. */}
               <fieldset
+                data-select-scroll-boundary
                 disabled={isSubmitting}
                 className={`p-6 md:p-8 flex-1 overflow-y-auto min-h-0 vq-scroll border-0 m-0 min-w-0 ${
                   isSubmitting ? 'opacity-60' : ''
@@ -402,6 +412,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                   <RegisterFormStep1
                     departments={departments}
                     currentShift={editUser?.shiftId}
+                    showCameraAssignments={Boolean(editUser)}
                     locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))}
                   />
                 ) : (
@@ -415,7 +426,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                 )}
               </fieldset>
 
-              <div className="p-6 border-t border-[var(--bd)] flex justify-center">
+              <div className="shrink-0 p-6 border-t border-[var(--bd)] flex justify-center">
                 {step === 1 ? (
                   <Button
                     type="button"

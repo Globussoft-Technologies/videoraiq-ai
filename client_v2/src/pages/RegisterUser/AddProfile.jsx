@@ -271,7 +271,7 @@ const AddProfile = () => {
       .then((res) => {
         const stored = res?.link;
         setRegistrationLink(stored?.token
-          ? { url: buildRegistrationLink(stored.token), expiresAt: stored.expiresAt }
+          ? { url: buildRegistrationLink(stored.token), expiresAt: stored.expiresAt, cameraAssignments: stored.cameraAssignments }
           : null);
       })
       .catch((error) => console.error('Failed to fetch registration link', error));

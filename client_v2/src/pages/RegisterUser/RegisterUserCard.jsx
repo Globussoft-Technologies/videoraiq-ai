@@ -19,6 +19,7 @@ import FaceCaptureModal from './FaceCaptureModal';
 import FaceCaptureWizard from './FaceCaptureWizard';
 import { COMPACT_TOAST } from './toastOptions';
 import { EMAIL_EMOJI_ERROR, hasEmailEmoji, isValidEmailFormat } from '@/utils/emailValidation';
+import CameraAssignmentFields, { appendCameraIds } from './CameraAssignmentFields';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -98,6 +99,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [designation, setDesignation] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [cameraAssignments, setCameraAssignments] = useState({});
   const [shiftId, setShiftId] = useState('');
   const [location, setLocation] = useState('');
   const [errors, setErrors] = useState({});
@@ -182,6 +184,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     setVehicleNumber('');
     setDesignation('');
     setDepartmentId('');
+    setCameraAssignments({});
     setShiftId('');
     setLocation('');
     setErrors({});
@@ -201,7 +204,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     else if (email.trim() && !isValidEmailFormat(email))
       errs.email = 'Invalid email format';
     if (!designation.trim()) errs.designation = 'Designation is required';
-    if (!departmentId) errs.department = 'Department is required';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -252,6 +254,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     formData.append('vehicleNumber', vehicleNumber.trim());
     formData.append('designation', designation.trim());
     if (departmentId) formData.append('departmentId', departmentId);
+    for (const [name, ids] of Object.entries(cameraAssignments)) appendCameraIds(formData, name, ids);
     if (shiftId) formData.append('shiftId', shiftId);
     if (location) formData.append('location', location);
     imagePaths.forEach((item) => {
@@ -378,16 +381,16 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               )}
             </div>
             <div>
-              <label className={fieldLabel}>Department<Req /></label>
+              <label className={fieldLabel}>Department (optional)</label>
               <SelectField
                 value={departmentId}
                 options={departmentOptions}
-                onChange={setDepartmentId}
+                onChange={(id) => {
+                  if (id && id !== departmentId) setCameraAssignments({});
+                  setDepartmentId(id);
+                }}
                 placeholder="Select department"
               />
-              {errors.department && (
-                <p className="text-xs text-[var(--crit)] mt-1">{errors.department}</p>
-              )}
             </div>
           </div>
 
@@ -416,6 +419,12 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               <ShiftSelect value={shiftId} onChange={setShiftId} />
             </div>
           </div>
+
+          <CameraAssignmentFields
+            values={cameraAssignments}
+            departmentId={departmentId}
+            onChange={(name, value) => setCameraAssignments((previous) => ({ ...previous, [name]: value }))}
+          />
 
           <button
             type="button"
