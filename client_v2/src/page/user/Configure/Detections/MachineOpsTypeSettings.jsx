@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { createDetectionSetting, updateDetectionSetting } from '../../../../helpers/configure';
-import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE } from '../../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE } from '../../../../helpers/machineOpsDetection?v=roller-export-1';
 import { getTelegramLinkCode } from '../../../../helpers/telegram';
 import { whatsappRequest } from '../../../../helpers/whatsapp';
 import { useApi } from '../../../../hooks/useApi';

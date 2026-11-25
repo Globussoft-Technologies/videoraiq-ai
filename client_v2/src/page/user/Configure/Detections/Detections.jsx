@@ -16,7 +16,7 @@ import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
 import SpecialDetectionSettings from './SpecialDetectionSettings';
 import MachineOpsTypeSettings from './MachineOpsTypeSettings';
-import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE } from '../../../../helpers/machineOpsDetection';
+import { MACHINE_OPS_SETTING_TYPE, ROLLER_MACHINE_TYPE } from '../../../../helpers/machineOpsDetection?v=roller-export-1';
 import { snapshotForPreview } from '../DetectionZoneMarking/preview';
 import {
   ATTENDANCE_DETECTION_SETTING_TYPE,
