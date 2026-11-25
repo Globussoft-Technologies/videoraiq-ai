@@ -3097,7 +3097,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
+            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, max(300px, calc(25% - 12px))), 1fr))', gap: 16 }}>
               {items.map((item, i) => (
                 <div
                   key={`${item._id || item.id}:${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) ? lastViewedPulse : 0}`}

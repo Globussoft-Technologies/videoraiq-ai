@@ -388,7 +388,7 @@ function ReportFormModal({
           </div>
 
           <Section title="Frequency" icon={Clock3}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8 }}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {FREQUENCIES.map((frequency) => (
                 <label key={frequency.value} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form.frequency === frequency.value ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form.frequency === frequency.value ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: form.frequency === frequency.value ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
                   <input type="radio" name="auto-report-frequency" checked={form.frequency === frequency.value} onChange={() => setForm((current) => ({ ...current, frequency: frequency.value }))} />

@@ -293,7 +293,7 @@ const ReusableTablePage = ({
           <>
             {showGrid ? (
               !isEmpty && (
-                <div className="grid gap-2.5 sm:gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
+                <div className="grid gap-2.5 sm:gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, max(300px, calc(25% - 18px))), 1fr))' }}>
                   {(paginated || []).map((item, idx) => (
                     <div key={`${item?.id ?? item?._id ?? item?.email ?? idx}:${recentlyViewedId === (item?.id ?? item?._id) ? recentlyViewedPulse : 0}`} data-recent-log-card={item?.id ?? item?._id} className={`min-w-0${recentlyViewedId != null && recentlyViewedId === (item?.id ?? item?._id) && recentlyViewedPulse ? ' log-card-flash' : ''}`}>
                       {gridCard(item, idx)}

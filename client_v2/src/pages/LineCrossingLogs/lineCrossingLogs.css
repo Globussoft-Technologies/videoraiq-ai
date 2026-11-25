@@ -110,3 +110,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 600px) {
+  .vq-lcl-live-controls-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vq-lcl-system-controls,
+  .vq-lcl-system-controls > div {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .vq-lcl-chart-modal-overlay {
+    padding: 8px !important;
+  }
+
+  .vq-lcl-chart-modal-panel {
+    width: 100% !important;
+    max-height: calc(100dvh - 16px) !important;
+    padding: 14px !important;
+  }
+
+  .vq-lcl-chart-modal-empty {
+    height: min(320px, 45dvh) !important;
+    text-align: center;
+  }
+}

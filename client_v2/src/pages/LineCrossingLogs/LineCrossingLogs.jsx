@@ -1288,7 +1288,9 @@ export default function LineCrossingLogs() {
           )}
         </section>
 
-        <SystemControls />
+        <div className="vq-lcl-system-controls">
+          <SystemControls />
+        </div>
       </div>
 
       <div className="vq-lcl-charts-grid-primary">
@@ -1307,7 +1309,7 @@ export default function LineCrossingLogs() {
                 onClick={() => setChartModal({
                   title: 'Cumulative Crossings Over Time',
                   sub: 'Shows how entry and exit totals build up through the selected period',
-                  children: seriesPoints.length ? <ReactApexChart options={buildChartOptions()} series={chartSeries} type="area" height={560} /> : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No line crossing time-series data.</div>,
+                  children: seriesPoints.length ? <ReactApexChart options={buildChartOptions()} series={chartSeries} type="area" height={560} /> : <div className="vq-lcl-chart-modal-empty" style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No line crossing time-series data.</div>,
                 })}
                 style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: GRAPH_CARD_ACCENT, display: 'grid', placeItems: 'center', cursor: 'pointer' }}
               >
@@ -1839,12 +1841,14 @@ export default function LineCrossingLogs() {
       )}
       {chartModal && createPortal(
         <div
+          className="vq-lcl-chart-modal-overlay"
           role="dialog"
           aria-modal="true"
           style={{ position: 'fixed', inset: 0, zIndex: 10020, background: 'rgba(15,23,42,.62)', backdropFilter: 'blur(8px)', display: 'grid', placeItems: 'center', padding: 24 }}
           onClick={() => setChartModal(null)}
         >
           <section
+            className="vq-lcl-chart-modal-panel"
             onClick={(event) => event.stopPropagation()}
             style={{
               width: 'min(1120px, 96vw)',
