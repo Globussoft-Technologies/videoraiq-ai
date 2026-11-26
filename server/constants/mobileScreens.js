@@ -57,7 +57,7 @@ const dynamicLogs = new Map(incidentDefinitions.map(([key, handler, extraFields]
 
 // Specialised workflows remain native, as specified in the proposal. An app
 // must skip an unknown native ID rather than try to draw an incomplete screen.
-export const MOBILE_SCREENS = TOUR_MODULES.filter((entry) => !entry.tourOnly && entry.permissionKey).map((entry, order) => {
+export const MOBILE_SCREENS = TOUR_MODULES.filter((entry) => !entry.tourOnly && entry.permissionKey && entry.key !== 'register').map((entry, order) => {
   let moduleId = entry.moduleKey || (entry.modulePageKey ? 'mattressMeasurement' : 'core');
   let modulePageKey = entry.modulePageKey;
   if (entry.key.startsWith('box-packing')) {
