@@ -10,7 +10,7 @@ import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
 import { isLocalSetup } from '@/utils/jwt';
 import AuthLoader from '@/page/user/Users/AuthLoader';
 import MobilePageLoader from '@/components/MobilePageLoader';
-import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed } from '@/utils/mobileEmbed';
+import { getMobileEmbed, isMobileEmbedded, clearMobileEmbed, verifyMobileEmbedSession } from '@/utils/mobileEmbed';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
@@ -151,29 +151,54 @@ export default function IsAuth({ children }) {
 
   useEffect(() => {
     if (isMobileEmbedded()) {
-      let stopped = false;
+      const controller = new AbortController();
+      let checking = false;
       let verified = false;
+      let ended = false;
+      const endEmbed = (message) => {
+        ended = true;
+        clearMobileEmbed();
+        setUser(null);
+        setFailure({ title: 'Mobile page unavailable', message });
+        setIsLoading(false);
+      };
       const checkEmbedded = async () => {
+        if (checking || ended || controller.signal.aborted) return;
+        const session = getMobileEmbed();
+        if (!session || session.screen.webPath !== window.location.pathname) {
+          endEmbed('Open the permitted page again from the mobile app.');
+          return;
+        }
+        checking = true;
         try {
-          const session = getMobileEmbed();
-          if (!session || session.screen.webPath !== window.location.pathname) throw new Error('Open the permitted page again from the mobile app.');
-          const response = await fetch(`${HOST}/mobile-access/session`, { headers: { 'x-access-token': session.token } });
-          const result = await response.json();
-          if (!response.ok || result.body?.status !== 'success') throw new Error('Page access expired or revoked. Reopen from the mobile app.');
-          if (!stopped && !verified) {
+          const user = await verifyMobileEmbedSession(HOST, session.token, controller.signal);
+          if (controller.signal.aborted) return;
+          if (!user) {
+            endEmbed('Page access expired or revoked. Reopen from the mobile app.');
+          } else if (!verified) {
             verified = true;
-            setUser(result.body.data.user);
+            setUser(user);
+            setFailure(null);
             setIsLoading(false);
           }
-        } catch (error) {
-          if (!stopped) { clearMobileEmbed(); setUser(null); setFailure({ title: 'Mobile page unavailable', message: error.message }); setIsLoading(false); }
+        } catch {
+          if (!controller.signal.aborted && !verified) {
+            setFailure({ title: 'Checking mobile page access', message: 'The connection was interrupted. We’ll try again automatically.' });
+            setIsLoading(false);
+          }
+        } finally {
+          checking = false;
         }
       };
       checkEmbedded();
       const timer = setInterval(checkEmbedded, 30000);
       const onResume = () => { if (document.visibilityState === 'visible') checkEmbedded(); };
       document.addEventListener('visibilitychange', onResume);
-      return () => { stopped = true; clearInterval(timer); document.removeEventListener('visibilitychange', onResume); };
+      return () => {
+        controller.abort();
+        clearInterval(timer);
+        document.removeEventListener('visibilitychange', onResume);
+      };
     }
     // React 18 StrictMode (see main.jsx) double-invokes this effect in dev:
     // mount -> cleanup -> mount again, with the SAME component instance (refs
