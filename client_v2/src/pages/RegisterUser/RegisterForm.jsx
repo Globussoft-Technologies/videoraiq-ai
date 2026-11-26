@@ -359,8 +359,9 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
         </div>
       </DialogTrigger>}
       <DialogContent
-        className="w-[95vw] max-w-[800px] max-h-[90vh] top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] p-0 overflow-hidden bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl flex flex-col"
-        closeBtn={`z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)] top-6 right-6 opacity-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
+        data-vq-user-form=""
+        className="inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-0 sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-h-[90dvh] sm:w-[95vw] sm:max-w-[800px] sm:-translate-x-1/2 sm:-translate-y-1/2"
+        closeBtn={`z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)] top-3 right-3 sm:top-6 sm:right-6 opacity-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--brand)] ${
           isSubmitting ? 'pointer-events-none opacity-40' : ''
         }`}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -375,8 +376,8 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
           onSubmit={handleSubmit}
         >
           {({ values, validateForm, setTouched }) => (
-            <Form className="flex min-h-0 flex-col h-full w-full overflow-hidden">
-              <DialogHeader className="shrink-0 p-6 border-b border-[var(--bd)]">
+            <Form className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]">
+              <DialogHeader className="shrink-0 border-b border-[var(--bd)] px-4 py-3 sm:p-6">
                 {headerContent && <fieldset disabled={isSubmitting} className="border-0 p-0 pr-12 m-0 mb-3">{headerContent}</fieldset>}
                 <div className="flex items-center justify-center relative">
                   {step === 2 && (
@@ -389,7 +390,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                       <ArrowLeft className="w-5 h-5 text-[var(--tx2)]" />
                     </button>
                   )}
-                  <DialogTitle className="px-10 text-xl font-semibold text-center text-[var(--tx)]">
+                  <DialogTitle className="px-9 text-center text-lg font-semibold text-[var(--tx)] sm:px-10 sm:text-xl">
                     {step === 1
                       ? editUser
                         ? 'Update User Details'
@@ -401,32 +402,31 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
 
               {/* fieldset[disabled] natively blocks every control inside, so
                   images can't be swapped or removed while the update is in flight. */}
-              <fieldset
+              <div
                 data-select-scroll-boundary
-                disabled={isSubmitting}
-                className={`p-6 md:p-8 flex-1 overflow-y-auto min-h-0 vq-scroll border-0 m-0 min-w-0 ${
-                  isSubmitting ? 'opacity-60' : ''
-                }`}
+                className="vq-scroll relative min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6 md:p-8"
               >
-                {step === 1 ? (
-                  <RegisterFormStep1
-                    departments={departments}
-                    currentShift={editUser?.shiftId}
-                    showCameraAssignments={Boolean(editUser)}
-                    locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))}
-                  />
-                ) : (
-                  <RegisterFormStep2
-                    uploadedImagePaths={uploadedImagePaths}
-                    uploadedImageUrls={uploadedImageUrls}
-                    onRemoveImage={handleRemoveImage}
-                    onUploadFile={uploadFile}
-                    onOpenCamera={handleOpenCamera}
-                  />
-                )}
-              </fieldset>
+                <fieldset disabled={isSubmitting} className={`m-0 min-w-0 border-0 p-0 ${isSubmitting ? 'opacity-60' : ''}`}>
+                  {step === 1 ? (
+                    <RegisterFormStep1
+                      departments={departments}
+                      currentShift={editUser?.shiftId}
+                      showCameraAssignments={Boolean(editUser)}
+                      locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))}
+                    />
+                  ) : (
+                    <RegisterFormStep2
+                      uploadedImagePaths={uploadedImagePaths}
+                      uploadedImageUrls={uploadedImageUrls}
+                      onRemoveImage={handleRemoveImage}
+                      onUploadFile={uploadFile}
+                      onOpenCamera={handleOpenCamera}
+                    />
+                  )}
+                </fieldset>
+              </div>
 
-              <div className="shrink-0 p-6 border-t border-[var(--bd)] flex justify-center">
+              <div className="flex shrink-0 justify-center border-t border-[var(--bd)] bg-[var(--bg1solid)] px-4 py-3 sm:p-6">
                 {step === 1 ? (
                   <Button
                     type="button"

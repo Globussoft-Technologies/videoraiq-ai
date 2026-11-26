@@ -225,6 +225,8 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
     : '16px';
   const expandLeft = compactPosition !== null && compactPosition.left + COMPACT_PILL_WIDTH / 2 >= viewport.width / 2;
   const expandDown = compactPosition !== null && compactPosition.bottom >= viewport.height / 2;
+  const ExpandChevron = expandDown ? ChevronDown : ChevronUp;
+  const CollapseChevron = expandDown ? ChevronUp : ChevronDown;
   const panelWidth = isCompact ? 'var(--vq-alert-summary-width)' : 'min(340px, calc(100vw - 24px))';
   const panelLeft = expandLeft ? `calc(${compactLeft} + var(--vq-alert-peek-width) - ${panelWidth})` : compactLeft;
   const panelTop = `calc(100dvh - ${compactBottom} - var(--vq-alert-compact-height))`;
@@ -421,7 +423,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
           width: compactPeek ? 'var(--vq-alert-peek-width)' : panelWidth,
           maxHeight: isCompact ? undefined : `min(66dvh, 520px, calc(100dvh - ${expandDown ? panelTop : compactBottom} - 8px))`,
           borderColor: 'var(--bd)',
-          background: 'var(--glass)',
+          background: 'var(--vq-alert-card-bg, var(--glass))',
           backdropFilter: 'blur(18px)',
           WebkitBackdropFilter: 'blur(18px)',
           boxShadow: '0 12px 36px rgba(45,35,100,.18), 0 3px 10px rgba(45,35,100,.08)',
@@ -454,8 +456,8 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
                 </span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold leading-tight" style={{ color: 'var(--tx)' }}>Notifications</span>
-                <span className="mt-0.5 block text-[11px] leading-tight" style={{ color: 'var(--tx2)' }}>{alerts.length} new alerts</span>
+                <span className="vq-alert-compact-title block text-[14px] font-semibold leading-tight">Notifications</span>
+                <span className="vq-alert-compact-subtitle mt-0.5 block text-[11px] leading-tight">{alerts.length} new alerts</span>
               </span>
             </button>
             <span className="vq-alert-compact-divider" aria-hidden="true" />
@@ -463,8 +465,9 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
               {clearing ? <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" size={14} strokeWidth={2} /> : <Trash2 size={14} strokeWidth={2} />}
               <span className="hidden min-[380px]:inline">{clearing ? 'Clearing…' : 'Clear All'}</span>
             </button>
+            <span className="vq-alert-compact-divider" aria-hidden="true" />
             <button type="button" onClick={() => updateExpanded(true)} className="vq-alert-compact-toggle flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg" aria-label="Expand notifications" aria-expanded={false}>
-              <ChevronDown className="vq-alert-expand-icon" size={20} strokeWidth={2.6} />
+              <ExpandChevron className="vq-alert-expand-icon" size={20} strokeWidth={2.6} aria-hidden="true" />
             </button>
           </div>
           </>
@@ -483,7 +486,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
               </button>
               <span className="vq-alert-action-divider" aria-hidden="true" />
               <button type="button" onClick={() => updateExpanded(false)} aria-expanded={true} className="vq-alert-action vq-alert-view-pill flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold">
-                View Less <ChevronUp size={12} strokeWidth={2} />
+                View Less <CollapseChevron size={12} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
           </>

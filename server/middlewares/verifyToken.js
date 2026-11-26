@@ -103,7 +103,7 @@ async function verifyToken(req, res, next) {
             const { enforceEmbeddedAccess } = await import('../core/v2/mobileAccess/mobileAccess.service.js');
             if (!await enforceEmbeddedAccess(req, decoded)) return res.status(401).json(Response.tokenFailResp('Embedded access expired or revoked'));
           } catch {
-            return res.status(401).json(Response.tokenFailResp('Embedded access unavailable'));
+            return res.status(503).json(Response.errorResp('Embedded access unavailable'));
           }
         }
         let roleWithPermission = null;

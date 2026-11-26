@@ -4,6 +4,7 @@ import Response from '../../../utils/response.js';
 
 export const digest = value => createHash('sha256').update(String(value)).digest('hex');
 export const consumeCodeScript = "local v=redis.call('GET',KEYS[1]); if v then redis.call('DEL',KEYS[1]); end; return v";
+const EMBED_SESSION_TTL_SECONDS = 30 * 60;
 
 // No customer data or auth implementation in this factory; production supplies
 // the same token, licence and role services used by the rest of the application.
@@ -23,7 +24,7 @@ export function createMobileAccessRouter({ redis, authenticate, resolveAccess, s
       const snapshot = await resolveAccess(grant.claims, { includeDetectionDetails: false });
       const screen = snapshot.screens.find(screen => screen.id === grant.screenId);
       if (!screen) return fail(res, 403, 'Page access revoked');
-      const ttl = Math.min(600, grant.claims.exp - Math.floor(now() / 1000));
+      const ttl = Math.min(EMBED_SESSION_TTL_SECONDS, grant.claims.exp - Math.floor(now() / 1000));
       if (ttl < 1) return fail(res, 401, 'Mobile login expired');
       const embedId = randomBytes(24).toString('hex');
       await redis.set(`mobile:sso:session:${embedId}`, JSON.stringify(grant), 'EX', ttl);

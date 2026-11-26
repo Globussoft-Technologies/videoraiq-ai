@@ -245,6 +245,7 @@ function ImageZoomModal({ url, caption, onClose }) {
   return (
     <div
       ref={rootRef}
+      data-vq-image-preview=""
       onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >

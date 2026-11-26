@@ -1051,6 +1051,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
 
   return (
     <div
+      data-vq-image-preview=""
       onClick={onClose}
       onWheel={onWheel}
       style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000' }}

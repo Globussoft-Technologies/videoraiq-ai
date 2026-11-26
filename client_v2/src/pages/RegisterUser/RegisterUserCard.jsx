@@ -285,7 +285,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   };
 
   return (
-    <div data-tour="reg-form" className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-6">
+    <div data-tour="reg-form" className="min-w-0 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-3 sm:p-6">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--tx)]">Register New User</h2>
@@ -457,67 +457,67 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
           </div>
 
           {useWizard && uploadedCount === 0 ? (
-            <div className="w-full rounded-2xl border-2 border-dashed border-[var(--bd)] bg-[var(--bg2)] px-6 sm:px-8 py-8 sm:py-10 flex flex-col lg:flex-row items-center gap-7 lg:gap-12">
-              {/* left: ghosted avatar in a scan frame */}
-              <span className="relative flex items-center justify-center w-28 h-28 shrink-0">
-                <span className="absolute inset-0 rounded-full bg-[var(--blue)]/8" />
-                <span className="absolute inset-3 rounded-full bg-gradient-to-b from-[var(--blue)]/22 to-[var(--violet)]/18 flex items-end justify-center overflow-hidden">
-                  <UserRound className="w-16 h-16 text-[var(--blue)]/55 translate-y-2" strokeWidth={1.5} />
+            <div className="@container w-full rounded-2xl border-2 border-dashed border-[var(--bd)] bg-[var(--bg2)] px-3 py-5 sm:px-8 sm:py-10">
+              <div className="flex flex-col items-center gap-5 @min-[44rem]:flex-row @min-[44rem]:gap-8">
+                {/* left: ghosted avatar in a scan frame */}
+                <span className="relative flex items-center justify-center w-28 h-28 shrink-0">
+                  <span className="absolute inset-0 rounded-full bg-[var(--blue)]/8" />
+                  <span className="absolute inset-3 rounded-full bg-gradient-to-b from-[var(--blue)]/22 to-[var(--violet)]/18 flex items-end justify-center overflow-hidden">
+                    <UserRound className="w-16 h-16 text-[var(--blue)]/55 translate-y-2" strokeWidth={1.5} />
+                  </span>
+                  {['-top-1 -left-1 border-t-2 border-l-2 rounded-tl-lg',
+                    '-top-1 -right-1 border-t-2 border-r-2 rounded-tr-lg',
+                    '-bottom-1 -left-1 border-b-2 border-l-2 rounded-bl-lg',
+                    '-bottom-1 -right-1 border-b-2 border-r-2 rounded-br-lg'].map((c) => (
+                    <span key={c} className={`absolute w-5 h-5 border-[var(--blue)] ${c}`} />
+                  ))}
+                  <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center w-7 h-7 rounded-full text-white shadow-md" style={{ background: GRADIENT }}>
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                  </span>
                 </span>
-                {['-top-1 -left-1 border-t-2 border-l-2 rounded-tl-lg',
-                  '-top-1 -right-1 border-t-2 border-r-2 rounded-tr-lg',
-                  '-bottom-1 -left-1 border-b-2 border-l-2 rounded-bl-lg',
-                  '-bottom-1 -right-1 border-b-2 border-r-2 rounded-br-lg'].map((c) => (
-                  <span key={c} className={`absolute w-5 h-5 border-[var(--blue)] ${c}`} />
-                ))}
-                <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center w-7 h-7 rounded-full text-white shadow-md" style={{ background: GRADIENT }}>
-                  <Check className="w-4 h-4" strokeWidth={3} />
-                </span>
-              </span>
 
-              {/* middle: copy + actions */}
-              <div className="flex flex-col items-center lg:items-start gap-2 text-center lg:text-left flex-1 min-w-0">
-                <span className="text-[17px] font-semibold text-[var(--tx)] leading-tight">Start guided face capture</span>
-                <span className="text-xs text-[var(--tx3)] max-w-sm leading-relaxed">
-                  Add front, left and right views in one guided flow — use your camera or upload photos.
-                </span>
-                <div className="mt-2.5 flex flex-wrap justify-center lg:justify-start gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => openCameraFor(captureAngles[0], 'camera')}
-                    className="inline-flex items-center gap-2 h-10 px-5 rounded-xl text-white text-sm font-semibold hover:opacity-95 transition-opacity cursor-pointer"
-                    style={{ background: GRADIENT }}
-                  >
-                    <Camera className="w-4 h-4" /> Take Photos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openCameraFor(captureAngles[0], 'upload')}
-                    className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] text-sm font-semibold hover:bg-[var(--bg3)] transition-colors cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4" /> Upload Photos
-                  </button>
+                {/* middle: copy + actions */}
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center @min-[44rem]:items-start @min-[44rem]:text-left">
+                  <span className="text-[17px] font-semibold text-[var(--tx)] leading-tight">Start guided face capture</span>
+                  <span className="text-xs text-[var(--tx3)] max-w-sm leading-relaxed">
+                    Add front, left and right views in one guided flow — use your camera or upload photos.
+                  </span>
+                  <div className="mt-2.5 flex w-full flex-wrap justify-center gap-2.5 @min-[44rem]:justify-start">
+                    <button
+                      type="button"
+                      onClick={() => openCameraFor(captureAngles[0], 'camera')}
+                      className="inline-flex items-center gap-2 h-10 px-5 rounded-xl text-white text-sm font-semibold hover:opacity-95 transition-opacity cursor-pointer"
+                      style={{ background: GRADIENT }}
+                    >
+                      <Camera className="w-4 h-4" /> Take Photos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openCameraFor(captureAngles[0], 'upload')}
+                      className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] text-sm font-semibold hover:bg-[var(--bg3)] transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4" /> Upload Photos
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* right: Front / Left / Right icon steps */}
-              <div className="flex items-start gap-2 lg:gap-3 shrink-0">
-                {[
-                  { label: 'Front View', hint: 'Capture full face' },
-                  { label: 'Left View', hint: 'Turn your face left' },
-                  { label: 'Right View', hint: 'Turn your face right' },
-                ].map((s, i) => (
-                  <div key={s.label} className="flex items-start">
-                    <div className="flex flex-col items-center gap-2 w-[96px]">
-                      <span className="flex items-center justify-center w-12 h-12 rounded-full border-2 border-[var(--blue)] bg-[var(--blue)]/12 text-[var(--blue)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--blue)_16%,transparent)]">
+                {/* right: Front / Left / Right icon steps */}
+                <div className="grid w-full max-w-80 grid-cols-3 items-start gap-2 sm:gap-3 @min-[44rem]:w-80 @min-[44rem]:shrink-0">
+                  {[
+                    { label: 'Front View', hint: 'Capture full face' },
+                    { label: 'Left View', hint: 'Turn your face left' },
+                    { label: 'Right View', hint: 'Turn your face right' },
+                  ].map((s, i) => (
+                    <div key={s.label} className="relative flex min-w-0 flex-col items-center gap-1.5 text-center sm:gap-2">
+                      <span className="flex size-9 items-center justify-center rounded-full border-2 border-[var(--blue)] bg-[var(--blue)]/12 text-[var(--blue)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--blue)_16%,transparent)] sm:size-12">
                         <UserRound className="w-5 h-5" strokeWidth={1.75} />
                       </span>
                       <span className="text-[12px] font-semibold text-[var(--tx)]">{s.label}</span>
-                      <span className="text-[10px] text-[var(--tx3)] text-center leading-tight">{s.hint}</span>
+                      <span className="text-[10px] text-[var(--tx3)] leading-tight">{s.hint}</span>
+                      {i < 2 && <span aria-hidden="true" className="absolute left-[calc(100%+6px)] top-6 hidden w-5 -translate-x-1/2 border-t border-dashed border-[var(--blue)]/50 @min-[44rem]:block" />}
                     </div>
-                    {i < 2 && <span className="mt-6 w-7 border-t border-dashed border-[var(--blue)]/50" />}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           ) : (

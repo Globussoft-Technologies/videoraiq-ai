@@ -628,6 +628,7 @@ export default function IncidentPreviewModal({ item, channel, channelId, at, onC
 
   return createPortal(
     <div
+      data-vq-video-preview=""
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(6,9,15,.72)',

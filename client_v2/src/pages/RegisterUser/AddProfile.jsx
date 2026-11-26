@@ -519,7 +519,7 @@ const AddProfile = () => {
   const suggestions = suggestionsReady ? users.filter((user) => matchesEmployeeSearch(user, normalizedSearch)).slice(0, 5) : [];
 
   return (
-    <div className="p-[22px] flex flex-col gap-[18px] min-h-full min-w-0">
+    <div className="flex min-h-full min-w-0 flex-col gap-4 p-3 sm:gap-[18px] sm:p-[22px]">
       {/* Register New User (inline, two-step) */}
       <RegisterUserCard
         departments={formDepartments}
@@ -527,7 +527,7 @@ const AddProfile = () => {
         onCreated={fetchUsers}
       />
 
-      <div data-tour="reg-directory" className="w-full min-w-0 flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
+      <div data-tour="reg-directory" className="w-full min-w-0 flex-1 flex flex-col p-3 sm:p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
         <div className="flex min-w-0 flex-col gap-3">
           <div data-tour="reg-search" className="relative w-full md:w-56" onBlur={(event) => {

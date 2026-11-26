@@ -93,6 +93,7 @@ const RegisterFormStep1 = ({ departments = [], locations = [], currentShift, sho
           options={locationOptions}
           onChange={(loc) => setFieldValue('location', loc)}
           placeholder="Select location"
+          inline
           preferUp
         />
         <ErrorMessage name="location" component="div" className={errorClass} />
@@ -111,6 +112,7 @@ const RegisterFormStep1 = ({ departments = [], locations = [], currentShift, sho
             setValues(next);
           }}
           placeholder="Select department"
+          inline
           preferUp
         />
       </div>
