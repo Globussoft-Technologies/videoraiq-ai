@@ -2,16 +2,17 @@ import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@/App';
-import { Bell, Trash2, X } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronUp, LoaderCircle, Trash2, X } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { usePermissions } from './PermissionContext';
-import { timeOfDay } from '../lib/format';
+import { incidentTimestamp, timeOfDay } from '../lib/format';
 import getAccessToken from '@/utils/getAccessToken';
 import { registerWebPush, webPushActive } from '@/utils/webPush';
 
 export const DESKTOP_NOTIFICATIONS_KEY = 'vq_desktop_notifications_enabled';
 export const IN_APP_NOTIFICATIONS_KEY = 'vq_inapp_notifications_enabled';
+export const NOTIFICATION_STACK_EXPANDED_KEY = 'vq_notification_stack_expanded';
 
 export function desktopNotificationsEnabled() {
   if (typeof window === 'undefined') return true;
@@ -30,7 +31,7 @@ function notificationKey(detection) {
     detection?.cameraId?._id || detection?.cameraId,
     detection?.channelId?._id || detection?.channelId,
     detection?.incidentType || detection?.incidentName || detection?.displayName,
-    detection?.timeOfIncident || detection?.createdAt || detection?.timestamp,
+    incidentTimestamp(detection),
   ].filter(Boolean).join('_');
 }
 
@@ -47,10 +48,19 @@ const SEVERITY_COLOR = {
   info: 'var(--blue)',
 };
 
-// How long an alert stays on screen before it auto-dismisses, matching the
-// previous sonner toast `duration`. Paused while the pointer is over the
-// stack so an alert can't disappear out from under the user mid-read/click.
-const ALERT_DURATION = 4000;
+// Each alert gets its own display window once it reaches the front of the queue.
+// Hovering pauses that window so the alert stays available for interaction.
+const ALERT_DURATION = 5000;
+// Keep the existing dismissal timing, but wait for the full visual exit sequence
+// before removing the row from React so the reference animation can complete.
+const ALERT_EXIT_DURATION = 1200;
+const COMPACT_PILL_WIDTH = 60;
+
+function alertDurationForCount(count) {
+  if (count > 20) return 2200;
+  if (count > 10) return 3500;
+  return ALERT_DURATION;
+}
 
 function cameraLabel(detection) {
   return (
@@ -134,39 +144,40 @@ function detectionTitle(detection) {
 }
 
 function detectionTime(detection) {
-  const value = detection?.timeOfIncident || detection?.createdAt || detection?.timestamp || new Date();
-  return timeOfDay(value) || 'Unknown time';
+  return timeOfDay(incidentTimestamp(detection)) || 'Unknown time';
 }
 
-function AlertRow({ alert, showDivider, onDismiss, onOpen }) {
+function AlertRow({ alert, showDivider, exiting, onDismiss, onOpen }) {
   const color = SEVERITY_COLOR[alert.severity] || SEVERITY_COLOR.info;
   return (
     <li
-      className="vq-fadeup flex list-none items-start gap-2.5 px-3.5 py-3"
+      className={`nm-wrap ${exiting ? 'is-going' : 'vq-fadeup'}`}
       style={{ borderTop: showDivider ? '1px solid var(--bd)' : 'none' }}
     >
-      <span
-        className="flex h-7 w-7 flex-none items-center justify-center rounded-full"
-        style={{ background: `${color}1a`, color }}
-      >
-        <Bell size={14} strokeWidth={2} />
-      </span>
-      <button type="button" onClick={() => onOpen(alert)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Open ${alert.title} alert`}>
-        <div className="truncate text-[13px] font-semibold leading-tight" style={{ color: 'var(--tx)' }}>
-          {alert.title}
-        </div>
-        <div className="mt-1 truncate text-[11.5px] leading-tight" style={{ color: 'var(--tx2)' }}>
-          {alert.description}
-        </div>
-      </button>
-      <button
-        type="button"
-        onClick={() => onDismiss(alert.id)}
-        aria-label={`Dismiss ${alert.title} alert`}
-        className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[var(--tx3)] transition-colors hover:bg-[var(--bg2)] hover:text-[var(--tx)]"
-      >
-        <X size={14} strokeWidth={2} />
-      </button>
+      <div className="nm-item flex list-none items-start gap-2.5 px-3.5 py-4">
+        <span
+          className="nm-bell flex h-7 w-7 flex-none items-center justify-center rounded-full"
+          style={{ background: `${color}1a`, color }}
+        >
+          <Bell size={14} strokeWidth={2} />
+        </span>
+        <button type="button" onClick={() => onOpen(alert)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Open ${alert.title} alert`}>
+          <div className="truncate text-[13px] font-semibold leading-tight" style={{ color: 'var(--tx)' }}>
+            {alert.title}
+          </div>
+          <div className="mt-1 truncate text-[11.5px] leading-tight" style={{ color: 'var(--tx2)' }}>
+            {alert.description}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => onDismiss(alert.id)}
+          aria-label={`Dismiss ${alert.title} alert`}
+          className="nm-x flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[var(--tx3)] transition-colors hover:bg-[var(--bg2)] hover:text-[var(--tx)]"
+        >
+          <X size={14} strokeWidth={1.8} />
+        </button>
+      </div>
     </li>
   );
 }
@@ -174,92 +185,310 @@ function AlertRow({ alert, showDivider, onDismiss, onOpen }) {
 /**
  * Floating stack of active detection alerts, portalled to <body> so it can't
  * be clipped or offset by whatever page happens to be mounted underneath it.
- * All alerts render at once (no stacking/collapsing); once there are more
- * than fit in the max height, only the list scrolls — the "Clear All Alerts"
- * footer stays pinned outside that scroll area.
+ * Render the original scrollable alert stack while animating rows before removal.
  */
 function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
-  const timersRef = useRef(new Map());
-  const pausedRef = useRef(false);
+  const [paused, setPaused] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return window.localStorage.getItem(NOTIFICATION_STACK_EXPANDED_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [compactMinimized, setCompactMinimized] = useState(false);
+  const [compactHovered, setCompactHovered] = useState(false);
+  const [compactPosition, setCompactPosition] = useState(null);
+  const [viewport, setViewport] = useState(() => typeof window === 'undefined'
+    ? { width: 0, height: 0 }
+    : { width: window.innerWidth, height: window.innerHeight });
+  const [dragging, setDragging] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const remainingRef = useRef(ALERT_DURATION);
+  const startedRef = useRef(0);
+  const currentIdRef = useRef(null);
+  const compactTargetRef = useRef(null);
+  const dragRef = useRef(null);
+  const suppressDragClickRef = useRef(false);
+  const hoverTimerRef = useRef(null);
+  const exitTimersRef = useRef(new Map());
+  const [exitingIds, setExitingIds] = useState(() => new Set());
+  const active = alerts[0];
+  const hasAlerts = alerts.length > 0;
+  const isCompact = !expanded;
+  const compactPeek = isCompact && (dragging || (compactMinimized && !compactHovered && !clearing));
+  const compactLeft = compactPosition
+    ? `clamp(0px, ${compactPosition.left}px, calc(100vw - var(--vq-alert-peek-width)))`
+    : 'var(--vq-alert-compact-left)';
+  const compactBottom = compactPosition
+    ? `clamp(0px, ${compactPosition.bottom}px, calc(100dvh - var(--vq-alert-compact-height)))`
+    : '16px';
+  const expandLeft = compactPosition !== null && compactPosition.left + COMPACT_PILL_WIDTH / 2 >= viewport.width / 2;
+  const expandDown = compactPosition !== null && compactPosition.bottom >= viewport.height / 2;
+  const panelWidth = isCompact ? 'var(--vq-alert-summary-width)' : 'min(340px, calc(100vw - 24px))';
+  const panelLeft = expandLeft ? `calc(${compactLeft} + var(--vq-alert-peek-width) - ${panelWidth})` : compactLeft;
+  const panelTop = `calc(100dvh - ${compactBottom} - var(--vq-alert-compact-height))`;
+  const alertDuration = alertDurationForCount(alerts.length);
 
-  const scheduleFor = useCallback((id) => {
-    if (timersRef.current.has(id)) return;
+  const updateExpanded = (next) => {
+    setExpanded(next);
+    try {
+      window.localStorage.setItem(NOTIFICATION_STACK_EXPANDED_KEY, String(next));
+    } catch {}
+  };
+
+  const dismissWithAnimation = useCallback((id) => {
+    if (!id || exitTimersRef.current.has(id) || exitTimersRef.current.has('__clear_all__')) return;
+    setExitingIds((prev) => new Set(prev).add(id));
     const timer = setTimeout(() => {
-      timersRef.current.delete(id);
+      exitTimersRef.current.delete(id);
+      setExitingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       onDismiss(id);
-    }, ALERT_DURATION);
-    timersRef.current.set(id, timer);
+    }, ALERT_EXIT_DURATION);
+    exitTimersRef.current.set(id, timer);
   }, [onDismiss]);
 
-  useEffect(() => {
-    const liveIds = new Set(alerts.map((a) => a.id));
-    timersRef.current.forEach((timer, id) => {
-      if (!liveIds.has(id)) {
-        clearTimeout(timer);
-        timersRef.current.delete(id);
-      }
+  const clearAllWithAnimation = useCallback(() => {
+    if (!alerts.length || exitTimersRef.current.has('__clear_all__')) return;
+    setClearing(true);
+    exitTimersRef.current.forEach((timer) => clearTimeout(timer));
+    exitTimersRef.current.clear();
+    alerts.forEach((alert) => {
+      setExitingIds((prev) => new Set(prev).add(alert.id));
     });
-    if (!pausedRef.current) {
-      alerts.forEach((a) => scheduleFor(a.id));
-    }
-  }, [alerts, scheduleFor]);
+    const timer = setTimeout(() => {
+      exitTimersRef.current.clear();
+      setExitingIds(new Set());
+      setClearing(false);
+      onClearAll();
+    }, ALERT_EXIT_DURATION);
+    exitTimersRef.current.set('__clear_all__', timer);
+  }, [alerts, onClearAll]);
 
   useEffect(() => () => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current.clear();
+    clearTimeout(hoverTimerRef.current);
+    exitTimersRef.current.forEach((timer) => clearTimeout(timer));
+    exitTimersRef.current.clear();
   }, []);
+
+  useEffect(() => {
+    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!alerts.length) setPaused(false);
+  }, [alerts.length]);
+
+  useEffect(() => {
+    if (!isCompact || !hasAlerts) {
+      setCompactMinimized(false);
+      setCompactHovered(false);
+      return undefined;
+    }
+    if (paused || clearing || compactMinimized) return undefined;
+    const timer = setTimeout(() => setCompactMinimized(true), 3000);
+    return () => clearTimeout(timer);
+  }, [isCompact, hasAlerts, paused, clearing, compactMinimized]);
+
+  useEffect(() => {
+    if (active?.id !== currentIdRef.current) {
+      currentIdRef.current = active?.id ?? null;
+      remainingRef.current = alertDuration;
+    } else if (alertDuration < remainingRef.current) {
+      // If a burst pushes the stack over a threshold, shorten the current
+      // alert's remaining time as well instead of waiting for the old timer.
+      remainingRef.current = alertDuration;
+    }
+    if (!active || paused || clearing) return undefined;
+    startedRef.current = Date.now();
+    const timer = setTimeout(() => dismissWithAnimation(active.id), remainingRef.current);
+    return () => {
+      clearTimeout(timer);
+      remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedRef.current));
+    };
+  }, [active?.id, alertDuration, paused, clearing, dismissWithAnimation]);
 
   if (!alerts.length || typeof document === 'undefined') return null;
 
-  const handleMouseEnter = () => {
-    pausedRef.current = true;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current.clear();
+  const handleStackMouseEnter = ({ clientX, clientY }) => {
+    if (dragRef.current || clearing) return;
+    if (isCompact && compactMinimized) {
+      const target = compactTargetRef.current?.getBoundingClientRect();
+      if (!target || clientX < target.left || clientX >= target.right || clientY < target.top || clientY >= target.bottom) return;
+      if (hoverTimerRef.current == null) {
+        hoverTimerRef.current = setTimeout(() => {
+          hoverTimerRef.current = null;
+          setCompactHovered(true);
+        }, 220);
+      }
+    }
+    setPaused(true);
   };
 
-  const handleMouseLeave = () => {
-    pausedRef.current = false;
-    alerts.forEach((a) => scheduleFor(a.id));
+  const handleStackMouseLeave = () => {
+    clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+    if (dragRef.current) return;
+    setPaused(false);
+    setCompactHovered(false);
+  };
+
+  const startCompactDrag = (event) => {
+    if (!event.isPrimary || event.button !== 0 || clearing) return;
+    clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: Math.min(event.clientX - rect.left, 30),
+      offsetY: event.clientY - rect.top,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPaused(true);
+  };
+
+  const moveCompactDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.moved) {
+      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+      drag.moved = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDragging(true);
+      setCompactMinimized(true);
+      setCompactHovered(false);
+    }
+    const { clientWidth, clientHeight } = document.documentElement;
+    const width = compactTargetRef.current?.offsetWidth || COMPACT_PILL_WIDTH;
+    const height = compactTargetRef.current?.offsetHeight || 56;
+    setCompactPosition({
+      left: Math.max(0, Math.min(clientWidth - width, event.clientX - drag.offsetX)),
+      bottom: Math.max(0, Math.min(clientHeight - height, clientHeight - event.clientY + drag.offsetY - height)),
+    });
+  };
+
+  const finishCompactDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    suppressDragClickRef.current = drag.moved;
+    setDragging(false);
+    if (drag.moved || event.pointerType !== 'mouse') setPaused(false);
   };
 
   return createPortal(
     <div
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      role="region"
-      aria-label="Active alerts"
-      className="fixed z-[9999] flex flex-col overflow-hidden rounded-2xl border"
-      style={{
-        left: 16,
-        bottom: 16,
-        width: 'min(380px, calc(100vw - 32px))',
-        maxHeight: 'min(66vh, 520px)',
-        borderColor: 'var(--bd)',
-        background: 'var(--glass)',
-        backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
-        boxShadow: '0 18px 46px rgba(0,0,0,.34)',
+      className="vq-alert-position"
+      data-expand-side={expandLeft ? 'left' : 'right'}
+      style={{ '--vq-alert-peek-width': `${COMPACT_PILL_WIDTH}px` }}
+      onMouseEnter={handleStackMouseEnter}
+      onMouseMove={compactPeek ? handleStackMouseEnter : undefined}
+      onMouseLeave={handleStackMouseLeave}
+      onPointerDownCapture={() => { suppressDragClickRef.current = false; }}
+      onPointerMove={moveCompactDrag}
+      onPointerUp={finishCompactDrag}
+      onPointerCancel={finishCompactDrag}
+      onLostPointerCapture={(event) => {
+        if (!dragRef.current?.moved || event.target === event.currentTarget) finishCompactDrag(event);
+      }}
+      onClickCapture={(event) => {
+        if (!suppressDragClickRef.current || event.detail === 0) return;
+        event.stopPropagation();
+        suppressDragClickRef.current = false;
       }}
     >
-      <ul className="vq-scroll m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto p-0">
-        {alerts.map((alert, index) => (
-          <AlertRow key={alert.id} alert={alert} showDivider={index > 0} onDismiss={onDismiss} onOpen={onOpen} />
-        ))}
-      </ul>
-
-      {alerts.length >= 2 && (
-        <div className="flex-none border-t p-2.5" style={{ borderColor: 'var(--bd)', background: 'var(--bg1solid)' }}>
-          <button
-            type="button"
-            onClick={onClearAll}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border py-2 text-[12.5px] font-semibold transition-colors hover:bg-[var(--bg2)]"
-            style={{ borderColor: 'var(--bd)', color: 'var(--tx)' }}
-          >
-            <Trash2 size={13} strokeWidth={2} />
-            Clear All Alerts
-          </button>
-        </div>
+      {isCompact && compactMinimized && (
+        <span ref={compactTargetRef} aria-hidden="true" className="fixed z-[9998]" style={{ left: compactLeft, bottom: compactBottom, height: 'var(--vq-alert-compact-height)', width: 'var(--vq-alert-peek-width)' }} />
       )}
+      <div
+        role="region"
+        aria-label="Active alerts"
+        className={`vq-alert-stack fixed z-[9999] flex flex-col rounded-2xl border ${isCompact ? 'vq-alert-stack-compact' : ''} ${compactPeek ? 'vq-alert-stack-compact-peek' : ''} ${isCompact && compactMinimized && !dragging ? 'vq-alert-stack-hover-motion' : ''}`}
+        style={{
+          left: compactPeek ? compactLeft : `clamp(0px, ${panelLeft}, calc(100vw - ${panelWidth}))`,
+          top: !isCompact && expandDown ? panelTop : undefined,
+          bottom: !isCompact && expandDown ? undefined : compactBottom,
+          height: isCompact ? 'var(--vq-alert-compact-height)' : undefined,
+          width: compactPeek ? 'var(--vq-alert-peek-width)' : panelWidth,
+          maxHeight: isCompact ? undefined : `min(66dvh, 520px, calc(100dvh - ${expandDown ? panelTop : compactBottom} - 8px))`,
+          borderColor: 'var(--bd)',
+          background: 'var(--glass)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
+          boxShadow: '0 12px 36px rgba(45,35,100,.18), 0 3px 10px rgba(45,35,100,.08)',
+        }}
+      >
+        {isCompact ? (
+          <>
+            <button type="button" inert={!compactPeek} onPointerDown={startCompactDrag} onClick={() => updateExpanded(true)} className={`vq-alert-peek flex h-full w-full touch-none select-none items-center justify-between rounded-full pl-1 pr-1.5 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`} aria-label="Expand notifications" aria-expanded={false}>
+              <ChevronLeft className="vq-alert-expand-icon shrink-0" size={10} strokeWidth={2} aria-hidden="true" />
+              <span className="vq-alert-summary-icon flex h-9 w-9 flex-none items-center justify-center rounded-full">
+                <Bell size={18} strokeWidth={2.2} />
+                <span className="vq-alert-count" aria-label={`${alerts.length} notifications`}>
+                  {alerts.length > 99 ? '99+' : alerts.length}
+                </span>
+              </span>
+            </button>
+          <div inert={compactPeek} className="vq-alert-compact flex h-full w-full items-center gap-2 px-2">
+            <button
+              type="button"
+              onPointerDown={startCompactDrag}
+              onClick={() => updateExpanded(true)}
+              className="vq-alert-compact-summary flex min-w-0 flex-1 touch-none select-none cursor-grab items-center gap-3 text-left"
+              aria-label="View notifications"
+              aria-expanded={false}
+            >
+              <span className="vq-alert-summary-icon flex h-9 w-9 flex-none items-center justify-center rounded-full">
+                <Bell size={18} strokeWidth={2.2} />
+                <span className="vq-alert-count" aria-label={`${alerts.length} notifications`}>
+                  {alerts.length > 99 ? '99+' : alerts.length}
+                </span>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold leading-tight" style={{ color: 'var(--tx)' }}>Notifications</span>
+                <span className="mt-0.5 block text-[11px] leading-tight" style={{ color: 'var(--tx2)' }}>{alerts.length} new alerts</span>
+              </span>
+            </button>
+            <span className="vq-alert-compact-divider" aria-hidden="true" />
+            <button type="button" disabled={clearing} aria-busy={clearing} onClick={clearAllWithAnimation} className="vq-alert-compact-clear flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold disabled:cursor-wait" aria-label={clearing ? 'Clearing alerts' : 'Clear all alerts'}>
+              {clearing ? <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" size={14} strokeWidth={2} /> : <Trash2 size={14} strokeWidth={2} />}
+              <span className="hidden min-[380px]:inline">{clearing ? 'Clearing…' : 'Clear All'}</span>
+            </button>
+            <button type="button" onClick={() => updateExpanded(true)} className="vq-alert-compact-toggle flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg" aria-label="Expand notifications" aria-expanded={false}>
+              <ChevronDown className="vq-alert-expand-icon" size={20} strokeWidth={2.6} />
+            </button>
+          </div>
+          </>
+        ) : (
+          <>
+            <ul className="vq-scroll m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto p-0">
+              {alerts.map((alert, index) => (
+                <AlertRow key={alert.id} alert={alert} showDivider={index > 0} exiting={exitingIds.has(alert.id)} onDismiss={dismissWithAnimation} onOpen={onOpen} />
+              ))}
+            </ul>
+
+            <div className="vq-alert-actions flex flex-none items-center border-t px-2 py-1.5" style={{ borderColor: 'var(--bd)' }}>
+              <button type="button" onClick={clearAllWithAnimation} className="vq-alert-action flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold">
+                <Trash2 size={13} strokeWidth={2} />
+                Clear All
+              </button>
+              <span className="vq-alert-action-divider" aria-hidden="true" />
+              <button type="button" onClick={() => updateExpanded(false)} aria-expanded={true} className="vq-alert-action vq-alert-view-pill flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold">
+                View Less <ChevronUp size={12} strokeWidth={2} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>,
     document.body
   );
@@ -287,7 +516,9 @@ export function DetectionNotificationProvider({ children }) {
 
   const openAlert = useCallback((alert) => {
     if (!alert.incidentId) return;
-    router.navigate(`/alerts?alertId=${encodeURIComponent(alert.incidentId)}`, { state: { alertId: alert.incidentId, alert: alert.incident } });
+    router.navigate(`/alerts?alertId=${encodeURIComponent(alert.incidentId)}`, {
+      state: { alertId: alert.incidentId, alert: alert.incident, fromDetectionNotification: true },
+    });
     dismissAlert(alert.id);
   }, [dismissAlert]);
 

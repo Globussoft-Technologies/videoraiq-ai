@@ -35,11 +35,14 @@ export function timeOfDay(date) {
 }
 
 /** "Jun 29, 14:32" */
-export function shortDateTime(date) {
+export function shortDateTime(date, { seconds = false } = {}) {
   if (!date) return '';
   const m = utcToConfiguredTimezone(date);
-  return m ? m.format('MMM D, HH:mm') : '';
+  return m ? m.format(seconds ? 'MMM D, HH:mm:ss' : 'MMM D, HH:mm') : '';
 }
+
+export const incidentTimestamp = (incident) =>
+  incident?.timeOfIncident || incident?.createdAt || incident?.timestamp;
 
 /** Thousands-separated integer. */
 export function num(n) {

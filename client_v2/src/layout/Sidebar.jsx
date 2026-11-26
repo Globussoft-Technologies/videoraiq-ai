@@ -205,6 +205,8 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
 
   return (
     <aside
+      data-vq-desktop-sidebar={isMobile ? undefined : collapsed ? 'collapsed' : 'expanded'}
+      data-vq-mobile-sidebar-open={isMobile && mobileOpen ? '' : undefined}
       style={
         isMobile
           ? {

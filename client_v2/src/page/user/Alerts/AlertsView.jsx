@@ -11,7 +11,7 @@ import { AsyncBoundary, Loading } from '../../../components/States';
 import moment from 'moment';
 import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
 import MultiSelect from '../../../components/MultiSelect';
-import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
+import { severity, detectionLabel, incidentTimestamp, shortDateTime, timeOfDay, mediaUrl } from '../../../lib/format';
 import { fetchIncidents, fetchIncidentById, fetchDetectionTypes, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { emotionAlertLabel } from '@/helpers/emotionDetection';
@@ -27,6 +27,12 @@ const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
 const incidentIdOf = (incident) => String(
   incident?._id || incident?.id || incident?.incidentId || ''
 );
+
+const incidentTimeValue = (incident) => new Date(incidentTimestamp(incident)).getTime() || 0;
+const incidentReadingKey = (incident) => {
+  const id = incidentIdOf(incident);
+  return id ? `${id}:${incidentTimeValue(incident)}` : '';
+};
 
 function exportClipFilename(name) {
   const safeName = String(name)
@@ -457,6 +463,7 @@ export default function AlertsView() {
   // incident id â€” fetched directly by id since it may not be in the general
   // feed's first page (older, or hidden by whatever tab/filter is active).
   const routedAlert = routerLocation.state?.alert || null;
+  const fromDetectionNotification = routerLocation.state?.fromDetectionNotification === true;
   const initialAlertId = routerLocation.state?.alertId
     || new URLSearchParams(routerLocation.search).get('alertId')
     || incidentIdOf(routedAlert);
@@ -469,23 +476,31 @@ export default function AlertsView() {
   const preserveInitialSelectionRef = useRef(Boolean(initialAlertId || routedAlert));
 
   useEffect(() => {
-    if (routedAlert) {
-      setDeepLinkedIncident(routedAlert);
-      setSelected(routedAlert);
-    }
+    preserveInitialSelectionRef.current = Boolean(initialAlertId || routedAlert);
+    setDeepLinkedIncident(routedAlert);
+    setSelected(routedAlert);
     if (!initialAlertId) return undefined;
     let cancelled = false;
     fetchIncidentById(initialAlertId)
       .then((incident) => {
-        if (cancelled || !incident) return;
-        setDeepLinkedIncident(incident);
-        setSelected(incident);
+        if (cancelled) return;
+        if (!incident || incidentIdOf(incident) !== String(initialAlertId)) {
+          if (!routedAlert) toast.error('Could not load that alert');
+          return;
+        }
+        // Aggregated incidents can advance to a newer reading under the same ID.
+        const sameReading = incidentReadingKey(incident) === incidentReadingKey(routedAlert);
+        const target = fromDetectionNotification && routedAlert && !sameReading
+          ? { ...routedAlert, resolved: incident.resolved, report: incident.report }
+          : incident;
+        setDeepLinkedIncident(target);
+        setSelected((current) => current === routedAlert ? target : current);
       })
       .catch(() => {
         if (!cancelled && !routedAlert) toast.error('Could not load that alert');
       });
     return () => { cancelled = true; };
-  }, [initialAlertId, routedAlert]);
+  }, [initialAlertId, routedAlert, fromDetectionNotification, routerLocation.key]);
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
@@ -532,6 +547,7 @@ export default function AlertsView() {
     : filter, [filter, selectedDetectionTypes]);
 
   const hasFilters = sev !== 'all' || statusFilter !== 'all' || selectedDetectionTypes.length > 0 || !!(dateFrom && dateTo);
+  const useLiveFeed = !hasFilters && !location;
   const clearAllFilters = useCallback(() => {
     setSev('all');
     setStatusFilter('all');
@@ -549,6 +565,7 @@ export default function AlertsView() {
   // Manual pagination (not useApi) so pages can accumulate as the user
   // scrolls, instead of each fetch replacing the whole list.
   const [items, setItems] = useState([]);
+  const [loadedCount, setLoadedCount] = useState(0);
   const liveItemsRef = useRef(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [countSummary, setCountSummary] = useState(() => normalizeIncidentCounts(null, 0));
@@ -557,45 +574,66 @@ export default function AlertsView() {
   const [error, setError] = useState(null);
   const listRef = useRef(null);
   const deepLinkedRowRef = useRef(null);
+  const focusedLinkRef = useRef(null);
   const requestIdRef = useRef(0);
   const countsRequestIdRef = useRef(0);
 
-  const hasMore = items.length < totalCount;
+  const hasMore = loadedCount < totalCount;
   // Polling only resumes once the user is back down to just the first page â€”
   // otherwise a background refresh would silently wipe out scrolled-in pages.
-  const isFirstPageOnly = items.length <= PAGE_SIZE;
+  const isFirstPageOnly = loadedCount <= PAGE_SIZE;
 
-  const loadPage = useCallback(async (skip, { append }) => {
+  const loadPage = useCallback(async (skip, { append, background = false }) => {
     const requestId = ++requestIdRef.current;
-    append ? setLoadingMore(true) : setLoading(true);
-    setError(null);
+    if (append) setLoadingMore(true);
+    else if (!background) {
+      setLoading(true);
+      setLoadingMore(false);
+    }
+    if (!background) setError(null);
     try {
       const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, listFilter);
       if (requestId !== requestIdRef.current) return; // superseded by a newer request
-      const fetchedIds = new Set(result.items.map(incidentIdOf));
-      const liveItems = [...liveItemsRef.current.values()].filter((item) => !fetchedIds.has(incidentIdOf(item)));
-      setItems((prev) => append ? [...prev, ...result.items] : [...liveItems, ...result.items]);
+      const fetched = result.items.map((item) => {
+        const live = useLiveFeed && liveItemsRef.current.get(incidentIdOf(item));
+        return live && incidentTimeValue(live) > incidentTimeValue(item) ? live : item;
+      });
+      const fetchedIds = new Set(fetched.map(incidentIdOf));
+      const liveItems = useLiveFeed
+        ? [...liveItemsRef.current.values()].filter((item) => !fetchedIds.has(incidentIdOf(item)))
+        : [];
+      setItems((prev) => append
+        ? [...prev.filter((item) => !fetchedIds.has(incidentIdOf(item))), ...fetched]
+        : [...liveItems, ...fetched]);
+      setLoadedCount(skip + result.items.length);
       setTotalCount(result.totalCount);
+      setError(null);
     } catch (err) {
-      if (requestId === requestIdRef.current) setError(err);
+      if (requestId === requestIdRef.current && !background) setError(err);
     } finally {
       if (requestId === requestIdRef.current) {
         append ? setLoadingMore(false) : setLoading(false);
       }
     }
-  }, [listFilter]);
+  }, [listFilter, useLiveFeed]);
 
   useEffect(() => {
-    if (!socket || !user?.adminId) return undefined;
+    if (!socket || !user?.adminId || !useLiveFeed) return undefined;
     const onDetection = (incident) => {
       const id = incidentIdOf(incident);
-      if (!id || !incident?.Image) return;
+      if (!id) return;
+      const live = liveItemsRef.current.get(id);
+      if (live && incidentTimeValue(live) > incidentTimeValue(incident)) return;
       liveItemsRef.current.set(id, incident);
-      setItems((previous) => [incident, ...previous.filter((item) => incidentIdOf(item) !== id)]);
+      setItems((previous) => {
+        const existing = previous.find((item) => incidentIdOf(item) === id);
+        if (existing && incidentTimeValue(existing) > incidentTimeValue(incident)) return previous;
+        return [incident, ...previous.filter((item) => incidentIdOf(item) !== id)];
+      });
     };
     socket.on(`cameradetection_${user.adminId}`, onDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, onDetection);
-  }, [socket, user?.adminId]);
+  }, [socket, user?.adminId, useLiveFeed]);
 
   const loadCounts = useCallback(async () => {
     const requestId = ++countsRequestIdRef.current;
@@ -650,15 +688,15 @@ export default function AlertsView() {
 
   // Poll only while sitting on just the first page.
   useEffect(() => {
-    if (!isFirstPageOnly) return;
-    const id = setInterval(() => loadPage(0, { append: false }), POLL_MS);
+    if (!isFirstPageOnly || loading || loadingMore) return;
+    const id = setInterval(() => loadPage(0, { append: false, background: true }), POLL_MS);
     return () => clearInterval(id);
-  }, [isFirstPageOnly, loadPage]);
+  }, [isFirstPageOnly, loading, loadingMore, loadPage]);
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || !hasMore) return;
-    loadPage(items.length, { append: true });
-  }, [loading, loadingMore, hasMore, items.length, loadPage]);
+    loadPage(loadedCount, { append: true });
+  }, [loading, loadingMore, hasMore, loadedCount, loadPage]);
 
   const handleScroll = useCallback((e) => {
     const el = e.target;
@@ -668,33 +706,42 @@ export default function AlertsView() {
   const refetch = useCallback(() => loadPage(0, { append: false }), [loadPage]);
 
   const rows = useMemo(() => {
-    if (!deepLinkedIncident) return items;
-    const deepLinkedId = incidentIdOf(deepLinkedIncident);
-    if (items.some((item) => incidentIdOf(item) === deepLinkedId)) return items;
-    return [
-      deepLinkedIncident,
-      ...items,
-    ];
-  }, [items, deepLinkedIncident]);
+    const linkedKey = incidentReadingKey(deepLinkedIncident);
+    const linkedId = incidentIdOf(deepLinkedIncident);
+    let feed = [...items];
+    if (deepLinkedIncident && fromDetectionNotification) {
+      feed = [deepLinkedIncident, ...items.filter((item) => incidentReadingKey(item) !== linkedKey)];
+    } else if (linkedId && !items.some((item) => incidentIdOf(item) === linkedId)) {
+      feed.push(deepLinkedIncident);
+    }
+    return feed.sort((a, b) => incidentTimeValue(b) - incidentTimeValue(a));
+  }, [items, deepLinkedIncident, fromDetectionNotification]);
 
-  // The deep-linked row is deliberately prepended, so bring the internal
-  // table scroller back to its top after the incident has loaded.
   useEffect(() => {
-    if (!deepLinkedIncident || loading) return undefined;
+    if (!deepLinkedIncident || loading || focusedLinkRef.current === routerLocation.key) return undefined;
     const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-      deepLinkedRowRef.current?.focus({ preventScroll: true });
+      const row = deepLinkedRowRef.current;
+      if (!row) return;
+      focusedLinkRef.current = routerLocation.key;
+      row.scrollIntoView({ block: 'nearest' });
+      row.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
-  }, [deepLinkedIncident, loading]);
+  }, [deepLinkedIncident, loading, routerLocation.key]);
 
   // Per-tab counts come from the backend aggregate for the full filtered result
   // set, not from the currently loaded pagination page.
   const sevCounts = countSummary.severity;
   const statusCounts = countSummary.status;
 
-  const active = selected || rows[0] || null;
+  const active = selected
+    ? rows.find((row) => incidentReadingKey(row) === incidentReadingKey(selected))
+      || rows.find((row) => incidentIdOf(row) === incidentIdOf(selected))
+      || selected
+    : rows[0] || null;
   const activeId = incidentIdOf(active);
+  const activeReadingKey = incidentReadingKey(active);
+  const linkedReadingKey = incidentReadingKey(deepLinkedIncident);
   const activeResolved = !!active?.resolved;
   const activeReported = !!active?.report?.status;
   const activeStatus = active ? statusOf(active) : null;
@@ -751,6 +798,7 @@ export default function AlertsView() {
         if (incidentIdOf(incident) !== activeId) return incident;
         return { ...incident, resolved: true, report: { ...(incident.report || {}), status: false, description: "", resolvedAt: new Date().toISOString(), reportedAt: null } };
       };
+      liveItemsRef.current.delete(activeId);
       setItems((prev) => prev.map(markResolved));
       setSelected((prev) => markResolved(prev));
       setDeepLinkedIncident((prev) => markResolved(prev));
@@ -778,6 +826,7 @@ export default function AlertsView() {
         },
       };
     };
+    liveItemsRef.current.delete(idToUpdate);
     setItems((prev) => prev.map(markReported));
     setSelected((prev) => markReported(prev));
     setDeepLinkedIncident((prev) => markReported(prev));
@@ -861,12 +910,14 @@ export default function AlertsView() {
                   const typeColor = typeAccentFor(it, sevMeta);
                   const eventDescription = it?.incidentType === 'emotionDetection' ? emotionAlertLabel(it) : incidentDescription(it);
                   const detailParts = alertDetailParts(it);
-                  const rowId = incidentIdOf(it);
-                  const isSel = !!activeId && activeId === rowId;
-                  const isDeepLinked = !!rowId && rowId === incidentIdOf(deepLinkedIncident);
+                  const rowKey = incidentReadingKey(it);
+                  const isSel = !!rowKey && activeReadingKey === rowKey;
+                  const isDeepLinked = fromDetectionNotification
+                    ? !!rowKey && rowKey === linkedReadingKey
+                    : !!linkedReadingKey && incidentIdOf(it) === incidentIdOf(deepLinkedIncident);
                   return (
                     <div
-                      key={rowId || index}
+                      key={rowKey || index}
                       ref={isDeepLinked ? deepLinkedRowRef : undefined}
                       onClick={() => handleSelectAlert(it)}
                       onKeyDown={(event) => {
@@ -911,7 +962,7 @@ export default function AlertsView() {
                         {detailParts.length > 0 && <div style={{ gridColumn: '1 / -1', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
                         <IncidentReportMessage item={it} compact />
                       </div>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
+                      <span title={shortDateTime(incidentTimestamp(it), { seconds: true })} style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeOfDay(incidentTimestamp(it)) || 'Unknown time'}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, flex: '0 0 auto' }} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.label}</span>
                       </span>
@@ -957,7 +1008,7 @@ export default function AlertsView() {
               <div style={{ padding: '10px 0 0', display: 'flex', flexDirection: 'column', gap: 9, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
                   <Badge color="#ff6b00" style={{ fontSize: 10, padding: '4px 8px', borderRadius: 5 }}>{activeTypeLabel}</Badge>
-                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(incidentTimestamp(active), { seconds: true }) || 'Unknown time'}</span>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', wordBreak: 'break-word' }}>{activeDescription}</div>
                 <div style={{ fontSize: 12, color: 'var(--tx2)', wordBreak: 'break-word' }}>{activeCameraLine}</div>
