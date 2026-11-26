@@ -5,6 +5,7 @@ const STATUS_STYLES = {
   active: { dot: 'bg-green-500', text: 'text-green-600 dark:text-green-400', label: 'Active' },
   inactive: { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', label: 'Inactive' },
   expired: { dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', label: 'Expired' },
+  unknown: { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', label: 'Unknown' },
 }
 
 const formatDate = (value) => {
@@ -38,7 +39,7 @@ const ClientRow = ({ client }) => {
     avatarColor = 'from-blue-500 to-purple-500',
   } = client
 
-  const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.inactive
+  const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.unknown
 
   const openConfig = () => {
     if (!id) return
@@ -47,16 +48,18 @@ const ClientRow = ({ client }) => {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={openConfig}
-      onKeyDown={(e) => {
+      role={id ? 'button' : undefined}
+      tabIndex={id ? 0 : undefined}
+      onClick={id ? openConfig : undefined}
+      onKeyDown={id ? (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           openConfig()
         }
-      }}
-      className="grid cursor-pointer grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)_150px_100px_150px_110px] items-center gap-4 border-b border-gray-100 px-6 py-4 transition-colors last:border-b-0 hover:bg-gray-50/70 focus:bg-gray-50/70 focus:outline-none dark:border-white/5 dark:hover:bg-white/3 dark:focus:bg-white/3">
+      } : undefined}
+      className={`grid grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)_150px_100px_150px_110px] items-center gap-4 border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/5 ${
+        id ? 'cursor-pointer transition-colors hover:bg-gray-50/70 focus:bg-gray-50/70 focus:outline-none dark:hover:bg-white/3 dark:focus:bg-white/3' : ''
+      }`}>
       {/* Name */}
       <div className="flex items-center gap-3">
         <span

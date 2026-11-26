@@ -28,9 +28,9 @@ const AVATAR_COLORS = [
 ]
 
 // Map an API admin record → the shape ClientRow expects.
-// adminId and userId are intentionally dropped.
 const mapAdmin = (admin, index) => ({
   id: admin.adminId,
+  userId: admin.userId,
   name: admin.name,
   email: admin.email,
   plan: admin.plan,

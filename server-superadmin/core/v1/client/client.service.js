@@ -10,7 +10,6 @@ import clientCameraDetectionModel from "../clientConfig/clientCameraDetection.mo
 import { Incident } from "../incidents/incidents.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
-import AUTHService from "../Auth/auth.service.js";
 import { redis } from "../../../utils/database.js";
 
 const baseUrl = config.get("aMember.baseUrl");
@@ -74,58 +73,90 @@ export const pickLatestExpiry = (subscriptions = {}) => {
   return times.length ? new Date(Math.max(...times)) : null;
 };
 
-export const subscriptionStatusFromSnapshot = (
-  snapshot,
-  now = Date.now(),
-) => {
-  if (!snapshot?.syncedAt) return null;
-  if (!snapshot.expiresAt) return { expireDate: null, status: "inactive" };
-
-  const expireDate = new Date(snapshot.expiresAt);
-  if (Number.isNaN(expireDate.getTime())) return null;
-
-  return {
-    expireDate,
-    status: now <= expireDate.getTime() ? "active" : "expired",
-  };
-};
-
 class ClientService {
+  async _getAmemberUsers() {
+    const users = new Map();
+    const pageSize = 100;
+    for (let page = 0; ; page += 1) {
+      const query = new URLSearchParams({
+        _count: String(pageSize),
+        _page: String(page),
+        _sort: "user_id",
+        "_nested[]": "access",
+      });
+      const response = await fetch(`${baseUrl}/users?${query}`, {
+        headers: { Accept: "application/json", "X-API-Key": apiKey },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) throw new Error(`aMember users API returned HTTP ${response.status}`);
+
+      const data = await response.json();
+      const total = Number(data?._total);
+      if (data?._total == null || !Number.isSafeInteger(total) || total < 0) {
+        throw new Error("aMember users API returned an invalid total");
+      }
+
+      const previousSize = users.size;
+      for (const user of Object.values(data)) {
+        if (user?.user_id != null) users.set(String(user.user_id), user);
+      }
+      if (users.size >= total) return [...users.values()];
+      if (users.size === previousSize) throw new Error("aMember users API returned an incomplete roster");
+    }
+  }
+
+  async _getClientRoster() {
+    const [users, admins] = await Promise.all([
+      this._getAmemberUsers(),
+      adminModel.find().select("user_id purchasedCameras subscriptionSnapshot createdAt").lean(),
+    ]);
+    const adminsByUserId = new Map(admins.map((admin) => [String(admin.user_id), admin]));
+    const statusByCode = { 0: "inactive", 1: "active", 2: "expired" };
+
+    return users.map((user) => {
+      const userId = String(user.user_id);
+      const admin = adminsByUserId.get(userId);
+      const access = Object.values(user.nested?.access || {});
+      return {
+        _id: admin?._id ?? null,
+        user_id: userId,
+        name_f: user.name_f,
+        name_l: user.name_l,
+        login: user.login,
+        email: user.email,
+        createdAt: admin?.createdAt || user.added,
+        purchasedCameras: admin?.purchasedCameras || 0,
+        subscriptionSnapshot: admin?.subscriptionSnapshot,
+        expireDate: pickLatestExpiry(access.map((record) => record?.expire_date)),
+        status: Object.hasOwn(statusByCode, user.status) ? statusByCode[user.status] : "unknown",
+      };
+    });
+  }
+
   // Latest invoice's product title from aMember (best-effort — returns null on any failure).
   async _getLatestInvoiceName(userId) {
     try {
-      const res = await fetch(`${baseUrl}/users?_key=${apiKey}&_filter[user_id]=${userId}&_nested[]=invoices`);
+      const options = () => ({
+        headers: { Accept: "application/json", "X-API-Key": apiKey },
+        signal: AbortSignal.timeout(8000),
+      });
+      const query = new URLSearchParams({ "_filter[user_id]": userId, "_nested[]": "invoices" });
+      const res = await fetch(`${baseUrl}/users?${query}`, options());
+      if (!res.ok) return null;
       const data = await res.json();
       let invoices = data?.[0]?.nested?.invoices || [];
       if (!invoices.length) return null;
       const latest = [...invoices].reverse()[0]; // aMember returns oldest-first
       if (!latest?.invoice_id) return null;
 
-      const invRes = await fetch(`${baseUrl}/invoices/${latest.invoice_id}?_key=${apiKey}`);
+      const invRes = await fetch(`${baseUrl}/invoices/${encodeURIComponent(latest.invoice_id)}`, options());
+      if (!invRes.ok) return null;
       const invData = await invRes.json();
       const item = invData?.[0]?.nested?.["invoice-items"]?.[0];
       return item?.item_title || item?.name || null;
     } catch (err) {
       logger.error(`client _getLatestInvoiceName(${userId}): ${err.message}`);
       return null;
-    }
-  }
-
-  // Expiry date + status derived from the aMember access (subscriptions) API.
-  async _getSubscriptionStatus(userId, snapshot = null) {
-    const storedStatus = subscriptionStatusFromSnapshot(snapshot);
-    if (storedStatus) return storedStatus;
-
-    try {
-      const access = await AUTHService.getAmemberAccessByUserId(userId);
-      const subscriptions = AUTHService.extractSubscriptions(access); // { product_id: expire_date }
-      const expireDate = pickLatestExpiry(subscriptions);
-      if (!expireDate) return { expireDate: null, status: "inactive" };
-      const active = AUTHService.isPlanActive({ subscriptions });
-      return { expireDate, status: active ? "active" : "expired" };
-    } catch (err) {
-      logger.error(`client _getSubscriptionStatus(${userId}): ${err.message}`);
-      return { expireDate: null, status: "unknown" };
     }
   }
 
@@ -147,27 +178,18 @@ class ClientService {
       const sortField = SORTABLE[req.query.sortBy] || "createdAt";
       const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
 
-      const filter = {};
-      if (search) {
-        const rx = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
-        filter.$or = [{ name_f: rx }, { name_l: rx }, { email: rx }, { login: rx }];
-      }
+      const roster = await this._getClientRoster();
+      const needle = search.toLowerCase();
+      const admins = roster.filter((admin) => !needle ||
+        [`${admin.name_f || ""} ${admin.name_l || ""}`, admin.email, admin.login]
+          .some((value) => String(value || "").toLowerCase().includes(needle)));
 
-      const admins = await adminModel.find(filter).lean();
-
-      // Resolve every matching client's subscription before filtering and
-      // pagination. Stored snapshots make this local for current clients; the
-      // existing aMember fallback keeps legacy clients accurate.
+      // Resolve plans before filtering and pagination.
       const enriched = await Promise.all(
         admins.map(async (admin) => {
           const snapshot = admin.subscriptionSnapshot;
-          const [plan, sub] = await Promise.all([
-            snapshot?.planName
-              ? Promise.resolve(snapshot.planName)
-              : this._getLatestInvoiceName(admin.user_id),
-            this._getSubscriptionStatus(admin.user_id, snapshot),
-          ]);
-          return { admin, plan, sub };
+          const plan = snapshot?.planName || await this._getLatestInvoiceName(admin.user_id);
+          return { admin, plan };
         }),
       );
 
@@ -175,8 +197,8 @@ class ClientService {
         enriched.map(({ plan }) => String(plan || "").trim()).filter(Boolean),
       )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
-      const filtered = enriched.filter(({ plan, sub }) => {
-        if (effectiveStatusFilter && sub.status !== effectiveStatusFilter) return false;
+      const filtered = enriched.filter(({ plan, admin }) => {
+        if (effectiveStatusFilter && admin.status !== effectiveStatusFilter) return false;
         if (planFilter && String(plan || "").trim().toLowerCase() !== planFilter) return false;
         return true;
       });
@@ -191,11 +213,11 @@ class ClientService {
         }) * sortOrder;
       };
       filtered.sort((left, right) => {
-        const rankDifference = (statusRank[left.sub.status] ?? 4) - (statusRank[right.sub.status] ?? 4);
+        const rankDifference = (statusRank[left.admin.status] ?? 4) - (statusRank[right.admin.status] ?? 4);
         if (rankDifference) return rankDifference;
         const valueDifference = compareValues(left.admin[sortField], right.admin[sortField]);
         if (valueDifference) return valueDifference;
-        return String(left.admin._id).localeCompare(String(right.admin._id));
+        return left.admin.user_id.localeCompare(right.admin.user_id);
       });
 
       const totalCount = filtered.length;
@@ -210,15 +232,15 @@ class ClientService {
       ]);
       const cameraByUser = Object.fromEntries(cameraAgg.map((c) => [c._id, c.cameras]));
 
-      const rows = pageRows.map(({ admin, plan, sub }) => ({
+      const rows = pageRows.map(({ admin, plan }) => ({
             adminId: admin._id,
             userId: admin.user_id,
             name: `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login,
             email: admin.email,
             plan,
             cameras: cameraByUser[admin.user_id] || 0,
-            expireDate: sub.expireDate,
-            status: sub.status,
+            expireDate: admin.expireDate,
+            status: admin.status,
           }));
 
       return res.send(Response.SuccessResp("Admins fetched successfully", {
@@ -233,7 +255,7 @@ class ClientService {
       }));
     } catch (err) {
       logger.error(`client listAdmins: ${err.message}`);
-      return res.send(Response.userFailResp("Failed to fetch admins", err.message));
+      return res.status(500).send(Response.errorResp("Failed to fetch clients"));
     }
   }
 
@@ -250,9 +272,7 @@ class ClientService {
       // case-insensitive substring cannot execute as a regular expression.
       const search = fleetSearch(req);
 
-      const allAdmins = await adminModel.find()
-        .select("user_id name_f name_l login email purchasedCameras subscriptionSnapshot")
-        .lean();
+      const allAdmins = await this._getClientRoster();
       const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, search));
       const userIds = admins.map((admin) => admin.user_id);
       const [channels, catalog, alerts24h, nvrAgg, controlAgg] = await Promise.all([
@@ -262,27 +282,19 @@ class ClientService {
         Incident.countDocuments(fleetAlertFilter(userIds, since, asOf, alertStatus)),
         // Preserve the existing health formula; scope its inputs when searching.
         NVRModel.aggregate([
-          ...(search ? [{ $match: { userId: { $in: userIds } } }] : []),
+          { $match: { userId: { $in: userIds } } },
           { $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } },
         ]),
         channelModel.aggregate([
-          { $match: { isAdded: true, ...(search ? { userId: { $in: userIds } } : {}) } },
+          { $match: { isAdded: true, userId: { $in: userIds } } },
           { $group: { _id: "$control", count: { $sum: 1 } } },
         ]),
       ]);
 
-      // ponytail: one aMember status+invoice lookup per client — fine at this
-      // fleet size, cache the responses if clients grow into the hundreds.
       const enriched = await Promise.all(
         admins.map(async (a) => {
-          const snapshot = a.subscriptionSnapshot;
-          const [plan, sub] = await Promise.all([
-            snapshot?.planName
-              ? Promise.resolve(snapshot.planName)
-              : this._getLatestInvoiceName(a.user_id),
-            this._getSubscriptionStatus(a.user_id, snapshot),
-          ]);
-          return { ...a, plan, status: sub.status };
+          const plan = a.subscriptionSnapshot?.planName || await this._getLatestInvoiceName(a.user_id);
+          return { ...a, plan };
         })
       );
 
@@ -344,7 +356,7 @@ class ClientService {
       );
     } catch (err) {
       logger.error(`client fleetOverview: ${err.message}`);
-      return res.send(Response.userFailResp("Failed to fetch fleet overview", err.message));
+      return res.status(500).send(Response.errorResp("Failed to fetch fleet overview"));
     }
   }
 
@@ -356,8 +368,7 @@ class ClientService {
       const { hours, asOf, since } = fleetAlertWindow(req, 720);
       const alertStatus = fleetAlertStatus(req);
       const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 50);
-      const allAdmins = await adminModel.find()
-        .select("user_id name_f name_l login email").lean();
+      const allAdmins = await this._getClientRoster();
       const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, fleetSearch(req)));
       const byUser = Object.fromEntries(admins.map((a) => [a.user_id, a]));
 
@@ -394,8 +405,7 @@ class ClientService {
     try {
       const { hours, asOf, since } = fleetAlertWindow(req);
       const alertStatus = fleetAlertStatus(req);
-      const allAdmins = await adminModel.find()
-        .select("user_id name_f name_l login email").lean();
+      const allAdmins = await this._getClientRoster();
       const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, fleetSearch(req)));
       const boundaries = Array.from(
         { length: hours + 1 },

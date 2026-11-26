@@ -61,7 +61,7 @@ const ClientsTable = ({ clients = [], searching = false, sortBy, sortOrder, onSo
       {clients.length === 0 ? (
         <EmptyState searching={searching} />
       ) : (
-        clients.map((client) => <ClientRow key={client.id} client={client} />)
+        clients.map((client) => <ClientRow key={client.userId} client={client} />)
       )}
     </div>
   )
