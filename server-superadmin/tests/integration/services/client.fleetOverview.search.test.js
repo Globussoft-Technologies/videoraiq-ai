@@ -28,8 +28,8 @@ const makeAdmin = (overrides) => Admin.create({
   purchasedCameras: overrides.purchasedCameras || 0,
 });
 
-describe("client fleet overview camera-utilisation search", () => {
-  it("filters by req.query.search without changing fleet-wide totals", async () => {
+describe("client fleet overview search", () => {
+  it("scopes totals, plans, and camera utilisation to matching clients", async () => {
     await Promise.all([
       makeAdmin({
         user_id: "101",
@@ -53,8 +53,12 @@ describe("client fleet overview camera-utilisation search", () => {
     await ClientService.fleetOverview(req, res);
 
     const data = payload(res).data;
-    expect(data.totals.clients).toBe(2);
-    expect(data.clientsByPlan).toEqual([{ plan: "Test Plan", clients: 2 }]);
+    expect(data.totals.clients).toBe(1);
+    expect(data.totals.activeClients).toBe(1);
+    expect(data.totals.camerasLicensed).toBe(50);
+    expect(data.clientsByPlan).toEqual([{ plan: "Test Plan", clients: 1 }]);
+    expect(data.cameraHealth).toEqual({ running: 0, stopped: 0, idleCapacity: 50 });
+    expect(data.detectionsByType).toEqual([]);
     expect(data.cameraUtilisation).toHaveLength(1);
     expect(data.cameraUtilisation[0]).toMatchObject({
       name: "Pavan Kumar",

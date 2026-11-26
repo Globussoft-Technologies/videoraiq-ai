@@ -16,8 +16,8 @@ class ClientController {
 
     async fleetOverview(req, res, next) {
         /* #swagger.tags = ['Client'] */
-        /* #swagger.description = 'Fleet Overview stats: header tiles (clients, active, cameras licensed/provisioned, detections running, alerts 24h), camera utilisation per client, clients by plan, detections by type, camera health. Super-admin token required.' */
-        /* #swagger.parameters['search'] = { in: 'query', description: 'Filter only the camera-utilisation client list by name, login, email, or user ID' } */
+        /* #swagger.description = 'Fleet Overview stats: clients, camera licences and added cameras, enabled detections, active alerts in the last 24 hours, camera utilisation, clients by plan, and the existing Camera Health calculation. Super-admin token required.' */
+        /* #swagger.parameters['search'] = { in: 'query', description: 'Scope all Fleet Overview values to clients matching name, login, email, or user ID' } */
         return await clientService.fleetOverview(req, res, next);
     }
 
@@ -26,13 +26,15 @@ class ClientController {
         /* #swagger.description = 'Clients ranked by incident (alert) count in the window. Powers the Fleet Overview "Top Clients by Alert Volume" panel. Super-admin token required.' */
         /* #swagger.parameters['hours'] = { in: 'query', type: 'integer', description: 'Window in hours (default 24, max 720)' } */
         /* #swagger.parameters['limit'] = { in: 'query', type: 'integer', description: 'Number of clients (default 5, max 50)' } */
+        /* #swagger.parameters['search'] = { in: 'query', description: 'Restrict results to matching clients, as in Fleet Overview' } */
         return await clientService.topClientsByAlertVolume(req, res, next);
     }
 
     async alertsGraph(req, res, next) {
         /* #swagger.tags = ['Client'] */
-        /* #swagger.description = 'Fleet-wide hourly incident counts, zero-filled per UTC hour, oldest first. Powers the Fleet Overview "Alerts - last 24h" bar chart. Super-admin token required.' */
+        /* #swagger.description = 'Active alert counts in exact consecutive one-hour buckets from asOf minus hours through asOf. Returns from, to, total and zero-filled buckets. Optional search scopes the same matching clients as Fleet Overview. Super-admin token required.' */
         /* #swagger.parameters['hours'] = { in: 'query', type: 'integer', description: 'Window in hours (default 24, max 168)' } */
+        /* #swagger.parameters['search'] = { in: 'query', description: 'Restrict results to matching clients, as in Fleet Overview' } */
         return await clientService.alertsGraph(req, res, next);
     }
 

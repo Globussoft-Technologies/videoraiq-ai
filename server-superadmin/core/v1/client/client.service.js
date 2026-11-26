@@ -9,11 +9,61 @@ import clientDetectionAllocationModel from "../clientConfig/clientDetectionAlloc
 import clientCameraDetectionModel from "../clientConfig/clientCameraDetection.model.js";
 import { Incident } from "../incidents/incidents.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
 import AUTHService from "../Auth/auth.service.js";
 import { redis } from "../../../utils/database.js";
 
 const baseUrl = config.get("aMember.baseUrl");
 const apiKey = config.get("aMember.apiKey");
+
+// Keep every Fleet alert panel on the same window and alert definition.
+const fleetAlertWindow = (req, maxHours = 168) => {
+  const hours = Math.min(Math.max(parseInt(req.query?.hours, 10) || 24, 1), maxHours);
+  const asOf = req.query?.asOf ? new Date(req.query.asOf) : new Date();
+  if (Number.isNaN(asOf.getTime())) throw new Error("Invalid asOf timestamp");
+  return { hours, asOf, since: new Date(asOf.getTime() - hours * 3600000) };
+};
+
+const fleetAlertStatus = (req) => req.query?.status === "all" ? "all" : "active";
+
+const fleetAlertFilter = (userIds, since, asOf, status = "active") => {
+  const filter = {
+    userId: { $in: userIds },
+    timeOfIncident: { $gte: since, $lte: asOf },
+    incidentType: { $nin: ["countPersons", "lineCrossing", "countVehicles", "genderAgeCount"] },
+    liveDemoData: { $ne: true },
+    incidentName: { $not: /Guard Present/i },
+  };
+  const image = { $exists: true, $nin: [null, "", "https://"] };
+  if (status === "all") {
+    // Match the client's Alerts & Events feed: box-packing sensor events can
+    // have no snapshot, and All includes new, reported, and resolved alerts.
+    filter.$and = [
+      { $or: [{ incidentType: "boxPackingDetection" }, { Image: image }] },
+      { $or: [
+        { resolved: false, "report.status": { $ne: true } },
+        { resolved: true },
+        { "report.status": true, resolved: { $ne: true } },
+      ] },
+    ];
+  } else {
+    // Preserve the existing default for every caller without status=all.
+    filter.Image = image;
+    filter.resolved = false;
+    filter["report.status"] = { $ne: true };
+  }
+  return filter;
+};
+
+const fleetSearch = (req) => String(req.query?.search || "").trim().slice(0, 120).toLowerCase();
+
+const matchesFleetSearch = (admin, search) => {
+  if (!search) return true;
+  const fullName = `${admin.name_f || ""} ${admin.name_l || ""}`.trim();
+  return [fullName, admin.name_f, admin.name_l, admin.login, admin.email, admin.user_id]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(search));
+};
 
 // Latest expiry date across all of a user's subscribed products. Pure helper.
 export const pickLatestExpiry = (subscriptions = {}) => {
@@ -192,27 +242,33 @@ class ClientService {
   // (plan name + subscription status per client, via the existing helpers).
   async fleetOverview(req, res) {
     try {
-      const since24h = new Date(Date.now() - 24 * 3600000);
-      // Search affects only the camera-utilisation panel. The headline totals,
-      // plans, health and alerts must remain fleet-wide while one client is
-      // being located in that list. Plain substring matching avoids turning
-      // user input into an executable regular expression.
-      const search = String(req.query?.search || "").trim().slice(0, 120).toLowerCase();
+      // This field is always a 24-hour count, even if another query parameter
+      // is supplied alongside the camera-utilisation search.
+      const { asOf, since } = fleetAlertWindow({ query: { asOf: req.query?.asOf } });
+      const alertStatus = fleetAlertStatus(req);
+      // Search scopes every Fleet panel to the same clients. A literal,
+      // case-insensitive substring cannot execute as a regular expression.
+      const search = fleetSearch(req);
 
-      const [admins, nvrAgg, detectionAgg, controlAgg, alerts24h] = await Promise.all([
-        adminModel.find().select("user_id name_f name_l login email purchasedCameras subscriptionSnapshot").lean(),
-        NVRModel.aggregate([{ $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } }]),
-        clientCameraDetectionModel.aggregate([
-          { $match: { enabled: true } },
-          { $group: { _id: "$settingType", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
+      const allAdmins = await adminModel.find()
+        .select("user_id name_f name_l login email purchasedCameras subscriptionSnapshot")
+        .lean();
+      const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, search));
+      const userIds = admins.map((admin) => admin.user_id);
+      const [channels, catalog, alerts24h, nvrAgg, controlAgg] = await Promise.all([
+        channelModel.find({ userId: { $in: userIds }, isAdded: true })
+          .select("userId detections").lean(),
+        resolveDetectionTypes(),
+        Incident.countDocuments(fleetAlertFilter(userIds, since, asOf, alertStatus)),
+        // Preserve the existing health formula; scope its inputs when searching.
+        NVRModel.aggregate([
+          ...(search ? [{ $match: { userId: { $in: userIds } } }] : []),
+          { $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } },
         ]),
-        // aggregate() bypasses the channel find-hook, so match isAdded explicitly.
         channelModel.aggregate([
-          { $match: { isAdded: true } },
+          { $match: { isAdded: true, ...(search ? { userId: { $in: userIds } } : {}) } },
           { $group: { _id: "$control", count: { $sum: 1 } } },
         ]),
-        Incident.countDocuments({ timeOfIncident: { $gte: since24h } }),
       ]);
 
       // ponytail: one aMember status+invoice lookup per client — fine at this
@@ -230,26 +286,31 @@ class ClientService {
         })
       );
 
-      const provisionedByUser = Object.fromEntries(nvrAgg.map((n) => [n._id, n.cameras]));
+      const provisionedByUser = {};
+      const detectionCounts = {};
+      for (const camera of channels) {
+        provisionedByUser[camera.userId] = (provisionedByUser[camera.userId] || 0) + 1;
+        for (const [settingType, detection] of Object.entries(camera.detections || {})) {
+          if (detection?.enabled !== true) continue;
+          detectionCounts[settingType] = (detectionCounts[settingType] || 0) + 1;
+        }
+      }
+      const names = Object.fromEntries(catalog.detections.map((row) => [row.settingType, row.name]));
+      const detectionAgg = Object.entries(detectionCounts)
+        .map(([settingType, count]) => ({ settingType, count }))
+        .sort((a, b) => b.count - a.count);
       const camerasLicensed = admins.reduce((s, a) => s + (a.purchasedCameras || 0), 0);
-      const camerasProvisioned = nvrAgg.reduce((s, n) => s + n.cameras, 0);
-      const detectionsRunning = detectionAgg.reduce((s, d) => s + d.count, 0);
-      const controls = Object.fromEntries(controlAgg.map((c) => [c._id, c.count]));
+      const camerasProvisioned = channels.length;
+      const detectionsEnabled = detectionAgg.reduce((s, d) => s + d.count, 0);
+      const legacyProvisioned = nvrAgg.reduce((sum, nvr) => sum + nvr.cameras, 0);
+      const controls = Object.fromEntries(controlAgg.map((row) => [row._id, row.count]));
 
-      const cameraUtilisation = enriched
-        .filter((a) => {
-          if (!search) return true;
-          const fullName = `${a.name_f || ""} ${a.name_l || ""}`.trim();
-          return [fullName, a.name_f, a.name_l, a.login, a.email, a.user_id]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(search));
-        })
-        .map((a) => ({
+      const cameraUtilisation = enriched.map((a) => ({
           adminId: a._id,
           name: `${a.name_f || ""} ${a.name_l || ""}`.trim() || a.login,
           provisioned: provisionedByUser[a.user_id] || 0,
           licensed: a.purchasedCameras || 0,
-        }));
+      }));
 
       const planCounts = {};
       for (const a of enriched) {
@@ -264,22 +325,20 @@ class ClientService {
             activeClients: enriched.filter((a) => a.status === "active").length,
             camerasLicensed,
             camerasProvisioned,
-            detectionsRunning,
+            detectionsEnabled,
             alerts24h,
           },
           cameraUtilisation,
           clientsByPlan: Object.entries(planCounts).map(([plan, clients]) => ({ plan, clients })),
           detectionsByType: detectionAgg.map((d) => ({
-            settingType: d._id,
-            name: DETECTION_TYPES[d._id] || d._id,
+            settingType: d.settingType,
+            name: names[d.settingType] || DETECTION_TYPES[d.settingType] || d.settingType,
             count: d.count,
           })),
-          // No true stream-health data exists: running/stopped is the camera's
-          // detection control state; idleCapacity = licensed - provisioned.
           cameraHealth: {
             running: controls[1] || 0,
             stopped: controls[0] || 0,
-            idleCapacity: Math.max(camerasLicensed - camerasProvisioned, 0),
+            idleCapacity: Math.max(camerasLicensed - legacyProvisioned, 0),
           },
         })
       );
@@ -294,22 +353,20 @@ class ClientService {
   // Powers the "Top Clients by Alert Volume" panel on Fleet Overview.
   async topClientsByAlertVolume(req, res) {
     try {
-      const hours = Math.min(Math.max(parseInt(req.query.hours) || 24, 1), 720);
+      const { hours, asOf, since } = fleetAlertWindow(req, 720);
+      const alertStatus = fleetAlertStatus(req);
       const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 50);
-      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+      const allAdmins = await adminModel.find()
+        .select("user_id name_f name_l login email").lean();
+      const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, fleetSearch(req)));
+      const byUser = Object.fromEntries(admins.map((a) => [a.user_id, a]));
 
       const agg = await Incident.aggregate([
-        { $match: { timeOfIncident: { $gte: since } } },
+        { $match: fleetAlertFilter(admins.map((a) => a.user_id), since, asOf, alertStatus) },
         { $group: { _id: "$userId", alerts: { $sum: 1 } } },
         { $sort: { alerts: -1 } },
         { $limit: limit },
       ]);
-
-      const admins = await adminModel
-        .find({ user_id: { $in: agg.map((a) => a._id) } })
-        .select("user_id name_f name_l login email")
-        .lean();
-      const byUser = Object.fromEntries(admins.map((a) => [a.user_id, a]));
 
       const clients = agg.map((row, i) => {
         const admin = byUser[row._id];
@@ -323,7 +380,7 @@ class ClientService {
         };
       });
 
-      return res.send(Response.SuccessResp("Top clients by alert volume fetched", { hours, clients }));
+      return res.send(Response.SuccessResp("Top clients by alert volume fetched", { hours, status: alertStatus, clients }));
     } catch (err) {
       logger.error(`client topClientsByAlertVolume: ${err.message}`);
       return res.send(Response.userFailResp("Failed to fetch top clients by alert volume", err.message));
@@ -331,37 +388,48 @@ class ClientService {
   }
 
   // GET /client/alerts-graph?hours=24
-  // Fleet-wide hourly incident counts for the "Alerts - last 24h" bar chart.
-  // Buckets are UTC hour starts, zero-filled, oldest first; the last bucket is
-  // the current (partial) hour.
+  // Exactly `hours` consecutive one-hour buckets, anchored to the same
+  // rolling window used by the Fleet alert card and client ranking.
   async alertsGraph(req, res) {
     try {
-      const hours = Math.min(Math.max(parseInt(req.query.hours) || 24, 1), 168);
-      const start = new Date();
-      start.setUTCMinutes(0, 0, 0);
-      start.setUTCHours(start.getUTCHours() - (hours - 1));
+      const { hours, asOf, since } = fleetAlertWindow(req);
+      const alertStatus = fleetAlertStatus(req);
+      const allAdmins = await adminModel.find()
+        .select("user_id name_f name_l login email").lean();
+      const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, fleetSearch(req)));
+      const boundaries = Array.from(
+        { length: hours + 1 },
+        (_, index) => new Date(since.getTime() + index * 3600000),
+      );
+      // $bucket excludes its final upper boundary; include an incident exactly
+      // at asOf while still reporting the exact requested end time to the UI.
+      boundaries[hours] = new Date(asOf.getTime() + 1);
 
       const agg = await Incident.aggregate([
-        { $match: { timeOfIncident: { $gte: start } } },
+        { $match: fleetAlertFilter(admins.map((a) => a.user_id), since, asOf, alertStatus) },
         {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%dT%H:00:00Z", date: "$timeOfIncident" } },
-            count: { $sum: 1 },
+          $bucket: {
+            groupBy: "$timeOfIncident",
+            boundaries,
+            output: { count: { $sum: 1 } },
           },
         },
       ]);
-      const byHour = Object.fromEntries(agg.map((b) => [b._id, b.count]));
+      const byHour = Object.fromEntries(agg.map((b) => [new Date(b._id).toISOString(), b.count]));
 
       let total = 0;
       const buckets = [];
       for (let i = 0; i < hours; i++) {
-        const key = new Date(start.getTime() + i * 3600000).toISOString().slice(0, 13) + ":00:00Z";
-        const count = byHour[key] || 0;
+        const from = boundaries[i].toISOString();
+        const to = i === hours - 1 ? asOf.toISOString() : boundaries[i + 1].toISOString();
+        const count = byHour[from] || 0;
         total += count;
-        buckets.push({ hour: key, count });
+        buckets.push({ from, to, count });
       }
 
-      return res.send(Response.SuccessResp("Alerts graph fetched", { hours, total, buckets }));
+      return res.send(Response.SuccessResp("Alerts graph fetched", {
+        hours, status: alertStatus, from: since.toISOString(), to: asOf.toISOString(), total, buckets,
+      }));
     } catch (err) {
       logger.error(`client alertsGraph: ${err.message}`);
       return res.send(Response.userFailResp("Failed to fetch alerts graph", err.message));
