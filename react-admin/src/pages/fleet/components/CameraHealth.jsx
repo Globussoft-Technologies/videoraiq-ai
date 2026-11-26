@@ -10,7 +10,7 @@ const SEGMENTS = [
 const RADIUS = 42
 const CIRCUM = 2 * Math.PI * RADIUS
 
-const CameraHealth = ({ health }) => {
+const CameraHealth = ({ health, filtered = false }) => {
   const running = health?.running || 0
   const stopped = health?.stopped || 0
   const idle = health?.idleCapacity || 0
@@ -32,7 +32,7 @@ const CameraHealth = ({ health }) => {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
       <h2 className="text-base font-semibold text-gray-900 dark:text-white">Camera Health</h2>
-      <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Fleet-wide status right now.</p>
+      <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{filtered ? 'Matching clients right now.' : 'Fleet-wide status right now.'}</p>
 
       <div className="mt-4 flex items-center gap-6">
         {/* Donut */}

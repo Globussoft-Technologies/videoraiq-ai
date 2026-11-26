@@ -1,4 +1,4 @@
-import { Loader2, Search, X } from 'lucide-react'
+import { Info, Loader2, Search, X } from 'lucide-react'
 
 const AVATAR_COLORS = [
   'from-blue-500 to-purple-500',
@@ -47,8 +47,8 @@ const CameraUtilisation = ({
             type="search"
             value={query}
             onChange={(event) => onQueryChange?.(event.target.value)}
-            placeholder="Search clients…"
-            aria-label="Search camera utilisation by client"
+            placeholder="Filter fleet by client…"
+            aria-label="Filter Fleet Overview by client"
             className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pr-9 pl-9 text-xs text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-white/4 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-purple-400/60"
           />
           {searching ? (
@@ -69,9 +69,23 @@ const CameraUtilisation = ({
           ) : null}
         </div>
 
-        <span className="ml-auto font-mono text-[10px] tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
-          Provisioned / Licensed
-        </span>
+        <div className="group relative ml-auto">
+          <button
+            type="button"
+            aria-describedby="camera-utilisation-key-tooltip"
+            className="flex cursor-help items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1.5 font-mono text-[11px] font-medium tracking-wide text-gray-700 uppercase shadow-sm transition-colors hover:border-purple-400 hover:bg-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-white/20 dark:bg-white/5 dark:text-gray-200 dark:hover:border-purple-400/60 dark:hover:bg-purple-500/10"
+          >
+            Provisioned / Licensed
+            <Info size={13} aria-hidden="true" className="shrink-0 text-gray-500 dark:text-gray-400" />
+          </button>
+          <div
+            id="camera-utilisation-key-tooltip"
+            role="tooltip"
+            className="pointer-events-none absolute top-full right-0 z-20 mt-2 w-64 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-700 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:border-white/20 dark:bg-[#171a24] dark:text-gray-200"
+          >
+            The first number is cameras added for this client. The second is their camera licence limit. The bar shows how much of that limit is used.
+          </div>
+        </div>
       </div>
 
       {searchError && (

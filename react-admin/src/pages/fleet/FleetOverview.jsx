@@ -17,15 +17,22 @@ const unwrap = (res) => res?.body?.data ?? res?.data ?? {}
 const FleetOverview = () => {
   const [overview, setOverview] = useState(null)
   const [topClients, setTopClients] = useState([])
-  const [graph, setGraph] = useState({ buckets: [], total: 0, hours: 24 })
+  const [graph, setGraph] = useState({ buckets: [], total: 0, hours: 24, from: '', to: '' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [utilisationQuery, setUtilisationQuery] = useState('')
   const [debouncedUtilisationQuery, setDebouncedUtilisationQuery] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
   const [utilisationLoading, setUtilisationLoading] = useState(false)
   const [utilisationError, setUtilisationError] = useState('')
+  const [refreshError, setRefreshError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [alertStatus, setAlertStatus] = useState('active')
+  const [appliedAlertStatus, setAppliedAlertStatus] = useState('active')
   const [initialOverviewLoaded, setInitialOverviewLoaded] = useState(false)
-  const lastUtilisationSearchRef = useRef('')
+  const lastFleetRequestRef = useRef({ search: '', version: 0, status: 'active' })
+  const asOfRef = useRef(new Date().toISOString())
 
   useEffect(() => {
     let cancelled = false
@@ -36,9 +43,9 @@ const FleetOverview = () => {
       try {
         // All three panels load together; one slow call shouldn't serialise the rest.
         const [ovRes, topRes, graphRes] = await Promise.all([
-          getFleetOverview(),
-          getTopAlerts(24, 5),
-          getAlertsGraph(24),
+          getFleetOverview('', asOfRef.current),
+          getTopAlerts(24, 5, asOfRef.current),
+          getAlertsGraph(24, asOfRef.current),
         ])
         if (cancelled) return
 
@@ -46,7 +53,7 @@ const FleetOverview = () => {
         setInitialOverviewLoaded(true)
         setTopClients(unwrap(topRes).clients || [])
         const g = unwrap(graphRes)
-        setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24 })
+        setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24, from: g.from || '', to: g.to || '' })
       } catch (err) {
         if (cancelled) return
         setError(getApiMessage(err, 'Failed to load fleet overview'))
@@ -72,37 +79,67 @@ const FleetOverview = () => {
   useEffect(() => {
     if (
       !initialOverviewLoaded ||
-      debouncedUtilisationQuery === lastUtilisationSearchRef.current
+      (debouncedUtilisationQuery === lastFleetRequestRef.current.search &&
+        refreshVersion === lastFleetRequestRef.current.version &&
+        alertStatus === lastFleetRequestRef.current.status)
     ) {
       return undefined
     }
 
     let cancelled = false
-    lastUtilisationSearchRef.current = debouncedUtilisationQuery
+    lastFleetRequestRef.current = { search: debouncedUtilisationQuery, version: refreshVersion, status: alertStatus }
     setUtilisationLoading(true)
     setUtilisationError('')
+    setRefreshError('')
+    const asOf = new Date().toISOString()
+    asOfRef.current = asOf
 
-    getFleetOverview(debouncedUtilisationQuery)
-      .then((response) => {
+    Promise.all([
+      getFleetOverview(debouncedUtilisationQuery, asOf, alertStatus),
+      getTopAlerts(24, 5, asOf, debouncedUtilisationQuery, alertStatus),
+      getAlertsGraph(24, asOf, debouncedUtilisationQuery, alertStatus),
+    ])
+      .then(([overviewRes, topRes, graphRes]) => {
         if (cancelled) return
-        const data = unwrap(response)
-        setOverview((current) => ({
-          ...current,
-          cameraUtilisation: data.cameraUtilisation || [],
-        }))
+        setOverview(unwrap(overviewRes))
+        setTopClients(unwrap(topRes).clients || [])
+        const g = unwrap(graphRes)
+        setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24, from: g.from || '', to: g.to || '' })
+        setAppliedSearch(debouncedUtilisationQuery)
+        setAppliedAlertStatus(alertStatus)
       })
       .catch((err) => {
         if (cancelled) return
-        setUtilisationError(getApiMessage(err, 'Failed to search camera utilisation'))
+        const message = getApiMessage(err, 'Failed to refresh fleet overview')
+        setUtilisationError(message)
+        setRefreshError(message)
       })
       .finally(() => {
-        if (!cancelled) setUtilisationLoading(false)
+        if (!cancelled) {
+          setUtilisationLoading(false)
+          setRefreshing(false)
+        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [debouncedUtilisationQuery, initialOverviewLoaded])
+  }, [debouncedUtilisationQuery, initialOverviewLoaded, refreshVersion, alertStatus])
+
+  const refreshFleet = () => {
+    if (refreshing) return
+    setRefreshing(true)
+    setDebouncedUtilisationQuery(utilisationQuery.trim())
+    setRefreshVersion((version) => version + 1)
+  }
+
+  const changeAlertStatus = (status) => {
+    if (refreshing || status === appliedAlertStatus) return
+    setRefreshing(true)
+    setAlertStatus(status)
+    // Also retries a selection if its previous request failed.
+    setRefreshVersion((version) => version + 1)
+  }
 
   const t = overview?.totals || {}
 
@@ -111,7 +148,7 @@ const FleetOverview = () => {
       key: 'clients',
       Icon: Building2,
       value: t.clients ?? 0,
-      label: 'Total Clients',
+      label: appliedSearch ? 'Matching Clients' : 'Total Clients',
       tint: 'bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-300',
       glow: 'bg-blue-400/20',
     },
@@ -142,16 +179,16 @@ const FleetOverview = () => {
     {
       key: 'detections',
       Icon: ScanEye,
-      value: t.detectionsRunning ?? 0,
-      label: 'Detections Running',
+      value: t.detectionsEnabled ?? 0,
+      label: 'Detections Enabled',
       tint: 'bg-purple-50 text-purple-500 dark:bg-purple-500/10 dark:text-purple-300',
       glow: 'bg-purple-400/20',
     },
     {
       key: 'alerts',
       Icon: TriangleAlert,
-      value: t.alerts24h ?? 0,
-      label: 'Alerts · 24h',
+      value: graph.total,
+      label: `${appliedAlertStatus === 'all' ? 'All' : 'Active'} Alerts · 24h`,
       tint: 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-300',
       glow: 'bg-orange-400/20',
     },
@@ -191,14 +228,26 @@ const FleetOverview = () => {
 
             {/* Detections + health + alerts */}
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <DetectionsByType rows={overview?.detectionsByType || []} />
-              <CameraHealth health={overview?.cameraHealth} />
-              <AlertsGraph buckets={graph.buckets} total={graph.total} hours={graph.hours} />
+              <DetectionsByType rows={overview?.detectionsByType || []} filtered={Boolean(appliedSearch)} />
+              <CameraHealth health={overview?.cameraHealth} filtered={Boolean(appliedSearch)} />
+              <AlertsGraph
+                buckets={graph.buckets}
+                total={graph.total}
+                hours={graph.hours}
+                from={graph.from}
+                to={graph.to}
+                filtered={Boolean(appliedSearch)}
+                status={appliedAlertStatus}
+                onStatusChange={changeAlertStatus}
+                onRefresh={refreshFleet}
+                refreshing={refreshing}
+                error={refreshError}
+              />
             </div>
 
             {/* Top clients by alerts */}
             <div className="mt-6">
-              <TopAlertClients clients={topClients} />
+              <TopAlertClients clients={topClients} status={appliedAlertStatus} />
             </div>
           </>
         )}

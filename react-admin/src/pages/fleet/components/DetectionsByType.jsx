@@ -10,23 +10,23 @@ const BAR_COLORS = [
   { bar: 'bg-pink-500', text: 'text-pink-600 dark:text-pink-400' },
 ]
 
-const DetectionsByType = ({ rows = [] }) => {
+const DetectionsByType = ({ rows = [], filtered = false }) => {
   const max = Math.max(1, ...rows.map((r) => r.count || 0))
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
       <div className="mb-4 flex flex-wrap items-baseline gap-2">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          Detections Running by Type
+          Detections Enabled by Type
         </h2>
         <span className="font-mono text-[10px] tracking-wide text-gray-400 dark:text-gray-600">
-          fleet-wide cameras
+          {filtered ? 'matching clients' : 'fleet-wide cameras'}
         </span>
       </div>
 
       {rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-          No detections running.
+          No detections enabled on added cameras.
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">

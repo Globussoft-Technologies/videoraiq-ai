@@ -13,11 +13,11 @@ const getInitials = (name = '') => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-const TopAlertClients = ({ clients = [] }) => {
+const TopAlertClients = ({ clients = [], status = 'active' }) => {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
       <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">
-        Top Clients by Alert Volume
+        Top Clients by {status === 'all' ? 'All' : 'Active'} Alerts · 24h
       </h2>
 
       {clients.length === 0 ? (
