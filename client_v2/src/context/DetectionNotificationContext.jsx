@@ -2,7 +2,7 @@ import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@/App';
-import { Bell, ChevronDown, ChevronLeft, ChevronUp, LoaderCircle, Trash2, X } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronUp, GripHorizontal, LoaderCircle, Trash2, X } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { usePermissions } from './PermissionContext';
@@ -55,6 +55,7 @@ const ALERT_DURATION = 5000;
 // before removing the row from React so the reference animation can complete.
 const ALERT_EXIT_DURATION = 1200;
 const COMPACT_PILL_WIDTH = 60;
+const COMPACT_PILL_HEIGHT = 56;
 
 function alertDurationForCount(count) {
   if (count > 20) return 2200;
@@ -199,6 +200,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
   const [compactMinimized, setCompactMinimized] = useState(false);
   const [compactHovered, setCompactHovered] = useState(false);
   const [compactPosition, setCompactPosition] = useState(null);
+  const [expandedPosition, setExpandedPosition] = useState(null);
   const [viewport, setViewport] = useState(() => typeof window === 'undefined'
     ? { width: 0, height: 0 }
     : { width: window.innerWidth, height: window.innerHeight });
@@ -208,6 +210,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
   const startedRef = useRef(0);
   const currentIdRef = useRef(null);
   const compactTargetRef = useRef(null);
+  const stackRef = useRef(null);
   const dragRef = useRef(null);
   const suppressDragClickRef = useRef(false);
   const hoverTimerRef = useRef(null);
@@ -224,12 +227,14 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
     ? `clamp(0px, ${compactPosition.bottom}px, calc(100dvh - var(--vq-alert-compact-height)))`
     : '16px';
   const expandLeft = compactPosition !== null && compactPosition.left + COMPACT_PILL_WIDTH / 2 >= viewport.width / 2;
-  const expandDown = compactPosition !== null && compactPosition.bottom >= viewport.height / 2;
+  const expandDown = compactPosition !== null && compactPosition.bottom + COMPACT_PILL_HEIGHT / 2 >= viewport.height / 2;
   const ExpandChevron = expandDown ? ChevronDown : ChevronUp;
   const CollapseChevron = expandDown ? ChevronUp : ChevronDown;
   const panelWidth = isCompact ? 'var(--vq-alert-summary-width)' : 'min(340px, calc(100vw - 24px))';
   const panelLeft = expandLeft ? `calc(${compactLeft} + var(--vq-alert-peek-width) - ${panelWidth})` : compactLeft;
   const panelTop = `calc(100dvh - ${compactBottom} - var(--vq-alert-compact-height))`;
+  const draggedPanel = !isCompact ? expandedPosition : null;
+  const draggedTop = draggedPanel ? `clamp(0px, ${draggedPanel.top}px, calc(100dvh - 120px))` : undefined;
   const alertDuration = alertDurationForCount(alerts.length);
 
   const updateExpanded = (next) => {
@@ -341,16 +346,19 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
     setCompactHovered(false);
   };
 
-  const startCompactDrag = (event) => {
+  const startStackDrag = (event) => {
     if (!event.isPrimary || event.button !== 0 || clearing) return;
     clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current = null;
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = (isCompact ? event.currentTarget : stackRef.current).getBoundingClientRect();
     dragRef.current = {
+      expanded: !isCompact,
+      width: rect.width,
+      height: rect.height,
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      offsetX: Math.min(event.clientX - rect.left, 30),
+      offsetX: isCompact ? Math.min(event.clientX - rect.left, COMPACT_PILL_WIDTH / 2) : event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
       moved: false,
     };
@@ -358,7 +366,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
     setPaused(true);
   };
 
-  const moveCompactDrag = (event) => {
+  const moveStackDrag = (event) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (!drag.moved) {
@@ -366,19 +374,34 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
       drag.moved = true;
       event.currentTarget.setPointerCapture(event.pointerId);
       setDragging(true);
-      setCompactMinimized(true);
-      setCompactHovered(false);
+      if (!drag.expanded) {
+        setExpandedPosition(null);
+        setCompactMinimized(true);
+        setCompactHovered(false);
+      }
     }
     const { clientWidth, clientHeight } = document.documentElement;
+    if (drag.expanded) {
+      const left = Math.max(0, Math.min(clientWidth - drag.width, event.clientX - drag.offsetX));
+      const top = Math.max(0, Math.min(clientHeight - drag.height, event.clientY - drag.offsetY));
+      const onRight = left + drag.width / 2 >= clientWidth / 2;
+      const onTop = top + drag.height / 2 < clientHeight / 2;
+      setExpandedPosition({ left, top });
+      setCompactPosition({
+        left: onRight ? left + drag.width - COMPACT_PILL_WIDTH : left,
+        bottom: clientHeight - top - (onTop ? COMPACT_PILL_HEIGHT : drag.height),
+      });
+      return;
+    }
     const width = compactTargetRef.current?.offsetWidth || COMPACT_PILL_WIDTH;
-    const height = compactTargetRef.current?.offsetHeight || 56;
+    const height = compactTargetRef.current?.offsetHeight || COMPACT_PILL_HEIGHT;
     setCompactPosition({
       left: Math.max(0, Math.min(clientWidth - width, event.clientX - drag.offsetX)),
       bottom: Math.max(0, Math.min(clientHeight - height, clientHeight - event.clientY + drag.offsetY - height)),
     });
   };
 
-  const finishCompactDrag = (event) => {
+  const finishStackDrag = (event) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
@@ -396,11 +419,11 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
       onMouseMove={compactPeek ? handleStackMouseEnter : undefined}
       onMouseLeave={handleStackMouseLeave}
       onPointerDownCapture={() => { suppressDragClickRef.current = false; }}
-      onPointerMove={moveCompactDrag}
-      onPointerUp={finishCompactDrag}
-      onPointerCancel={finishCompactDrag}
+      onPointerMove={moveStackDrag}
+      onPointerUp={finishStackDrag}
+      onPointerCancel={finishStackDrag}
       onLostPointerCapture={(event) => {
-        if (!dragRef.current?.moved || event.target === event.currentTarget) finishCompactDrag(event);
+        if (!dragRef.current?.moved || event.target === event.currentTarget) finishStackDrag(event);
       }}
       onClickCapture={(event) => {
         if (!suppressDragClickRef.current || event.detail === 0) return;
@@ -412,16 +435,17 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
         <span ref={compactTargetRef} aria-hidden="true" className="fixed z-[9998]" style={{ left: compactLeft, bottom: compactBottom, height: 'var(--vq-alert-compact-height)', width: 'var(--vq-alert-peek-width)' }} />
       )}
       <div
+        ref={stackRef}
         role="region"
         aria-label="Active alerts"
         className={`vq-alert-stack fixed z-[9999] flex flex-col rounded-2xl border ${isCompact ? 'vq-alert-stack-compact' : ''} ${compactPeek ? 'vq-alert-stack-compact-peek' : ''} ${isCompact && compactMinimized && !dragging ? 'vq-alert-stack-hover-motion' : ''}`}
         style={{
-          left: compactPeek ? compactLeft : `clamp(0px, ${panelLeft}, calc(100vw - ${panelWidth}))`,
-          top: !isCompact && expandDown ? panelTop : undefined,
-          bottom: !isCompact && expandDown ? undefined : compactBottom,
+          left: compactPeek ? compactLeft : `clamp(0px, ${draggedPanel ? `${draggedPanel.left}px` : panelLeft}, calc(100vw - ${panelWidth}))`,
+          top: draggedTop ?? (!isCompact && expandDown ? panelTop : undefined),
+          bottom: !isCompact && (draggedPanel || expandDown) ? undefined : compactBottom,
           height: isCompact ? 'var(--vq-alert-compact-height)' : undefined,
           width: compactPeek ? 'var(--vq-alert-peek-width)' : panelWidth,
-          maxHeight: isCompact ? undefined : `min(66dvh, 520px, calc(100dvh - ${expandDown ? panelTop : compactBottom} - 8px))`,
+          maxHeight: isCompact ? undefined : `min(66dvh, 520px, calc(100dvh - ${draggedTop ?? (expandDown ? panelTop : compactBottom)}${draggedPanel ? '' : ' - 8px'}))`,
           borderColor: 'var(--bd)',
           background: 'var(--vq-alert-card-bg, var(--glass))',
           backdropFilter: 'blur(18px)',
@@ -431,7 +455,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
       >
         {isCompact ? (
           <>
-            <button type="button" inert={!compactPeek} onPointerDown={startCompactDrag} onClick={() => updateExpanded(true)} className={`vq-alert-peek flex h-full w-full touch-none select-none items-center justify-between rounded-full pl-1 pr-1.5 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`} aria-label="Expand notifications" aria-expanded={false}>
+            <button type="button" inert={!compactPeek} onPointerDown={startStackDrag} onClick={() => updateExpanded(true)} className={`vq-alert-peek flex h-full w-full touch-none select-none items-center justify-between rounded-full pl-1 pr-1.5 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`} aria-label="Expand notifications" aria-expanded={false}>
               <ChevronLeft className="vq-alert-expand-icon shrink-0" size={10} strokeWidth={2} aria-hidden="true" />
               <span className="vq-alert-summary-icon flex h-9 w-9 flex-none items-center justify-center rounded-full">
                 <Bell size={18} strokeWidth={2.2} />
@@ -443,7 +467,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
           <div inert={compactPeek} className="vq-alert-compact flex h-full w-full items-center gap-2 px-2">
             <button
               type="button"
-              onPointerDown={startCompactDrag}
+              onPointerDown={startStackDrag}
               onClick={() => updateExpanded(true)}
               className="vq-alert-compact-summary flex min-w-0 flex-1 touch-none select-none cursor-grab items-center gap-3 text-left"
               aria-label="View notifications"
@@ -484,7 +508,13 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
                 <Trash2 size={13} strokeWidth={2} />
                 Clear All
               </button>
-              <span className="vq-alert-action-divider" aria-hidden="true" />
+              <div
+                title="Drag notifications"
+                onPointerDown={startStackDrag}
+                className={`flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center text-[var(--tx3)] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+              >
+                <GripHorizontal size={17} aria-hidden="true" />
+              </div>
               <button type="button" onClick={() => updateExpanded(false)} aria-expanded={true} className="vq-alert-action vq-alert-view-pill flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold">
                 View Less <CollapseChevron size={12} strokeWidth={2} aria-hidden="true" />
               </button>
