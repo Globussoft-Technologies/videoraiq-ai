@@ -940,10 +940,11 @@ function CameraPreviewModal({ camera, onClose }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onResetThresholdsRequest, onCheckTypeChange, checkTypeSaving, resetLoading = false, canEdit = false }) {
+function CameraRow({ camera, nvrName, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onResetThresholdsRequest, onCheckTypeChange, checkTypeSaving, resetLoading = false, canEdit = false }) {
   const { names: displayNames } = useDetectionDisplayNames();
   const zoneTypes = configuredZoneTypesFor(camera, typeLabels, displayNames);
   const resettableTypes = resettableTypesFor(camera, typeLabels, displayNames);
+  const nvrLabel = `NVR Name: ${nvrName || '—'}`;
 
   return (
     <div
@@ -996,8 +997,8 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
               Preview
             </button>
           </span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>
-            {camera.ipAddress || ''}
+          <span title={nvrLabel} style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {nvrLabel}
           </span>
         </span>
       </span>
@@ -1138,6 +1139,7 @@ export function DetectionSettingsCameraList({ onOpenCamera, requestedDetection }
     return { ...firstPage, nvrs: [...firstPage.nvrs, ...rest.flatMap(page => page.nvrs)] };
   }, []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
+  const nvrNamesById = useMemo(() => new Map(nvrs.map(nvr => [String(nvr._id), nvr.nvrName])), [nvrs]);
 
   const typesApi = useApi(() => getDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
@@ -1607,6 +1609,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             <CameraRow
               key={camera._id}
               camera={camera}
+              nvrName={camera.nvrId?.nvrName || nvrNamesById.get(String(camera.nvrId?._id ?? camera.nvrId))}
               typeLabels={typeLabels}
               onOpen={(targetSettingType) => onOpenCamera?.(
                 camera,
