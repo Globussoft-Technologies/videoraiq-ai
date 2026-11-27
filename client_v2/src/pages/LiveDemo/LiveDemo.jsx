@@ -25,7 +25,10 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detectionsData';
+import { buildDetectionModels, DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detectionsData';
+import { useDetectionCatalog } from '@/page/user/Configure/Detections/useDetectionCatalog';
+import { IS_LICENSING_ENABLED } from '@/helpers/license';
+import { useLicense } from '@/context/LicenseContext';
 import { ZONE_EXTRA_FIELDS } from '@/page/user/Configure/DetectionZoneMarking/constants';
 import { createAuthorizedUser, isEmailExist } from '../RegisterUser/Api';
 import { mediaUrl } from '@/lib/format';
@@ -34,17 +37,35 @@ import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordVideos, getVideoRecords } from './api/get';
 import { deleteDemoMedia } from './api/delete';
-import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, getLiveDemoAnalytics, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
+import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidentsForVideo, getLiveDemoAnalytics, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
 import howToTakeFacePhotos from './assets/howto.jpg';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
 import { buildAttendanceRows, buildSessionRows, handleLiveDemoExport, handleLiveDemoExportAll } from './liveDemoExport';
 import { clearLiveDemoSession, readLiveDemoSession, updateLiveDemoSession } from './liveDemoSession';
 import SessionAnalyticsPanel from './SessionAnalyticsPanel';
+import DemoIncidentReportsPanel from './DemoIncidentReportsPanel';
 import VideoProcessingLoader from './VideoProcessingLoader';
 import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
+
+// Evenly spaced accents keep every catalog tile distinct in both themes.
+function detectionColor(index) {
+  const hue = (index * 137.508) % 360;
+  const saturation = 0.68;
+  const lightness = index % 2 === 0 ? 0.48 : 0.54;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const segment = hue / 60;
+  const secondary = chroma * (1 - Math.abs(segment % 2 - 1));
+  const [red, green, blue] = segment < 1 ? [chroma, secondary, 0]
+    : segment < 2 ? [secondary, chroma, 0]
+      : segment < 3 ? [0, chroma, secondary]
+        : segment < 4 ? [0, secondary, chroma]
+          : segment < 5 ? [secondary, 0, chroma] : [chroma, 0, secondary];
+  const offset = lightness - chroma / 2;
+  return `#${[red, green, blue].map((value) => Math.round((value + offset) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
 
 const detections = [
   { name: 'Count Person Detection', subtitle: 'Occupancy', category: 'people', color: '#4f7cff', settingType: 'countPersonsSettings' },
@@ -161,6 +182,25 @@ function analyticsSettingType(settingType) {
 
 function firstVideoOf(record) {
   return Array.isArray(record?.videos) ? record.videos[0] : null;
+}
+
+function displayedVideoOf(videos) {
+  return Array.isArray(videos) ? videos.find((video) => video?.dsVideoUrl) || videos[0] || null : null;
+}
+
+function displayedVideoId(videos, record) {
+  const video = displayedVideoOf(videos);
+  if (video?._id || video?.id) return video._id || video.id;
+  const savedVideos = Array.isArray(record?.videos) ? record.videos : [];
+  const matching = savedVideos.find((saved) =>
+    (video?.videoUrl && saved.videoUrl === video.videoUrl)
+    || (video?.dsVideoUrl && saved.dsVideoUrl === video.dsVideoUrl));
+  return matching?._id || matching?.id || (video ? savedVideos[videos.indexOf(video)]?._id || savedVideos[videos.indexOf(video)]?.id : null)
+    || firstVideoOf(record)?._id || firstVideoOf(record)?.id || '';
+}
+
+function demoIncidentFilter(settingType) {
+  return settingType === 'unauthorizedAccessSettings' ? ['unauthorizedAccess'] : undefined;
 }
 
 function containRect(containerW, containerH, videoW, videoH) {
@@ -1092,7 +1132,7 @@ function ExpandableSnap({ src, alt, size = 'h-10 w-10' }) {
 // opens a playable video in the same centred modal popup on click. Used by
 // the Recent Demos list so clicking a clip's thumbnail previews the footage
 // without triggering the row's onSelect (loads that demo into the page).
-function ExpandableVideoSnap({ src, alt, size = 'h-11 w-16' }) {
+function ExpandableVideoSnap({ src, alt, label, onSelect, size = 'h-14 w-20' }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -1106,8 +1146,9 @@ function ExpandableVideoSnap({ src, alt, size = 'h-11 w-16' }) {
 
   if (!src) {
     return (
-      <span className={`grid ${size} shrink-0 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]`}>
+      <span className={`relative grid ${size} shrink-0 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]`}>
         <FileVideo className="h-4 w-4" />
+        <span className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] font-bold uppercase text-white">{label}</span>
       </span>
     );
   }
@@ -1116,12 +1157,23 @@ function ExpandableVideoSnap({ src, alt, size = 'h-11 w-16' }) {
     <>
       <button
         type="button"
-        onClick={(event) => { event.stopPropagation(); setOpen(true); }}
-        className={`block shrink-0 cursor-pointer overflow-hidden rounded-md border border-[var(--bd)] bg-black transition-colors hover:border-[var(--blue)] ${size}`}
-        aria-label="Preview clip"
-        title="Click to preview"
+        onClick={(event) => { event.stopPropagation(); onSelect?.(); setOpen(true); }}
+        className={`relative block shrink-0 cursor-pointer overflow-hidden rounded-md border border-[var(--bd)] bg-black transition-colors hover:border-[var(--blue)] ${size}`}
+        aria-label={`Play ${label.toLowerCase()} for ${alt}`}
+        title={`Play ${label.toLowerCase()}`}
       >
-        <video src={src} className="h-full w-full object-cover" preload="metadata" muted playsInline />
+        <video
+          src={src}
+          className="h-full w-full object-cover"
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedMetadata={(event) => {
+            const duration = event.currentTarget.duration;
+            if (Number.isFinite(duration) && duration > 0.5) event.currentTarget.currentTime = 0.5;
+          }}
+        />
+        <span className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] font-bold uppercase text-white">{label}</span>
       </button>
       {open && (
         <div
@@ -1225,28 +1277,12 @@ const SEVERITY_STYLES = {
   low: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-500',
 };
 
-function incidentStatus(item) {
-  if (item?.resolved) return { label: 'Resolved', className: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-500' };
-  if (item?.report?.status) return { label: 'Reported', className: 'border-red-400/40 bg-red-500/10 text-red-500' };
-  return { label: 'New', className: 'border-[var(--blue)]/40 bg-[var(--blue)]/10 text-[var(--blue)]' };
-}
-
-// ConfidenceScoreInPercentage is already 0-100; the legacy fallbacks are 0-1
-// ratios, so only those get scaled.
-function incidentConfidence(item) {
-  const pct = item?.ConfidenceScoreInPercentage ?? item?.confidenceScoreInPercentage;
-  if (Number.isFinite(Number(pct))) return `${Math.round(Number(pct))}%`;
-  const raw = item?.confidence ?? item?.accuracy ?? item?.score;
-  if (Number.isFinite(Number(raw))) return `${Math.round(Number(raw) * 100)}%`;
-  return '--';
-}
-
 function incidentTime(item) {
   const value = item?.timeOfIncident || item?.createdAt;
   return formatUtcInConfiguredTimezone(value, 'DD MMM, HH:mm');
 }
 
-function DemoEventLogPanel({ incidents, detectionName, loading }) {
+function DemoEventLogPanel({ incidents, detectionName, loading, error }) {
   const items = Array.isArray(incidents?.items) ? incidents.items : [];
   const total = incidents?.totalCount ?? items.length;
 
@@ -1266,28 +1302,28 @@ function DemoEventLogPanel({ incidents, detectionName, loading }) {
         <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
           Loading events...
         </div>
+      ) : error ? (
+        <div role="alert" className="rounded-lg border border-red-400/40 bg-red-500/10 p-6 text-center text-xs text-red-500">
+          {error}
+        </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
           No events detected in this clip.
         </div>
       ) : (
         <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)]">
-          <table className="w-full min-w-[720px] text-left text-xs">
+          <table className="w-full min-w-[420px] text-left text-xs">
             <thead className="sticky top-0 z-10 bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
                 <th className="px-3 py-2">Snap</th>
                 <th className="px-3 py-2">Event</th>
                 <th className="px-3 py-2">Time</th>
-                <th className="px-3 py-2">Camera</th>
                 <th className="px-3 py-2">Severity</th>
-                <th className="px-3 py-2">Confidence</th>
-                <th className="px-3 py-2">Status</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => {
                 const severity = String(item?.severity || '').toLowerCase();
-                const status = incidentStatus(item);
                 return (
                   <tr key={item?._id || item?.id || index} className="border-t border-[var(--bd)] align-middle">
                     <td className="px-3 py-2">
@@ -1298,9 +1334,6 @@ function DemoEventLogPanel({ incidents, detectionName, loading }) {
                       {item?.zone && <div className="mt-0.5 text-[11px] text-[var(--tx3)]">{item.zone}</div>}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-[var(--tx2)]">{incidentTime(item)}</td>
-                    <td className="px-3 py-2 text-[var(--tx2)]">
-                      {item?.channelData?.name || item?.channelName || '--'}
-                    </td>
                     <td className="px-3 py-2">
                       {severity ? (
                         <span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${SEVERITY_STYLES[severity] || 'border-[var(--bd)] text-[var(--tx3)]'}`}>
@@ -1309,12 +1342,6 @@ function DemoEventLogPanel({ incidents, detectionName, loading }) {
                       ) : (
                         <span className="text-[var(--tx3)]">--</span>
                       )}
-                    </td>
-                    <td className="px-3 py-2 text-[var(--tx2)]">{incidentConfidence(item)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${status.className}`}>
-                        {status.label}
-                      </span>
                     </td>
                   </tr>
                 );
@@ -1976,7 +2003,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
     currentClipName: clipName,
     range,
   });
-  const hasData = reports.some((report) => report.rows.length > 0);
+  const hasData = reports.length > 0;
 
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -2004,7 +2031,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
           </div>
           <button
             type="button"
-            disabled={!hasData}
+            disabled={!hasData || loading}
             onClick={() => handleLiveDemoExportAll('excel', reports, analytics)}
             title="Export every demo report into one Excel file"
             className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[#14b8a6] to-[#22c55e] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(34,197,94,0.28)] transition-shadow hover:shadow-[0_8px_22px_rgba(34,197,94,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
@@ -2014,7 +2041,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
           </button>
           <button
             type="button"
-            disabled={!hasData}
+            disabled={!hasData || loading}
             onClick={() => handleLiveDemoExportAll('pdf', reports, analytics)}
             title="Export every demo report into one PDF file"
             className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(99,102,241,0.3)] transition-shadow hover:shadow-[0_8px_22px_rgba(124,92,255,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
@@ -2062,7 +2089,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
-                  disabled={events === 0}
+                  disabled={loading}
                   onClick={() => handleLiveDemoExport('excel', report, analytics)}
                   title="Export this report as Excel"
                   className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(34,197,94,0.45)] px-3 text-[11.5px] font-semibold text-[var(--ok)] transition-colors hover:bg-[rgba(34,197,94,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -2072,7 +2099,7 @@ function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
                 </button>
                 <button
                   type="button"
-                  disabled={events === 0}
+                  disabled={loading}
                   onClick={() => handleLiveDemoExport('pdf', report, analytics)}
                   title="Export this report as PDF"
                   className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(59,130,246,0.4)] px-3 text-[11.5px] font-semibold text-[var(--blue)] transition-colors hover:bg-[rgba(59,130,246,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -2281,25 +2308,28 @@ function DemoHistoryPanel({ history, loading, activeRecordId, filters, onFilters
               const name = detections.find((item) => item.settingType === settingType)?.name || 'Live Demo';
               const ranAt = record?.createdAt ? formatUtcInConfiguredTimezone(record.createdAt, 'DD MMM YYYY, hh:mm A', '') : '';
               const isActive = id === activeRecordId;
-              const thumbSrc = firstVideoOf(record)?.dsVideoUrl ? dsVideoSrc(firstVideoOf(record).dsVideoUrl) : '';
+              const video = displayedVideoOf(record?.videos);
+              const originalSrc = dsVideoSrc(video?.videoUrl);
+              const processedSrc = dsVideoSrc(video?.dsVideoUrl);
               return (
-                <button
+                <div
                   key={id}
-                  type="button"
-                  onClick={() => onSelect(record)}
-                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                  className={`flex w-full flex-wrap items-center gap-3 rounded-lg border p-2.5 transition-colors ${
                     isActive ? 'border-[var(--blue)] bg-[var(--bg2)]' : 'border-[var(--bd)] hover:border-[var(--bd2)] hover:bg-[var(--bg2)]'
                   }`}
                 >
-                  <ExpandableVideoSnap src={thumbSrc} alt={name} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-bold text-[var(--tx)]">{name}</div>
-                    <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">{ranAt}</div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <ExpandableVideoSnap src={originalSrc} alt={name} label="Original" onSelect={() => onSelect(record, 'original')} />
+                    <ExpandableVideoSnap src={processedSrc} alt={name} label="Processed" onSelect={() => onSelect(record, 'processed')} />
                   </div>
+                  <button type="button" onClick={() => onSelect(record)} className="min-w-0 flex-1 cursor-pointer text-left">
+                    <span className="block truncate text-xs font-bold text-[var(--tx)]">{name}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-[var(--tx3)]">{ranAt}</span>
+                  </button>
                   <span className="shrink-0 rounded-md border border-emerald-400 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-500">
                     Processed
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -2328,9 +2358,12 @@ export default function LiveDemo({ active = true }) {
   const [secondsRemaining, setSecondsRemaining] = useState(null);
   const [demoIncidents, setDemoIncidents] = useState({ items: [], totalCount: 0 });
   const [demoIncidentsLoading, setDemoIncidentsLoading] = useState(false);
+  const [demoIncidentsError, setDemoIncidentsError] = useState('');
   const [demoAttendanceLogs, setDemoAttendanceLogs] = useState(null);
   const [clipStatus, setClipStatus] = useState('idle');
   const [clipProgress, setClipProgress] = useState(0);
+  const [videoView, setVideoView] = useState('processed');
+  const [originalPlaybackFailed, setOriginalPlaybackFailed] = useState(false);
   const clipInputRef = useRef(null);
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -2370,6 +2403,21 @@ export default function LiveDemo({ active = true }) {
 
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { license, loading: licenseLoading } = useLicense();
+  const detectionTypesApi = useDetectionCatalog(license);
+  const availableDetections = useMemo(() => {
+    const allowed = IS_LICENSING_ENABLED ? new Set(license?.allowedDetections || []) : null;
+    const catalog = buildDetectionModels(detectionTypesApi.data);
+    const known = detections
+      .map((item, index) => ({ ...item, color: detectionColor(index) }))
+      .filter((item) => !allowed || allowed.has(item.settingType));
+    const knownTypes = new Set(known.map((item) => item.settingType));
+    const knownNames = new Set(known.map((item) => item.name));
+    const additional = catalog
+      .filter((item) => (!allowed || allowed.has(item.settingType)) && !knownTypes.has(item.settingType) && !knownNames.has(item.name))
+      .map((item, index) => ({ ...item, color: detectionColor(detections.length + index) }));
+    return [...known, ...additional];
+  }, [license?.allowedDetections, detectionTypesApi.data]);
   const [matchedAlerts, setMatchedAlerts] = useState([]);
   const [demoHistory, setDemoHistory] = useState([]);
   const [demoHistoryLoading, setDemoHistoryLoading] = useState(false);
@@ -2377,7 +2425,7 @@ export default function LiveDemo({ active = true }) {
   // YYYY-MM-DD date window. A new object identity re-runs loadDemoHistory.
   const [demoHistoryFilters, setDemoHistoryFilters] = useState({ detectionType: '', startDate: '', endDate: '' });
 
-  const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
+  const selected = availableDetections.find((item) => item.name === selectedDetection) || availableDetections[0] || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
   // Line Crossing draws a single straight tripwire, not a closed area: clicks 1
   // and 2 are the line endpoints and click 3 is the inside reference point that
@@ -2388,10 +2436,15 @@ export default function LiveDemo({ active = true }) {
   const effectiveMaxPoints = isLineCrossing ? 3 : maxPoints;
   const configurationAvailable = selectedDetection === 'Face Recognition' || selectedConfig;
   const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing' || clipStatus === 'awaiting-ds';
-  const currentVideoId = firstVideoOf(videoRecord)?._id || firstVideoOf(videoRecord)?.id || '';
+  const currentVideoId = displayedVideoId(recordVideos, videoRecord);
+  const overlayUnitsPerPixel = videoRect.width > 0 && videoRect.height > 0
+    ? Math.max(1, (videoSize.w || 1000) / videoRect.width, (videoSize.h || 562) / videoRect.height)
+    : 1;
   const processedVideo = recordVideos.find((video) => video?.dsVideoUrl)?.dsVideoUrl;
+  const originalVideoUrl = dsVideoSrc(firstVideoOf(recordVideos)?.videoUrl || firstVideoOf(videoRecord)?.videoUrl || uploadedVideoPath);
+  const showVideoChoices = Boolean(clipStatus === 'ready' && processedVideo && originalVideoUrl && !originalPlaybackFailed);
   const playerVideoUrl = processedVideo
-    ? dsVideoSrc(processedVideo)
+    ? videoView === 'original' && showVideoChoices ? originalVideoUrl : dsVideoSrc(processedVideo)
     : mediaSrc(clipPreviewUrl || uploadedVideoUrl || uploadedVideoPath);
   const statusLabel = clipStatus === 'uploading'
     ? `Uploading - ${clipProgress}%`
@@ -2408,12 +2461,12 @@ export default function LiveDemo({ active = true }) {
         : 'Waiting for clip';
   const filteredDetections = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return detections.filter((item) => {
+    return availableDetections.filter((item) => {
       if (activeCategory !== 'all' && item.category !== activeCategory) return false;
       if (query && !`${item.name} ${item.subtitle}`.toLowerCase().includes(query)) return false;
       return true;
     });
-  }, [activeCategory, search]);
+  }, [activeCategory, search, availableDetections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2486,7 +2539,7 @@ export default function LiveDemo({ active = true }) {
           ? latestSaved.videos
           : serverVideos;
     const ready = videos.some((video) => video?.dsVideoUrl);
-    const video = firstVideoOf(videos);
+    const video = displayedVideoOf(videos);
     // A not-yet-processed ("pending") record must never show the processing
     // loader on load. Only keep waiting when the caller is restoring an
     // in-flight session from this same tab (fallbackStatus === 'awaiting-ds').
@@ -2503,6 +2556,10 @@ export default function LiveDemo({ active = true }) {
     const restoredZones = Array.isArray(video?.zones)
       ? video.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
       : [];
+    if (isLineCrossing && restoredZones[0]?.length === 2 && video?.inside_reference_point?.length === 2) {
+      const [x, y] = video.inside_reference_point;
+      restoredZones[0].push({ x, y });
+    }
     const restoredConfigs = Array.isArray(video?.zone_configs)
       ? video.zone_configs.map((config, index) => ({
           name: config.name || `${isLineCrossing ? 'Line' : 'Zone'} ${index + 1}`,
@@ -2512,7 +2569,7 @@ export default function LiveDemo({ active = true }) {
         }))
       : [];
     const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
-    const videoId = video?._id || video?.id;
+    const videoId = displayedVideoId(videos, record);
 
     setVideoRecord(record);
     setRecordVideos(videos);
@@ -2542,16 +2599,20 @@ export default function LiveDemo({ active = true }) {
     // Rebuild the event panels the same way handleVideoRecordUpdated does after
     // a fresh process — derived analytics (populated as soon as events land, not
     // the DS-pushed sessionAnalytics counters which stay zero), plus incidents
-    // and the attendance log. Attendance/incidents are scoped to this record's
-    // video where possible, but fall back to the admin-wide demo data so a
-    // reloaded / re-opened run never shows empty panels.
+    // and the attendance log. Incidents are scoped to this record's video.
     const isFaceRecognition = settingType === 'faceAuthenticationSettings';
+    setDemoIncidentsError('');
+    setDemoIncidentsLoading(!isFaceRecognition);
     const [analyticsData, incidentsData, attendanceScoped] = await Promise.all([
       getLiveDemoAnalytics({
         detectionTypes: settingType ? [analyticsSettingType(settingType)] : undefined,
       }).catch(() => null),
-      videoId
-        ? getDemoIncidents({ limit: 50, videoId, ...(settingType ? { incidentTypeFilter: [settingType] } : {}) }).catch(() => null)
+      !isFaceRecognition
+        ? getDemoIncidentsForVideo({ videoId, incidentTypeFilter: demoIncidentFilter(settingType) }).catch((error) => {
+            console.error('Failed to load Live Demo incidents', error);
+            setDemoIncidentsError('Could not load events for this clip. Please reopen the demo to retry.');
+            return null;
+          })
         : Promise.resolve(null),
       isFaceRecognition && videoId
         ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true, videoId }).catch(() => null)
@@ -2564,14 +2625,8 @@ export default function LiveDemo({ active = true }) {
     if (isFaceRecognition && !(attendanceScoped?.usersLogs?.length)) {
       attendanceData = await getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }).catch(() => attendanceScoped);
     }
-    let resolvedIncidents = incidentsData;
-    if (!isFaceRecognition && !(resolvedIncidents?.items?.length)) {
-      resolvedIncidents = await getDemoIncidents({
-        limit: 50,
-        ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
-      }).catch(() => resolvedIncidents);
-    }
-    setDemoIncidents(resolvedIncidents || { items: [], totalCount: 0 });
+    setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
+    setDemoIncidentsLoading(false);
     setDemoAttendanceLogs(attendanceData);
     // Matched Alerts is a live socket feed (accessLogs_${adminId}), not a
     // fetch — for a re-opened past run it seeds from the attendance sessions so
@@ -2649,8 +2704,10 @@ export default function LiveDemo({ active = true }) {
   // Loads a past record's clip/zones/results into the player and panels
   // without touching selectedDetection — callers that already know (or are
   // about to set) the detection name do that themselves.
-  const openDemoRecord = async (record) => {
+  const openDemoRecord = async (record, preferredView = 'processed') => {
     const recordId = recordIdOf(record);
+    setVideoView(preferredView);
+    setOriginalPlaybackFailed(false);
     if (!recordId || recordId === recordIdOf(videoRecord)) return;
     const video = firstVideoOf(record);
     setClipFile({ name: 'Demo clip', size: 0 });
@@ -2659,7 +2716,7 @@ export default function LiveDemo({ active = true }) {
     await loadDemoRecord(recordId, { fallbackRecord: record });
   };
 
-  const handleSelectDemoHistory = async (record) => {
+  const handleSelectDemoHistory = async (record, preferredView = 'processed') => {
     try {
       const restoredDetection = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
       const detectionName = detections.find((item) => item.settingType === restoredDetection)?.name || 'Face Recognition';
@@ -2668,7 +2725,7 @@ export default function LiveDemo({ active = true }) {
       if (restoredDetection) {
         setDemoHistoryFilters((current) => ({ ...current, detectionType: restoredDetection }));
       }
-      await openDemoRecord(record);
+      await openDemoRecord(record, preferredView);
     } catch (error) {
       console.error('Failed to load selected live demo', error);
       toast.error('Failed to load this demo', COMPACT_TOAST);
@@ -2724,6 +2781,7 @@ export default function LiveDemo({ active = true }) {
       setClipProgress(100);
       setClipStatus('ready');
       if (processingSettingTypeRef.current !== 'faceAuthenticationSettings') setDemoIncidentsLoading(true);
+      setDemoIncidentsError('');
       setSecondsRemaining(null);
       processingDeadlineRef.current = null;
       updateLiveDemoSession({
@@ -2742,31 +2800,25 @@ export default function LiveDemo({ active = true }) {
         // hasn't emitted any events by then -- this is the refetch that
         // actually fills the Event Log.
         const settingType = processingSettingTypeRef.current;
+        const updatedVideoId = displayedVideoId(videos, videoRecord) || currentVideoId;
         const [analyticsData, attendanceData, incidentsData] = await Promise.all([
           getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(settingType)] }),
           isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }) : Promise.resolve(null),
           isFaceRecognition
             ? Promise.resolve(null)
-            : getDemoIncidents({
-                limit: 50,
-                ...(currentVideoId ? { videoId: currentVideoId } : {}),
-                ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
-              }).catch(() => null),
+            : getDemoIncidentsForVideo({
+                videoId: updatedVideoId,
+                incidentTypeFilter: demoIncidentFilter(settingType),
+              }).catch((error) => {
+                console.error('Failed to load Live Demo incidents', error);
+                setDemoIncidentsError('Could not load events for this clip. Please reopen the demo to retry.');
+                return null;
+              }),
         ]);
         setSessionAnalytics(analyticsData || null);
         if (isFaceRecognition) setDemoAttendanceLogs(attendanceData);
         if (!isFaceRecognition) {
-          // DS doesn't always stamp events with our videoId, so a scoped query
-          // can come back empty for a clip that did produce events. Fall back to
-          // the admin-wide demo feed rather than showing an empty log.
-          let resolved = incidentsData;
-          if (!resolved?.items?.length) {
-            resolved = await getDemoIncidents({
-              limit: 50,
-              ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
-            }).catch(() => resolved);
-          }
-          setDemoIncidents(resolved || { items: [], totalCount: 0 });
+          setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
           setDemoIncidentsLoading(false);
         }
       } catch (error) {
@@ -2778,6 +2830,23 @@ export default function LiveDemo({ active = true }) {
     socket.on(eventName, handleVideoRecordUpdated);
     return () => socket.off(eventName, handleVideoRecordUpdated);
   }, [socket, videoRecord]);
+
+  // DS may save incidents after it marks the processed video ready. Receive
+  // those later events without requiring the user to reopen the demo.
+  useEffect(() => {
+    if (!socket || !user?.adminId || !currentVideoId) return;
+    const eventName = `liveDemoIncident_${user.adminId}`;
+    const onIncident = (incident) => {
+      if (incident?.liveDemoData !== true || String(incident.videoId || '') !== String(currentVideoId)) return;
+      setDemoIncidents((current) => {
+        const items = Array.isArray(current?.items) ? current.items : [];
+        if (items.some((item) => String(item._id || item.id) === String(incident._id || incident.id))) return current;
+        return { items: [incident, ...items].slice(0, 50), totalCount: (current?.totalCount || 0) + 1 };
+      });
+    };
+    socket.on(eventName, onIncident);
+    return () => socket.off(eventName, onIncident);
+  }, [socket, user?.adminId, currentVideoId]);
 
   // Face-match alerts (same accessLogs_${adminId} channel the real app uses —
   // there's no Live Demo-specific event yet). Unrecognized/"Unknown" matches
@@ -2810,28 +2879,58 @@ export default function LiveDemo({ active = true }) {
     return () => clearTimeout(timer);
   }, [clipStatus, secondsRemaining]);
 
-  // Safety net: once processing has been submitted, if it runs past
-  // estimated_completion_seconds + 20% with no completion socket event, stop
-  // waiting and surface a timeout. Only active after /process returns
-  // (processing / awaiting-ds) — never during upload.
+  // A missed socket event can leave a completed job looking unfinished.
+  // Check the saved video before treating the estimate as a timeout.
   useEffect(() => {
     const waiting = clipStatus === 'processing' || clipStatus === 'awaiting-ds';
     if (!waiting || processingDeadlineRef.current == null) return;
-    const stopProcessing = () => {
+    let cancelled = false;
+    const deadline = processingDeadlineRef.current;
+    const stopProcessing = async () => {
+      const recordId = videoRecord?._id || videoRecord?.id;
+      try {
+        if (recordId) {
+          const { videos = [] } = await getVideoRecordVideos(recordId);
+          if (cancelled || processingDeadlineRef.current !== deadline) return;
+          if (videos.some((video) => video?.dsVideoUrl)) {
+            processingDeadlineRef.current = null;
+            setSecondsRemaining(null);
+            setRecordVideos(videos);
+            setClipProgress(100);
+            setClipStatus('ready');
+            updateLiveDemoSession({ videoRecord: { ...videoRecord, videos }, videos, status: 'ready' });
+            toast.success('Demo clip processed', COMPACT_TOAST);
+            loadDemoRecord(recordId, { fallbackRecord: videoRecord, fallbackVideos: videos }).catch((error) => {
+              console.error('Failed to refresh completed demo', error);
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        if (cancelled || processingDeadlineRef.current !== deadline) return;
+        console.error('Failed to verify demo processing status', error);
+        toast.error('Could not confirm processing status. Reopen the demo to check.', COMPACT_TOAST);
+        processingDeadlineRef.current = null;
+        setSecondsRemaining(null);
+        setClipStatus('error');
+        updateLiveDemoSession({ status: 'error' });
+        return;
+      }
+      if (cancelled || processingDeadlineRef.current !== deadline) return;
       processingDeadlineRef.current = null;
       setSecondsRemaining(null);
       setClipStatus('error');
       updateLiveDemoSession({ status: 'error' });
       toast.error('Video processing timed out — please try again', COMPACT_TOAST);
     };
-    const msLeft = processingDeadlineRef.current - Date.now();
+    const msLeft = deadline - Date.now();
     if (msLeft <= 0) {
       stopProcessing();
-      return;
+      return () => { cancelled = true; };
     }
     const timer = setTimeout(stopProcessing, msLeft);
-    return () => clearTimeout(timer);
-  }, [clipStatus, secondsRemaining]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [clipStatus, secondsRemaining, videoRecord]);
 
   useEffect(() => {
     const timers = [];
@@ -2873,6 +2972,8 @@ export default function LiveDemo({ active = true }) {
   };
 
   const resetClipState = async ({ deleteRemote = false } = {}) => {
+    setVideoView('processed');
+    setOriginalPlaybackFailed(false);
     if (deleteRemote && uploadedVideoPath) {
       try {
         await deleteDemoMedia(uploadedVideoPath);
@@ -2893,6 +2994,7 @@ export default function LiveDemo({ active = true }) {
     setSecondsRemaining(null);
     processingDeadlineRef.current = null;
     setDemoIncidents({ items: [], totalCount: 0 });
+    setDemoIncidentsError('');
     setDemoAttendanceLogs(null);
     setMatchedAlerts([]);
     setClipStatus('idle');
@@ -2909,6 +3011,19 @@ export default function LiveDemo({ active = true }) {
     setZoneSettings([]);
     clearLiveDemoSession();
   };
+
+  useEffect(() => {
+    if (licenseLoading || detectionTypesApi.loading || availableDetections.some((item) => item.name === selectedDetection)) return;
+    const saved = readLiveDemoSession();
+    if (!detectionSelected && saved?.recordId && saved?.uploadedVideoPath
+      && availableDetections.some((item) => item.settingType === saved.settingType)) return;
+    const nextName = availableDetections[0]?.name || '';
+    if (selectedDetection === nextName) return;
+    resetClipState().catch((error) => console.error('Failed to reset clip after detection licence change', error));
+    setSelectedDetection(nextName);
+    setDetectionSelected(false);
+    setDemoHistoryFilters((current) => ({ ...current, detectionType: '' }));
+  }, [availableDetections, detectionSelected, detectionTypesApi.loading, licenseLoading, selectedDetection]);
 
   const handleVideoMetadata = () => {
     const video = videoRef.current;
@@ -3529,6 +3644,7 @@ export default function LiveDemo({ active = true }) {
     setRecordVideos([]);
     setSessionAnalytics(null);
     setDemoIncidents({ items: [], totalCount: 0 });
+    setDemoIncidentsError('');
     setDemoAttendanceLogs(null);
     setMatchedAlerts([]);
 
@@ -3596,7 +3712,7 @@ export default function LiveDemo({ active = true }) {
 
       const [analyticsData, incidentsData, attendanceData] = await Promise.all([
         getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(selected.settingType)] }),
-        getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
+        Promise.resolve({ items: [], totalCount: 0 }),
         selected.settingType === 'faceAuthenticationSettings'
           ? getDemoAttendanceLogs({ limit: 10, isExport: false })
           : Promise.resolve(null),
@@ -3630,6 +3746,13 @@ export default function LiveDemo({ active = true }) {
       toast.error(message, COMPACT_TOAST);
     }
   };
+
+  if (licenseLoading || detectionTypesApi.loading) {
+    return <div className="grid min-h-[calc(100dvh-64px)] place-items-center text-sm text-[var(--tx3)]">Loading available detections...</div>;
+  }
+  if (!availableDetections.length) {
+    return <div className="p-6 text-sm text-[var(--tx3)]">No detections are allowed for this account.</div>;
+  }
 
   return (
     <div className="min-h-full bg-[var(--bg2)] p-3 sm:p-4 lg:p-[22px]">
@@ -3793,6 +3916,24 @@ export default function LiveDemo({ active = true }) {
           />
           {clipFile ? (
             <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
+              {showVideoChoices && !isClipFullscreen && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--bd)] p-3">
+                  {[
+                    ['original', 'Original video'],
+                    ['processed', 'Processed video'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setVideoView(value)}
+                      aria-pressed={videoView === value}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${videoView === value ? 'border-[var(--blue)] bg-[var(--blue)]/10 text-[var(--blue)]' : 'border-[var(--bd)] text-[var(--tx3)] hover:text-[var(--tx)]'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div
                 ref={stageRef}
                 className={`relative grid min-h-[260px] place-items-center overflow-hidden bg-black ${drawing ? 'cursor-crosshair' : ''} ${isClipFullscreen ? 'h-screen w-screen' : ''}`}
@@ -3814,6 +3955,12 @@ export default function LiveDemo({ active = true }) {
                       muted
                       controlsList="nofullscreen"
                       onLoadedMetadata={handleVideoMetadata}
+                      onError={() => {
+                        if (videoView === 'original' && processedVideo) {
+                          setOriginalPlaybackFailed(true);
+                          setVideoView('processed');
+                        }
+                      }}
                       onClick={(event) => {
                         if (!drawing) event.preventDefault();
                       }}
@@ -3848,14 +3995,16 @@ export default function LiveDemo({ active = true }) {
                               points={pointsToAttr(zone.slice(0, 2))}
                               fill="none"
                               stroke="rgba(245,166,35,.95)"
-                              strokeWidth="4"
+                              strokeWidth="2"
+                              vectorEffect="non-scaling-stroke"
                             />
                           ) : (
                             <polygon
                               points={pointsToAttr(zone)}
-                              fill="rgba(245,166,35,.18)"
+                              fill="rgba(245,166,35,.2)"
                               stroke="rgba(245,166,35,.95)"
-                              strokeWidth="3"
+                              strokeWidth="2"
+                              vectorEffect="non-scaling-stroke"
                             />
                           )}
                           {zone.map((point, pointIndex) => {
@@ -3865,10 +4014,11 @@ export default function LiveDemo({ active = true }) {
                                 <circle
                                   cx={point.x}
                                   cy={point.y}
-                                  r={isRefPoint ? 7 : 6}
+                                  r={(isRefPoint ? 5 : 4) * overlayUnitsPerPixel}
                                   fill={isRefPoint ? '#22c55e' : '#fff'}
                                   stroke={isRefPoint ? '#fff' : 'rgba(245,166,35,.95)'}
-                                  strokeWidth="3"
+                                  strokeWidth="1.5"
+                                  vectorEffect="non-scaling-stroke"
                                 />
                                 {isRefPoint && (
                                   <text
@@ -3892,19 +4042,21 @@ export default function LiveDemo({ active = true }) {
                             <polyline
                               points={pointsToAttr(zone.slice(0, 2))}
                               fill="none"
-                              stroke="rgba(59,130,246,.95)"
-                              strokeWidth="4"
+                              stroke="#4f6fff"
+                              strokeWidth="2"
+                              vectorEffect="non-scaling-stroke"
                             />
                           ) : (
                             <polygon
                               points={pointsToAttr(zone)}
-                              fill="rgba(59,130,246,.14)"
-                              stroke="rgba(59,130,246,.95)"
-                              strokeWidth="3"
+                              fill="rgba(79,111,255,.22)"
+                              stroke="#4f6fff"
+                              strokeWidth="2"
+                              vectorEffect="non-scaling-stroke"
                             />
                           )}
                           {zone.map((point, pointIndex) => (
-                            <circle key={`draft-zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r="6" fill="#fff" stroke="rgba(59,130,246,.95)" strokeWidth="3" />
+                            <circle key={`draft-zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r={4 * overlayUnitsPerPixel} fill="#fff" stroke="#4f6fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
                           ))}
                         </g>
                       ))}
@@ -3914,16 +4066,18 @@ export default function LiveDemo({ active = true }) {
                         <polyline
                           points={pointsToAttr(isLineCrossing ? points.slice(0, 2) : points)}
                           fill="none"
-                          stroke="rgba(59,130,246,.95)"
-                          strokeWidth={isLineCrossing ? 4 : 3}
+                          stroke="#4f6fff"
+                          strokeWidth="2"
+                          vectorEffect="non-scaling-stroke"
                         />
                       )}
                       {!isLineCrossing && points.length >= 3 && (
                         <polygon
                           points={pointsToAttr(points)}
-                          fill="rgba(59,130,246,.14)"
-                          stroke="rgba(59,130,246,.95)"
-                          strokeWidth="3"
+                          fill="rgba(79,111,255,.22)"
+                          stroke="#4f6fff"
+                          strokeWidth="2"
+                          vectorEffect="non-scaling-stroke"
                         />
                       )}
                       {points.map((point, index) => {
@@ -3933,12 +4087,21 @@ export default function LiveDemo({ active = true }) {
                             <circle
                               cx={point.x}
                               cy={point.y}
-                              r={drawing ? 7 : 10}
-                              fill={isRefPoint ? '#22c55e' : '#fff'}
-                              stroke={isRefPoint ? '#fff' : 'rgba(59,130,246,.95)'}
-                              strokeWidth="3"
+                              r={9 * overlayUnitsPerPixel}
+                              fill="transparent"
+                              stroke="none"
                               style={{ pointerEvents: drawing ? 'none' : 'auto', cursor: drawing ? 'default' : 'grab', touchAction: 'none' }}
                               onPointerDown={handlePointDragStart(index)}
+                            />
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={(isRefPoint ? 5 : 4) * overlayUnitsPerPixel}
+                              fill={isRefPoint ? '#22c55e' : '#fff'}
+                              stroke={isRefPoint ? '#fff' : '#4f6fff'}
+                              strokeWidth="1.5"
+                              vectorEffect="non-scaling-stroke"
+                              style={{ pointerEvents: 'none' }}
                             />
                             {isRefPoint && (
                               <text
@@ -4143,6 +4306,7 @@ export default function LiveDemo({ active = true }) {
             incidents={demoIncidents}
             detectionName={selectedDetection}
             loading={demoIncidentsLoading}
+            error={demoIncidentsError}
           />
         )}
         {selectedDetection !== 'Face Recognition' && clipStatus !== 'ready' && selectedConfig && (
@@ -4191,6 +4355,9 @@ export default function LiveDemo({ active = true }) {
             history={demoHistory}
             analytics={sessionAnalytics}
           />
+        )}
+        {selectedDetection !== 'Face Recognition' && (
+          <DemoIncidentReportsPanel history={demoHistory} filters={demoHistoryFilters} sourceLoading={demoHistoryLoading} detections={availableDetections} />
         )}
       </div>
 

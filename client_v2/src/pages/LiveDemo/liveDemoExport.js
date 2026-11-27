@@ -2,9 +2,19 @@ import moment from 'moment-timezone';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { unzipSync, zipSync } from 'fflate';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-color.png';
 import { getConfiguredTimezone } from '@/utils/timezone';
+import { loadReportImages } from './reportImage';
+import { embedImagesInWorksheet } from './xlsxImageEmbed';
+
+function photoUrl(path) {
+  if (!path) return '';
+  if (/^(https?:)?\/\//i.test(path)) return path;
+  const base = import.meta.env.VITE_INCIDENT_URL || import.meta.env.VITE_BACKEND || '';
+  return `${String(base).replace(/\/+$/, '')}/${String(path).replace(/^\/+/, '')}`;
+}
 
 /** Row shape used by both the on-page Attendance Log table and this export —
  * built once from the raw usersLogs entries returned by getDemoAttendanceLogs. */
@@ -106,8 +116,7 @@ function toReports(input) {
       generatedAt: report.generatedAt || report.lastRunAt || null,
       rows: Array.isArray(report.rows) ? report.rows : [],
       _index: index,
-    }))
-    .filter((report) => report.rows.length > 0);
+    }));
 }
 
 const slug = (value) => String(value || 'live_demo').replace(/\s+/g, '_').toLowerCase();
@@ -301,7 +310,7 @@ const drawDetectionTable = (doc, rows, startY) => {
  * Min confidence / Summary, followed by the per-person table. `avgConfidence`
  * comes from the Session Analytics detection breakdown — there's no per-row
  * confidence in the attendance data, only the detection-level average. */
-const drawAttendanceSection = (doc, report, startY, avgConfidence) => {
+const drawAttendanceSection = (doc, report, startY, avgConfidence, images) => {
   let y = startY;
   drawSectionTitle(doc, report.title, y);
   y += 6;
@@ -343,13 +352,30 @@ const drawAttendanceSection = (doc, report, startY, avgConfidence) => {
   y = doc.lastAutoTable.finalY + 4;
 
   autoTable(doc, {
-    head: [['Person', 'Email', 'Date', 'Check-in', 'Check-out']],
-    body: report.rows.map((row) => [row.name, row.email || '--', row.date || '--', row.checkIn, row.checkOut]),
+    head: [['Snapshot', 'Person', 'Email', 'Description', 'Date', 'Check-in', 'Check-out']],
+    body: report.rows.map((row) => [
+      images.get(photoUrl(row.photo)) ? '' : row.photo ? 'Open image' : '--',
+      row.name, row.email || '--', row.name === 'Unknown' ? 'Face detected' : 'Recognized face',
+      row.date || '--', row.checkIn, row.checkOut,
+    ]),
     startY: y,
     margin: { left: 14, right: 14 },
     styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
     headStyles: { fillColor: TABLE_HEAD, textColor: 255 },
     alternateRowStyles: { fillColor: [246, 248, 252] },
+    columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 26 }, 2: { cellWidth: 37 }, 3: { cellWidth: 40 }, 4: { cellWidth: 24 }, 5: { cellWidth: 16 }, 6: { cellWidth: 16 } },
+    didParseCell: ({ section, cell }) => {
+      if (section === 'body') cell.styles.minCellHeight = 18;
+    },
+    didDrawCell: ({ section, row, column, cell }) => {
+      if (section !== 'body' || column.index !== 0) return;
+      const url = photoUrl(report.rows[row.index]?.photo);
+      if (url) doc.link(cell.x, cell.y, cell.width, cell.height, { url });
+      const image = images.get(url);
+      if (image) {
+        try { doc.addImage(image.dataUrl, 'PNG', cell.x + 1, cell.y + 1, cell.width - 2, Math.min(cell.height - 2, 14)); } catch { /* keep the link */ }
+      }
+    },
   });
   return doc.lastAutoTable.finalY;
 };
@@ -418,13 +444,24 @@ function reportSheet(report) {
       Date: row.date || '--',
       'Check-in': row.checkIn,
       'Check-out': row.checkOut,
+      Description: row.name === 'Unknown' ? 'Face detected' : 'Recognized face',
+      Snapshot: row.photo ? 'Open snapshot' : '--',
     })),
     { origin: -1 },
   );
+  report.rows.forEach((row, index) => {
+    const url = photoUrl(row.photo);
+    const address = XLSX.utils.encode_cell({ r: meta.length + index, c: 7 });
+    if (url && sheet[address]) sheet[address].l = { Target: url, Tooltip: 'Open face snapshot' };
+  });
+  sheet['!cols'] = [8, 25, 36, 18, 16, 16, 25, 23].map((wch) => ({ wch }));
+  sheet['!rows'] = Array.from({ length: meta.length + report.rows.length }, (_, index) => (
+    index >= meta.length ? { hpx: 60 } : {}
+  ));
   return sheet;
 }
 
-function exportExcel(input, analytics, { filename } = {}) {
+async function exportExcel(input, analytics, { filename } = {}) {
   const reports = toReports(input);
   if (!reports.length) {
     toast.error('No attendance data to export');
@@ -451,6 +488,7 @@ function exportExcel(input, analytics, { filename } = {}) {
     XLSX.utils.book_append_sheet(workbook, summary, 'Summary');
   }
 
+  const reportSheetOffset = workbook.SheetNames.length;
   const seen = {};
   reports.forEach((report, i) => {
     let name = (report.title || `Report ${i + 1}`).slice(0, 28);
@@ -464,7 +502,26 @@ function exportExcel(input, analytics, { filename } = {}) {
     (reports.length > 1
       ? 'live_demo_all_reports.xlsx'
       : `${slug(reports[0].title)}_report.xlsx`);
-  XLSX.writeFile(workbook, outName);
+  const images = await loadReportImages([logoUrl, ...reports.flatMap((report) => report.rows.map((row) => photoUrl(row.photo)))]);
+  const zip = unzipSync(new Uint8Array(XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })));
+  const logo = images.get(logoUrl);
+  if (logo) embedImagesInWorksheet(zip, 1, [{ row: 0, col: 7, bytes: logo.bytes, widthPx: 144, heightPx: 40 }]);
+  reports.forEach((report, reportIndex) => {
+    const firstDataRow = report.minConfidence != null ? 7 : 6;
+    const placements = report.rows.flatMap((row, rowIndex) => {
+      const image = images.get(photoUrl(row.photo));
+      return image ? [{ row: firstDataRow + rowIndex, col: 7, bytes: image.bytes }] : [];
+    });
+    if (placements.length) embedImagesInWorksheet(zip, reportSheetOffset + reportIndex + 1, placements);
+  });
+  const url = URL.createObjectURL(new Blob([zipSync(zip)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = outName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ---------------------------------------------------------------------------
@@ -481,6 +538,7 @@ async function exportPdf(input, analytics, { filename } = {}) {
   const stats = toAnalytics(analytics);
   const doc = new jsPDF();
   doc.setFont('helvetica');
+  const images = await loadReportImages(reports.flatMap((report) => report.rows.map((row) => photoUrl(row.photo))));
 
   await drawLiveDemoHeader(doc, stats);
   let y = 44;
@@ -498,7 +556,7 @@ async function exportPdf(input, analytics, { filename } = {}) {
       y = 16;
     }
     const detectionStat = stats.rows.find((row) => row.name === report.detectionName);
-    y = drawAttendanceSection(doc, report, y, detectionStat?.avgConfidence) + 12;
+    y = drawAttendanceSection(doc, report, y, detectionStat?.avgConfidence, images) + 12;
   });
 
   const pageCount = doc.internal.getNumberOfPages();
@@ -528,12 +586,19 @@ async function exportPdf(input, analytics, { filename } = {}) {
 
 /** Export a single report (per-row buttons). `params` is a `{ rows, ... }` bag. */
 export const handleLiveDemoExport = (format, params, analytics) => {
-  if (format === 'excel') exportExcel(params, analytics);
-  else if (format === 'pdf') exportPdf(params, analytics);
+  const task = format === 'excel' ? exportExcel(params, analytics) : format === 'pdf' ? exportPdf(params, analytics) : null;
+  task?.catch((error) => {
+    console.error('Failed to export Face Recognition demo', error);
+    toast.error('Could not create the demo report');
+  });
 };
 
 /** Export every report in one file (the "All · Excel" / "All · PDF" buttons). */
 export const handleLiveDemoExportAll = (format, reports, analytics) => {
-  if (format === 'excel') exportExcel(reports, analytics, { filename: 'live_demo_all_reports.xlsx' });
-  else if (format === 'pdf') exportPdf(reports, analytics, { filename: 'live_demo_all_reports.pdf' });
+  const options = { filename: `live_demo_all_reports.${format === 'excel' ? 'xlsx' : 'pdf'}` };
+  const task = format === 'excel' ? exportExcel(reports, analytics, options) : format === 'pdf' ? exportPdf(reports, analytics, options) : null;
+  task?.catch((error) => {
+    console.error('Failed to export Face Recognition demos', error);
+    toast.error('Could not create the demo report');
+  });
 };

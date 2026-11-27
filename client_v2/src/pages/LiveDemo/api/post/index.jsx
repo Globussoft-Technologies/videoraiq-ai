@@ -95,6 +95,31 @@ export const getDemoIncidents = async ({ skip = 0, limit = 10, ...filter } = {})
   };
 };
 
+// The deployed API may not yet apply videoId. Keep the Event Log scoped to one
+// clip even then, while preserving a failed request as an error for the caller.
+export const getDemoIncidentsForVideo = async ({ videoId, incidentTypeFilter, limit = 50 }) => {
+  if (!videoId) throw new Error('The selected demo has no video ID');
+  const matchesVideo = (item) => String(item?.videoId || '') === String(videoId);
+  const filter = incidentTypeFilter?.length ? { incidentTypeFilter } : {};
+  const scoped = await getDemoIncidents({ videoId, ...filter, limit });
+  if (scoped.items.length && scoped.items.every(matchesVideo) && scoped.totalCount <= scoped.items.length) {
+    return { items: scoped.items, totalCount: scoped.items.length };
+  }
+
+  const items = [];
+  const pageSize = 200;
+  let skip = 0;
+  let total = Infinity;
+  while (skip < total) {
+    const page = await getDemoIncidents({ skip, limit: pageSize, ...filter, eventSource: 'live_demo' });
+    items.push(...page.items.filter(matchesVideo));
+    skip += page.items.length;
+    total = Number(page.totalCount) || skip;
+    if (!page.items.length) break;
+  }
+  return { items, totalCount: items.length };
+};
+
 /**
  * Session analytics across every demo this admin has run, optionally scoped to
  * a set of detections. Unlike getVideoRecordAnalytics (one record, and only the
