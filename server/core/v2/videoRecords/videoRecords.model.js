@@ -31,6 +31,9 @@ const videoEntrySchema = new mongoose.Schema({
   dsVideoUrl: { type: String, default: null },
   zones: { type: [mongoose.Schema.Types.Mixed], default: [] },
   zone_configs: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  inside_reference_point: { type: [Number], default: undefined },
+  count_mode: { type: String },
+  videoResolution: { type: [Number], default: undefined },
 });
 
 const videoRecordSchema = new mongoose.Schema(

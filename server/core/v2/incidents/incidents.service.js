@@ -1113,6 +1113,9 @@ class IncidentsService {
       // incidents without a channelId stop here.
       if (!channelId) {
         delete saved.timeSeries;
+        if (liveDemoData === true && saved.videoId) {
+          void sendPayloadToUser(userId, `liveDemoIncident_${adminId}`, saved);
+        }
         return res
           .status(200)
           .json(
@@ -1343,6 +1346,7 @@ class IncidentsService {
         search,
         tagStatus,
         liveDemoData,
+        videoId,
       } = req.body;
 
       const stockModeFilter = stockIncidentModeFilter(incidentMode);
@@ -1367,6 +1371,19 @@ class IncidentsService {
         delete matchStage.Image;
         delete matchStage.incidentType;
         delete matchStage.incidentName;
+      }
+      // Live Demo's Event Log includes count snapshots and events without an
+      // image. Keep the normal Incident Center alert filters unchanged.
+      if (liveDemoData === true && (req.body?.eventSource === "live_demo" || videoId)) {
+        delete matchStage.Image;
+        delete matchStage.incidentType;
+        delete matchStage.incidentName;
+        if (videoId) {
+          if (!mongoose.Types.ObjectId.isValid(videoId)) {
+            return res.status(400).json(Response.userFailResp("Invalid Live Demo videoId"));
+          }
+          matchStage.videoId = new mongoose.Types.ObjectId(videoId);
+        }
       }
 
       // Filter: status (new / resolved). Defaults to

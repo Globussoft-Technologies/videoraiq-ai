@@ -642,6 +642,11 @@ class VideoRecordsService {
           dsVideoUrl: v.dsVideoUrl ?? null,
           zones: Array.isArray(v.zones) ? v.zones : [],
           zone_configs: Array.isArray(v.zone_configs) ? v.zone_configs : [],
+          ...(detections?.lineCrossingSettings ? {
+            ...(Array.isArray(v.inside_reference_point) ? { inside_reference_point: v.inside_reference_point } : {}),
+            ...(v.count_mode ? { count_mode: v.count_mode } : {}),
+            ...(Array.isArray(v.videoResolution) ? { videoResolution: v.videoResolution } : {}),
+          } : {}),
         })),
         adminId,
         userId,
@@ -763,6 +768,11 @@ class VideoRecordsService {
           if (carCompany) detector.car_company = carCompany;
           if (video.zones && video.zones.length) detector.zones = video.zones;
           if (video.zone_configs && video.zone_configs.length) detector.zone_configs = video.zone_configs;
+          if (name === "lineCrossingSettings") {
+            if (video.inside_reference_point?.length) detector.inside_reference_point = video.inside_reference_point;
+            if (video.count_mode) detector.count_mode = video.count_mode;
+            if (video.videoResolution?.length) detector.videoResolution = video.videoResolution;
+          }
           return detector;
         }),
       };
@@ -800,6 +810,9 @@ class VideoRecordsService {
         dsVideoUrl,
         zones,
         zone_configs,
+        inside_reference_point,
+        count_mode,
+        videoResolution,
         addVideos,
       } = req.body;
       const { adminId, system: isSystem } = req?.verified?.userData || {};
@@ -844,6 +857,9 @@ class VideoRecordsService {
         if (dsVideoUrl !== undefined) set["videos.$.dsVideoUrl"] = dsVideoUrl;
         if (zones !== undefined) set["videos.$.zones"] = Array.isArray(zones) ? zones : [];
         if (zone_configs !== undefined) set["videos.$.zone_configs"] = Array.isArray(zone_configs) ? zone_configs : [];
+        if (inside_reference_point !== undefined) set["videos.$.inside_reference_point"] = inside_reference_point;
+        if (count_mode !== undefined) set["videos.$.count_mode"] = count_mode;
+        if (videoResolution !== undefined) set["videos.$.videoResolution"] = videoResolution;
       }
 
       const update = {};
