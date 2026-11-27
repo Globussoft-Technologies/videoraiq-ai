@@ -12,18 +12,19 @@ export function httpBase(value) {
   } catch { return null; }
 }
 
-export function statusIdentity(admin, nvr, camera, settings) {
+export function statusIdentity(admin, nvr, camera, settings, fleet = false) {
   const appEnv = admin.appEnv || settings.defaultAppEnv;
   const local = appEnv === "local" || appEnv === "onprem";
   const path = String(camera.streamingPath || "");
   const parsedId = path.match(/(?:^|\/)(?:sub-)?stream\/([^/?]+)\/playlist\.m3u8/i)?.[1];
   let pathHost = null;
   try { pathHost = new URL(path).origin; } catch { /* Relative path. */ }
-  const fixed = settings.statusMode === "fixed" || (settings.statusMode === "auto" && !local);
+  const installer = fleet && (nvr.managementSource === "installer" || nvr.localNvrId);
+  const fixed = settings.statusMode === "fixed" || (settings.statusMode === "auto" && !local && !installer);
   const host = httpBase(fixed
     ? settings.statusUrl || admin.streamHost || settings.defaultHost
     : nvr.domain || pathHost || admin.streamHost || settings.statusUrl || settings.defaultHost);
-  const statusId = local
+  const statusId = local || installer || (fleet && (camera.localChannelId || parsedId))
     ? String(camera.localChannelId || parsedId || "")
     : `${nvr._id}-${camera._id}`;
   // Preserve the existing mapping key so removing probes does not reset camera history.

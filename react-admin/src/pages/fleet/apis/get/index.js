@@ -17,21 +17,13 @@ const authGet = async (path) => {
   return response.data
 }
 
+export const getFleetMetricDetails = (metric, { skip, limit, search, setup }) =>
+  authGet(`/api/v1/client/overview/${metric}?${new URLSearchParams({ skip, limit, search, ...(setup ? { setup } : {}) })}`)
+
 // Header tiles, camera utilisation per client, clients by plan,
 // detections by type, camera health.
-export const getFleetOverview = (search = '', asOf = '', status = 'active') => {
-  const params = new URLSearchParams()
-  if (search.trim()) params.set('search', search.trim())
-  if (asOf) params.set('asOf', asOf)
-  if (status !== 'active') params.set('status', status)
-  const query = params.toString()
-  return authGet(`/api/v1/client/overview${query ? `?${query}` : ''}`)
-}
+export const getFleetOverview = (search = '') =>
+  authGet(`/api/v1/client/overview?${new URLSearchParams({ search, includeAlerts: 'false' })}`)
 
-// Clients ranked by incident (alert) count. hours: default 24, max 720.
-export const getTopAlerts = (hours = 24, limit = 5, asOf = '', search = '', status = 'active') =>
-  authGet(`/api/v1/client/top-alerts?${new URLSearchParams({ hours, limit, ...(asOf ? { asOf } : {}), ...(search.trim() ? { search: search.trim() } : {}), ...(status !== 'active' ? { status } : {}) })}`)
-
-// Fleet-wide hourly incident counts, zero-filled. hours: default 24, max 168.
-export const getAlertsGraph = (hours = 24, asOf = '', search = '', status = 'active') =>
-  authGet(`/api/v1/client/alerts-graph?${new URLSearchParams({ hours, ...(asOf ? { asOf } : {}), ...(search.trim() ? { search: search.trim() } : {}), ...(status !== 'active' ? { status } : {}) })}`)
+export const getTopActiveAlertClients = (search) =>
+  authGet(`/api/v1/client/top-alerts?${new URLSearchParams({ hours: 24, limit: 5, status: 'active', search })}`)

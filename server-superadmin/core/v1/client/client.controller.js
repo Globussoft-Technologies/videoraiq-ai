@@ -18,7 +18,12 @@ class ClientController {
         /* #swagger.tags = ['Client'] */
         /* #swagger.description = 'Fleet Overview stats: clients, camera licences and added cameras, enabled detections, active alerts in the last 24 hours, camera utilisation, clients by plan, and the existing Camera Health calculation. Super-admin token required.' */
         /* #swagger.parameters['search'] = { in: 'query', description: 'Scope all Fleet Overview values to clients matching name, login, email, or user ID' } */
+        /* #swagger.parameters['includeAlerts'] = { in: 'query', type: 'boolean', description: 'Pass false to omit the 24-hour alert count' } */
         return await clientService.fleetOverview(req, res, next);
+    }
+
+    async fleetMetricDetails(req, res) {
+        return clientService.fleetMetricDetails(req, res);
     }
 
     async topClientsByAlertVolume(req, res, next) {

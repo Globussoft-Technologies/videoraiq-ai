@@ -9,7 +9,7 @@ function timestamp(value) {
   return Date.parse(value);
 }
 
-function classify(sample, settings) {
+function classify(sample, settings, rtspOnly) {
   const checkedAt = timestamp(sample?.last_checked), age = Date.now() - checkedAt;
   const state = String(sample?.stream_status || "").trim().toLowerCase();
   const availability = String(sample?.availability || "").trim().toLowerCase();
@@ -18,13 +18,13 @@ function classify(sample, settings) {
     || ["unknown", "unobserved", "not_found", "disabled"].includes(availability)
     || (sample.status_age_ms != null && (typeof sample.status_age_ms !== "number" || !Number.isFinite(sample.status_age_ms)
       || sample.status_age_ms < 0 || sample.status_age_ms > settings.sourceMaxAgeMs))) return "UNKNOWN";
-  if (sample.rtsp_online === false && state === "stalled") return "DOWN";
-  if (sample.rtsp_online === true && state === "running") return "ALIVE";
+  if (sample.rtsp_online === false && (rtspOnly || state === "stalled")) return "DOWN";
+  if (sample.rtsp_online === true && (rtspOnly || state === "running")) return "ALIVE";
   return "UNKNOWN";
 }
 
 // Status snapshots only: no RTSP connections, media GETs or lifecycle calls.
-export async function readStatuses(cameras, settings, signal) {
+export async function readStatuses(cameras, settings, signal, { rtspOnly = false } = {}) {
   const hosts = new Map(), samples = new Map();
   for (const camera of cameras) if (camera.host && camera.statusId && !camera.mappingError) {
     const group = hosts.get(camera.host) || []; group.push(camera); hosts.set(camera.host, group);
@@ -42,7 +42,8 @@ export async function readStatuses(cameras, settings, signal) {
   }
   return cameras.map(camera => {
     const sample = samples.get(camera.host + "\n" + camera.statusId);
-    const status = signal?.aborted || camera.mappingError ? "UNKNOWN" : classify(sample, settings);
+    const status = camera.mappingError || (!rtspOnly && signal?.aborted)
+      ? "UNKNOWN" : classify(sample, settings, rtspOnly);
     const checked = timestamp(sample?.last_checked);
     return { ...publicCamera(camera), status,
       checkedAt: Number.isFinite(checked) ? new Date(checked).toISOString() : null,

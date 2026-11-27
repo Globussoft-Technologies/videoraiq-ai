@@ -1,5 +1,5 @@
 import { useDetectionLabels } from '@/context/DetectionDisplayNamesContext';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@/App';
 import { Bell, ChevronDown, ChevronLeft, ChevronUp, GripHorizontal, LoaderCircle, Trash2, X } from 'lucide-react';
@@ -13,6 +13,11 @@ import { registerWebPush, webPushActive } from '@/utils/webPush';
 export const DESKTOP_NOTIFICATIONS_KEY = 'vq_desktop_notifications_enabled';
 export const IN_APP_NOTIFICATIONS_KEY = 'vq_inapp_notifications_enabled';
 export const NOTIFICATION_STACK_EXPANDED_KEY = 'vq_notification_stack_expanded';
+const DetectionNotificationContext = createContext(null);
+
+export function useNotifyFetchedDetection() {
+  return useContext(DetectionNotificationContext);
+}
 
 export function desktopNotificationsEnabled() {
   if (typeof window === 'undefined') return true;
@@ -25,6 +30,10 @@ export function inAppNotificationsEnabled() {
 }
 
 function notificationKey(detection) {
+  const id = detection?._id || detection?.id || detection?.incidentId;
+  const timestamp = incidentTimestamp(detection);
+  const epoch = new Date(timestamp).getTime();
+  if (id) return JSON.stringify([String(id), Number.isFinite(epoch) ? epoch : timestamp]);
   return [
     detection?._id,
     detection?.nvrId?._id || detection?.nvrId,
@@ -50,7 +59,7 @@ const SEVERITY_COLOR = {
 
 // Each alert gets its own display window once it reaches the front of the queue.
 // Hovering pauses that window so the alert stays available for interaction.
-const ALERT_DURATION = 5000;
+const ALERT_DURATION = 12000;
 // Keep the existing dismissal timing, but wait for the full visual exit sequence
 // before removing the row from React so the reference animation can complete.
 const ALERT_EXIT_DURATION = 1200;
@@ -58,8 +67,8 @@ const COMPACT_PILL_WIDTH = 60;
 const COMPACT_PILL_HEIGHT = 56;
 
 function alertDurationForCount(count) {
-  if (count > 20) return 2200;
-  if (count > 10) return 3500;
+  if (count > 20) return 5000;
+  if (count > 10) return 8000;
   return ALERT_DURATION;
 }
 
@@ -211,12 +220,15 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
   const currentIdRef = useRef(null);
   const compactTargetRef = useRef(null);
   const stackRef = useRef(null);
+  const alertListRef = useRef(null);
+  const followLatestRef = useRef(true);
   const dragRef = useRef(null);
   const suppressDragClickRef = useRef(false);
   const hoverTimerRef = useRef(null);
   const exitTimersRef = useRef(new Map());
   const [exitingIds, setExitingIds] = useState(() => new Set());
-  const active = alerts[0];
+  const orderedAlerts = useMemo(() => [...alerts].sort((a, b) => a.timestamp - b.timestamp), [alerts]);
+  const active = orderedAlerts[0];
   const hasAlerts = alerts.length > 0;
   const isCompact = !expanded;
   const compactPeek = isCompact && (dragging || (compactMinimized && !compactHovered && !clearing));
@@ -237,7 +249,13 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
   const draggedTop = draggedPanel ? `clamp(0px, ${draggedPanel.top}px, calc(100dvh - 120px))` : undefined;
   const alertDuration = alertDurationForCount(alerts.length);
 
+  useLayoutEffect(() => {
+    const list = alertListRef.current;
+    if (list && followLatestRef.current) list.scrollTop = list.scrollHeight;
+  }, [isCompact, orderedAlerts]);
+
   const updateExpanded = (next) => {
+    if (next) followLatestRef.current = true;
     setExpanded(next);
     try {
       window.localStorage.setItem(NOTIFICATION_STACK_EXPANDED_KEY, String(next));
@@ -497,8 +515,14 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll, onOpen }) {
           </>
         ) : (
           <>
-            <ul className="vq-scroll m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto p-0">
-              {alerts.map((alert, index) => (
+            <ul
+              ref={alertListRef}
+              onScroll={({ currentTarget: list }) => {
+                followLatestRef.current = list.scrollHeight - list.clientHeight - list.scrollTop <= 8;
+              }}
+              className="vq-scroll m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto p-0"
+            >
+              {orderedAlerts.map((alert, index) => (
                 <AlertRow key={alert.id} alert={alert} showDivider={index > 0} exiting={exitingIds.has(alert.id)} onDismiss={dismissWithAnimation} onOpen={onOpen} />
               ))}
             </ul>
@@ -555,69 +579,74 @@ export function DetectionNotificationProvider({ children }) {
     dismissAlert(alert.id);
   }, [dismissAlert]);
 
-  useEffect(() => {
-    if (!canViewAlerts) {
-      setAlerts([]);
-      return undefined;
+  const notifyDetection = useCallback((data, fromFeed = false) => {
+    if (!canViewAlerts || !user?.adminId || !data || (fromFeed && !inAppNotificationsEnabled())) return;
+    const key = notificationKey(data) || JSON.stringify(data);
+    if (shownDetections.current.has(key)) return;
+    shownDetections.current.add(key);
+
+    if (shownDetections.current.size > 200) {
+      const [oldest] = shownDetections.current;
+      shownDetections.current.delete(oldest);
     }
-    if (!socket || !user?.adminId) return undefined;
 
-    const handleDetection = (data) => {
-      const key = notificationKey(data) || JSON.stringify(data);
-      if (shownDetections.current.has(key)) return;
-      shownDetections.current.add(key);
+    const type = data?.incidentType || data?.detectionType;
+    const title = labels.override(type) ? labels.event(type, data?.incidentName) : detectionTitle(data);
+    const description = `${cameraLabel(data)} - ${detectionTime(data)}`;
 
-      if (shownDetections.current.size > 200) {
-        const [oldest] = shownDetections.current;
-        shownDetections.current.delete(oldest);
-      }
+    const desktopEnabled = !fromFeed && desktopNotificationsEnabled();
 
-      const type = data?.incidentType || data?.detectionType;
-      const title = labels.override(type) ? labels.event(type, data?.incidentName) : detectionTitle(data);
-      const description = `${cameraLabel(data)} - ${detectionTime(data)}`;
+    if (
+      desktopEnabled &&
+      !permissionAsked.current &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
+      Notification.requestPermission();
+      permissionAsked.current = true;
+    }
 
-      const desktopEnabled = desktopNotificationsEnabled();
+    if (
+      desktopEnabled &&
+      document.visibilityState !== 'visible' &&
+      'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
+      // With web push active, the service worker already shows this one for
+      // a hidden tab — don't pop it twice. The shared tag is a second guard.
+      if (webPushActive()) return;
+      const notification = new Notification(title, {
+        body: description,
+        tag: `incident-${data?._id}-${data?.timeOfIncident}`,
+      });
+      notification.onclick = () => window.focus();
+      return;
+    }
 
-      if (
-        desktopEnabled &&
-        !permissionAsked.current &&
-        'Notification' in window &&
-        Notification.permission === 'default'
-      ) {
-        Notification.requestPermission();
-        permissionAsked.current = true;
-      }
+    if (!inAppNotificationsEnabled()) return;
 
-      if (
-        desktopEnabled &&
-        document.visibilityState !== 'visible' &&
-        'Notification' in window &&
-        Notification.permission === 'granted'
-      ) {
-        // With web push active, the service worker already shows this one for
-        // a hidden tab — don't pop it twice. The shared tag is a second guard.
-        if (webPushActive()) return;
-        const notification = new Notification(title, {
-          body: description,
-          tag: `incident-${data?._id}-${data?.timeOfIncident}`,
-        });
-        notification.onclick = () => window.focus();
-        return;
-      }
+    // On every detection, unconditionally. An earlier version only showed
+    // it once a second alert was already open, which meant it was
+    // invisible exactly when you went looking for it — and it depended on
+    // `incidentType` being present, which it isn't always (detectionTitle
+    // falls back to incidentName/displayName for the same reason).
+    const timestamp = new Date(incidentTimestamp(data)).getTime() || 0;
+    setAlerts((prev) => [...prev, { id: key, incidentId: String(data?.incidentId || data?._id || data?.id || ''), incident: data, title, description, severity: severityBucket(data?.severity), timestamp }]);
+  }, [canViewAlerts, user?.adminId, labels]);
 
-      if (!inAppNotificationsEnabled()) return;
+  const notifyFetchedDetection = useCallback((data) => notifyDetection(data, true), [notifyDetection]);
 
-      // On every detection, unconditionally. An earlier version only showed
-      // it once a second alert was already open, which meant it was
-      // invisible exactly when you went looking for it — and it depended on
-      // `incidentType` being present, which it isn't always (detectionTitle
-      // falls back to incidentName/displayName for the same reason).
-      setAlerts((prev) => [...prev, { id: key, incidentId: String(data?.incidentId || data?._id || data?.id || ''), incident: data, title, description, severity: severityBucket(data?.severity) }]);
-    };
+  useEffect(() => {
+    shownDetections.current.clear();
+    setAlerts([]);
+  }, [user?.adminId, user?.memberId, canViewAlerts]);
 
+  useEffect(() => {
+    if (!socket || !user?.adminId || !canViewAlerts) return undefined;
+    const handleDetection = (data) => notifyDetection(data);
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, handleDetection);
-  }, [socket, user?.adminId, canViewAlerts, labels]);
+  }, [socket, user?.adminId, canViewAlerts, notifyDetection]);
 
   // Incident push for when no tab is open — follows the same Settings ▸
   // Desktop notifications switch as the socket-driven desktop notification.
@@ -626,10 +655,10 @@ export function DetectionNotificationProvider({ children }) {
   }, [user?.adminId, canViewAlerts]);
 
   return (
-    <>
+    <DetectionNotificationContext.Provider value={notifyFetchedDetection}>
       {children}
       <DetectionAlertStack alerts={alerts} onDismiss={dismissAlert} onClearAll={clearAllAlerts} onOpen={openAlert} />
-    </>
+    </DetectionNotificationContext.Provider>
   );
 }
 

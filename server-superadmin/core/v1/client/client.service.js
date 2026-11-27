@@ -11,6 +11,7 @@ import { Incident } from "../incidents/incidents.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
 import { redis } from "../../../utils/database.js";
+import { readFleetCameraStatuses } from "../streamMonitoring/service.js";
 
 const baseUrl = config.get("aMember.baseUrl");
 const apiKey = config.get("aMember.apiKey");
@@ -63,6 +64,51 @@ const matchesFleetSearch = (admin, search) => {
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(search));
 };
+
+const clientName = (admin) =>
+  `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login || admin.user_id;
+
+const enabledDetectionTypes = (camera) =>
+  Object.keys(camera.detections || {}).filter((type) => camera.detections[type]?.enabled === true);
+
+const summarizeFleetCameras = (cameras) => {
+  const byUser = new Map();
+  const detectionCounts = new Map();
+  for (const camera of cameras) {
+    const types = enabledDetectionTypes(camera);
+    const counts = byUser.get(camera.userId) || { provisioned: 0, detections: 0 };
+    counts.provisioned += 1;
+    counts.detections += types.length;
+    byUser.set(camera.userId, counts);
+    for (const type of types) detectionCounts.set(type, (detectionCounts.get(type) || 0) + 1);
+  }
+  return { byUser, detectionCounts };
+};
+
+const detectionSetupStatus = ({ provisioned, detections }) => {
+  if (detections) return "enabled";
+  return provisioned ? "no-detections" : "no-cameras";
+};
+
+const cameraCountsFor = (byUser, userId) => byUser.get(userId) || { provisioned: 0, detections: 0 };
+
+const fleetCameraHealth = async (cameras) => {
+  const statuses = await readFleetCameraStatuses(cameras.map((camera) => camera._id)).catch((err) => {
+    logger.warn(`Fleet stream status unavailable: ${err.message}`);
+    return new Map();
+  });
+  const byUser = new Map();
+  for (const camera of cameras) {
+    const counts = byUser.get(camera.userId) || { provisioned: 0, online: 0, offline: 0, unknown: 0 };
+    const status = statuses.get(String(camera._id));
+    counts.provisioned += 1;
+    counts[status === "ALIVE" ? "online" : status === "DOWN" ? "offline" : "unknown"] += 1;
+    byUser.set(camera.userId, counts);
+  }
+  return byUser;
+};
+
+const clientPlanLabel = (plan) => String(plan || "").trim() || "No plan";
 
 // Latest expiry date across all of a user's subscribed products. Pure helper.
 export const pickLatestExpiry = (subscriptions = {}) => {
@@ -164,7 +210,7 @@ class ClientService {
     try {
       const skip = Math.max(parseInt(req.query.skip) || 0, 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
-      const search = (req.query.search || "").trim();
+      const search = fleetSearch(req);
       const statusFilter = String(req.query.status || "").trim().toLowerCase();
       const planFilter = String(req.query.plan || "").trim().toLowerCase();
       const allowedStatuses = new Set(["active", "inactive", "expired", "unknown"]);
@@ -179,10 +225,7 @@ class ClientService {
       const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
 
       const roster = await this._getClientRoster();
-      const needle = search.toLowerCase();
-      const admins = roster.filter((admin) => !needle ||
-        [`${admin.name_f || ""} ${admin.name_l || ""}`, admin.email, admin.login]
-          .some((value) => String(value || "").toLowerCase().includes(needle)));
+      const admins = roster.filter((admin) => matchesFleetSearch(admin, search));
 
       // Resolve plans before filtering and pagination.
       const enriched = await Promise.all(
@@ -194,12 +237,12 @@ class ClientService {
       );
 
       const availablePlans = [...new Set(
-        enriched.map(({ plan }) => String(plan || "").trim()).filter(Boolean),
+        enriched.map(({ plan }) => clientPlanLabel(plan)),
       )].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
       const filtered = enriched.filter(({ plan, admin }) => {
         if (effectiveStatusFilter && admin.status !== effectiveStatusFilter) return false;
-        if (planFilter && String(plan || "").trim().toLowerCase() !== planFilter) return false;
+        if (planFilter && clientPlanLabel(plan).toLowerCase() !== planFilter) return false;
         return true;
       });
 
@@ -264,10 +307,6 @@ class ClientService {
   // (plan name + subscription status per client, via the existing helpers).
   async fleetOverview(req, res) {
     try {
-      // This field is always a 24-hour count, even if another query parameter
-      // is supplied alongside the camera-utilisation search.
-      const { asOf, since } = fleetAlertWindow({ query: { asOf: req.query?.asOf } });
-      const alertStatus = fleetAlertStatus(req);
       // Search scopes every Fleet panel to the same clients. A literal,
       // case-insensitive substring cannot execute as a regular expression.
       const search = fleetSearch(req);
@@ -275,20 +314,11 @@ class ClientService {
       const allAdmins = await this._getClientRoster();
       const admins = allAdmins.filter((admin) => matchesFleetSearch(admin, search));
       const userIds = admins.map((admin) => admin.user_id);
-      const [channels, catalog, alerts24h, nvrAgg, controlAgg] = await Promise.all([
+      const [channels, catalog, alerts24h] = await Promise.all([
         channelModel.find({ userId: { $in: userIds }, isAdded: true })
           .select("userId detections").lean(),
         resolveDetectionTypes(),
-        Incident.countDocuments(fleetAlertFilter(userIds, since, asOf, alertStatus)),
-        // Preserve the existing health formula; scope its inputs when searching.
-        NVRModel.aggregate([
-          { $match: { userId: { $in: userIds } } },
-          { $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } },
-        ]),
-        channelModel.aggregate([
-          { $match: { isAdded: true, userId: { $in: userIds } } },
-          { $group: { _id: "$control", count: { $sum: 1 } } },
-        ]),
+        req.query?.includeAlerts === "false" ? undefined : this._countFleetAlerts(req, userIds),
       ]);
 
       const enriched = await Promise.all(
@@ -298,65 +328,184 @@ class ClientService {
         })
       );
 
-      const provisionedByUser = {};
-      const detectionCounts = {};
-      for (const camera of channels) {
-        provisionedByUser[camera.userId] = (provisionedByUser[camera.userId] || 0) + 1;
-        for (const [settingType, detection] of Object.entries(camera.detections || {})) {
-          if (detection?.enabled !== true) continue;
-          detectionCounts[settingType] = (detectionCounts[settingType] || 0) + 1;
-        }
+      const { byUser, detectionCounts } = summarizeFleetCameras(channels);
+      const detectionSetup = { "no-cameras": 0, "no-detections": 0, enabled: 0 };
+      const activeAdmins = admins.filter((admin) => admin.status === "active");
+      for (const admin of activeAdmins) {
+        detectionSetup[detectionSetupStatus(cameraCountsFor(byUser, admin.user_id))] += 1;
       }
       const names = Object.fromEntries(catalog.detections.map((row) => [row.settingType, row.name]));
-      const detectionAgg = Object.entries(detectionCounts)
+      const detectionAgg = [...detectionCounts]
         .map(([settingType, count]) => ({ settingType, count }))
         .sort((a, b) => b.count - a.count);
       const camerasLicensed = admins.reduce((s, a) => s + (a.purchasedCameras || 0), 0);
       const camerasProvisioned = channels.length;
       const detectionsEnabled = detectionAgg.reduce((s, d) => s + d.count, 0);
-      const legacyProvisioned = nvrAgg.reduce((sum, nvr) => sum + nvr.cameras, 0);
-      const controls = Object.fromEntries(controlAgg.map((row) => [row._id, row.count]));
+      const healthByUser = await fleetCameraHealth(channels);
+      const cameraHealth = { running: 0, stopped: 0, unknown: 0, idleCapacity: Math.max(camerasLicensed - camerasProvisioned, 0) };
+      for (const counts of healthByUser.values()) {
+        cameraHealth.running += counts.online;
+        cameraHealth.stopped += counts.offline;
+        cameraHealth.unknown += counts.unknown;
+      }
 
       const cameraUtilisation = enriched.map((a) => ({
           adminId: a._id,
           name: `${a.name_f || ""} ${a.name_l || ""}`.trim() || a.login,
-          provisioned: provisionedByUser[a.user_id] || 0,
+        provisioned: cameraCountsFor(byUser, a.user_id).provisioned,
           licensed: a.purchasedCameras || 0,
       }));
 
-      const planCounts = {};
+      const planCounts = new Map();
       for (const a of enriched) {
-        const plan = a.plan || "No plan";
-        planCounts[plan] = (planCounts[plan] || 0) + 1;
+        const plan = clientPlanLabel(a.plan);
+        const key = plan.toLowerCase();
+        if (!planCounts.has(key)) planCounts.set(key, { plan, clients: 0 });
+        planCounts.get(key).clients += 1;
       }
 
       return res.send(
         Response.SuccessResp("Fleet overview fetched", {
           totals: {
             clients: admins.length,
-            activeClients: enriched.filter((a) => a.status === "active").length,
+            activeClients: activeAdmins.length,
             camerasLicensed,
             camerasProvisioned,
             detectionsEnabled,
-            alerts24h,
+            ...(alerts24h === undefined ? {} : { alerts24h }),
           },
           cameraUtilisation,
-          clientsByPlan: Object.entries(planCounts).map(([plan, clients]) => ({ plan, clients })),
+          clientsByPlan: [...planCounts.values()],
+          detectionSetup,
           detectionsByType: detectionAgg.map((d) => ({
             settingType: d.settingType,
             name: names[d.settingType] || DETECTION_TYPES[d.settingType] || d.settingType,
             count: d.count,
           })),
-          cameraHealth: {
-            running: controls[1] || 0,
-            stopped: controls[0] || 0,
-            idleCapacity: Math.max(camerasLicensed - legacyProvisioned, 0),
-          },
+          cameraHealth,
         })
       );
     } catch (err) {
       logger.error(`client fleetOverview: ${err.message}`);
       return res.status(500).send(Response.errorResp("Failed to fetch fleet overview"));
+    }
+  }
+
+  _countFleetAlerts(req, userIds) {
+    // Preserve the rolling 24-hour count for existing overview consumers.
+    const { asOf, since } = fleetAlertWindow({ query: { asOf: req.query?.asOf } });
+    return Incident.countDocuments(fleetAlertFilter(userIds, since, asOf, fleetAlertStatus(req)));
+  }
+
+  async fleetMetricDetails(req, res) {
+    const { metric } = req.params;
+    if (!["licensed", "provisioned", "detections", "alerts", "detection-setup"].includes(metric)) {
+      return res.status(404).send(Response.notFoundResp("Fleet metric not found"));
+    }
+
+    try {
+      const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+      const search = fleetSearch(req);
+      const admins = (await this._getClientRoster()).filter((admin) => matchesFleetSearch(admin, search));
+      const byUser = new Map(admins.map((admin) => [admin.user_id, admin]));
+      const client = (userId) => {
+        const admin = byUser.get(userId);
+        return { adminId: admin._id, clientName: clientName(admin) };
+      };
+      const userIds = [...byUser.keys()];
+      const cameraFilter = { userId: { $in: userIds }, isAdded: true };
+      const send = (rows, totalCount, total = totalCount) =>
+        res.send(Response.SuccessResp("Fleet metric details fetched", { rows, totalCount, total }));
+
+      if (metric === "detection-setup") {
+        const setup = req.query.setup || "pending";
+        if (!["all", "pending", "no-cameras", "no-detections", "enabled"].includes(setup)) {
+          return res.status(400).send(Response.userFailResp("Invalid detection setup filter"));
+        }
+        const activeAdmins = admins.filter((admin) => admin.status === "active");
+        const cameras = await channelModel.find({
+          isAdded: true,
+          userId: { $in: activeAdmins.map((admin) => admin.user_id) },
+        }).select("userId detections").lean();
+        const { byUser } = summarizeFleetCameras(cameras);
+        const rows = activeAdmins.map((admin) => {
+          const counts = cameraCountsFor(byUser, admin.user_id);
+          return {
+            ...client(admin.user_id), id: admin.user_id, ...counts, setup: detectionSetupStatus(counts),
+          };
+        }).filter((row) => setup === "all" || (setup === "pending" ? row.setup !== "enabled" : row.setup === setup))
+          .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.id.localeCompare(b.id));
+        return send(rows.slice(skip, skip + limit), rows.length);
+      }
+
+      if (metric === "licensed") {
+        const licensed = admins.filter((admin) => admin.purchasedCameras > 0)
+          .sort((a, b) => b.purchasedCameras - a.purchasedCameras || a.user_id.localeCompare(b.user_id));
+        const page = licensed.slice(skip, skip + limit);
+        const counts = await channelModel.aggregate([
+          { $match: { isAdded: true, userId: { $in: page.map((admin) => admin.user_id) } } },
+          { $group: { _id: "$userId", provisioned: { $sum: 1 } } },
+        ]);
+        const byClient = new Map(counts.map(({ _id, provisioned }) => [_id, provisioned]));
+        const rows = page.map((admin) => ({
+          ...client(admin.user_id), id: admin.user_id, licensed: admin.purchasedCameras,
+          provisioned: byClient.get(admin.user_id) ?? 0,
+        }));
+        return send(rows, licensed.length, licensed.reduce((sum, admin) => sum + admin.purchasedCameras, 0));
+      }
+
+      if (metric === "alerts") {
+        const { asOf, since } = fleetAlertWindow({ query: { asOf: req.query.asOf } });
+        const filter = fleetAlertFilter(userIds, since, asOf, fleetAlertStatus(req));
+        const [alerts, totalCount] = await Promise.all([
+          Incident.find(filter).select("userId incidentName incidentType timeOfIncident severity resolved report.status")
+            .sort({ timeOfIncident: -1, _id: -1 }).skip(skip).limit(limit).lean(),
+          Incident.countDocuments(filter),
+        ]);
+        return send(alerts.map((alert) => ({
+          ...client(alert.userId),
+          id: alert._id,
+          alert: alert.incidentName || alert.incidentType,
+          time: alert.timeOfIncident,
+          severity: alert.severity,
+          status: alert.resolved ? "Resolved" : alert.report?.status ? "Reported" : "Active",
+        })), totalCount);
+      }
+
+      if (metric === "provisioned") {
+        const cameras = await channelModel.find(cameraFilter).select("userId").lean();
+        const grouped = [...await fleetCameraHealth(cameras)]
+          .sort(([a, left], [b, right]) => right.provisioned - left.provisioned || a.localeCompare(b));
+        const rows = grouped.slice(skip, skip + limit).map(([userId, counts]) => ({
+          ...client(userId), id: userId, licensed: byUser.get(userId).purchasedCameras, ...counts,
+        }));
+        return send(rows, grouped.length, cameras.length);
+      }
+
+      const cameraRow = (camera) => ({
+        ...client(camera.userId),
+        id: camera._id,
+        camera: camera.customName || camera.name || String(camera._id),
+        status: camera.control === 1 ? "Online" : "Offline",
+      });
+      const cameras = channelModel.find(cameraFilter).select("userId name customName control").sort({ _id: 1 });
+
+      const [allCameras, catalog] = await Promise.all([
+        cameras.select("detections").lean(),
+        resolveDetectionTypes(),
+      ]);
+      const names = Object.fromEntries(catalog.detections.map((row) => [row.settingType, row.name]));
+      const detections = allCameras.flatMap((camera) =>
+        enabledDetectionTypes(camera).map((type) => ({
+          ...cameraRow(camera),
+          id: `${camera._id}:${type}`,
+          detection: names[type] || DETECTION_TYPES[type] || type,
+        })));
+      return send(detections.slice(skip, skip + limit), detections.length);
+    } catch (err) {
+      logger.error(`client fleetMetricDetails: ${err.message}`);
+      return res.status(500).send(Response.errorResp("Failed to fetch fleet metric details"));
     }
   }
 

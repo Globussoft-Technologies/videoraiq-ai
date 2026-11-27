@@ -5,6 +5,7 @@ import verifySuperAdmin from '../../../middlewares/verifySuperAdmin.js';
 
 router.get('/admins', verifySuperAdmin, clientController.listAdmins);
 router.get('/overview', verifySuperAdmin, clientController.fleetOverview);
+router.get('/overview/:metric', verifySuperAdmin, clientController.fleetMetricDetails);
 router.get('/top-alerts', verifySuperAdmin, clientController.topClientsByAlertVolume);
 router.get('/alerts-graph', verifySuperAdmin, clientController.alertsGraph);
 router.get('/:adminId/cameras', verifySuperAdmin, clientController.getClientCameras);

@@ -2,6 +2,15 @@
 // can show it after a page refresh. The auth token itself stays in the cookie.
 const STORAGE_KEY = 'auth-user'
 
+export const CLIENT_AVATAR_COLORS = [
+  'from-blue-500 to-purple-500',
+  'from-purple-500 to-pink-500',
+  'from-teal-400 to-cyan-500',
+  'from-pink-500 to-rose-500',
+  'from-amber-500 to-orange-500',
+  'from-emerald-500 to-green-500',
+]
+
 export const setAuthUser = (user) => {
   if (!user) return
   try {

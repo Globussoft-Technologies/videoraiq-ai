@@ -1,6 +1,8 @@
 import Response from "../../../utils/response.js";
+import mongoose from "mongoose";
 import { monitoringSettings } from "./settings.js";
-import { readInventory } from "./inventory.js";
+import { readFleetStatusInventory, readInventory } from "./inventory.js";
+import { readStatuses } from "./statusAdapter.js";
 import { monitoringStore, cameraMuted } from "./localStore.js";
 import { readMonitoringControl } from "./control.js";
 
@@ -23,6 +25,14 @@ function currentReading(camera, saved, control, settings) {
     && (saved.status === "UNKNOWN" || (Number.isFinite(checked) && now - checked >= -settings.sourceClockSkewMs
       && now - checked <= settings.sourceMaxAgeMs));
 }
+export async function readFleetCameraStatuses(cameraIds) {
+  if (!cameraIds.length) return new Map();
+  const settings = monitoringSettings();
+  const cameras = await readFleetStatusInventory(mongoose.connection.db, settings, cameraIds);
+  const readings = await readStatuses(cameras, settings, AbortSignal.timeout(settings.timeoutMs), { rtspOnly: true });
+  return new Map(readings.map(({ cameraId, status }) => [cameraId, status]));
+}
+
 export async function listCameras(req, res) {
   res.set("Cache-Control", "no-store");
   try {

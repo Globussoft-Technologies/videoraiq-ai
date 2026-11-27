@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -49,8 +49,12 @@ const ClientConfig = () => {
   const { adminId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  // Header details carried from the Clients row click (falls back gracefully).
+  // Navigation can provide the roster name while the configuration loads.
   const passed = location.state || {}
+  const [identity, setIdentity] = useState(null)
+  const client = identity?.adminId === adminId ? identity.client : null
+  const clientName = passed.name || client?.name
+  const clientEmail = passed.email || client?.email
 
   const [stats, setStats] = useState(null)
   const [detections, setDetections] = useState([])
@@ -79,7 +83,7 @@ const ClientConfig = () => {
   const latestRef = useRef({ totalCameras: 0, detections: [] })
 
   // Cameras load lazily on first open.
-  const [tab, setTab] = useState('license')
+  const [tab, setTab] = useState(passed.tab === 'cameras' ? 'cameras' : 'license')
   const [cameras, setCameras] = useState([])
   const [camerasLoaded, setCamerasLoaded] = useState(false)
   const [camerasLoading, setCamerasLoading] = useState(false)
@@ -94,6 +98,25 @@ const ClientConfig = () => {
   // Filters the Detection Configuration table only — never what gets saved.
   const [detectionSearch, setDetectionSearch] = useState('')
   const [syncing, setSyncing] = useState(false)
+
+  // Push a fetched config response into local + baseline state.
+  const applyData = useCallback((res) => {
+    const data = res?.body?.data ?? res?.data ?? {}
+    const dets = Array.isArray(data.detections) ? data.detections : []
+    setIdentity({ adminId, client: data.client })
+    setStats(data.stats || null)
+    setModulePermissions({
+      mattressMeasurement: data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
+      solarLineQc: data.modules?.solarLineQc || { solderLine: false, solderAlertLogs: false, operatorReports: false },
+      boxPackingQc: data.modules?.boxPackingQc || { boxPacking: true, packingAlertLogs: true, boxPackingReports: true },
+    })
+    setDetections(dets)
+    setTotalCameras(data.stats?.totalCameras ?? 0)
+    setBaseline({
+      totalCameras: data.stats?.totalCameras ?? 0,
+      detections: dets.map((d) => ({ ...d })),
+    })
+  }, [adminId])
 
   // Pull the platform detection list again. The client backend publishes its
   // DETECTION_TYPES into a shared catalog on boot; this picks up anything added
@@ -113,24 +136,6 @@ const ClientConfig = () => {
     } finally {
       setSyncing(false)
     }
-  }
-
-  // Push a fetched config response into local + baseline state.
-  const applyData = (res) => {
-    const data = res?.body?.data ?? res?.data ?? {}
-    const dets = Array.isArray(data.detections) ? data.detections : []
-    setStats(data.stats || null)
-    setModulePermissions({
-      mattressMeasurement: data.modules?.mattressMeasurement || { measurementLogs: false, raspberryPiDevices: false, measurementCalibration: false },
-      solarLineQc: data.modules?.solarLineQc || { solderLine: false, solderAlertLogs: false, operatorReports: false },
-      boxPackingQc: data.modules?.boxPackingQc || { boxPacking: true, packingAlertLogs: true, boxPackingReports: true },
-    })
-    setDetections(dets)
-    setTotalCameras(data.stats?.totalCameras ?? 0)
-    setBaseline({
-      totalCameras: data.stats?.totalCameras ?? 0,
-      detections: dets.map((d) => ({ ...d })),
-    })
   }
 
   useEffect(() => {
@@ -155,7 +160,7 @@ const ClientConfig = () => {
     return () => {
       cancelled = true
     }
-  }, [adminId, reloadKey])
+  }, [adminId, reloadKey, applyData])
 
   // Load the client's cameras the first time the Cameras tab is opened.
   useEffect(() => {
@@ -527,15 +532,15 @@ const ClientConfig = () => {
                 passed.avatarColor || 'from-blue-500 to-purple-500'
               }`}
             >
-              {getInitials(passed.name || '')}
+              {getInitials(clientName || '')}
             </span>
 
             <div className="min-w-0">
               <h2 className="truncate text-lg font-bold text-gray-900 dark:text-white">
-                {passed.name || 'Client'}
+                {clientName || 'Client'}
               </h2>
               <p className="truncate font-mono text-xs text-gray-400 dark:text-gray-500">
-                {[passed.email].filter(Boolean).join(' · ') || adminId}
+                {clientEmail || adminId}
               </p>
             </div>
 

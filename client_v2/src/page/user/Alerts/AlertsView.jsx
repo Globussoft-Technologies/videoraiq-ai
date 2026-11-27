@@ -15,6 +15,7 @@ import { severity, detectionLabel, incidentTimestamp, shortDateTime, timeOfDay, 
 import { fetchIncidents, fetchIncidentById, fetchDetectionTypes, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 import { formatUtcInConfiguredTimezone } from '@/utils/timezone';
 import { emotionAlertLabel } from '@/helpers/emotionDetection';
+import { useNotifyFetchedDetection } from '@/context/DetectionNotificationContext';
 import IncidentReportMessage from '../Incidents/IncidentReportMessage';
 
 const PAGE_SIZE = 50;
@@ -22,6 +23,7 @@ const PAGE_SIZE = 50;
 // they've scrolled to load more, a silent 30s poll would reset/shrink the
 // list out from under them, so polling pauses until they're back on page 1.
 const POLL_MS = 30000;
+const RECENT_NOTIFICATION_WINDOW_MS = 15000;
 const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
 
 const incidentIdOf = (incident) => String(
@@ -450,6 +452,7 @@ function ReportModal({ item, onClose, onSuccess }) {
 }
 
 export default function AlertsView() {
+  const notifyFetchedDetection = useNotifyFetchedDetection();
   const labels = useDetectionLabels();
   const { socket } = useSocket() || {};
   const { user } = useAuth();
@@ -577,6 +580,7 @@ export default function AlertsView() {
   const deepLinkedRowRef = useRef(null);
   const focusedLinkRef = useRef(null);
   const requestIdRef = useRef(0);
+  const lastFeedReadRef = useRef(null);
   const countsRequestIdRef = useRef(0);
 
   const hasMore = loadedCount < totalCount;
@@ -586,6 +590,7 @@ export default function AlertsView() {
 
   const loadPage = useCallback(async (skip, { append, background = false }) => {
     const requestId = ++requestIdRef.current;
+    const requestedAt = Date.now();
     if (append) setLoadingMore(true);
     else if (!background) {
       setLoading(true);
@@ -595,6 +600,22 @@ export default function AlertsView() {
     try {
       const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, listFilter);
       if (requestId !== requestIdRef.current) return; // superseded by a newer request
+      if (!append) {
+        const previous = lastFeedReadRef.current;
+        lastFeedReadRef.current = { filter: listFilter, requestedAt, keys: new Set(result.items.map(incidentReadingKey)) };
+        // On first load, catch recent alerts that arrived before the feed opened.
+        // Filter changes establish a fresh baseline without notifying for existing rows.
+        if (notifyFetchedDetection && (!previous || previous.filter === listFilter)) {
+          const cutoff = (previous?.requestedAt ?? requestedAt) - RECENT_NOTIFICATION_WINDOW_MS;
+          for (const incident of result.items) {
+            const key = incidentReadingKey(incident);
+            const receivedAt = Math.max(new Date(incident.createdAt).getTime() || 0, incidentTimeValue(incident));
+            if (key && !previous?.keys.has(key) && receivedAt >= cutoff) {
+              notifyFetchedDetection(incident);
+            }
+          }
+        }
+      }
       const fetched = result.items.map((item) => {
         const live = useLiveFeed && liveItemsRef.current.get(incidentIdOf(item));
         return live && incidentTimeValue(live) > incidentTimeValue(item) ? live : item;
@@ -616,7 +637,7 @@ export default function AlertsView() {
         append ? setLoadingMore(false) : setLoading(false);
       }
     }
-  }, [listFilter, useLiveFeed]);
+  }, [listFilter, useLiveFeed, notifyFetchedDetection]);
 
   useEffect(() => {
     if (!socket || !user?.adminId || !useLiveFeed) return undefined;

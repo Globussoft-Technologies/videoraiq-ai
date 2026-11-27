@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import Topbar from '../../layout/Topbar'
 import ClientsTable from './components/ClientsTable'
 import Pagination from './components/Pagination'
 import LoadingState from '../../components/UI/LoadingState'
 import CustomSelect from '../../components/UI/CustomSelect'
+import { CLIENT_AVATAR_COLORS } from '../../utils/authUser'
 import { getClients } from './apis/get'
 import { notifyApiError } from '../../utils/apiError'
 
@@ -17,16 +19,6 @@ const STATUS_OPTIONS = [
   { value: 'unknown', label: 'Unknown' },
 ]
 
-// Rotating avatar gradients so rows are visually distinct.
-const AVATAR_COLORS = [
-  'from-blue-500 to-purple-500',
-  'from-purple-500 to-pink-500',
-  'from-teal-400 to-cyan-500',
-  'from-pink-500 to-rose-500',
-  'from-amber-500 to-orange-500',
-  'from-emerald-500 to-green-500',
-]
-
 // Map an API admin record → the shape ClientRow expects.
 const mapAdmin = (admin, index) => ({
   id: admin.adminId,
@@ -37,18 +29,16 @@ const mapAdmin = (admin, index) => ({
   cameras: admin.cameras,
   expireDate: admin.expireDate,
   status: admin.status,
-  avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
+  avatarColor: CLIENT_AVATAR_COLORS[index % CLIENT_AVATAR_COLORS.length],
 })
 
-const Clients = () => {
+const ClientList = ({ initialSearch, statusFilter, planFilter, onFilterChange }) => {
   const [clients, setClients] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [planFilter, setPlanFilter] = useState('')
+  const [query, setQuery] = useState(initialSearch)
+  const [debouncedQuery, setDebouncedQuery] = useState(initialSearch)
   const [availablePlans, setAvailablePlans] = useState([])
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -117,7 +107,10 @@ const Clients = () => {
 
   const planOptions = [
     { value: '', label: 'All plans' },
-    ...availablePlans.map((plan) => ({ value: plan.toLowerCase(), label: plan })),
+    ...Array.from(
+      new Map(availablePlans.map((plan) => [plan.toLowerCase(), plan])),
+      ([value, label]) => ({ value, label }),
+    ),
   ]
 
   return (
@@ -146,7 +139,7 @@ const Clients = () => {
                 value={statusFilter}
                 options={STATUS_OPTIONS}
                 onChange={(value) => {
-                  setStatusFilter(value)
+                  onFilterChange('status', value)
                   setPage(0)
                 }}
               />
@@ -156,7 +149,7 @@ const Clients = () => {
                 value={planFilter}
                 options={planOptions}
                 onChange={(value) => {
-                  setPlanFilter(value)
+                  onFilterChange('plan', value)
                   setPage(0)
                 }}
               />
@@ -208,6 +201,28 @@ const Clients = () => {
         )}
       </div>
     </>
+  )
+}
+
+const Clients = () => {
+  const [params, setParams] = useSearchParams()
+  const search = params.get('search') || ''
+
+  const changeFilter = (name, value) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(name, value)
+    else next.delete(name)
+    setParams(next, { replace: true })
+  }
+
+  return (
+    <ClientList
+      key={search}
+      initialSearch={search}
+      statusFilter={params.get('status') || ''}
+      planFilter={params.get('plan') || ''}
+      onFilterChange={changeFilter}
+    />
   )
 }
 

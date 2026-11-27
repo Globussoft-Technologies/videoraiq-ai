@@ -9,6 +9,7 @@ import ClientConfig from "./pages/clients/ClientConfig";
 import DetectionCatalog from "./pages/detectionCatalog/DetectionCatalog";
 import SubscriptionPlans from "./pages/subscriptionPlans/SubscriptionPlans";
 import FleetOverview from "./pages/fleet/FleetOverview";
+import FleetMetricDetails from "./pages/fleet/FleetMetricDetails";
 import SessionManagement from "./pages/sessionManagement/SessionManagement";
 import ComingSoon from "./pages/placeholder/ComingSoon";
 import Profile from "./pages/profile/Profile";
@@ -37,6 +38,7 @@ const App = () => {
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
         <Route path="/fleet" element={<FleetOverview />} />
+        <Route path="/fleet/:metric" element={<FleetMetricDetails />} />
         <Route path="/stream-monitoring" element={<StreamMonitoring />} />
         <Route
           path="/stream-monitoring/:adminId"

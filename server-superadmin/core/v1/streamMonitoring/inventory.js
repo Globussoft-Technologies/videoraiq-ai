@@ -23,17 +23,20 @@ async function legacyControl(db, settings) {
     revision: row?.controlRevision || 0, changedAt: row?.changedAt || null };
 }
 
-async function inventorySnapshot(db, settings, adminId) {
+async function inventorySnapshot(db, settings, adminId, cameraIds) {
   if (adminId && !validId(adminId)) throw new Error("Invalid admin ID");
-  const scope = adminId ? [adminId] : [...settings.adminIds];
+  const scope = adminId ? [adminId] : cameraIds ? [] : [...settings.adminIds];
   if (scope.some(id => !validId(id))) throw new Error("Invalid admin scope");
   const admins = await db.collection("admins").find(scope.length ? { _id: { $in: scope.map(id => new ObjectId(id)) } } : {},
     { projection: { user_id: 1, name_f: 1, name_l: 1, login: 1, email: 1, streamHost: 1, appEnv: 1 } }).toArray();
   const byUser = new Map(admins.map(admin => [String(admin.user_id), admin]));
   const nvrs = admins.length ? await db.collection("nvrs").find({ userId: { $in: [...byUser.keys()] } },
-    { projection: { userId: 1, nvrName: 1, domain: 1 } }).toArray() : [];
+    { projection: { userId: 1, nvrName: 1, domain: 1, managementSource: 1, localNvrId: 1 } }).toArray() : [];
   const byNvr = new Map(nvrs.map(nvr => [String(nvr._id), nvr]));
-  const channels = nvrs.length ? await db.collection("channels").find({ nvrId: { $in: nvrs.map(nvr => nvr._id) }, isAdded: true },
+  const channels = nvrs.length ? await db.collection("channels").find({
+    nvrId: { $in: nvrs.map(nvr => nvr._id) }, isAdded: true,
+    ...(cameraIds ? { _id: { $in: cameraIds.map(id => new ObjectId(String(id))) } } : {}),
+  },
     { projection: { userId: 1, nvrId: 1, name: 1, customName: 1, channelId: 1, localChannelId: 1, streamingPath: 1 } }).toArray() : [];
   const cameras = channels.flatMap(channel => {
     const nvr = byNvr.get(String(channel.nvrId)), admin = byUser.get(String(channel.userId));
@@ -41,11 +44,12 @@ async function inventorySnapshot(db, settings, adminId) {
     return [{ cameraId: String(channel._id), adminId: String(admin._id), nvrId: String(nvr._id),
       name: channel.customName || channel.name || "Camera", channelId: channel.channelId || channel.localChannelId || null,
       nvrName: nvr.nvrName, adminName: publicAdmin(admin).name, email: admin.email,
-      ...statusIdentity(admin, nvr, channel, settings) }];
+      ...statusIdentity(admin, nvr, channel, settings, Boolean(cameraIds)) }];
   });
   const identities = new Map();
   for (const camera of cameras) if (camera.sourceKey) identities.set(camera.sourceKey, (identities.get(camera.sourceKey) || 0) + 1);
   for (const camera of cameras) if (identities.get(camera.sourceKey) > 1) camera.mappingError = "Ambiguous status ID";
+  if (cameraIds) return { cameras };
   const owners = await db.collection("superadmins").find({}, { projection: { _id: 1 } }).toArray();
   const recipients = owners.length ? await db.collection("superadmintelegramrecipients").find({ _id: { $in: owners.map(owner => owner._id) } },
     { projection: { selectedChatId: 1, telegramChannels: 1, telegramChatId: 1, telegramChatTitle: 1,
@@ -54,6 +58,10 @@ async function inventorySnapshot(db, settings, adminId) {
     { projection: { _id: 1 } }).toArray() : [];
   return { admins: admins.map(publicAdmin), nvrs: nvrs.map(nvr => ({ _id: String(nvr._id), nvrName: nvr.nvrName })),
     cameras, recipients, mutedCameraIds: muted.map(row => String(row._id)) };
+}
+
+export async function readFleetStatusInventory(db, settings, cameraIds) {
+  return (await inventorySnapshot(db, settings, null, cameraIds)).cameras;
 }
 
 export function monitoringInventoryRoutes(database) {

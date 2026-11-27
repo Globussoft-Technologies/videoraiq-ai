@@ -18,6 +18,7 @@ import { Check, ChevronDown } from 'lucide-react'
 export default function CustomSelect({
   value,
   options,
+  placeholder = '—',
   onChange,
   className = '',
   disabled = false,
@@ -35,11 +36,10 @@ export default function CustomSelect({
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [])
 
-  useEffect(() => {
-    if (disabled) setOpen(false)
-  }, [disabled])
+  if (disabled && open) setOpen(false)
 
   const selectedOption = options.find((option) => option.value === value)
+  const SelectedIcon = selectedOption?.icon
 
   const selectOption = (option) => {
     setOpen(false)
@@ -60,7 +60,10 @@ export default function CustomSelect({
             : 'border-gray-200 dark:border-white/8'
         } ${className}`}
       >
-        <span className="truncate">{selectedOption?.label ?? '—'}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {SelectedIcon && <SelectedIcon size={16} aria-hidden="true" className={`shrink-0 ${selectedOption.iconClassName || ''}`} />}
+          <span className="truncate">{selectedOption?.label ?? placeholder}</span>
+        </span>
         <ChevronDown
           size={15}
           className={`shrink-0 text-gray-400 transition-transform dark:text-gray-500 ${open ? 'rotate-180' : ''}`}
@@ -74,6 +77,7 @@ export default function CustomSelect({
         >
           {options.map((option) => {
             const selected = option.value === value
+            const Icon = option.icon
             return (
               <button
                 key={option.value}
@@ -87,7 +91,14 @@ export default function CustomSelect({
                     : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/6'
                 }`}
               >
-                <span className="truncate">{option.label}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  {Icon && (
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gray-100 dark:bg-white/8 ${option.iconClassName || ''}`}>
+                      <Icon size={15} aria-hidden="true" />
+                    </span>
+                  )}
+                  <span className="truncate">{option.label}</span>
+                </span>
                 {selected && <Check size={14} className="shrink-0" />}
               </button>
             )

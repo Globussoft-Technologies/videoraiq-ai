@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react'
+import { getTopActiveAlertClients } from '../apis/get'
+import { getApiMessage } from '../../../utils/apiError'
+
 const AVATAR_COLORS = [
   'from-blue-500 to-purple-500',
   'from-emerald-500 to-green-500',
@@ -13,14 +17,33 @@ const getInitials = (name = '') => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-const TopAlertClients = ({ clients = [], status = 'active' }) => {
+const TopAlertClients = ({ search }) => {
+  const [clients, setClients] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    getTopActiveAlertClients(search)
+      .then((response) => {
+        if (!cancelled) setClients((response?.body?.data ?? response?.data)?.clients ?? [])
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getApiMessage(err, 'Failed to load top clients'))
+      })
+    return () => { cancelled = true }
+  }, [search])
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
+    <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
       <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">
-        Top Clients by {status === 'all' ? 'All' : 'Active'} Alerts · 24h
+        Top Clients by Active Alerts · 24h
       </h2>
 
-      {clients.length === 0 ? (
+      {error ? (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      ) : !clients ? (
+        <p role="status" className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">Loading top clients…</p>
+      ) : clients.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
           No alerts in this window.
         </p>

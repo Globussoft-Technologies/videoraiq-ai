@@ -111,6 +111,10 @@ class ClientConfigService {
 
       return res.send(
         Response.SuccessResp("Client config fetched", {
+          client: {
+            name: `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login,
+            email: admin.email,
+          },
           stats,
           detections,
           modules: normalizeModuleConfig(admin.moduleConfig),

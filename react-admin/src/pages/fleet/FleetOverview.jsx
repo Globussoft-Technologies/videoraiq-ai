@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Building2, CircleCheck, Video, VideoOff, ScanEye, TriangleAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Building2, CircleCheck, Video, VideoOff, ScanEye, ListChecks } from 'lucide-react'
 import Topbar from '../../layout/Topbar'
 import LoadingState from '../../components/UI/LoadingState'
 import StatTile from './components/StatTile'
@@ -7,141 +7,57 @@ import CameraUtilisation from './components/CameraUtilisation'
 import ClientsByPlan from './components/ClientsByPlan'
 import DetectionsByType from './components/DetectionsByType'
 import CameraHealth from './components/CameraHealth'
-import AlertsGraph from './components/AlertsGraph'
+import DetectionSetup from './components/DetectionSetup'
 import TopAlertClients from './components/TopAlertClients'
-import { getFleetOverview, getTopAlerts, getAlertsGraph } from './apis/get'
+import { getFleetOverview } from './apis/get'
 import { getApiMessage } from '../../utils/apiError'
 
 const unwrap = (res) => res?.body?.data ?? res?.data ?? {}
 
 const FleetOverview = () => {
-  const [overview, setOverview] = useState(null)
-  const [topClients, setTopClients] = useState([])
-  const [graph, setGraph] = useState({ buckets: [], total: 0, hours: 24, from: '', to: '' })
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
   const [utilisationQuery, setUtilisationQuery] = useState('')
-  const [debouncedUtilisationQuery, setDebouncedUtilisationQuery] = useState('')
-  const [appliedSearch, setAppliedSearch] = useState('')
-  const [utilisationLoading, setUtilisationLoading] = useState(false)
-  const [utilisationError, setUtilisationError] = useState('')
-  const [refreshError, setRefreshError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshVersion, setRefreshVersion] = useState(0)
-  const [alertStatus, setAlertStatus] = useState('active')
-  const [appliedAlertStatus, setAppliedAlertStatus] = useState('active')
-  const [initialOverviewLoaded, setInitialOverviewLoaded] = useState(false)
-  const lastFleetRequestRef = useRef({ search: '', version: 0, status: 'active' })
-  const asOfRef = useRef(new Date().toISOString())
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
   useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError('')
-      try {
-        // All three panels load together; one slow call shouldn't serialise the rest.
-        const [ovRes, topRes, graphRes] = await Promise.all([
-          getFleetOverview('', asOfRef.current),
-          getTopAlerts(24, 5, asOfRef.current),
-          getAlertsGraph(24, asOfRef.current),
-        ])
-        if (cancelled) return
-
-        setOverview(unwrap(ovRes))
-        setInitialOverviewLoaded(true)
-        setTopClients(unwrap(topRes).clients || [])
-        const g = unwrap(graphRes)
-        setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24, from: g.from || '', to: g.to || '' })
-      } catch (err) {
-        if (cancelled) return
-        setError(getApiMessage(err, 'Failed to load fleet overview'))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setDebouncedUtilisationQuery(utilisationQuery.trim()),
-      350,
-    )
+    const timer = setTimeout(() => setDebouncedSearch(utilisationQuery.trim()), 350)
     return () => clearTimeout(timer)
   }, [utilisationQuery])
 
   useEffect(() => {
-    if (
-      !initialOverviewLoaded ||
-      (debouncedUtilisationQuery === lastFleetRequestRef.current.search &&
-        refreshVersion === lastFleetRequestRef.current.version &&
-        alertStatus === lastFleetRequestRef.current.status)
-    ) {
-      return undefined
-    }
-
     let cancelled = false
-    lastFleetRequestRef.current = { search: debouncedUtilisationQuery, version: refreshVersion, status: alertStatus }
-    setUtilisationLoading(true)
-    setUtilisationError('')
-    setRefreshError('')
-    const asOf = new Date().toISOString()
-    asOfRef.current = asOf
-
-    Promise.all([
-      getFleetOverview(debouncedUtilisationQuery, asOf, alertStatus),
-      getTopAlerts(24, 5, asOf, debouncedUtilisationQuery, alertStatus),
-      getAlertsGraph(24, asOf, debouncedUtilisationQuery, alertStatus),
-    ])
-      .then(([overviewRes, topRes, graphRes]) => {
-        if (cancelled) return
-        setOverview(unwrap(overviewRes))
-        setTopClients(unwrap(topRes).clients || [])
-        const g = unwrap(graphRes)
-        setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24, from: g.from || '', to: g.to || '' })
-        setAppliedSearch(debouncedUtilisationQuery)
-        setAppliedAlertStatus(alertStatus)
+    getFleetOverview(debouncedSearch)
+      .then((response) => {
+        if (!cancelled) setResult({ overview: unwrap(response), search: debouncedSearch })
       })
       .catch((err) => {
-        if (cancelled) return
-        const message = getApiMessage(err, 'Failed to refresh fleet overview')
-        setUtilisationError(message)
-        setRefreshError(message)
+        if (!cancelled) setResult((previous) => ({
+          ...previous,
+          failedSearch: debouncedSearch,
+          error: getApiMessage(err, 'Failed to load fleet overview'),
+        }))
       })
-      .finally(() => {
-        if (!cancelled) {
-          setUtilisationLoading(false)
-          setRefreshing(false)
-        }
-      })
-
     return () => {
       cancelled = true
     }
-  }, [debouncedUtilisationQuery, initialOverviewLoaded, refreshVersion, alertStatus])
+  }, [debouncedSearch])
 
-  const refreshFleet = () => {
-    if (refreshing) return
-    setRefreshing(true)
-    setDebouncedUtilisationQuery(utilisationQuery.trim())
-    setRefreshVersion((version) => version + 1)
-  }
-
-  const changeAlertStatus = (status) => {
-    if (refreshing || status === appliedAlertStatus) return
-    setRefreshing(true)
-    setAlertStatus(status)
-    // Also retries a selection if its previous request failed.
-    setRefreshVersion((version) => version + 1)
-  }
+  const overview = result?.overview
+  const appliedSearch = result?.search || ''
+  const error = result?.failedSearch === debouncedSearch ? result.error : ''
 
   const t = overview?.totals || {}
+  const metricLink = (key) => {
+    const params = new URLSearchParams()
+    if (appliedSearch) params.set('search', appliedSearch)
+    if (key === 'active') params.set('status', 'active')
+    if (key === 'licensed' || key === 'provisioned') {
+      params.set('view', key)
+      return `/fleet/cameras?${params}`
+    }
+    const path = key === 'clients' || key === 'active' ? '/clients' : `/fleet/${key}`
+    return params.size ? `${path}?${params}` : path
+  }
 
   const TILES = [
     {
@@ -185,10 +101,10 @@ const FleetOverview = () => {
       glow: 'bg-purple-400/20',
     },
     {
-      key: 'alerts',
-      Icon: TriangleAlert,
-      value: graph.total,
-      label: `${appliedAlertStatus === 'all' ? 'All' : 'Active'} Alerts · 24h`,
+      key: 'detection-setup',
+      Icon: ListChecks,
+      value: t.activeClients ?? 0,
+      label: 'Client Detection Setup',
       tint: 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-300',
       glow: 'bg-orange-400/20',
     },
@@ -199,18 +115,18 @@ const FleetOverview = () => {
       <Topbar eyebrow="PLATFORM" title="Fleet Overview" />
 
       <div className="px-8 py-6">
-        {error ? (
+        {!overview && error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
             {error}
           </div>
-        ) : loading ? (
+        ) : !overview ? (
           <LoadingState message="Loading fleet overview…" />
         ) : (
           <>
             {/* Header tiles */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
               {TILES.map(({ key, ...tile }) => (
-                <StatTile key={key} {...tile} />
+                <StatTile key={key} {...tile} to={metricLink(key)} />
               ))}
             </div>
 
@@ -220,35 +136,23 @@ const FleetOverview = () => {
                 rows={overview?.cameraUtilisation || []}
                 query={utilisationQuery}
                 onQueryChange={setUtilisationQuery}
-                searching={utilisationLoading}
-                searchError={utilisationError}
+                searching={!error && debouncedSearch !== appliedSearch}
+                searchError={error}
               />
-              <ClientsByPlan rows={overview?.clientsByPlan || []} />
+              <ClientsByPlan rows={overview?.clientsByPlan || []} search={appliedSearch} />
             </div>
 
-            {/* Detections + health + alerts */}
+            {/* Detection configuration and camera health */}
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
               <DetectionsByType rows={overview?.detectionsByType || []} filtered={Boolean(appliedSearch)} />
-              <CameraHealth health={overview?.cameraHealth} filtered={Boolean(appliedSearch)} />
-              <AlertsGraph
-                buckets={graph.buckets}
-                total={graph.total}
-                hours={graph.hours}
-                from={graph.from}
-                to={graph.to}
+              <CameraHealth
+                health={overview?.cameraHealth}
+                provisioned={t.camerasProvisioned ?? 0}
                 filtered={Boolean(appliedSearch)}
-                status={appliedAlertStatus}
-                onStatusChange={changeAlertStatus}
-                onRefresh={refreshFleet}
-                refreshing={refreshing}
-                error={refreshError}
               />
+              <DetectionSetup counts={overview.detectionSetup} search={appliedSearch} />
             </div>
-
-            {/* Top clients by alerts */}
-            <div className="mt-6">
-              <TopAlertClients clients={topClients} status={appliedAlertStatus} />
-            </div>
+            <TopAlertClients key={appliedSearch} search={appliedSearch} />
           </>
         )}
       </div>

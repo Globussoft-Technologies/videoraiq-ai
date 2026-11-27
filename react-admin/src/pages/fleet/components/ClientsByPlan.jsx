@@ -1,15 +1,17 @@
 // Categorical hues assigned in fixed order by plan index — never cycled past
 // the list, and never re-assigned when the set changes.
+import ClientBreakdownRow from './ClientBreakdownRow'
+
 const PLAN_COLORS = [
-  { dot: 'bg-cyan-400', bar: 'bg-cyan-400' },
-  { dot: 'bg-blue-500', bar: 'bg-blue-500' },
-  { dot: 'bg-purple-500', bar: 'bg-purple-500' },
-  { dot: 'bg-amber-500', bar: 'bg-amber-500' },
-  { dot: 'bg-emerald-500', bar: 'bg-emerald-500' },
-  { dot: 'bg-pink-500', bar: 'bg-pink-500' },
+  'bg-cyan-400',
+  'bg-blue-500',
+  'bg-purple-500',
+  'bg-amber-500',
+  'bg-emerald-500',
+  'bg-pink-500',
 ]
 
-const ClientsByPlan = ({ rows = [] }) => {
+const ClientsByPlan = ({ rows = [], search = '' }) => {
   const max = Math.max(1, ...rows.map((r) => r.clients || 0))
 
   return (
@@ -21,28 +23,18 @@ const ClientsByPlan = ({ rows = [] }) => {
       ) : (
         <div className="flex flex-col gap-3.5">
           {rows.map((row, i) => {
-            const c = PLAN_COLORS[i % PLAN_COLORS.length]
             const count = row.clients || 0
+            const params = new URLSearchParams({ plan: (row.plan || 'No plan').toLowerCase() })
+            if (search) params.set('search', search)
             return (
-              <div key={row.plan || i}>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${c.dot}`} />
-                    <span className="truncate text-sm text-gray-700 dark:text-gray-300">
-                      {row.plan || 'No plan'}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-xs font-semibold text-gray-700 dark:text-gray-200">
-                    {count}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/8">
-                  <span
-                    className={`block h-full rounded-full ${c.bar}`}
-                    style={{ width: `${(count / max) * 100}%` }}
-                  />
-                </div>
-              </div>
+              <ClientBreakdownRow
+                key={row.plan || i}
+                to={`/clients?${params}`}
+                label={row.plan || 'No plan'}
+                count={count}
+                max={max}
+                color={PLAN_COLORS[i % PLAN_COLORS.length]}
+              />
             )
           })}
         </div>
