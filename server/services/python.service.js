@@ -19,7 +19,9 @@ import {
   DETECTION_MODES_MAP,
   DS_DETECTOR_BY_MODE,
   INDUSTRIAL_SETTING_TYPES,
-  ROLLER_STOCK_SETTING_MODE,
+  normalizeStockSettingMode,
+  STEEL_STACK_STOCK_SETTING_MODE,
+  STOCK_SETTING_MODES,
   dsDetectorsForModes,
 } from "../constants/detectionTypes.js";
 import { DetectionSetting } from "../core/v1/detectionSettings/detectionSettings.model.js";
@@ -220,6 +222,8 @@ const appendIndustrialDetectors = (
       if (name === "loadingUnloadingStockCountingSettings") {
         const configs = Array.isArray(zone_configs) ? zone_configs : [];
         const stockZones = Array.isArray(zones) ? zones : [];
+        const settingMode = normalizeStockSettingMode(stockSettings.settingMode);
+        const isSteelStack = settingMode === STEEL_STACK_STOCK_SETTING_MODE;
         stockZones.forEach((zone, index) => {
           const config = configs[index];
           const plainConfig = plainZoneConfig(config);
@@ -227,13 +231,10 @@ const appendIndustrialDetectors = (
             ?? stockSettings.activity_mode ?? stockSettings.mode;
           detectors.push({
             name,
-            ...(stockSettings.settingMode === ROLLER_STOCK_SETTING_MODE || stockSettings.settingMode === null
-              ? { settingMode: stockSettings.settingMode } : {}),
-            activity_mode: ["loading", "unloading", "all"].includes(activityMode)
-              ? activityMode
-              : "all",
+            ...(STOCK_SETTING_MODES.includes(settingMode) || settingMode === null ? { settingMode } : {}),
+            ...(!isSteelStack ? { activity_mode: ["loading", "unloading", "all"].includes(activityMode) ? activityMode : "all" } : {}),
             zones: [zone],
-            zone_configs: [{ name: plainConfig?.name }],
+            zone_configs: [{ name: plainConfig?.name, ...(isSteelStack ? { stack_limit: plainConfig?.stack_limit } : {}) }],
             trigger_notification: stockSettings.trigger_notification ?? true,
           });
         });

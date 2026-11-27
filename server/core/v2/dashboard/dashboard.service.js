@@ -11,6 +11,7 @@ import moment from "moment";
 import sideBarConfigData from './dashboardSidebar.model.js'
 import dashboardSidebarModel from "./dashboardSidebar.model.js";
 import NVR from "../NVR/nvr.model.js"
+import { stockIncidentModeFilter } from "../../../utils/stockNormalization.js";
 
 function escapeRegex(value = "") {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -32,7 +33,11 @@ class DashboardService {
     async headerStats(req, res, next) {
         try {
           const data = req?.verified?.userData;
-          const { startDate, endDate, nvrId, channelId, location, department ,reportStatus,checkInOrCheckOutCamera,incidentTypeFilter} = req.body;
+          const { startDate, endDate, nvrId, channelId, location, department ,reportStatus,checkInOrCheckOutCamera,incidentTypeFilter,incidentMode} = req.body;
+          const stockModeFilter = stockIncidentModeFilter(incidentMode);
+          if (!stockModeFilter) {
+            return res.status(400).json(Response.userFailResp("Invalid stock incident mode."));
+          }
           let authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
           let authorizedNVRs = req?.verified?.authorizedChannel?.nvrIds || [];
           let memberId = req?.verified?.userData?.memberId;
@@ -66,6 +71,9 @@ class DashboardService {
             userMatch.incidentType = { $in: incidentTypeFilter };
           } else {
             userMatch.incidentType = { $nin: ["countPersons", "lineCrossing"] };
+          }
+          if (incidentMode) {
+            userMatch.$and = [stockModeFilter];
           }
           
           // Exclude incidents where triggerNotification is true and exists

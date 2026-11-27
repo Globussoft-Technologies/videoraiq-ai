@@ -5,6 +5,7 @@ import PostureSelect from './PostureSelect';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
 import ThresholdDurationInput from './ThresholdDurationInput';
+import StackLimitInput from './StackLimitInput';
 import DoorAlertDurationInput from './DoorAlertDurationInput';
 import DoorAlertRules from './DoorAlertRules';
 import { CAR_COMPANIES } from '../constants';
@@ -34,6 +35,7 @@ export default function ZoneSettingsPanel({
   isLineCrossing = false,
   isCheckInOut = false,
   isStockCounting = false,
+  isSteelStack = false,
   isSackLoading = false,
   isFireSmoke = false,
   isHygiene = false,
@@ -235,7 +237,8 @@ export default function ZoneSettingsPanel({
                   )}
                   {isPpe && <PpeItemsSelect value={z.required_items} disabled={savingIndex !== null}
                     onChange={value => onUpdateField(i, 'required_items', value)} />}
-                  {isStockCounting && (
+                  {isSteelStack && <StackLimitInput value={z.stackLimit} onChange={value => onUpdateField(i, 'stackLimit', value)} error={errors[`zone-${i}-stackLimit`]} disabled={savingIndex === i} />}
+                  {isStockCounting && !isSteelStack && (
                     <div>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                       <select

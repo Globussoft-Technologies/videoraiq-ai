@@ -8,7 +8,9 @@ import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect
 import ThresholdDurationInput from '../components/ThresholdDurationInput';
 import DoorAlertDurationInput from '../components/DoorAlertDurationInput';
 import DoorAlertRules from '../components/DoorAlertRules';
-import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC, PPE_SETTING_TYPE, ROLLER_STOCK_SETTING_MODE } from '../constants';
+import { PRIORITY_OPTIONS, CAR_COMPANIES, DOOR_MIN_THRESHOLD_SEC, PPE_SETTING_TYPE, ROLLER_STOCK_SETTING_MODE, STEEL_STACK_STOCK_SETTING_MODE, STOCK_MODES, isSteelStackStockMode } from '../constants';
+import { stackLimitError } from '../utils';
+import StackLimitInput from '../components/StackLimitInput';
 import LightingFields from '../components/LightingFields';
 import { lightingZoneSettings, lightingZoneErrors } from '../../../../../helpers/lightingDetection';
 import HygieneZoneFields from '../components/HygieneZoneFields';
@@ -68,9 +70,11 @@ export default function SaveDetectionAreaModal({
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
   const showStockMode = isStockCounting && !isSackLoading;
+  const initialMode = initialSpecialSettings?.settingMode;
   const [settingMode, setSettingMode] = useState(
-    initialSpecialSettings?.settingMode === ROLLER_STOCK_SETTING_MODE ? ROLLER_STOCK_SETTING_MODE : '',
+    isSteelStackStockMode(initialMode) ? STEEL_STACK_STOCK_SETTING_MODE : initialMode === ROLLER_STOCK_SETTING_MODE ? initialMode : '',
   );
+  const isSteelStack = showStockMode && settingMode === STEEL_STACK_STOCK_SETTING_MODE;
   const modeId = useId();
   const modeTrigger = useRef(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
@@ -150,6 +154,10 @@ export default function SaveDetectionAreaModal({
       const hasSchedule =
         Boolean(formatTime(z.schedule?.from)) && Boolean(formatTime(z.schedule?.to));
       if (!String(z.name || '').trim()) nextErrors[`zone-${i}-name`] = true;
+      if (isSteelStack) {
+        const error = stackLimitError(z.stackLimit);
+        if (error) nextErrors[`zone-${i}-stackLimit`] = error;
+      }
       if (extraFields.includes('capacity') && String(z.capacity ?? '').trim() === '') {
         nextErrors[`zone-${i}-capacity`] = true;
       }
@@ -307,28 +315,33 @@ export default function SaveDetectionAreaModal({
                           fontSize: 13, color: 'var(--tx)', cursor: saving ? 'not-allowed' : 'pointer',
                         }}
                       >
-                        {settingMode ? 'Roller' : 'Select mode'}
+                        {STOCK_MODES.find(mode => mode.value === settingMode)?.label || 'Select mode'}
                         <ChevronDown size={15} style={{ color: 'var(--blue)', transform: modeMenuOpen ? 'rotate(180deg)' : undefined }} />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent sideOffset={4} className="z-[10030] p-1.5">
                       <div role="listbox" aria-label="Mode" style={{ width: `min(${modeTrigger.current?.offsetWidth - 14 || 240}px, calc(100vw - 30px))` }}>
-                        <button type="button" role="option" aria-selected={Boolean(settingMode)} autoFocus
-                          onKeyDown={(event) => { if (event.key === 'Escape') modeTrigger.current?.focus(); }}
-                          onClick={() => {
-                            setSettingMode(ROLLER_STOCK_SETTING_MODE);
-                            setModeMenuOpen(false);
-                            modeTrigger.current?.focus();
-                          }}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            width: '100%', padding: '9px 10px', borderRadius: 8, border: 0,
-                            background: 'color-mix(in srgb, var(--blue) 16%, var(--bg1solid))',
-                            color: 'var(--tx)', fontSize: 13, textAlign: 'left', cursor: 'pointer',
-                          }}
-                        >
-                          Roller {settingMode && <Check size={14} style={{ color: 'var(--blue)' }} />}
-                        </button>
+                        {STOCK_MODES.map(({ value, label }, index) => {
+                          const selected = settingMode === value;
+                          return (
+                            <button key={value} type="button" role="option" aria-selected={selected} autoFocus={selected || (!settingMode && index === 0)}
+                              onKeyDown={(event) => { if (event.key === 'Escape') modeTrigger.current?.focus(); }}
+                              onClick={() => {
+                                setSettingMode(value);
+                                setModeMenuOpen(false);
+                                modeTrigger.current?.focus();
+                              }}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                width: '100%', padding: '9px 10px', borderRadius: 8, border: 0,
+                                background: selected ? 'color-mix(in srgb, var(--blue) 16%, var(--bg1solid))' : 'transparent',
+                                color: 'var(--tx)', fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                              }}
+                            >
+                              {label} {selected && <Check size={14} style={{ color: 'var(--blue)' }} />}
+                            </button>
+                          );
+                        })}
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -470,7 +483,8 @@ export default function SaveDetectionAreaModal({
                   </select>
                 </div>
               )}
-              {isStockCounting && (
+              {isSteelStack && <StackLimitInput value={z.stackLimit} onChange={value => updateZoneField(i, 'stackLimit', value)} error={errors[`zone-${i}-stackLimit`]} disabled={saving} />}
+              {isStockCounting && !isSteelStack && (
                 <div>
                   <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                   <select

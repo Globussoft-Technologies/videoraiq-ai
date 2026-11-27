@@ -368,6 +368,32 @@ describe("PythonService.startNewDetection", () => {
     });
   });
 
+  it.each(["steelStackOverloadSettings", "steelStackSettings"])("sends Steel Stack zone limits for %s", async (settingMode) => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+    const zones = [
+      [[0, 0], [10, 0], [10, 10]],
+      [[20, 20], [30, 20], [30, 30]],
+    ];
+    await PythonService.startNewDetection({
+      camera_id: "stock-camera",
+      nvr_id: "stock-nvr",
+      admin_id: "stock-admin",
+      stream_url: "rtsp://stock.test/stream",
+      detection_modes: ["loadingUnloadingStockCountingSettings"],
+      zones,
+      zone_configs: [
+        { name: "North yard", stack_limit: 7, activity_mode: "loading", telegramChatIds: ["1"] },
+        { name: "South yard", stack_limit: 0, startTime: "09:00 AM" },
+      ],
+      confidence_thresholds: { settingMode, trigger_notification: false },
+    });
+
+    expect(axios.post.mock.calls[0][1].detectors).toEqual([
+      { name: "loadingUnloadingStockCountingSettings", settingMode: "steelStackOverloadSettings", zones: [zones[0]], zone_configs: [{ name: "North yard", stack_limit: 7 }], trigger_notification: false },
+      { name: "loadingUnloadingStockCountingSettings", settingMode: "steelStackOverloadSettings", zones: [zones[1]], zone_configs: [{ name: "South yard", stack_limit: 0 }], trigger_notification: false },
+    ]);
+  });
+
   it("builds the exact desk-solar-shoulder payload DS expects", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
 

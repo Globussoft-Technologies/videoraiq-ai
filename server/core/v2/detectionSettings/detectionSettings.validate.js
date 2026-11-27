@@ -2,7 +2,7 @@ import Joi from "joi";
 import { EMOTION_ALERT_GROUPS } from "../../../constants/emotionDetection.js";
 import { validateUniformSettings } from "../../../services/uniformDetection.js";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
-import { PPE_REQUIRED_ITEMS, ROLLER_STOCK_SETTING_MODE } from "../../../constants/detectionTypes.js";
+import { normalizeStockSettingMode, PPE_REQUIRED_ITEMS, STEEL_STACK_STOCK_SETTING_MODE, STOCK_SETTING_MODES } from "../../../constants/detectionTypes.js";
 import {
   WEEKDAYS as weekdays,
   findScheduleConflict,
@@ -142,8 +142,15 @@ class DetectionSettingsValidation {
     }
     if (settingType === "loadingUnloadingStockCountingSettings") {
       return Joi.object({
-        settingMode: Joi.string().valid(ROLLER_STOCK_SETTING_MODE).allow(null),
-      }).unknown(true).validate(settings, { convert: false });
+        settingMode: Joi.string().valid(...STOCK_SETTING_MODES).allow(null),
+        zone_configs: Joi.when("settingMode", {
+          is: Joi.valid(STEEL_STACK_STOCK_SETTING_MODE).required(),
+          then: Joi.array().items(Joi.object({
+            name: Joi.string().trim().required(),
+            stack_limit: Joi.number().integer().min(0).required(),
+          }).unknown(true)).required(),
+        }),
+      }).unknown(true).validate({ ...settings, settingMode: normalizeStockSettingMode(settings.settingMode) }, { convert: false });
     }
     if (settingType === 'personSittingOnCanDetectionSettings') {
       return Joi.object({

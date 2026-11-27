@@ -4,8 +4,9 @@ import { EMOTION_ALERT_GROUPS, EMOTION_DEFAULT_THRESHOLD } from "../../../consta
 import { HYGIENE_CATEGORIES, HYGIENE_DEFAULTS } from "../../../constants/hygieneDetection.js";
 import {
   DETECTION_TYPES,
+  normalizeStockSettingMode,
   PPE_REQUIRED_ITEMS,
-  ROLLER_STOCK_SETTING_MODE,
+  STOCK_SETTING_MODES,
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
 const baseOptions = { discriminatorKey: "settingType", timestamps: true };
@@ -1226,13 +1227,18 @@ const LoadingUnloadingStockCountingDetectionSchema = new mongoose.Schema({
     default: "gauge",
   },
 });
+const StockCountingSchema = LoadingUnloadingStockCountingDetectionSchema.clone();
+StockCountingSchema.remove("zone_configs");
+StockCountingSchema.add({
+  settingMode: { type: String, enum: STOCK_SETTING_MODES, set: normalizeStockSettingMode },
+  zone_configs: [{
+    ...zoneConfigsField.zone_configs[0],
+    stack_limit: { type: Number, min: 0, validate: Number.isSafeInteger },
+  }],
+});
 const LoadingUnloadingStockCountingSetting = DetectionSetting.discriminator(
   "loadingUnloadingStockCountingSettings",
-  new mongoose.Schema({
-    settings: LoadingUnloadingStockCountingDetectionSchema.clone().add({
-      settingMode: { type: String, enum: [ROLLER_STOCK_SETTING_MODE] },
-    }),
-  }),
+  new mongoose.Schema({ settings: StockCountingSchema }),
 );
 
 const SackLoadingUnloadingSetting = DetectionSetting.discriminator(

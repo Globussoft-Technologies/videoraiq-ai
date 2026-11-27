@@ -1,3 +1,27 @@
+import {
+  normalizeStockSettingMode,
+  STEEL_STACK_STOCK_SETTING_MODE,
+  STOCK_SETTING_MODES,
+} from "../constants/detectionTypes.js";
+
+export const STOCK_INCIDENT_TYPE = "loadingUnloadingStockCountingDetection";
+
+export function stockIncidentModeFilter(mode) {
+  if (mode === undefined || mode === "") return {};
+
+  const normalized = normalizeStockSettingMode(mode);
+  if (!STOCK_SETTING_MODES.includes(normalized)) return null;
+
+  return {
+    incidentType: STOCK_INCIDENT_TYPE,
+    // Compare stored values directly so Mongoose's setter cannot rewrite
+    // the legacy spelling in countDocuments filters.
+    ...(normalized === STEEL_STACK_STOCK_SETTING_MODE
+      ? { $expr: { $in: ["$incidentMode", [normalized, "steelStackSettings"]] } }
+      : { incidentMode: normalized }),
+  };
+}
+
 // Shared interpretation for analytics, raw evidence and grouped stock logs.
 // Invalid counts remain events but contribute no box throughput.
 export const stockNormalizationStages = (timezone) => [

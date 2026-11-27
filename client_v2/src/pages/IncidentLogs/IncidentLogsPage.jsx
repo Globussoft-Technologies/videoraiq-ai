@@ -13,6 +13,8 @@ import { LayoutGrid, List, Loader2, Cog, Power, PowerOff, Truck } from 'lucide-r
 import { getConfiguredTimezone } from '@/utils/timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
+import StockModeFilter from '@/components/StockModeFilter';
+import { STEEL_STACK_STOCK_SETTING_MODE } from '@/page/user/Configure/DetectionZoneMarking/constants';
 
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
@@ -190,6 +192,9 @@ const IncidentLogsPage = ({ config }) => {
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [boxTypeList, setBoxTypeList] = useState([]);
   const [stockDirection, setStockDirection] = useState('all');
+  const [stockMode, setStockMode] = useState('');
+  const showsStockMode = config.showStockCountingFields && !config.showSackFields;
+  const stockIncidentMode = showsStockMode ? stockMode : undefined;
   const [postureFilter, setPostureFilter] = useState('');
   const [observedLayersFilter, setObservedLayersFilter] = useState('');
   const [observedLayerOptions, setObservedLayerOptions] = useState([]);
@@ -332,6 +337,7 @@ const IncidentLogsPage = ({ config }) => {
         vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
         boxType: config.showBoxTypeFilter ? boxType : undefined,
         direction: config.showStockCountingFields ? stockDirection : undefined,
+        incidentMode: stockIncidentMode,
         posture: config.showPostureFilter ? postureFilter : undefined,
         observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
         peopleCount: config.showPeopleCountFilter ? peopleCount : undefined,
@@ -457,7 +463,7 @@ const IncidentLogsPage = ({ config }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput, nvrList, cameraList]);
+  }, [gender, zone, emotions, hygieneCategory, skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showMachineStateFilter, machineState, status, doorStatus, vehicleNumber, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, stockIncidentMode, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput, nvrList, cameraList]);
 
   useEffect(() => {
     fetchLogs();
@@ -800,11 +806,12 @@ const IncidentLogsPage = ({ config }) => {
       vehicleNumber: config.showVehicleNumberFilter ? vehicleNumber : undefined,
       boxType: config.showBoxTypeFilter ? boxType : undefined,
       direction: config.showStockCountingFields ? stockDirection : undefined,
+      incidentMode: stockIncidentMode,
       posture: config.showPostureFilter ? postureFilter : undefined,
       observedLayers: config.showObservedLayersFilter ? observedLayersFilter : undefined,
       peopleCount: config.showPeopleCountFilter ? peopleCount : undefined,
     }),
-    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]
+    [gender, zone, emotions, hygieneCategory, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showGenderAgeFields, config.showZoneFilter, config.showStockCountingFields, config.showStatus, config.showMachineStateFilter, machineState, config.showDoorFields, status, doorStatus, config.showVehicleNumberFilter, vehicleNumber, config.showBoxTypeFilter, boxType, peopleCount, config.showPeopleCountFilter, stockDirection, stockIncidentMode, postureFilter, config.showPostureFilter, observedLayersFilter, config.showObservedLayersFilter, searchInput]
   );
 
   const handleExport = useCallback(async (format) => {
@@ -958,14 +965,25 @@ const IncidentLogsPage = ({ config }) => {
             })}
           </div>
         ) : config.showStockCountingFields ? (
-          <div role="group" aria-label="Stock movement" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
-            {[['all', 'All'], ['loading', 'Loaded'], ['unloading', 'Unloaded']].map(([value, title]) => (
-              <button key={value} type="button" aria-pressed={stockDirection === value} onClick={() => {
-                setStockDirection(value);
+          <>
+            {showsStockMode && (
+              <StockModeFilter value={stockMode} onChange={(mode) => {
+                setStockMode(mode);
+                if (mode === STEEL_STACK_STOCK_SETTING_MODE) setStockDirection('all');
                 dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-              }} className={`h-full px-3 rounded-[7px] text-xs font-semibold cursor-pointer transition-colors ${stockDirection === value ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}>{title}</button>
-            ))}
-          </div>
+              }} />
+            )}
+            {stockIncidentMode !== STEEL_STACK_STOCK_SETTING_MODE && (
+              <div role="group" aria-label="Stock movement" className="flex items-center gap-1 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10">
+                {[['all', 'All'], ['loading', 'Loaded'], ['unloading', 'Unloaded']].map(([value, title]) => (
+                  <button key={value} type="button" aria-pressed={stockDirection === value} onClick={() => {
+                    setStockDirection(value);
+                    dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
+                  }} className={`h-full px-3 rounded-[7px] text-xs font-semibold cursor-pointer transition-colors ${stockDirection === value ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm' : 'text-[var(--tx2)] hover:text-[var(--tx)]'}`}>{title}</button>
+                ))}
+              </div>
+            )}
+          </>
         ) : undefined}
         renderExpandedRow={config.showStockCountingFields ? renderStockEvents : undefined}
         tableContainerClassName={config.showStockCountingFields ? '!border-[var(--blue)]' : ''}

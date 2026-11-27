@@ -37,6 +37,36 @@
         }
       }
     },
+    "/api/v2/agent-chat/export-image/{grant}/{key}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "grant",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
     "/api/v2/whatsapp/incident-image/{incidentId}": {
       "get": {
         "description": "",
@@ -4459,6 +4489,70 @@
         }
       }
     },
+    "/api/v2/incidents/logs/sack-loading-unloading/numbers": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/sack-loading-unloading": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sortField",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/machine-ops-detection": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v2/incidents/logs/gender-age-detection": {
       "get": {
         "description": "",
@@ -4470,6 +4564,36 @@
       }
     },
     "/api/v2/incidents/logs/emotion-detection": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/person-posture-detection": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/person-sitting-on-can": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/incidents/logs/cans-stack-detection": {
       "get": {
         "description": "",
         "responses": {
@@ -6619,7 +6743,7 @@
         "tags": [
           "Incidents"
         ],
-        "description": "Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData.",
+        "description": "Get Desk Absence time-series grouped by camera. Set mode to images to return paginated events with snapshots.",
         "parameters": [
           {
             "name": "data",
@@ -11328,19 +11452,16 @@
       "get": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       },
       "post": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
+          "403": {
+            "description": "Forbidden"
           }
         }
       }
@@ -11349,8 +11470,8 @@
       "get": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       }
@@ -11367,8 +11488,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       },
@@ -11383,11 +11504,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
+          "403": {
+            "description": "Forbidden"
           }
         }
       },
@@ -11402,11 +11520,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
+          "403": {
+            "description": "Forbidden"
           }
         }
       }
@@ -11423,11 +11538,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
+          "403": {
+            "description": "Forbidden"
           }
         }
       }
@@ -11606,8 +11718,8 @@
       "get": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       }
@@ -11616,8 +11728,8 @@
       "get": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       }
@@ -11626,8 +11738,8 @@
       "get": {
         "description": "",
         "responses": {
-          "200": {
-            "description": "OK"
+          "default": {
+            "description": ""
           }
         }
       }
@@ -15199,12 +15311,96 @@
         }
       }
     },
+    "/api/v2/agent-chat/camera-inventory/{inventoryId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "inventoryId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/camera-inventory/{inventoryId}/export-links": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "inventoryId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/reports/{reportId}/{fileName}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v2/agent-chat/actions/{aid}/preview": {
       "get": {
         "description": "",
         "parameters": [
           {
             "name": "aid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/agent-chat/camera-inventory/{inventoryId}/images/{fileName}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "inventoryId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fileName",
             "in": "path",
             "required": true,
             "type": "string"
@@ -16594,6 +16790,16 @@
         }
       }
     },
+    "/api/v2/client-config/detection-display-names": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/v2/client-config/license": {
       "get": {
         "description": "",
@@ -17853,6 +18059,16 @@
           },
           "400": {
             "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/v2/measurement-calibration/stations": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
           }
         }
       }
@@ -23416,6 +23632,14 @@
         "limit": {
           "type": "number",
           "example": 10
+        },
+        "granularity": {
+          "type": "string",
+          "example": "time"
+        },
+        "mode": {
+          "type": "string",
+          "example": "images"
         }
       },
       "xml": {

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 import { fetchIncidentLogs } from './Api';
 import { getConfiguredTimezone } from '@/utils/timezone';
+import { STOCK_MODES } from '@/page/user/Configure/DetectionZoneMarking/constants';
 import { boxSplitLabel } from './stockMovement';
 
 const EXPORT_LIMIT = 10000;
@@ -88,6 +89,7 @@ const fetchAllForExport = async (config, filters = {}) => {
     vehicleNumber: filters.vehicleNumber,
     boxType: filters.boxType,
     direction: filters.direction,
+    incidentMode: filters.incidentMode,
   });
 
   return response?.data?.body?.data?.data || [];
@@ -99,9 +101,13 @@ const rangeNote = (filters) => (
     : 'All dates'
 );
 
-const filterNote = (filters) => (
-  `${filters?.vehicleNumber ? `Vehicle: ${filters.vehicleNumber}` : 'All vehicles'}${filters?.direction && filters.direction !== 'all' ? ` | ${filters.direction === 'loading' ? 'Loaded' : 'Unloaded'}` : ''}`
-);
+const filterNote = (filters) => {
+  const notes = [filters?.vehicleNumber ? `Vehicle: ${filters.vehicleNumber}` : 'All vehicles'];
+  if (filters?.direction && filters.direction !== 'all') notes.push(filters.direction === 'loading' ? 'Loaded' : 'Unloaded');
+  const mode = STOCK_MODES.find(({ value }) => value === filters?.incidentMode);
+  if (mode) notes.push(mode.label);
+  return notes.join(' | ');
+};
 
 const sackHeaders = (headers, config) => !config.showSackFields ? headers : headers.map(label => ({
   'Box Type': 'Sacks / Cotton Boxes', 'Total Boxes': 'Total Items', 'Boxes': 'Items',

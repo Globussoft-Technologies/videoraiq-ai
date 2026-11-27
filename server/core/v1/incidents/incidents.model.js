@@ -3,7 +3,7 @@ import { invalidateApiCache } from "../../../services/apiCache.service.js";
 
 import mongoose from 'mongoose';
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
-import { ROLLER_STOCK_SETTING_MODE } from "../../../constants/detectionTypes.js";
+import { normalizeStockSettingMode, STOCK_SETTING_MODES } from "../../../constants/detectionTypes.js";
 import { AgentIncidentLifecycle, AgentEventGroup, AgentEvidence } from '../../v2/agentData/agentData.model.js';
 
 const { Schema, model } = mongoose;
@@ -758,7 +758,9 @@ const LoadingUnloadingStockCountingDetectionSchema = new Schema({
 const LoadingUnloadingStockCountingIncident = Incident.discriminator(
   "loadingUnloadingStockCountingDetection",
   LoadingUnloadingStockCountingDetectionSchema.clone().add({
-    incidentMode: { type: String, enum: [ROLLER_STOCK_SETTING_MODE] },
+    incidentMode: { type: String, enum: STOCK_SETTING_MODES, set: normalizeStockSettingMode },
+    stackLimit: { type: Number, min: 0, validate: Number.isSafeInteger },
+    overloadStatus: String,
   }),
 );
 

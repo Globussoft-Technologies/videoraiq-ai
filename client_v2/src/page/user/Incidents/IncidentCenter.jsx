@@ -27,6 +27,7 @@ import LateArrivalDetails, { IN_TIME_LABEL, lateArrivalDescription } from './Lat
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
+import StockModeFilter from '../../../components/StockModeFilter';
 import TaggedUserDetailsModal from '../../../components/TaggedUserDetailsModal';
 import { formatPlate, PLATE_BEARING_TYPES } from '../../../helpers/vehicleTagging';
 import RefreshControl from '../../../components/RefreshControl';
@@ -42,6 +43,7 @@ import { exportIncidentCenter } from './incidentCenterExport';
 import { doorDurationLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
+const STOCK_INCIDENT_TYPE = 'loadingUnloadingStockCountingDetection';
 const INCIDENT_LIST_DETAILS = {
   lateArrival: [
     { field: 'departmentName', label: 'Department', width: 130 },
@@ -1762,6 +1764,8 @@ export default function IncidentCenter() {
   // onLoad nor onError would ever fire to clear it.
   const [navFailedAt, setNavFailedAt] = useState(0);
   const [detTypes,   setDetTypes]   = useState(() => new Set());
+  const [stockMode, setStockMode] = useState('');
+  const showsStockMode = detTypes.has(STOCK_INCIDENT_TYPE);
   const [sevSet,     setSevSet]     = useState(() => new Set(initialSeverityFilter ? [initialSeverityFilter] : []));
   const [statusSet,  setStatusSet]  = useState(() => new Set(initialStatusFilter ? [initialStatusFilter] : []));
   const [dateFrom,   setDateFrom]   = useState(() => initialAllTime ? '' : initialDate || nowInConfiguredTimezone().format('YYYY-MM-DD'));
@@ -1851,6 +1855,7 @@ export default function IncidentCenter() {
     const f = {};
     if (ctxLoc)            f.location           = ctxLoc;
     if (detTypes.size)     f.incidentTypeFilter = [...detTypes];
+    if (showsStockMode && stockMode) f.incidentMode = stockMode;
     if (dateFrom && dateTo) { f.startDate = dateFrom; f.endDate = dateTo; }
     if (nvrIds.length)     f.nvrId              = nvrIds;
     if (channelIds.length) f.channelId          = channelIds;
@@ -1883,7 +1888,7 @@ export default function IncidentCenter() {
       if (utcTo) f.toTime = utcTo;
     }
     return f;
-  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo, timeRangeError]);
+  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo, timeRangeError, showsStockMode, stockMode]);
 
   const isResolvedView = statusSet.size === 1 && statusSet.has('resolved');
   const isReportedView = statusSet.size === 1 && statusSet.has('reported');
@@ -2487,6 +2492,7 @@ export default function IncidentCenter() {
 
   const clearAll = useCallback(() => {
     setDetTypes(new Set());
+    setStockMode('');
     setSevSet(new Set()); setStatusSet(new Set());
     setDateFrom(''); setDateTo('');
     setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]);
@@ -2647,9 +2653,19 @@ export default function IncidentCenter() {
         <MultiSelect
           options={typeOptions}
           selected={detTypes}
-          onChange={(next) => { setDetTypes(next); setPage(0); }}
+          onChange={(next) => {
+            setDetTypes(next);
+            if (!next.has(STOCK_INCIDENT_TYPE)) setStockMode('');
+            setPage(0);
+          }}
           placeholder="Select Incident"
         />
+        {showsStockMode && (
+          <StockModeFilter value={stockMode} onChange={(mode) => {
+            setStockMode(mode);
+            setPage(0);
+          }} />
+        )}
 
         {/* Date range */}
         <div className="vq-inc-date-control">

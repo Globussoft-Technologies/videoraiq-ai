@@ -45,6 +45,8 @@ import {
   unauthorizedAnimalEntryDetectionSettings,
   spillsDirtyMessyAreasDetectionSettings,
   loadingUnloadingStockCountingSettings,
+  normalizeStockSettingMode,
+  STEEL_STACK_STOCK_SETTING_MODE,
   sackLoadingUnloadingSettings,
   blurredCameraDetectionSettings,
   deskSolarShoulderDetectionSettings,
@@ -982,6 +984,12 @@ class DetectionSettingService {
       }
 
       if (value.settings && typeof value.settings === "object") {
+        if (settingType === "loadingUnloadingStockCountingSettings" && (
+          normalizeStockSettingMode(value.settings.settingMode) === STEEL_STACK_STOCK_SETTING_MODE ||
+          normalizeStockSettingMode(detectionSetting.settings?.settingMode) === STEEL_STACK_STOCK_SETTING_MODE
+        )) {
+          value.settings = { ...(detectionSetting.settings?.toObject?.() || detectionSetting.settings), ...value.settings };
+        }
         const newDetectorValidation = DetectionSettingsValidation.validateNewDetectorSettings(settingType, value.settings);
         if (newDetectorValidation.error) return res.status(400).json(Response.userFailResp('Validation Failed', newDetectorValidation.error.message));
         const thresholdValidation =

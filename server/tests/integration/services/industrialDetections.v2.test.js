@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import mongoose from "mongoose";
 import { clearCollections, connectMongo, disconnectMongo } from "../dbSetup.js";
 import { payload, serviceCtx } from "../../helpers/service.js";
 
@@ -18,6 +19,7 @@ const { default: IncidentsService } = await import(
 const { default: DetectionSettingsService } = await import(
   "../../../core/v2/detectionSettings/detectionSettings.service.js"
 );
+const { default: DashboardService } = await import("../../../core/v2/dashboard/dashboard.service.js");
 const { default: Admin } = await import("../../../core/v2/admin/admin.model.js");
 const { default: DetectionAllocation } = await import(
   "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
@@ -170,6 +172,125 @@ beforeEach(async () => {
     login: "industrial-user",
     email: "industrial@test.com",
   });
+});
+
+it("persists Steel Stack zone limits and alert delivery through partial settings updates", async () => {
+  const settingType = "loadingUnloadingStockCountingSettings";
+  const Model = settingsModels.LoadingUnloadingStockCountingSetting;
+  await DetectionAllocation.create({ adminId: admin._id, settingType, enabled: true, cameraAllocation: 10 });
+  const setting = await Model.create({ userId: admin.user_id, name: "Stock zones", enabled: true, settings: {} });
+  const update = async (settings) => {
+    const ctx = serviceCtx({
+      user_id: admin.user_id, adminId: admin._id, params: { id: String(setting._id) }, body: { settings },
+    });
+    await DetectionSettingsService.updateDetectionSettings(ctx.req, ctx.res, ctx.next);
+    return ctx.res;
+  };
+  const recipientId = new mongoose.Types.ObjectId();
+  const zone = { name: "North yard", stack_limit: 0, whatsappRecipientIds: [recipientId], telegramChatIds: ["123"], startTime: "09:00 AM", endTime: "06:00 PM" };
+
+  expect(payload(await update({ settingMode: "steelStackSettings", zone_configs: [zone] })).status).toBe("success");
+  expect(payload(await update({ levelOfImportance: "high" })).status).toBe("success");
+  for (const limit of [undefined, -1, 2.5, "3"]) {
+    expect((await update({ zone_configs: [{ ...zone, stack_limit: limit }] })).statusCode).toBe(400);
+  }
+
+  const updated = await Model.findById(setting._id).lean();
+  expect(updated.settings.settingMode).toBe("steelStackOverloadSettings");
+  expect(updated.settings.levelOfImportance).toBe("high");
+  expect(updated.settings.zone_configs[0]).toMatchObject(zone);
+  expect(updated.settings.zone_configs[0].activity_mode).toBeUndefined();
+});
+
+it("records a Steel Stack Overload payload and keeps its fields in stock logs", async () => {
+  const mode = "steelStackOverloadSettings";
+  const setting = await settingsModels.LoadingUnloadingStockCountingSetting.create({
+    userId: admin.user_id, name: "Steel Stack", enabled: true,
+    settings: { settingMode: mode, zone_configs: [{ name: "Stack A", stack_limit: 7 }] },
+  });
+  const nvr = await NVR.create({
+    userId: admin.user_id, nvrName: "Stock NVR", brand: "hikvision", domain: "http://stock-nvr.test", location: "factory", localNvrId: "steel-stack-nvr",
+  });
+  const channel = await Channel.create({
+    userId: admin.user_id, nvrId: nvr._id, localChannelId: "1", name: "Stack Camera", streamingPath: "/Streaming/Channels/101", isAdded: true,
+    detections: { loadingUnloadingStockCountingSettings: { id: setting._id, enabled: true } },
+  });
+  const fields = { incidentMode: mode, incidentName: "Steel Stack Overload", zone: "Stack A", stackLimit: 7, overloadStatus: "overloaded" };
+  const body = {
+    ...fields, incidentType: "loadingUnloadingStockCountingDetection", schemaVersion: "1.0",
+    timeOfIncident: "2026-11-27T11:15:00Z", Image: "https://media.test/steel-stack.jpg", severity: "high",
+    description: "Stack A has more than 7 bundles (limit 7).", cameraId: String(channel._id), channelId: String(channel._id),
+    nvrId: String(nvr._id), adminId: String(admin._id), eventId: "9f1c2e7a4b3d4f6a8e0b1c2d3e4f5a6b", triggerNotification: true,
+  };
+  const post = async (input) => {
+    const ctx = serviceCtx({ adminId: admin._id, user_id: admin.user_id, body: input });
+    await IncidentsService.createIncidents(ctx.req, ctx.res, ctx.next);
+    return ctx.res;
+  };
+  expect((await post({ ...body, stackLimit: 7.5 })).statusCode).toBe(400);
+  expect((await post({ ...body, nvrId: String(new mongoose.Types.ObjectId()) })).statusCode).toBe(400);
+  const created = await post(body);
+  expect(created.statusCode).toBe(200);
+  expect(payload(created).data.Incident).toMatchObject({ ...fields, timeOfIncident: new Date(body.timeOfIncident), description: body.description, triggerNotification: true });
+  expect(payload(await post({ ...body })).data.duplicate).toBe(true);
+  expect(await incidentModels.LoadingUnloadingStockCountingIncident.countDocuments({ eventId: body.eventId })).toBe(1);
+
+  const logs = serviceCtx({ adminId: admin._id, user_id: admin.user_id });
+  await IncidentsService.getLoadingUnloadingStockCountingLogs(logs.req, logs.res, logs.next);
+  expect(payload(logs.res).data.data[0]).toMatchObject({
+    ...fields, events: [expect.objectContaining({ incidentMode: mode, stackLimit: 7, overloadStatus: "overloaded" })],
+  });
+});
+
+it("filters stock incidents, counts and grouped logs by mode", async () => {
+  const stockType = "loadingUnloadingStockCountingDetection";
+  const rollerMode = "rollerLoadingUnloadingSettings";
+  const steelMode = "steelStackOverloadSettings";
+  const StockIncident = incidentModels.LoadingUnloadingStockCountingIncident;
+  const stock = {
+    userId: admin.user_id,
+    nvrId: new mongoose.Types.ObjectId(),
+    channelId: new mongoose.Types.ObjectId(),
+    incidentName: "Stock event",
+    timeOfIncident: new Date("2026-11-27T11:15:00Z"),
+    Image: "https://media.test/stock.jpg",
+    severity: "high",
+  };
+  const movement = { vehicleNumber: "MH12AB1234", direction: "loading" };
+  const [, , , legacySteel] = await StockIncident.create([
+    { ...stock, ...movement, eventId: "roller", incidentMode: rollerMode, boxCount: 2 },
+    { ...stock, ...movement, eventId: "no-mode", boxCount: 3 },
+    { ...stock, eventId: "steel", incidentMode: steelMode },
+    { ...stock, eventId: "legacy-steel", incidentMode: steelMode },
+  ]);
+  await StockIncident.collection.updateOne({ _id: legacySteel._id }, { $set: { incidentMode: "steelStackSettings" } });
+
+  for (const [incidentMode, eventIds] of [
+    [steelMode, ["legacy-steel", "steel"]],
+    [rollerMode, ["roller"]],
+    [undefined, ["legacy-steel", "no-mode", "roller", "steel"]],
+  ]) {
+    const auth = { adminId: admin._id, user_id: admin.user_id };
+    const body = { incidentTypeFilter: [stockType], incidentMode };
+    const list = serviceCtx({ ...auth, body });
+    await IncidentsService.getAllIncidents(list.req, list.res, list.next);
+    expect(list.res.statusCode).toBe(200);
+    expect(payload(list.res)).toMatchObject({ totalCount: eventIds.length, counts: { severity: { high: eventIds.length } } });
+    expect(payload(list.res).data.map((item) => item.eventId).sort()).toEqual(eventIds);
+
+    const stats = serviceCtx({ ...auth, body });
+    await DashboardService.headerStats(stats.req, stats.res, stats.next);
+    expect(stats.res.statusCode).toBe(200);
+    expect(payload(stats.res).data.totalAlerts).toBe(eventIds.length);
+
+    const logs = serviceCtx({ ...auth, query: { incidentMode } });
+    await IncidentsService.getLoadingUnloadingStockCountingLogs(logs.req, logs.res, logs.next);
+    expect(logs.res.statusCode).toBe(200);
+    const { data, totalCount } = payload(logs.res).data;
+    expect(totalCount).toBe(incidentMode ? eventIds.length : 3);
+    expect(data.flatMap((group) => group.events.map((event) => event.eventId)).sort()).toEqual(eventIds);
+    if (incidentMode === rollerMode) expect(data[0]).toMatchObject({ eventCount: 1, loadedBoxCount: 2 });
+  }
 });
 
 describe("stock-counting vehicle aggregation", () => {

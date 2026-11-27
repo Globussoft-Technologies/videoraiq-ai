@@ -33,6 +33,12 @@ export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
 export const PERSON_FALL_SICK_SETTING_TYPE = 'personFallSickDetectionSettings';
 export const STOCK_COUNTING_SETTING_TYPE = 'loadingUnloadingStockCountingSettings';
 export const ROLLER_STOCK_SETTING_MODE = 'rollerLoadingUnloadingSettings';
+export const STEEL_STACK_STOCK_SETTING_MODE = 'steelStackOverloadSettings';
+export const STOCK_MODES = [
+  { value: ROLLER_STOCK_SETTING_MODE, label: 'Roller' },
+  { value: STEEL_STACK_STOCK_SETTING_MODE, label: 'Steel Stack' },
+];
+export const isSteelStackStockMode = mode => mode === STEEL_STACK_STOCK_SETTING_MODE || mode === 'steelStackSettings';
 export const PPE_SETTING_TYPE = 'personalProtectiveEquipmentSettings';
 export const CANS_STACK_DETECTION_SETTING_TYPE = 'cansStackDetectionSettings';
 

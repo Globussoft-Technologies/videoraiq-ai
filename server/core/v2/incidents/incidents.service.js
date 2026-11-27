@@ -3,7 +3,7 @@ import { normalizeUniformIncident } from "../../../services/uniformDetection.js"
 import { machineOpsIncidentSchema } from '../../../services/machineOps.js';
 import { getGenderAgeSummary } from "./genderAgeSummary.js";
 import { attachLateArrivalDetails } from "./lateArrivalDetails.js";
-import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
+import { STOCK_INCIDENT_TYPE, stockIncidentModeFilter, stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
@@ -33,6 +33,8 @@ import {
   ALERT_FEED_EXCLUDED_TYPES,
   INCIDENT_TYPE_ALIASES,
   INDUSTRIAL_INCIDENT_TYPES,
+  normalizeStockSettingMode,
+  STEEL_STACK_STOCK_SETTING_MODE,
   TYPE_MAP,
 } from "../../../constants/detectionTypes.js";
 import { deleteMediaV2 as deleteMedia, mediaExistsV2 as mediaExists } from "../adminStorage/mediaStorage.v2.js";
@@ -457,6 +459,12 @@ class IncidentsService {
       }
       const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData } =
         req.body;
+      const isSteelStackOverload = incidentType === "loadingUnloadingStockCountingDetection" &&
+        normalizeStockSettingMode(req.body.incidentMode) === STEEL_STACK_STOCK_SETTING_MODE;
+      if (isSteelStackOverload) {
+        const { error } = incidentsValidate.validateSteelStackOverloadIncident(req.body);
+        if (error) return res.status(400).json(Response.validationFailResp(error.message, "Validation Failed!"));
+      }
       // const userId = req?.verified?.userData?.user_id;
 
       if (liveDemoData !== undefined && typeof liveDemoData !== "boolean") {
@@ -494,7 +502,7 @@ class IncidentsService {
           .json({ error: `Unknown incident type: ${incidentType}` });
       }
 
-      if (["genderAgeDetection", "genderAgeCount", "machineOpsDetection", "sackLoadingUnloadingDetection", "personSittingOnCan"].includes(incidentType) &&
+      if ((isSteelStackOverload || ["genderAgeDetection", "genderAgeCount", "machineOpsDetection", "sackLoadingUnloadingDetection", "personSittingOnCan"].includes(incidentType)) &&
         (!channel || String(channel.userId) !== userId || String(channel.nvrId) !== String(nvrId))) {
         return res.status(400).json(Response.userFailResp("Camera does not belong to this client and NVR"));
       }
@@ -1326,6 +1334,7 @@ class IncidentsService {
         reportStatus,
         checkInOrCheckOutCamera,
         incidentTypeFilter,
+        incidentMode,
         severity,
         statusFilter,
         // Vehicle Detection: free-text over plate + tagged user's name, and
@@ -1335,6 +1344,11 @@ class IncidentsService {
         tagStatus,
         liveDemoData,
       } = req.body;
+
+      const stockModeFilter = stockIncidentModeFilter(incidentMode);
+      if (!stockModeFilter) {
+        return res.status(400).json(Response.userFailResp("Invalid stock incident mode."));
+      }
 
       // Shared with the Analytics overview breakdown so the "why is this in the
       // total but not in Alerts?" explanation can never drift from what this
@@ -1612,6 +1626,9 @@ class IncidentsService {
           ...(matchStage.incidentType ?? {}),
           $in: incidentTypeFilter,
         };
+      }
+      if (incidentMode) {
+        matchStage.$and = [...(matchStage.$and || []), stockModeFilter];
       }
 
       // Box-packing confirmations can originate from the line sensor, where
@@ -5330,6 +5347,7 @@ console.log(result,'result');
         vehicleNumber,
         boxType,
         direction,
+        incidentMode,
         search,
         sortField,
         sortOrder,
@@ -5341,10 +5359,15 @@ console.log(result,'result');
       if (stockDirection && !['all', 'loading', 'unloading'].includes(stockDirection)) {
         return res.status(400).json({ error: 'direction must be all, loading or unloading' });
       }
+      const stockModeFilter = stockIncidentModeFilter(incidentMode);
+      if (!stockModeFilter) {
+        return res.status(400).json(Response.userFailResp("Invalid stock incident mode."));
+      }
 
       const match = {
         userId: data.user_id.toString(),
-        incidentType: "loadingUnloadingStockCountingDetection",
+        incidentType: STOCK_INCIDENT_TYPE,
+        ...stockModeFilter,
       };
       if (startDate && endDate) {
         match.timeOfIncident = {
@@ -5428,6 +5451,9 @@ console.log(result,'result');
             vehicleNumber: { $first: "$_stockVehicleNumber" },
             incidentType: { $first: "$incidentType" },
             incidentName: { $first: "$incidentName" },
+            incidentMode: { $first: "$incidentMode" },
+            stackLimit: { $first: "$stackLimit" },
+            overloadStatus: { $first: "$overloadStatus" },
             description: { $first: "$description" },
             zone: { $first: "$zone" },
             severity: { $first: "$severity" },
@@ -5450,6 +5476,9 @@ console.log(result,'result');
               $push: {
                 _id: "$_id",
                 eventId: "$eventId",
+                incidentMode: "$incidentMode",
+                stackLimit: "$stackLimit",
+                overloadStatus: "$overloadStatus",
                 direction: "$_stockDirection",
                 lineCrossingDirection: "$lineCrossingDirection",
                 boxType: "$boxType",

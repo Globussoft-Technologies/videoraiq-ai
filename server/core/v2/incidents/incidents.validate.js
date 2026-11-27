@@ -2,6 +2,21 @@ import Joi from "joi";
 import { HYGIENE_CATEGORIES } from "../../../constants/hygieneDetection.js";
 
 class IncidentsValidator {
+  validateSteelStackOverloadIncident(body) {
+    const objectId = Joi.string().hex().length(24);
+    return Joi.object({
+      adminId: objectId.required(),
+      nvrId: objectId.required(),
+      channelId: objectId.required(),
+      cameraId: objectId,
+      timeOfIncident: Joi.string().isoDate().required(),
+      stackLimit: Joi.number().integer().min(0).required(),
+      overloadStatus: Joi.string().trim().required(),
+      eventId: Joi.string().trim(),
+      triggerNotification: Joi.boolean(),
+    }).unknown(true).validate(body, { convert: false });
+  }
+
   validatePersonSittingOnCanIncident(body) {
     if (body?.incidentType !== 'personSittingOnCan') return { error: null };
     const objectId = Joi.string().hex().length(24);

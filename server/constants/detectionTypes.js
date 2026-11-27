@@ -1,5 +1,8 @@
 import { HYGIENE_CATEGORIES } from './hygieneDetection.js';
 export const ROLLER_STOCK_SETTING_MODE = "rollerLoadingUnloadingSettings";
+export const STEEL_STACK_STOCK_SETTING_MODE = "steelStackOverloadSettings";
+export const STOCK_SETTING_MODES = [ROLLER_STOCK_SETTING_MODE, STEEL_STACK_STOCK_SETTING_MODE];
+export const normalizeStockSettingMode = (mode) => mode === "steelStackSettings" ? STEEL_STACK_STOCK_SETTING_MODE : mode;
 export const PPE_REQUIRED_ITEMS = ["head_cap", "mask", "dangri", "helmet", "vest"];
 /* Update constants when new settings is added - DETECTION_TYPES, TYPE_MAP, Example payloads
  detection settings model

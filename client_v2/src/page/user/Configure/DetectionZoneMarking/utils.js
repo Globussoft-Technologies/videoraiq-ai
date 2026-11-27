@@ -2,6 +2,7 @@ import {
   ATTENDANCE_DETECTION_NAME,
   DETECTION_FIELD_KEYS,
   PPE_SETTING_TYPE,
+  STOCK_COUNTING_SETTING_TYPE,
   ZONE_EXTRA_FIELDS,
   isAttendanceDetectionType,
 } from './constants';
@@ -14,6 +15,12 @@ import { GENDER_AGE_SETTING_TYPE, genderAgeZoneSettings } from '../../../../help
 
 export function extraFieldsFor(settingType) {
   return ZONE_EXTRA_FIELDS[settingType] || [];
+}
+
+export function stackLimitError(value) {
+  if (value == null || String(value).trim() === '') return 'Stack limit is required.';
+  const limit = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN;
+  return Number.isSafeInteger(limit) && limit >= 0 ? '' : 'Enter a whole number of 0 or more.';
 }
 
 // Vehicle Check-In / Check-Out keeps a single crossing line (`line_coordinates`)
@@ -54,6 +61,7 @@ export function zonesFor(setting, cameraId, settingType) {
     trigger_on: configs[i]?.trigger_on || setting?.settings?.trigger_on || 'both',
     fireOutsideZoneEnabled: configs[i]?.fire_outside_zone_enabled ?? setting?.settings?.fire_outside_zone_enabled ?? false,
     capacity: configs[i]?.capacity ?? '',
+    ...(settingType === STOCK_COUNTING_SETTING_TYPE ? { stackLimit: configs[i]?.stack_limit ?? '' } : {}),
     threshold: configs[i]?.threshold_sec ?? (settingType === 'doorDetectionSettings' ? 300 : '0'),
     company: configs[i]?.company ?? '',
     whatsappRecipientIds: configs[i]?.whatsappRecipientIds,

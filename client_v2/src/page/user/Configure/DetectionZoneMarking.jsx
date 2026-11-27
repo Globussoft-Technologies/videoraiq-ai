@@ -20,15 +20,17 @@ import {
   FIRE_SMOKE_SETTING_TYPE,
   MIN_POINTS_TO_CLOSE,
   PPE_SETTING_TYPE,
+  STEEL_STACK_STOCK_SETTING_MODE,
   isAttendanceDetectionType,
   isCansStackDetectionType,
+  isSteelStackStockMode,
   isStockCountingType,
   isVehicleCheckInOutType,
   DOOR_DEFAULT_THRESHOLD_SEC,
   DOOR_DETECTION_SETTING_TYPE,
   DOOR_MIN_THRESHOLD_SEC,
 } from './DetectionZoneMarking/constants';
-import { allTypesFor, extraFieldsFor, lineFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
+import { allTypesFor, extraFieldsFor, lineFor, polygonPointsAttr, stackLimitError, zonesFor } from './DetectionZoneMarking/utils';
 import DetectionTypeDropdown from './DetectionZoneMarking/components/DetectionTypeDropdown';
 import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
 import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
@@ -147,6 +149,7 @@ export default function DetectionZoneMarking({
   const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
   const isStockCounting = isStockCountingType(activeType?.settingType);
   const isSackLoading = activeType?.settingType === 'sackLoadingUnloadingSettings';
+  const isSteelStack = isStockCounting && !isSackLoading && isSteelStackStockMode(activeType?.setting?.settings?.settingMode);
   const isFireSmoke = activeType?.settingType === FIRE_SMOKE_SETTING_TYPE;
   const isPpe = activeType?.settingType === PPE_SETTING_TYPE;
   const isHygiene = activeType?.settingType === HYGIENE_SETTING_TYPE;
@@ -629,6 +632,10 @@ export default function DetectionZoneMarking({
     const hasSchedule =
       Boolean(formatTime(zone?.schedule?.from)) && Boolean(formatTime(zone?.schedule?.to));
     if (!String(zone?.name || '').trim()) nextErrors[`zone-${index}-name`] = `${nameLabel} is required.`;
+    if (isSteelStack) {
+      const error = stackLimitError(zone?.stackLimit);
+      if (error) nextErrors[`zone-${index}-stackLimit`] = error;
+    }
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
     else if (isDoor && (!Number.isInteger(Number(zone?.threshold)) || Number(zone?.threshold) < DOOR_MIN_THRESHOLD_SEC || Number(zone?.threshold) % 60 !== 0)) nextErrors[`zone-${index}-threshold`] = 'Enter a whole number of minutes, at least 1.';
@@ -643,6 +650,13 @@ export default function DetectionZoneMarking({
   };
 
   const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName, doorAlertMode, doorNotification, lighting, specialSettings, settingMode }) => {
+    const saveSteelStack = settingMode === undefined ? isSteelStack : settingMode === STEEL_STACK_STOCK_SETTING_MODE;
+    if (saveSteelStack) {
+      for (const [index, zone] of nextZones.entries()) {
+        const error = stackLimitError(zone.stackLimit);
+        if (error) throw new Error(`Zone ${index + 1}: ${error}`);
+      }
+    }
     const doorSettings = isDoor
       ? {
           door_alert_mode: doorAlertMode || activeType.setting?.settings?.door_alert_mode || 'open',
@@ -703,7 +717,8 @@ export default function DetectionZoneMarking({
         ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
         : z.telegramChatId || undefined,
       ...(usesLineMode ? { count_mode: toApiMode(z.countMode) } : {}),
-      ...(isStockCounting ? { activity_mode: isSackLoading ? (['loading', 'unloading'].includes(z.activityMode) ? z.activityMode : 'both') : z.activityMode || 'all' } : {}),
+      ...(saveSteelStack ? { stack_limit: Number(z.stackLimit) } : {}),
+      ...(isStockCounting && !saveSteelStack ? { activity_mode: isSackLoading ? (['loading', 'unloading'].includes(z.activityMode) ? z.activityMode : 'both') : z.activityMode || 'all' } : {}),
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
       ...(fields.includes('company') && String(z.company ?? '').trim() !== '' ? { company: z.company } : {}),
@@ -901,7 +916,7 @@ export default function DetectionZoneMarking({
       toast.success('Zone updated.');
       onSaved?.();
     } catch (err) {
-      toast.error(err?.response?.data?.body?.message || 'Failed to update zone.');
+      toast.error(err?.response?.data?.body?.message || err.message || 'Failed to update zone.');
     } finally {
       setSavingZoneIndex(null);
     }
@@ -1717,6 +1732,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+                isSteelStack={isSteelStack}
           isSackLoading={isSackLoading}
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
@@ -1864,6 +1880,7 @@ export default function DetectionZoneMarking({
                 isLineCrossing={isLineCrossing}
                 isCheckInOut={isCheckInOut}
                 isStockCounting={isStockCounting}
+                isSteelStack={isSteelStack}
           isSackLoading={isSackLoading}
                 isFireSmoke={isFireSmoke}
                 isLighting={isLighting}
