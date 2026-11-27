@@ -23,6 +23,7 @@ import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentSummary from './IncidentSummary';
 import IncidentReportMessage from './IncidentReportMessage';
 import IncidentPreviewModal from './IncidentPreviewModal';
+import LateArrivalDetails, { IN_TIME_LABEL, lateArrivalDescription } from './LateArrivalDetails';
 import { packingIncidentDetails } from '../../../helpers/packingIncidentDetails.js';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
@@ -41,19 +42,11 @@ import { exportIncidentCenter } from './incidentCenterExport';
 import { doorDurationLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
-const lateArrivalDescription = (item) => {
-  if (item?.incidentType !== 'lateArrival') return item?.description;
-  const description = item?.description || '';
-  const minuteText = description.match(/\b(\d+)\s+minute\(s\) after the grace deadline\./);
-  const minutes = Number.isFinite(Number(item.lateMinutes)) && item.lateMinutes != null
-    ? Number(item.lateMinutes) : Number(minuteText?.[1]);
-  if (!minuteText || !Number.isFinite(minutes)) return description;
-  const totalSeconds = Math.max(0, Math.round(Number(minutes) * 60));
-  const duration = [Math.floor(totalSeconds / 3600), Math.floor(totalSeconds / 60) % 60, totalSeconds % 60]
-    .map((part) => String(part).padStart(2, '0')).join(':');
-  return description.replace(minuteText[0], `${duration} after the grace deadline.`);
-};
 const INCIDENT_LIST_DETAILS = {
+  lateArrival: [
+    { field: 'departmentName', label: 'Department', width: 130 },
+    { field: 'shiftName', label: 'Shift Name', width: 130 },
+  ],
   emotionDetection: [
     { field: 'emotionGroup', label: 'Emotion Group', width: 140 },
     { field: 'emotion', label: 'Emotion', width: 120 },
@@ -96,8 +89,10 @@ const INCIDENT_LIST_DETAILS = {
     { field: 'observedLayers', label: 'Observed Layers', width: 140 },
   ],
 };
+const LATE_ARRIVAL_LIST_FIELDS = new Set(INCIDENT_LIST_DETAILS.lateArrival.map(({ field }) => field));
 const incidentListColumnValue = (item, field) => {
   if (!item) return undefined;
+  if (LATE_ARRIVAL_LIST_FIELDS.has(field)) return item.incidentType === 'lateArrival' ? item[field] : undefined;
   if (field === 'zone') return item.zoneName || item.zone;
   if (field === 'presenceSec') return item.durationSec;
   if (field === 'done') return formatDoorStatus(item);
@@ -140,9 +135,12 @@ const incidentListDetailsFor = (types, items = null) => {
     label: field === 'violation' && labels.length > 1 ? 'Hygiene Violations / Lighting Violations' : labels.join(' / '),
     width: labels.length > 1 ? Math.max(width, 190) : width,
   }));
-  return Array.isArray(items) && items.length
-    ? details.filter(({ field }) => items.some((item) => hasIncidentListValue(incidentListColumnValue(item, field))))
-    : details;
+  if (!items?.length) return details;
+  const hasLateArrivals = items.some((item) => item.incidentType === 'lateArrival');
+  return details.filter(({ field }) => (
+    (hasLateArrivals && LATE_ARRIVAL_LIST_FIELDS.has(field))
+    || items.some((item) => hasIncidentListValue(incidentListColumnValue(item, field)))
+  ));
 };
 const incidentListColumns = (details, showDescription = true) => [
   '34px', '94px', 'minmax(190px,1.5fr)', ...(showDescription ? ['minmax(220px,1.35fr)'] : []), 'minmax(150px,1fr)',
@@ -1245,7 +1243,7 @@ function IncidentLightbox({ items, index, selectedItem, itemRemoved = false, onI
                   {lateArrivalDescription(item) || [cam, site].filter(Boolean).join(' · ')}
                 </p>}
                 <span style={{ fontFamily: 'monospace', fontSize: compactDetails ? 10 : 12, color: 'rgba(255,255,255,.45)', marginTop: compactDetails ? 0 : 2 }}>
-                  {shortDateTime(item.timeOfIncident)}
+                  {item.incidentType === 'lateArrival' && `${IN_TIME_LABEL} `}{shortDateTime(item.timeOfIncident)}
                 </span>
                 <IncidentReportMessage item={item} lightbox />
                 {item.incidentType === 'doorDetection' && (
@@ -1465,7 +1463,7 @@ const LIST_SEVERITY_COLORS = {
 function IncidentListRow({
   item, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser,
   hideResolveControls, resolveSelected, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete, detailColumns,
-  showDescriptionColumn, listColumns, listMinWidth, recentlyViewed,
+  showDescriptionColumn, listColumns, listMinWidth, recentlyViewed, showCheckInLabel,
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1486,6 +1484,7 @@ function IncidentListRow({
   const status = item.resolved ? 'Resolved' : item.report?.status === true ? 'Reported' : 'New';
   const statusColor = item.resolved ? 'var(--ok)' : item.report?.status === true ? 'var(--warn)' : 'var(--crit)';
   const isDoorDetection = item.incidentType === 'doorDetection';
+  const isLateArrival = item.incidentType === 'lateArrival';
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
   const selectionActive = deleteMode ? selectedForDelete : resolveSelected;
   const packing = item.incidentType === 'boxPackingDetection' ? packingIncidentDetails(item) : null;
@@ -1560,12 +1559,13 @@ function IncidentListRow({
         </div>
 
         <div role="cell" style={{ width: 94, height: 58, borderRadius: 8, overflow: 'hidden', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {image ? <img src={image} alt={incident} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: item.incidentType === 'lateArrival' ? 'center top' : 'center' }} /> : <ImageOff size={22} color="#6b7280" />}
+          {image ? <img src={image} alt={incident} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: isLateArrival ? 'center top' : 'center' }} /> : <ImageOff size={22} color="#6b7280" />}
         </div>
 
         <div role="cell" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span title={incident} style={{ fontSize: 13, fontWeight: 650, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident}</span>
-          {!isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labels.label(item.incidentType || item.displayName)}</span>}
+          {isLateArrival && <LateArrivalDetails item={item} />}
+          {!isLateArrival && !isConditionIncident && <span style={{ fontSize: 11, color: packing ? 'var(--tx2)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labels.label(item.incidentType || item.displayName)}</span>}
           <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           <IncidentReportMessage item={item} compact />
           {packing && <span style={{ fontSize: 11, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Box ID: ${packing.boxId}`}>Box ID: <strong style={{ color: 'var(--tx)', fontWeight: 650 }}>{packing.boxId}</strong></span>}
@@ -1592,6 +1592,8 @@ function IncidentListRow({
                   done: formatDoorStatus(item),
                 }[field]}
               </span>
+            ) : LATE_ARRIVAL_LIST_FIELDS.has(field) ? (
+              <span style={{ overflowWrap: 'anywhere' }}>{item[field] || '—'}</span>
             ) : field === 'emotionGroup' || field === 'emotion' ? (
               <span>{item[field] || '--'}</span>
             ) : field === 'posture' ? (
@@ -1632,7 +1634,10 @@ function IncidentListRow({
         </div>
 
         <div role="cell"><span style={{ color: statusColor, fontSize: 11.5, fontWeight: 650 }}>{status}</span></div>
-        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{shortDateTime(item.timeOfIncident) || '--'}</div>
+        <div role="cell" style={{ fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+          {isLateArrival && showCheckInLabel && <div style={{ fontSize: 10, color: 'var(--tx3)' }}>{IN_TIME_LABEL}</div>}
+          {shortDateTime(item.timeOfIncident) || '--'}
+        </div>
 
         <div role="cell" style={{ display: 'flex', justifyContent: 'center' }}>
           {canPreview && (
@@ -1916,6 +1921,8 @@ export default function IncidentCenter() {
         case 'severity': return ({ low: 1, moderate: 2, medium: 2, high: 3, critical: 4 })[String(item.severity || '').toLowerCase()] || 0;
         case 'status': return item.resolved ? 'Resolved' : item.report?.status ? 'Reported' : 'New';
         case 'time': return new Date(item.timeOfIncident || item.createdAt || 0).getTime() || 0;
+        case 'departmentName':
+        case 'shiftName': return incidentListColumnValue(item, listSort.field) || '';
         default: return item[listSort.field] ?? '';
       }
     };
@@ -1932,6 +1939,9 @@ export default function IncidentCenter() {
     return <span role="columnheader"><button type="button" onClick={() => toggleListSort(field)} title={`Sort visible page by ${label}`} aria-label={`Sort by ${label}${active ? `, ${listSort.direction}ending` : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'none', color: active ? 'var(--blue)' : 'var(--tx)', font: 'inherit', fontWeight: 900, letterSpacing: 'inherit', textTransform: 'inherit', cursor: 'pointer', textAlign: 'left' }}>{label}<SortIcon size={12} strokeWidth={1.9} style={{ opacity: active ? 1 : 0.6, flexShrink: 0 }} /></button></span>;
   };
   const visibleTypes = detTypes.size ? [...detTypes] : [...new Set(items.map((item) => item.incidentType))];
+  const hasLateArrivals = items.some((item) => item.incidentType === 'lateArrival');
+  const hasMixedTimes = hasLateArrivals && items.some((item) => item.incidentType !== 'lateArrival');
+  const listTimeLabel = hasMixedTimes ? `Incident / ${IN_TIME_LABEL}` : hasLateArrivals ? IN_TIME_LABEL : 'Time of Incident';
   const detailColumns = incidentListDetailsFor(visibleTypes, items);
   const showDescriptionColumn = items.some((item) => (
     ['sackLoadingUnloadingDetection', 'uniformDetection', 'machineOpsDetection', 'personPostureDetection', 'personSittingOnCan', 'cansStackDetection'].includes(item?.incidentType)
@@ -3137,7 +3147,7 @@ export default function IncidentCenter() {
                 {detailColumns.map(({ field, label }) => <Fragment key={field}>{sortHeader(label, field)}</Fragment>)}
                 {sortHeader('Severity', 'severity')}
                 {sortHeader('Status', 'status')}
-                {sortHeader('Time of Incident', 'time')}
+                {sortHeader(listTimeLabel, 'time')}
                 <span role="columnheader" style={{ textAlign: 'center' }}>Preview</span>
                 <span role="columnheader" style={{ textAlign: 'right' }}>Actions</span>
               </div>
@@ -3145,6 +3155,7 @@ export default function IncidentCenter() {
                 <IncidentListRow
                   key={`${item._id || item.id}:${lightboxIndex == null && lastViewedIncidentId === (item._id || item.id) ? lastViewedPulse : 0}`}
                   item={item}
+                  showCheckInLabel={hasMixedTimes}
                   recentlyViewed={lightboxIndex == null && lastViewedIncidentId === (item._id || item.id)}
                   onRefresh={refreshIncidentData}
                   onResolvedChange={handleResolvedChange}

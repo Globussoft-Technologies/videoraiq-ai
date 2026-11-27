@@ -12,8 +12,10 @@ import logger from "../utils/logger.js";
 const LateArrival = Incident.discriminators?.lateArrival || Incident.discriminator(
   "lateArrival", new mongoose.Schema({
     employee: { type: mongoose.Schema.Types.ObjectId, ref: "authorizedUsers" },
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
     attendanceDate: String,
     shiftId: mongoose.Schema.Types.ObjectId,
+    shiftName: String,
     expectedArrival: Date,
     graceDeadline: Date,
     lateMinutes: Number,
@@ -87,7 +89,8 @@ export async function processLateArrival({ attendance, employee, admin, channel,
       description: `${name || "Employee"} arrived ${result.lateMinutes} minute(s) after the grace deadline.`,
       userId: String(admin.user_id), nvrId: first.nvr || event.nvr, channelId: first.channel || event.channel,
       severity: "low", employee: employee._id, attendanceDate: result.date,
-      shiftId: result.shiftId, expectedArrival: result.expectedArrival,
+      departmentId: employee.departmentId ?? null,
+      shiftId: result.shiftId, shiftName: result.shiftName, expectedArrival: result.expectedArrival,
       graceDeadline: result.graceDeadline, lateMinutes: result.lateMinutes,
       Image: first.images?.frame || first.images?.person || first.images?.face || null };
     let write;

@@ -12,6 +12,7 @@ import IncidentZoneDetails from './IncidentZoneDetails';
 import IncidentSummary from './IncidentSummary';
 import IncidentReportMessage from './IncidentReportMessage';
 import IncidentHygieneDetails from './IncidentHygieneDetails';
+import LateArrivalDetails, { IN_TIME_LABEL, LateArrivalAssignmentOverlay } from './LateArrivalDetails';
 import { doorDurationLabel, doorStatusLabel } from '../../../pages/IncidentLogs/doorIncident';
 
 const SEV_COLOR = {
@@ -396,6 +397,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const labels = useDetectionLabels();
   const det = labels.label(item.incidentType || item.displayName);
   const isConditionIncident = ['hygieneSanitationFoodSafetyDetection', 'lightingVisibilitySiteConditionsDetection'].includes(item.incidentType);
+  const isLateArrival = item.incidentType === 'lateArrival';
   const st       = statusOf({ ...item, resolved: localResolved });
   const isMachineOps = item.incidentType === 'machineOpsDetection';
   const cam      = item.channelData?.customName || item.channelData?.name || item.cameraName || '';
@@ -514,7 +516,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
         {/* Image area */}
         <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
           {imgSrc ? (
-            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: item.incidentType === 'lateArrival' ? 'center top' : 'center' }} />
+            <img src={imgSrc} alt={det} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: isLateArrival ? 'center top' : 'center' }} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)' }}>
               <ImageOff size={28} strokeWidth={1.4} />
@@ -626,15 +628,16 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             Issues detected: {Number.isInteger(item.violationCount) && item.violationCount >= 0 ? item.violationCount : Array.isArray(item.violations) ? item.violations.length : 0}
           </span>}
 
-          {/* Bottom-left: detection type badge + timestamp */}
-          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+          {/* Bottom-left: detection type, timestamp, and late arrival assignment. */}
+          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: isLateArrival && conf == null ? 'max(calc(50% - 14px), calc(100% - 130px))' : 'calc(50% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
             {/* Detection type badge (moved here to avoid the baked-in count/ID labels up top) */}
             {!isConditionIncident && <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap', boxShadow: '0 1px 6px rgba(0,0,0,.55)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {det}
             </div>}
-            <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
-              {shortDateTime(item.timeOfIncident)}
+            <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: isLateArrival ? 'normal' : 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
+              {isLateArrival && <strong>{IN_TIME_LABEL}{' '}</strong>}{shortDateTime(item.timeOfIncident)}
             </span>
+            {isLateArrival && <LateArrivalAssignmentOverlay item={item} />}
           </div>
 
           {/* Keep card actions over the image, as in the original compact layout. */}
@@ -762,6 +765,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                   </span>
                 )}
               </div>
+              {isLateArrival && <LateArrivalDetails item={item} />}
               {incidentDescription && (
                 <div
                   title={incidentDescription}

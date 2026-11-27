@@ -38,6 +38,9 @@ const { default: IncidentsServiceV2 } = await import(
   "../../../core/v2/incidents/incidents.service.js"
 );
 const { Incident } = await import("../../../core/v1/incidents/incidents.model.js");
+const { default: Employee } = await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js");
+const { default: Department } = await import("../../../core/v1/departments/departments.model.js");
+const { default: Shift } = await import("../../../core/v1/shifts/shifts.model.js");
 
 const USER_ID = "200";
 const ADMIN_ID = new mongoose.Types.ObjectId();
@@ -71,6 +74,46 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+});
+
+it("resolves Late Arrival assignments for the incident list and a linked incident", async () => {
+  const otherAdminId = new mongoose.Types.ObjectId();
+  const [operations, dispatch, foreignDepartment, recordedShift, currentShift, foreignShift] = await Promise.all([
+    Department.create({ adminId: ADMIN_ID, departmentName: "Operations" }),
+    Department.create({ adminId: ADMIN_ID, departmentName: "Dispatch" }),
+    Department.create({ adminId: otherAdminId, departmentName: "Other department" }),
+    Shift.create({ adminId: ADMIN_ID, name: "Morning shift" }),
+    Shift.create({ adminId: ADMIN_ID, name: "Evening shift" }),
+    Shift.create({ adminId: otherAdminId, name: "Other shift" }),
+  ]);
+  const employee = await Employee.create({ adminId: ADMIN_ID, departmentId: operations._id, shiftId: currentShift._id });
+  const foreignEmployee = await Employee.create({ adminId: otherAdminId, departmentId: foreignDepartment._id });
+  const legacyIncident = { employee: employee._id, shiftId: recordedShift._id };
+  const checkIn = new Date("2026-08-01T08:12:34.000Z");
+  const { insertedIds } = await Incident.collection.insertMany([
+    legacyIncident,
+    { ...legacyIncident, departmentId: dispatch._id, shiftName: "Original shift name" },
+    { ...legacyIncident, departmentId: null },
+    { employee: foreignEmployee._id, shiftId: foreignShift._id },
+    { departmentId: foreignDepartment._id },
+  ].map((assignment) => ({
+    userId: USER_ID, incidentType: "lateArrival", timeOfIncident: checkIn, Image: "/uploads/late.jpg", resolved: false, ...assignment,
+  })));
+
+  const list = centerCtx();
+  await IncidentsServiceV2.getAllIncidents(list.req, list.res, list.next);
+  expect(list.res.statusCode).toBe(200);
+  const byId = new Map(payload(list.res).data.map((item) => [String(item._id), item]));
+  expect(byId.get(String(insertedIds[0]))).toMatchObject({ departmentName: "Operations", shiftName: "Morning shift", timeOfIncident: checkIn });
+  expect(byId.get(String(insertedIds[1]))).toMatchObject({ departmentName: "Dispatch", shiftName: "Original shift name" });
+  expect(byId.get(String(insertedIds[2]))).toMatchObject({ departmentName: null, shiftName: "Morning shift" });
+  expect(byId.get(String(insertedIds[3]))).toMatchObject({ departmentName: null, shiftName: null });
+  expect(byId.get(String(insertedIds[4]))).toMatchObject({ departmentName: null, shiftName: null });
+
+  const detail = serviceCtx({ adminId: ADMIN_ID, user_id: USER_ID, query: { incidentId: String(insertedIds[0]) } });
+  await IncidentsServiceV2.getAllIncidentsById(detail.req, detail.res, detail.next);
+  expect(detail.res.statusCode).toBe(200);
+  expect(payload(detail.res).data[0]).toMatchObject({ departmentName: "Operations", shiftName: "Morning shift" });
 });
 
 describe("detection history uses authorized events rather than the snapshot feed", () => {

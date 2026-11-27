@@ -2,6 +2,7 @@ import { sackIncidentSchema } from "../../../services/sackLoading.js";
 import { normalizeUniformIncident } from "../../../services/uniformDetection.js";
 import { machineOpsIncidentSchema } from '../../../services/machineOps.js';
 import { getGenderAgeSummary } from "./genderAgeSummary.js";
+import { attachLateArrivalDetails } from "./lateArrivalDetails.js";
 import { stockNormalizationStages } from "../../../utils/stockNormalization.js";
 import { exactIncidentWindow, incidentRecordSort } from "../../../utils/assistant-incident-query.js";
 import Channel from "./../channels/channels.model.js";
@@ -1273,7 +1274,8 @@ class IncidentsService {
 
       // Name the registered user each detected plate belongs to, so a
       // deep-linked Vehicle Detection incident reads the same as the list.
-      await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+      const adminId = req?.verified?.userData?.adminId;
+      await Promise.all([attachTaggedUsers(data, adminId), attachLateArrivalDetails(data, adminId)]);
       for (const incident of data) if (incident.incidentType === 'deskSolarShoulderDetection' && incident.eventType === 'panel') Object.assign(incident, solderPanelCounts(incident));
 
       // Get total count
@@ -1922,7 +1924,7 @@ class IncidentsService {
 
       // Vehicle Detection incidents carry only a plate; resolve who it
       // belongs to so the Incident Center can show plate + tagged user.
-      await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+      await Promise.all([attachTaggedUsers(data, adminId), attachLateArrivalDetails(data, adminId)]);
       for (const incident of data) if (incident.incidentType === 'deskSolarShoulderDetection' && incident.eventType === 'panel') Object.assign(incident, solderPanelCounts(incident));
 
       const [countStats = {}] = await Incident.aggregate([

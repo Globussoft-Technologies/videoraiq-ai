@@ -31,9 +31,9 @@ import { sendPayloadToUser } from '../../../socket.js';
 import { processLateArrival } from '../../../services/lateArrivalAlert.service.js';
 it('ignores lunch returns and deduplicates notifications across API calls', async()=>{
  const event={cameraType:'checkin',timestamp:new Date('2026-10-23T12:00:00+05:30')};
- const args=()=>({attendance:{_id:'row'},employee:{_id:'employee',shiftId:'shift'},admin:{_id:'admin',user_id:'1',timezone:'Asia/Kolkata'},channel:{},event});
+ const args=()=>({attendance:{_id:'row'},employee:{_id:'employee',departmentId:'department',shiftId:'shift'},admin:{_id:'admin',user_id:'1',timezone:'Asia/Kolkata'},channel:{},event});
  Schedule.find=vi.fn(()=>({lean:async()=>[]}));
- vi.spyOn(Shift,'find').mockReturnValue({lean:async()=>[{...shift,_id:'shift'}]});
+ vi.spyOn(Shift,'find').mockReturnValue({lean:async()=>[{...shift,_id:'shift',name:'Day shift'}]});
  Attendance.updateOne=vi.fn().mockResolvedValue({});
  Attendance.find=vi.fn(()=>({select:()=>({lean:async()=>[{events:[event,{...event,timestamp:new Date('2026-10-23T09:00:00+05:30')}]}]})}));
  Incident.discriminators.lateArrival.updateOne=vi.fn().mockResolvedValue({upsertedCount:1});
@@ -42,6 +42,9 @@ it('ignores lunch returns and deduplicates notifications across API calls', asyn
  Attendance.find.mockReturnValue({select:()=>({lean:async()=>[{events:[event]}]})});
  await processLateArrival(args());
  expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
+ expect(Incident.discriminators.lateArrival.updateOne.mock.calls[0][1].$setOnInsert).toMatchObject({
+  timeOfIncident: event.timestamp, departmentId: 'department', shiftId: 'shift', shiftName: 'Day shift',
+ });
  const id=String(Incident.discriminators.lateArrival.updateOne.mock.calls[0][0]._id);
  Incident.discriminators.lateArrival.updateOne.mockResolvedValue({upsertedCount:0});
  await processLateArrival(args());
