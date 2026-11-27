@@ -284,13 +284,15 @@ class NVRService {
         }
 
         // Sync cameras if provided
-        const syncResult = { created: [], updated: [], skipped: [] };
+        const syncResult = { created: [], updated: [], skipped: [], removed: [] };
 
         if (Array.isArray(cameras) && cameras.length > 0) {
           // Fetch existing channels for this NVR
+          // includeInactive: an unticked (hidden) camera that is ticked again must
+          // be found and re-activated, not created a second time.
           const existingChannels = await Camera.find({
             nvrId: existingNvr._id,
-          });
+          }).setOptions({ includeInactive: true });
           const channelMap = new Map(
             existingChannels.map((ch) => [ch.localChannelId, ch]),
           );
@@ -319,12 +321,31 @@ class NVRService {
             }
           }
 
+          // Sync sends the full ticked set: a stored installer camera missing from
+          // it was unticked. Hide it (isAdded:false) instead of deleting, so its
+          // settings and history survive and ticking it again brings it back.
+          const ticked = new Set(cameras.map((cam) => cam.localChannelId));
+          const unticked = existingChannels.filter(
+            (ch) => ch.isAdded && ch.localChannelId && !ticked.has(ch.localChannelId),
+          );
+          if (unticked.length) {
+            await Camera.updateMany(
+              { _id: { $in: unticked.map((ch) => ch._id) } },
+              { $set: { isAdded: false } },
+            );
+          }
+          syncResult.removed = unticked.map((ch) => ({ localChannelId: ch.localChannelId }));
+
           for (const cam of cameras) {
             const existing = channelMap.get(cam.localChannelId);
 
             if (existing) {
               // Update existing channel
               let changed = false;
+              if (!existing.isAdded) {
+                existing.isAdded = true;
+                changed = true;
+              }
               if (cam.name && cam.name !== existing.name) {
                 existing.name = cam.name;
                 changed = true;

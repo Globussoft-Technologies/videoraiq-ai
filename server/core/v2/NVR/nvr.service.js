@@ -336,7 +336,7 @@ class NVRService {
         }
 
         // Sync cameras if provided
-        const syncResult = { created: [], updated: [], skipped: [] };
+        const syncResult = { created: [], updated: [], skipped: [], removed: [] };
 
         if (Array.isArray(cameras) && cameras.length > 0) {
           // Fetch existing channels for this NVR
@@ -371,6 +371,22 @@ class NVRService {
             }
           }
 
+          // Sync sends the full ticked set: a stored installer camera missing from
+          // it was unticked. Hide it (isAdded:false) instead of deleting, so its
+          // settings and history survive and ticking it again brings it back.
+          // Runs before the limit read so the freed licences can be reused below.
+          const ticked = new Set(cameras.map((cam) => cam.localChannelId));
+          const unticked = existingChannels.filter(
+            (ch) => ch.isAdded && ch.localChannelId && !ticked.has(ch.localChannelId),
+          );
+          if (unticked.length) {
+            await Camera.updateMany(
+              { _id: { $in: unticked.map((ch) => ch._id) } },
+              { $set: { isAdded: false } },
+            );
+          }
+          syncResult.removed = unticked.map((ch) => ({ localChannelId: ch.localChannelId }));
+
           let remaining = await this.getRemainingCameraLimit(userId);
           for (const cam of cameras) {
             const existing = channelMap.get(cam.localChannelId);
@@ -378,6 +394,12 @@ class NVRService {
             if (existing) {
               // Update existing channel
               let changed = false;
+              // Ticked again (or stored hidden while over the licence): re-activate
+              // the same row if a licence is free.
+              if (!existing.isAdded && remaining-- > 0) {
+                existing.isAdded = true;
+                changed = true;
+              }
               if (cam.name && cam.name !== existing.name) {
                 existing.name = cam.name;
                 changed = true;

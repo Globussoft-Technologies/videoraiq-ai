@@ -149,6 +149,43 @@ describe("NVRService.updateNvr — happy path", () => {
     expect(await Channel.countDocuments({ nvrId: nvr._id }).setOptions({ includeInactive: true })).toBe(3);
   });
 
+  it("hides an unticked installer camera (no delete) and re-activates the same row when ticked again", async () => {
+    const nvr = await NVR.create({
+      userId: "u1",
+      nvrName: "N",
+      brand: "hikvision",
+      domain: "http://nvr.local",
+      location: "HQ",
+      localNvrId: "nvr-local-3",
+    });
+    const kept = await Channel.create({ nvrId: nvr._id, userId: "u1", name: "A", streamingPath: "/a", localChannelId: "nvr-local-3-ch1", isAdded: true });
+    const toggled = await Channel.create({ nvrId: nvr._id, userId: "u1", name: "B", streamingPath: "/b", localChannelId: "nvr-local-3-ch2", isAdded: true });
+    const legacy = await Channel.create({ nvrId: nvr._id, userId: "u1", name: "C", streamingPath: "/c", isAdded: true });
+    const find = (id) => Channel.findById(id).setOptions({ includeInactive: true });
+    const sync = async (cameras) => {
+      const { req, res, next } = serviceCtx({ user_id: "u1", params: { id: nvr.localNvrId }, body: { cameras } });
+      await NVRService.updateNvr(req, res, next);
+      expect(res.statusCode).toBe(200);
+      return payload(res).data;
+    };
+    const camA = { localChannelId: "nvr-local-3-ch1", name: "A", streamingPath: "/a" };
+
+    // Untick ch2: hidden, not deleted; the camera without a localChannelId is untouched.
+    let data = await sync([camA]);
+    expect(data.cameras.removed).toEqual([{ localChannelId: "nvr-local-3-ch2" }]);
+    expect((await find(toggled._id)).isAdded).toBe(false);
+    expect((await find(kept._id)).isAdded).toBe(true);
+    expect((await find(legacy._id)).isAdded).toBe(true);
+    expect(data.nvr.cameraCount).toBe(2);
+
+    // Tick ch2 again: same row comes back, no duplicate.
+    data = await sync([camA, { localChannelId: "nvr-local-3-ch2", name: "B", streamingPath: "/b2" }]);
+    expect(data.cameras.created).toHaveLength(0);
+    expect((await find(toggled._id)).isAdded).toBe(true);
+    expect((await find(toggled._id)).streamingPath).toBe("/b2");
+    expect(data.nvr.cameraCount).toBe(3);
+  });
+
   it("returns successfully even when no cameras array is provided (metadata-only update)", async () => {
     const nvr = await NVR.create({
       userId: "u1",
